@@ -266,7 +266,7 @@ const createBooking = async (req, res) => {
       }
 
       // Calculate amounts
-      let subtotal = service.basePrice * quantity;
+      let subtotal = (service.discountPrice || service.basePrice) * quantity;
       let totalDiscount = 0;
       let couponDetails = null;
       let coupon = null;
@@ -292,7 +292,7 @@ const createBooking = async (req, res) => {
         };
       }
 
-      // Resolve Active Surcharges
+      // Resolve Dynamic Surcharges
       const SurgeModel = mongoose.model('Surge');
       const allActiveSurges = session
         ? await SurgeModel.find({ active: true }).session(session)
@@ -420,7 +420,7 @@ const createBooking = async (req, res) => {
         services: [{
           service: serviceId,
           quantity,
-          price: service.basePrice,
+          price: service.discountPrice || service.basePrice,
           discountAmount: totalDiscount,
           serviceDetails: {
             title: service.title,
@@ -2178,7 +2178,7 @@ const getProviderBookingById = async (req, res) => {
       ]
     })
       .populate('customer', 'name email phone createdAt')
-      .populate('services.service', 'title description duration price')
+      .populate('services.service', 'title description duration price basePrice images serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
       .lean();
 
     if (!booking) {

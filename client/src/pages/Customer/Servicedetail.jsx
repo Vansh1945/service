@@ -15,6 +15,7 @@ import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import RelatedServicesComponent from '../../components/RelatedServices';
 import ErrorState from '../../components/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';
+import { getMergedPrice as getMergedPriceUtil } from '../../utils/surge';
 import useCategory from '../../hooks/useCategory';
 import { formatCurrency, formatDate, formatDuration } from '../../utils/format';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
@@ -23,7 +24,7 @@ const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { API, showToast, isAuthenticated, user } = useAuth();
+  const { showToast, isAuthenticated, user } = useAuth();
 
   // ==================== STATE MANAGEMENT ====================
   const [service, setService] = useState(null);
@@ -60,25 +61,7 @@ const ServiceDetailPage = () => {
 
   // Helper to get merged price (base price + active demand surge)
   const getMergedPrice = (basePrice) => {
-    if (!basePrice) return 0;
-    let demandSurge = 0;
-    activeSurcharges.forEach(s => {
-      if (s.chargeType === 'demand') {
-        if (s.maxBookingValue && basePrice > s.maxBookingValue) {
-          return;
-        }
-        let chargeAmount = 0;
-        if (s.mode === 'flat') {
-          chargeAmount = s.value;
-        } else if (s.mode === 'percentage') {
-          chargeAmount = (basePrice * s.value) / 100;
-        } else if (s.mode === 'multiplier') {
-          chargeAmount = basePrice * (s.value - 1);
-        }
-        demandSurge += parseFloat(chargeAmount.toFixed(2));
-      }
-    });
-    return basePrice + demandSurge;
+    return getMergedPriceUtil(basePrice, activeSurcharges);
   };
 
   // ==================== HELPER FUNCTIONS ====================
@@ -99,10 +82,6 @@ const ServiceDetailPage = () => {
     setImageLoading(false);
   };
 
-  const handleThumbnailClick = (index) => {
-    setCurrentImageIndex(index);
-    setImageLoading(true);
-  };
 
   // ==================== MEMOIZED VALUES ====================
   const categoryName = useMemo(() => {
@@ -194,25 +173,6 @@ const ServiceDetailPage = () => {
     }
   };
 
-  const getRelatedCategoryName = (relatedCategory) => {
-    if (!relatedCategory) return 'Uncategorized';
-    if (typeof relatedCategory === 'object' && relatedCategory.name) {
-      return relatedCategory.name;
-    }
-    if (typeof relatedCategory === 'string' && categories.length > 0) {
-      const category = categories.find(cat => cat.value === relatedCategory);
-      return category ? category.label : 'Uncategorized';
-    }
-    if (typeof relatedCategory === 'object' && relatedCategory.value && categories.length > 0) {
-      const category = categories.find(cat => cat.value === relatedCategory.value);
-      return category ? category.label : 'Uncategorized';
-    }
-    if (typeof relatedCategory === 'object' && relatedCategory._id && categories.length > 0) {
-      const category = categories.find(cat => cat.value === relatedCategory._id);
-      return category ? category.label : 'Uncategorized';
-    }
-    return 'Uncategorized';
-  };
 
   // ==================== EVENT HANDLERS ====================
   const handleBookNow = () => {
@@ -259,12 +219,6 @@ const ServiceDetailPage = () => {
   const specialNotes = service?.specialNotes || [];
   const materialsUsed = service?.materialsUsed || [];
 
-  // Placeholder FAQs
-  const faqs = [
-    { q: "What if the service takes longer than estimated?", a: "The price remains the same as quoted. Any additional costs for materials will be discussed beforehand." },
-    { q: "Are the service professionals background checked?", a: "Yes, all our professionals undergo strict identity and background verification." },
-    { q: "Do you provide a warranty for the service?", a: "We provide a 30-day service warranty on all professional bookings." }
-  ];
 
   // ==================== LOADING STATE ====================
   if (loading) {
@@ -319,7 +273,7 @@ const ServiceDetailPage = () => {
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="md:grid md:grid-cols-2 gap-10 p-6 lg:p-10">
 
-            {/* Left Column: Image Section */}
+            {/* Left Column: Image Section with Thumbnails */}
             <div className="flex flex-col">
               <div className="relative aspect-[4/3] md:aspect-square md:max-h-[400px] w-full mx-auto rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 group">
                 {imageLoading && (
@@ -352,100 +306,145 @@ const ServiceDetailPage = () => {
                   </div>
                 )}
               </div>
+
+              {/* Thumbnails Row */}
+              {allImages.length > 1 && (
+                <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-none">
+                  {allImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImageIndex(idx)}
+                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 bg-gray-50 flex-shrink-0 transition-all ${
+                        currentImageIndex === idx ? 'border-primary shadow-md scale-95' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <img src={img} alt={`thumbnail-${idx}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Right Column: Service Details */}
-            <div className="flex flex-col h-full mt-6 md:mt-0">
-              <div className="flex-1 space-y-6">
-                <div className="space-y-1.5">
-                  <h1 className="text-xl lg:text-2xl font-bold text-secondary tracking-tight leading-tight">
+            <div className="flex flex-col h-full mt-6 md:mt-0 justify-between">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-extrabold bg-teal-50 text-primary px-2.5 py-1 rounded-lg border border-teal-100/50 uppercase tracking-widest">
+                    {categoryName}
+                  </span>
+                  
+                  <h1 className="text-2xl lg:text-3xl font-extrabold text-secondary tracking-tight leading-tight pt-1">
                     {service.title}
                   </h1>
 
-                  {/* Rating Section */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-primary/10 px-2 py-0.5 rounded-lg text-primary font-bold text-xs">
-                      <MdStar className="mr-0.5" />
-                      {service.averageRating?.toFixed(1) || '0.0'}
+                  {/* Rating & Dynamic details */}
+                  <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
+                    <div className="flex items-center gap-1">
+                      <MdStar className="text-amber-500 w-4 h-4" />
+                      <span className="font-bold text-secondary">{service.averageRating?.toFixed(1) || '0.0'}</span>
+                      <span>({service.ratingCount || 0} Reviews)</span>
                     </div>
-                    <div className="text-gray-400 text-xs font-medium border-l border-gray-200 pl-3">
-                      {service.ratingCount || 0} Reviews
-                    </div>
+                    <span>•</span>
+                    <span className="bg-gray-100 px-2 py-0.5 rounded text-[10px] font-bold text-gray-600">
+                      Verified Service
+                    </span>
                   </div>
                 </div>
 
-                {/* Price Section */}
-                <div className="bg-primary/5 p-3.5 rounded-xl border border-primary/10">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl lg:text-3xl font-extrabold text-primary">{formatCurrency(getMergedPrice(service.basePrice))}</span>
+                {/* Unified Price & CTA Row */}
+                <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-100 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-col">
+                    <div className="flex items-baseline gap-1.5">
+                      {service.discountPrice ? (
+                        <>
+                          <span className="text-2xl lg:text-3xl font-black text-emerald-600">
+                            {formatCurrency(getMergedPrice(service.discountPrice))}
+                          </span>
+                          <span className="text-sm line-through text-gray-400 font-normal">
+                            {formatCurrency(getMergedPrice(service.basePrice))}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-2xl lg:text-3xl font-black text-emerald-600">
+                          {formatCurrency(getMergedPrice(service.basePrice))}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                        {service.discountPrice ? 'Special Offer' : 'Standard Rate'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-medium mt-0.5">
+                      Inclusive of all taxes
+                    </span>
                   </div>
-                  <p className="text-gray-400 text-[11px] mt-1 font-medium">• Inclusive of all taxes • Direct Professional Service</p>
-                </div>
 
-                {/* CTA Section */}
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex gap-2">
                     <button
                       onClick={handleBookNow}
-                      className="flex-1 bg-accent hover:opacity-90 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-accent/15 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+                      className="bg-accent hover:bg-accent/95 text-white font-extrabold py-3 px-6 rounded-xl shadow-md shadow-accent/10 transition-all active:scale-95 text-xs tracking-wider uppercase"
                     >
-                      <MdCalendarToday size={18} />
-                      BOOK SERVICE NOW
+                      Book Service Now
                     </button>
                     <button
                       onClick={handleShare}
-                      className="px-4 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center justify-center transition-all"
+                      className="p-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
                     >
-                      <MdShare size={20} />
+                      <MdShare size={18} />
                     </button>
                   </div>
                 </div>
 
-                {/* Note Section */}
-                <div className="space-y-1 p-3 bg-amber-50/70 rounded-xl border border-amber-100">
-                  <h3 className="text-amber-800 font-bold text-[9px] tracking-widest flex items-center gap-1.5 uppercase">
-                    <MdError className="w-3.5 h-3.5" />
-                    Note
-                  </h3>
-                  <p className="text-amber-700 text-xs font-semibold leading-relaxed">
-                    Material cost is NOT included. Actual material charges will be extra.
-                  </p>
+                {/* Key Specifications Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl border border-gray-100">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Duration</span>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-secondary">
+                      <ClockIcon className="w-4 h-4 text-primary" />
+                      <span>{service.duration || 1} Hr</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Warranty</span>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-secondary">
+                      <ShieldCheckIcon className="w-4 h-4 text-primary" />
+                      <span>{service.warranty?.duration ? `${service.warranty.duration} ${service.warranty.unit}` : 'Standard'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Service Type</span>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-secondary capitalize">
+                      <WrenchIcon className="w-4 h-4 text-primary" />
+                      <span>{service.serviceType || 'Standard'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Featured</span>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-secondary">
+                      <StarIconSolid className="w-4 h-4 text-amber-500" />
+                      <span>{service.isFeatured ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Features / Special Notes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
-                  <div className="space-y-3">
-                    <h4 className="text-gray-400 font-bold text-[9px] tracking-widest border-b border-gray-100 pb-1.5 uppercase">What's Included</h4>
-                    <ul className="space-y-2">
-                      {specialNotes.length > 0 ? specialNotes.map((note, index) => (
-                        <li key={index} className="flex items-start gap-2 text-xs text-gray-600">
-                          <MdCheck className="text-primary mt-0.5 shrink-0" />
-                          <span>{note}</span>
-                        </li>
-                      )) : <li className="text-gray-400 text-xs italic">Standard professional service</li>}
-                    </ul>
+                {/* Prerequisites tags */}
+                {service.tags && service.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {service.tags.map((tag, i) => (
+                      <span key={i} className="text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                        #{tag}
+                      </span>
+                    ))}
                   </div>
-                  <div className="space-y-3">
-                    <h4 className="text-gray-400 font-bold text-[9px] tracking-widest border-b border-gray-100 pb-1.5 uppercase">Tools & Materials</h4>
-                    <ul className="space-y-2">
-                      {materialsUsed.length > 0 ? materialsUsed.map((item, index) => (
-                        <li key={index} className="flex items-start gap-2 text-xs text-gray-600">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                          <span>{item}</span>
-                        </li>
-                      )) : <li className="text-gray-400 text-xs italic">All pro-tools included</li>}
-                    </ul>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
+
           </div>
         </div>
       </div>
-
       {/* Tabs / Bottom Section (FAQ & Reviews) */}
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
-        <div className="border-b border-gray-200 mb-6 overflow-x-auto">
+        <div className="border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hide">
           <nav className="flex space-x-8 min-w-max">
             {['Overview', 'Specifications', 'Reviews'].map((tab) => (
               <button
@@ -456,7 +455,7 @@ const ServiceDetailPage = () => {
                   : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
               >
-                {tab === 'Reviews' ? `Customer Reviews (${service.feedback?.filter(r => r.comment && r.comment.trim() !== "").length || 0})` : tab}
+                {tab === 'Reviews' ? `Customer Reviews (${service.ratingCount || 0})` : tab}
               </button>
             ))}
           </nav>
@@ -474,10 +473,22 @@ const ServiceDetailPage = () => {
                   <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Guarantees</h3>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { icon: <ShieldCheckIcon className="w-4.5 h-4.5" />, text: "30-Day Warranty" },
-                      { icon: <UserIcon className="w-4.5 h-4.5" />, text: "Certified Pros" },
-                      { icon: <ClockIcon className="w-4.5 h-4.5" />, text: "On-Time Arrival" },
-                      { icon: <CheckBadgeIcon className="w-4.5 h-4.5" />, text: "Genuine Spares" }
+                      ...(service?.warranty?.duration ? [{
+                        icon: <ShieldCheckIcon className="w-4.5 h-4.5" />,
+                        text: `${service.warranty.duration}-${service.warranty.unit === 'days' ? 'Day' : 'Month'} Warranty`
+                      }] : []),
+                      {
+                        icon: <UserIcon className="w-4.5 h-4.5" />,
+                        text: service?.serviceType === 'emergency' ? 'Emergency Pros' : service?.serviceType === 'premium' ? 'Premium Pros' : 'Certified Pros'
+                      },
+                      {
+                        icon: <ClockIcon className="w-4.5 h-4.5" />,
+                        text: 'On-Time Arrival'
+                      },
+                      {
+                        icon: <CheckBadgeIcon className="w-4.5 h-4.5" />,
+                        text: 'Genuine Spares'
+                      }
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl">
                         <div className="text-primary">{item.icon}</div>
@@ -487,61 +498,154 @@ const ServiceDetailPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Service Includes & Excludes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+                {/* Service Includes */}
+                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                  <h3 className="text-emerald-700 font-extrabold text-xs tracking-wider uppercase border-b border-emerald-100/50 pb-2">
+                    Service Includes
+                  </h3>
+                  <ul className="space-y-2">
+                    {specialNotes && specialNotes.length > 0 ? specialNotes.map((note, index) => (
+                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                        <MdCheck className="text-emerald-600 mt-0.5 shrink-0" />
+                        <span>{note}</span>
+                      </li>
+                    )) : (
+                      <li className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                        <MdCheck className="text-emerald-600 mt-0.5 shrink-0" />
+                        <span>Standard professional {categoryName} service</span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                {/* Service Excludes */}
+                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                  <h3 className="text-red-700 font-extrabold text-xs tracking-wider uppercase border-b border-red-100/50 pb-2">
+                    Service Excludes
+                  </h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                      <span className="text-red-500 font-bold shrink-0 mt-0.5">✕</span>
+                      <span>Spare parts / replacement materials cost</span>
+                    </li>
+                    <li className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                      <span className="text-red-500 font-bold shrink-0 mt-0.5">✕</span>
+                      <span>Additional civil or custom structural work</span>
+                    </li>
+                    <li className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                      <span className="text-red-500 font-bold shrink-0 mt-0.5">✕</span>
+                      <span>Any work outside the standard service scope</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === 'Specifications' && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm lg:grid lg:grid-cols-2 gap-10">
-              {/* Left Column: Tech Specs */}
-              <div>
-                <h3 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
-                  <WrenchIcon className="w-5 h-5 text-primary" />
-                  Technical Details
-                </h3>
-                <div className="divide-y divide-gray-100 text-sm">
-                  <div className="grid grid-cols-2 py-3">
-                    <span className="text-gray-500 font-medium">Estimated Duration</span>
-                    <span className="text-secondary font-semibold">{formatDuration(service.duration)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 py-3">
-                    <span className="text-gray-500 font-medium">Category</span>
-                    <span className="text-secondary font-semibold">{categoryName}</span>
-                  </div>
-                  <div className="grid grid-cols-2 py-3">
-                    <span className="text-gray-500 font-medium">Availability</span>
-                    <span className={`font-semibold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
-                      {service.isActive ? 'Ready for Booking' : 'Not Available'}
-                    </span>
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Left Column: Tech Specs */}
+                <div className="space-y-4">
+                  <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3 flex items-center gap-2">
+                    <WrenchIcon className="w-5 h-5 text-primary" />
+                    Technical Details
+                  </h3>
+                  <div className="divide-y divide-gray-100 text-sm">
+                    <div className="grid grid-cols-2 py-3">
+                      <span className="text-gray-500 font-medium">Estimated Duration</span>
+                      <span className="text-secondary font-semibold">{formatDuration(service.duration)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 py-3">
+                      <span className="text-gray-500 font-medium">Category</span>
+                      <span className="text-secondary font-semibold">{categoryName}</span>
+                    </div>
+                    <div className="grid grid-cols-2 py-3">
+                      <span className="text-gray-500 font-medium">Availability</span>
+                      <span className={`font-semibold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
+                        {service.isActive ? 'Ready for Booking' : 'Not Available'}
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Right Column: FAQ */}
+                {service.faqs && service.faqs.length > 0 ? (
+                  <div className="space-y-4">
+                    <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3 flex items-center gap-2">
+                      <MdHelpOutline className="w-5 h-5 text-primary" />
+                      Frequently Asked Questions
+                    </h3>
+                    <div className="space-y-3">
+                      {service.faqs.map((faq, index) => (
+                        <div
+                          key={index}
+                          className="border border-gray-100 rounded-xl p-3 hover:border-primary/20 transition-all cursor-pointer group"
+                          onClick={() => toggleAccordion(index)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs md:text-sm font-semibold text-secondary group-hover:text-primary transition-colors">
+                              {faq.question}
+                            </span>
+                            <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openAccordion === index ? 'rotate-180' : ''}`} />
+                          </div>
+                          {openAccordion === index && (
+                            <p className="mt-2 text-xs text-gray-500 leading-relaxed animate-fade-in">
+                              {faq.answer}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="hidden md:block" />
+                )}
               </div>
 
-              {/* Right Column: FAQ */}
-              <div className="mt-8 lg:mt-0">
-                <h3 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
-                  <MdHelpOutline className="w-5 h-5 text-primary" />
-                  Frequently Asked Questions
-                </h3>
-                <div className="space-y-3">
-                  {faqs.map((faq, index) => (
-                    <div
-                      key={index}
-                      className="border border-gray-100 rounded-xl p-3 hover:border-primary/20 transition-all cursor-pointer group"
-                      onClick={() => toggleAccordion(index)}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs md:text-sm font-semibold text-secondary group-hover:text-primary transition-colors">
-                          {faq.q}
-                        </span>
-                        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openAccordion === index ? 'rotate-180' : ''}`} />
-                      </div>
-                      {openAccordion === index && (
-                        <p className="mt-2 text-xs text-gray-500 leading-relaxed animate-fade-in">
-                          {faq.a}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+              {/* Tools & Materials and Why Choose Us */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+                {/* Tools & Materials */}
+                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                  <h3 className="text-sky-700 font-extrabold text-xs tracking-wider uppercase border-b border-sky-100/50 pb-2">
+                    Tools & Materials Used
+                  </h3>
+                  <ul className="space-y-2">
+                    {materialsUsed && materialsUsed.length > 0 ? materialsUsed.map((item, index) => (
+                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    )) : (
+                      <li className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
+                        <span>All professional installation tools included</span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                {/* Why Choose Us */}
+                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                  <h3 className="text-indigo-700 font-extrabold text-xs tracking-wider uppercase border-b border-indigo-100/50 pb-2">
+                    Why Choose Raj Electrical?
+                  </h3>
+                  <ul className="space-y-2">
+                    {[
+                      "100% Certified, Background-Verified Technicians",
+                      "On-Time Arrival and service execution guarantee",
+                      "Transparent pricing upfront with no hidden charges",
+                      "Safe, clean, and post-service cleanup process"
+                    ].map((item, index) => (
+                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                        <MdCheck className="text-indigo-600 mt-0.5 shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
             </div>

@@ -14,6 +14,7 @@ import ErrorState from '../../components/Error';
 import { getPublicServices } from '../../services/ServiceService';
 import useCategory from '../../hooks/useCategory';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
+import { getMergedPrice as getMergedPriceUtil } from '../../utils/surge';
 
 const ServiceListingPage = () => {
   const { API, user } = useAuth();
@@ -49,24 +50,7 @@ const ServiceListingPage = () => {
 
   // Helper to get merged price (base price + active demand surge)
   const getMergedPrice = (basePrice) => {
-    let demandSurge = 0;
-    activeSurcharges.forEach(s => {
-      if (s.chargeType === 'demand') {
-        if (s.maxBookingValue && basePrice > s.maxBookingValue) {
-          return;
-        }
-        let chargeAmount = 0;
-        if (s.mode === 'flat') {
-          chargeAmount = s.value;
-        } else if (s.mode === 'percentage') {
-          chargeAmount = (basePrice * s.value) / 100;
-        } else if (s.mode === 'multiplier') {
-          chargeAmount = basePrice * (s.value - 1);
-        }
-        demandSurge += parseFloat(chargeAmount.toFixed(2));
-      }
-    });
-    return basePrice + demandSurge;
+    return getMergedPriceUtil(basePrice, activeSurcharges);
   };
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -181,11 +165,39 @@ const ServiceListingPage = () => {
     }
   }, []);
 
+  // Sync url search parameters to state and apply initial filtering when loaded
   useEffect(() => {
-    if (!isInitialMount.current) {
-      applyLocalFilters(searchTerm, selectedCategory);
+    const searchVal = searchParams.get('search') || '';
+    const categoryVal = searchParams.get('category') || 'All';
+    setSearchTerm(searchVal);
+    setSelectedCategory(categoryVal);
+    
+    if (allServices.length > 0) {
+      let filtered = [...allServices];
+      const getCatName = (cat) => {
+        if (typeof cat === 'object' && cat !== null) return cat.name || '';
+        return categoriesData.find(c => c.value === cat)?.label || '';
+      };
+
+      if (searchVal?.trim()) {
+        const searchLower = searchVal.toLowerCase().trim();
+        filtered = filtered.filter(service =>
+          service.title?.toLowerCase().includes(searchLower) ||
+          service.description?.toLowerCase().includes(searchLower) ||
+          getCatName(service.category).toLowerCase().includes(searchLower)
+        );
+      }
+
+      if (categoryVal && categoryVal !== 'All') {
+        filtered = filtered.filter(service => {
+          const catId = typeof service.category === 'object' ? service.category?._id : service.category;
+          return catId === categoryVal;
+        });
+      }
+
+      setServices(filtered);
     }
-  }, [searchTerm, selectedCategory]);
+  }, [searchParams, allServices, categoriesData]);
 
   const categoriesForFilter = useMemo(() => {
     return [{ value: 'All', label: 'All' }, ...categoriesData];
@@ -437,7 +449,7 @@ const ServiceListingPage = () => {
       {showFilters && (
         <div className="fixed inset-0 z-[60] md:hidden flex flex-col justify-end">
           {/* Backdrop Overlay */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
             onClick={() => setShowFilters(false)}
           />
@@ -449,7 +461,7 @@ const ServiceListingPage = () => {
                 <Sliders className="w-5 h-5 text-primary" />
                 Filters & Sorting
               </h3>
-              <button 
+              <button
                 onClick={() => setShowFilters(false)}
                 className="p-1 hover:bg-gray-100 rounded-full transition-colors"
               >
@@ -600,50 +612,104 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
     ? service.category?.name
     : categoryMap[service.category] || 'Service';
 
+  // Format rating count nicely
+  const displayRating = service.averageRating ? service.averageRating.toFixed(1) : '0.0';
+  const displayRatingCount = service.ratingCount || 0;
+
   return (
-    <div className="group bg-white rounded-xl border border-gray-100 hover:border-primary/20 hover:shadow-lg transition-all duration-300 overflow-hidden">
-      <div className="relative h-36 overflow-hidden">
-        <img
-          src={imageUrl}
-          alt={service.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
-        />
-        <div className="absolute top-2 left-2">
-          <span className="text-xs font-medium bg-white/90 backdrop-blur-sm text-primary px-2 py-0.5 rounded-lg">
-            {categoryName}
-          </span>
+    <div className="group bg-white rounded-2xl border border-gray-150 hover:border-primary/40 hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between transform hover:-translate-y-0.5">
+      <div>
+        {/* Image Container */}
+        <div className="relative h-40 overflow-hidden bg-gray-50">
+          <img
+            src={imageUrl}
+            alt={service.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
+          />
+          {/* Top-Left Badges (Popular / Featured / Service Type) */}
+          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
+            {service.isFeatured && (
+              <span className="text-[9px] font-black bg-amber-50/90 text-amber-700 backdrop-blur-sm px-2 py-0.5 rounded-md shadow-sm border border-amber-100 flex items-center gap-1">
+                ★ Featured
+              </span>
+            )}
+            {service.serviceType && service.serviceType !== 'standard' && (
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase shadow-sm tracking-wider text-white ${service.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
+                }`}>
+                {service.serviceType}
+              </span>
+            )}
+            {!service.isFeatured && service.averageRating >= 4.5 && (
+              <span className="text-[9px] font-black bg-emerald-50/90 text-emerald-700 backdrop-blur-sm px-2 py-0.5 rounded-md shadow-sm border border-emerald-100 flex items-center gap-1">
+                ★ Popular
+              </span>
+            )}
+          </div>
+          {/* Bottom-Left Category Tag Overlay */}
+          <div className="absolute bottom-2.5 left-2.5 z-10">
+            <span className="text-[10px] font-extrabold bg-white/95 backdrop-blur-sm text-teal-700 px-2.5 py-1 rounded-lg shadow-md border border-teal-50">
+              {categoryName}
+            </span>
+          </div>
+        </div>
+
+        {/* Details Container */}
+        <div className="p-4">
+          <h3 className="font-extrabold text-secondary text-sm line-clamp-1 mb-1 group-hover:text-primary transition-colors">
+            {service.title}
+          </h3>
+
+          {service.shortDescription ? (
+            <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed">
+              {service.shortDescription}
+            </p>
+          ) : (
+            <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed">
+              {service.description}
+            </p>
+          )}
+
+          {/* Icons & Rating Row (Duration on Left, Rating on Right) */}
+          <div className="flex items-center justify-between mb-3 text-xs text-gray-500 font-medium">
+            <div className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+              <span>{service.duration || 1} Hr</span>
+            </div>
+            <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-lg border border-gray-100">
+              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 flex-shrink-0" />
+              <span className="text-xs font-bold text-secondary">{displayRating}</span>
+              <span className="text-[10px] text-gray-400">({displayRatingCount})</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="p-3">
-        <h3 className="font-semibold text-secondary text-sm line-clamp-1 mb-1">{service.title}</h3>
-        <p className="text-gray-500 text-xs line-clamp-2 mb-2">{service.description}</p>
-
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1 text-gray-500 text-xs">
-            <Clock className="w-3 h-3" />
-            <span>{service.duration || 1} hr</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Rating value={service.averageRating || 0} precision={0.5} readOnly size="small" sx={{ '& .MuiRating-iconFilled': { color: '#F97316' } }} />
-            <span className="text-xs text-gray-500">({service.ratingCount || 0})</span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <div className="flex items-baseline gap-0.5">
-            <IndianRupee className="w-3 h-3 text-secondary" />
-            <span className="text-base font-bold text-secondary">
-              {getMergedPrice ? getMergedPrice(service.basePrice)?.toLocaleString() : service.basePrice?.toLocaleString()}
-            </span>
+      {/* Footer / Price & Button */}
+      <div className="p-4 pt-0">
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+          <div className="flex flex-col flex-shrink-0">
+            {service.discountPrice ? (
+              <>
+                <span className="text-base font-extrabold text-emerald-600 whitespace-nowrap">
+                  ₹{getMergedPrice ? getMergedPrice(service.discountPrice)?.toLocaleString() : service.discountPrice?.toLocaleString()}
+                </span>
+                <span className="text-[10px] line-through text-gray-400 font-normal whitespace-nowrap">
+                  ₹{getMergedPrice ? getMergedPrice(service.basePrice)?.toLocaleString() : service.basePrice?.toLocaleString()}
+                </span>
+              </>
+            ) : (
+              <span className="text-base font-extrabold text-emerald-600 whitespace-nowrap">
+                ₹{getMergedPrice ? getMergedPrice(service.basePrice)?.toLocaleString() : service.basePrice?.toLocaleString()}
+              </span>
+            )}
           </div>
           <button
             onClick={() => onBook(service._id, isAvailable)}
             disabled={!isAvailable}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${isAvailable
-              ? 'bg-primary text-white hover:bg-primary/90'
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 ${isAvailable
+              ? 'bg-primary text-white hover:bg-primary/95 shadow-sm shadow-primary/10'
+              : 'bg-gray-150 text-gray-400 cursor-not-allowed'
               }`}
           >
             Book Now

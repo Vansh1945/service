@@ -90,6 +90,7 @@ import RescheduleModal from '../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
 import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
+import PriceDisplay from '../../components/PriceDisplay';
 import {
     Search,
     Calendar,
@@ -206,8 +207,8 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                 <div className="text-sm font-medium text-secondary">
                     {booking.services?.[0]?.service?.title || 'N/A'}
                 </div>
-                <div className="text-sm font-bold text-primary">
-                    {formatCurrency(booking.totalAmount)}
+                <div className="text-sm">
+                    <PriceDisplay amount={booking.totalAmount} type="bold-primary" />
                 </div>
             </div>
         </td>
@@ -533,9 +534,9 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                     </div>
                     <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-xs space-y-1">
                         <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">Refund Summary</p>
-                        <div className="flex justify-between"><span>Total Paid:</span><span className="font-semibold text-secondary">{formatCurrency(totalPaid)}</span></div>
-                        <div className="flex justify-between"><span>Platform Fee Retained:</span><span className="font-semibold text-red-600">{formatCurrency(platformFee)}</span></div>
-                        <div className="flex justify-between border-t border-gray-200 pt-1 font-bold"><span>Refundable Amount:</span><span className="text-teal-700">{formatCurrency(refundableAmount)}</span></div>
+                        <div className="flex justify-between"><span>Total Paid:</span><PriceDisplay amount={totalPaid} type="default" /></div>
+                        <div className="flex justify-between"><span>Platform Fee Retained:</span><PriceDisplay amount={platformFee} type="red-semibold" /></div>
+                        <div className="flex justify-between border-t border-gray-200 pt-1 font-bold"><span>Refundable Amount:</span><PriceDisplay amount={refundableAmount} type="teal" /></div>
                         <div className="flex justify-between pt-1"><span>Refund Destination:</span><span className="font-bold text-teal-700">Customer Wallet</span></div>
                         <div className="flex justify-between"><span>Expected Refund Method:</span><span className="font-semibold text-teal-700">Wallet Transfer</span></div>
                     </div>
@@ -1045,7 +1046,7 @@ const AdminBookingsView = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-600">Revenue</p>
-                            <p className="text-2xl font-bold text-primary">{formatCurrency(stats.revenue)}</p>
+                            <p className="text-2xl font-bold text-primary"><PriceDisplay amount={stats.revenue} type="text-only" /></p>
                         </div>
                         <div className="p-2 bg-teal-50 rounded-full">
                             <DollarSign className="w-6 h-6 text-primary" />
@@ -1393,7 +1394,7 @@ const AdminBookingsView = () => {
                                                         <p className="text-xs font-semibold text-secondary truncate">{item.service?.title || '—'}</p>
                                                         <p className="text-[10px] text-gray-400">{item.service?.category?.name || '—'} · Qty {item.quantity || 1}</p>
                                                     </div>
-                                                    <span className="text-xs font-bold text-secondary shrink-0 ml-2">{formatCurrency(item.price * (item.quantity || 1))}</span>
+                                                    <span className="shrink-0 ml-2"><PriceDisplay amount={item.price * (item.quantity || 1)} type="bold-secondary" className="text-xs" /></span>
                                                 </div>
                                             ))}
                                         </Card>
@@ -1540,12 +1541,12 @@ const AdminBookingsView = () => {
                                                         <div className="space-y-1 text-xs">
                                                             <div className="flex justify-between">
                                                                 <span className="text-gray-500">Service Price (Gross)</span>
-                                                                <span className="font-semibold text-secondary">{formatCurrency(pay.subtotal)}</span>
+                                                                <PriceDisplay amount={pay.subtotal} type="secondary" />
                                                             </div>
                                                             {pay.totalDiscount > 0 && (
                                                                 <div className="flex justify-between">
                                                                     <span className="text-gray-500">Coupon Discount</span>
-                                                                    <span className="font-bold text-red-500">-{formatCurrency(pay.totalDiscount)}</span>
+                                                                    <PriceDisplay amount={pay.totalDiscount} type="negative" prefix="-" />
                                                                 </div>
                                                             )}
                                                             {(() => {
@@ -1558,15 +1559,60 @@ const AdminBookingsView = () => {
                                                                 const custom = bk.customCharges || 0;
                                                                 const totalSur = visiting + rain + traffic + night + demand + platform + custom;
                                                                 return totalSur > 0 ? (
-                                                                    <div className="flex justify-between">
-                                                                        <span className="text-gray-500" title="Visiting, Rain, Traffic, Night, Demand, Custom, Platform fees">Total Surcharges & Fees</span>
-                                                                        <span className="font-semibold text-secondary">+{formatCurrency(totalSur)}</span>
+                                                                    <div className="space-y-1 pt-1 border-t border-dashed border-gray-100 mt-1">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Surges & Fees Breakdown</span>
+                                                                        {visiting > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Visiting Charge</span>
+                                                                                <PriceDisplay amount={visiting} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        {rain > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Rain Charge</span>
+                                                                                <PriceDisplay amount={rain} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        {traffic > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Traffic Charge</span>
+                                                                                <PriceDisplay amount={traffic} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        {night > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Night Charge</span>
+                                                                                <PriceDisplay amount={night} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        {demand > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Demand Surge</span>
+                                                                                <PriceDisplay amount={demand} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        {platform > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Platform Fee</span>
+                                                                                <PriceDisplay amount={platform} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        {custom > 0 && (
+                                                                            <div className="flex justify-between pl-2 text-[11px]">
+                                                                                <span className="text-gray-500">Custom Charge</span>
+                                                                                <PriceDisplay amount={custom} type="secondary" prefix="+" />
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex justify-between pl-2 text-xs font-semibold pt-1 border-t border-gray-150 mt-1">
+                                                                            <span className="text-gray-600">Total Surges & Fees</span>
+                                                                            <PriceDisplay amount={totalSur} type="secondary" prefix="+" />
+                                                                        </div>
                                                                     </div>
                                                                 ) : null;
                                                             })()}
                                                             <div className="flex justify-between border-t border-gray-100 mt-2 pt-2 text-sm font-bold">
                                                                 <span className="text-secondary">Total Billed to Customer</span>
-                                                                <span className="text-primary">{formatCurrency(pay.totalAmount)}</span>
+                                                                <PriceDisplay amount={pay.totalAmount} type="primary" className="text-sm" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1580,14 +1626,14 @@ const AdminBookingsView = () => {
                                                                     <p className="font-semibold text-secondary">Provider Settlement</p>
                                                                     <p className="text-[9px] text-gray-400">₹{(bk.providerEarnings || 0) - (bk.providerSurgeShare || 0)} Service + ₹{bk.providerSurgeShare || 0} Surcharges</p>
                                                                 </div>
-                                                                <span className="font-bold text-green-600 text-sm">{formatCurrency(bk.providerEarnings)}</span>
+                                                                <PriceDisplay amount={bk.providerEarnings} type="green-bold" className="text-sm" />
                                                             </div>
                                                             <div className="flex justify-between border-t border-teal-150 mt-1 pt-1 font-bold text-teal-700">
                                                                 <div>
                                                                     <p className="font-semibold text-gray-700">Platform Earning</p>
-                                                                    <p className="text-[9px] text-gray-400">₹{(bk.commissionAmount || 0)} Commission + ₹{bk.companySurgeShare || 0} Surge + ₹{bk.platformFee || 0} Fee</p>
+                                                                    <p className="text-[9px] text-gray-400"><PriceDisplay amount={bk.commissionAmount || 0} type="text-only" /> Commission + <PriceDisplay amount={bk.companySurgeShare || 0} type="text-only" /> Surge + <PriceDisplay amount={bk.platformFee || 0} type="text-only" /> Fee</p>
                                                                 </div>
-                                                                <span className="text-sm">{formatCurrency((bk.commissionAmount || 0) + (bk.companySurgeShare || 0) + (bk.platformFee || 0))}</span>
+                                                                <PriceDisplay amount={(bk.commissionAmount || 0) + (bk.companySurgeShare || 0) + (bk.platformFee || 0)} type="text-only" className="text-sm" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1597,8 +1643,8 @@ const AdminBookingsView = () => {
                                                         <div className="bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 text-[10px]">
                                                             <p className="font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Payment Sources</p>
                                                             <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                                                {pay.walletAmountUsed > 0 && <span className="text-gray-500">Wallet: <strong className="text-secondary">{formatCurrency(pay.walletAmountUsed)}</strong></span>}
-                                                                {pay.onlineAmountPaid > 0 && <span className="text-gray-500">Online: <strong className="text-secondary">{formatCurrency(pay.onlineAmountPaid)}</strong></span>}
+                                                                {pay.walletAmountUsed > 0 && <span className="text-gray-500">Wallet: <PriceDisplay amount={pay.walletAmountUsed} type="bold-secondary" className="font-bold text-secondary" /></span>}
+                                                                {pay.onlineAmountPaid > 0 && <span className="text-gray-500">Online: <PriceDisplay amount={pay.onlineAmountPaid} type="bold-secondary" className="font-bold text-secondary" /></span>}
                                                             </div>
                                                         </div>
                                                     )}
@@ -1612,12 +1658,12 @@ const AdminBookingsView = () => {
                                                             {bk.complaintId && <div className="flex justify-between"><span className="text-gray-400">Complaint:</span><span className="font-semibold">{bk.complaintId.complaintId || bk.complaintId}</span></div>}
                                                             {(bk.cancellationProgress?.refundAmount > 0 || bk.refundAmount > 0) && (
                                                                 <>
-                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund:</span><span className="font-bold text-teal-700">{formatCurrency(bk.refundAmount)}</span></div>
+                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund:</span><PriceDisplay amount={bk.refundAmount} type="teal" /></div>
                                                                     <div className="flex justify-between"><span className="text-gray-400">Refund Destination:</span><span className="font-bold text-teal-755 uppercase">Wallet</span></div>
                                                                     <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.cancellationProgress?.status || bk.refundStatus || 'Completed'}</span></div>
                                                                     <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || '—'}</span></div>
                                                                     {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{new Date(bk.refundProcessedAt).toLocaleDateString()}</span></div>}
-                                                                    {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><span className="font-bold text-red-600">{formatCurrency(bk.platformFee || bk.platformFeeRetained)}</span></div>}
+                                                                    {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><PriceDisplay amount={bk.platformFee || bk.platformFeeRetained} type="red-bold" /></div>}
                                                                 </>
                                                             )}
                                                         </div>

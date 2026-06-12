@@ -276,8 +276,8 @@ const getAllQuestions = async (req, res) => {
   try {
     const { category, subcategory, isActive, page, limit: limitQ } = req.query;
     const pageNum = parseInt(page) || 1;
-    const limit = parseInt(limitQ) || 10;
-    const skip = (pageNum - 1) * limit;
+    const limit = limitQ === 'all' ? 0 : (parseInt(limitQ) || 10);
+    const skip = limit === 0 ? 0 : (pageNum - 1) * limit;
     const filter = {};
 
     if (category) filter.category = category;
@@ -302,8 +302,8 @@ const getAllQuestions = async (req, res) => {
       pagination: {
         total,
         page: pageNum,
-        limit,
-        totalPages: Math.ceil(total / limit)
+        limit: limit === 0 ? total : limit,
+        totalPages: limit === 0 ? 1 : Math.ceil(total / limit)
       }
     });
   } catch (error) {

@@ -15,7 +15,7 @@ const { Category } = require('../models/SystemSetting');
 // Create a new service (Admin only)
 const createService = async (req, res) => {
     try {
-        const { title, category, description, basePrice, duration, specialNotes, materialsUsed } = req.body;
+        const { title, category, description, basePrice, duration, specialNotes, materialsUsed, serviceType, warranty, tags, faqs, shortDescription, isFeatured, prerequisites, discountPrice } = req.body;
 
         // Handle category conversion from string to ObjectId
         let categoryId = category;
@@ -63,7 +63,15 @@ const createService = async (req, res) => {
             duration,
             specialNotes: specialNotes ? JSON.parse(specialNotes) : [],
             materialsUsed: materialsUsed ? JSON.parse(materialsUsed) : [],
-            images: imageUrls
+            images: imageUrls,
+            serviceType,
+            warranty: warranty ? (typeof warranty === 'string' ? JSON.parse(warranty) : warranty) : undefined,
+            tags: tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [],
+            faqs: faqs ? (typeof faqs === 'string' ? JSON.parse(faqs) : faqs) : [],
+            shortDescription,
+            isFeatured: isFeatured === true || isFeatured === 'true',
+            prerequisites: prerequisites ? (typeof prerequisites === 'string' ? JSON.parse(prerequisites) : prerequisites) : [],
+            discountPrice: (discountPrice !== undefined && discountPrice !== null && discountPrice !== '') ? Number(discountPrice) : undefined
         });
 
         // Populate the category field
@@ -117,6 +125,30 @@ const updateService = async (req, res) => {
             updates.materialsUsed = JSON.parse(updates.materialsUsed);
         }
 
+        if (updates.warranty && typeof updates.warranty === 'string') {
+            updates.warranty = JSON.parse(updates.warranty);
+        }
+
+        if (updates.tags && typeof updates.tags === 'string') {
+            updates.tags = JSON.parse(updates.tags);
+        }
+
+        if (updates.faqs && typeof updates.faqs === 'string') {
+            updates.faqs = JSON.parse(updates.faqs);
+        }
+
+        if (updates.prerequisites && typeof updates.prerequisites === 'string') {
+            updates.prerequisites = JSON.parse(updates.prerequisites);
+        }
+
+        if (updates.isFeatured !== undefined) {
+            updates.isFeatured = updates.isFeatured === true || updates.isFeatured === 'true';
+        }
+
+        if (updates.discountPrice !== undefined && updates.discountPrice !== '') {
+            updates.discountPrice = Number(updates.discountPrice);
+        }
+
         // Handle category conversion from string to ObjectId
         if (updates.category && typeof updates.category === 'string') {
             // First try to find by _id, then by name
@@ -152,9 +184,7 @@ const updateService = async (req, res) => {
 
         // Update fields
         Object.keys(updates).forEach(key => {
-            if (key in service) {
-                service[key] = updates[key];
-            }
+            service[key] = updates[key];
         });
 
         await service.save();
@@ -337,7 +367,7 @@ const getServicesForProvider = async (req, res) => {
         }
 
         const services = await Service.find(query)
-            .select('title category description images basePrice duration feedback averageRating')
+            .select('title category description images basePrice duration feedback averageRating serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
@@ -368,7 +398,7 @@ const getServiceDetailsForProvider = async (req, res) => {
         const { id } = req.params;
 
         const service = await Service.findById(id)
-            .select('title category description images basePrice duration durationFormatted feedback averageRating')
+            .select('title category description images basePrice duration durationFormatted feedback averageRating serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
             .populate('feedback.customer', 'name')
             .lean();
 
@@ -414,7 +444,7 @@ const getActiveServices = async (req, res) => {
 
         // First get the services without virtuals to avoid issues
         const services = await Service.find(query)
-            .select('title category description images basePrice duration feedback averageRating ratingCount')
+            .select('title category description images basePrice duration feedback averageRating ratingCount serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
@@ -478,7 +508,7 @@ const getPublicServiceById = async (req, res) => {
 
         // First get the service with basic info
         const service = await Service.findById(id)
-            .select('title category description images basePrice duration isActive averageRating ratingCount specialNotes materialsUsed')
+            .select('title category description images basePrice duration isActive averageRating ratingCount specialNotes materialsUsed serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice')
             .populate('category', 'name')
             .lean();
 
@@ -838,9 +868,50 @@ const exportServicesToExcel = async (req, res) => {
     }
 };
 
+// Bulk disable discounts (Admin only)
+const disableDiscounts = async (req, res) => {
+    try {
+        const { scope, categoryId } = req.body;
+
+        if (!scope || !['all', 'category'].includes(scope)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid scope. Must be "all" or "category"'
+            });
+        }
+
+        let query = { createdBy: req.adminID };
+
+        if (scope === 'category') {
+            if (!categoryId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Category ID is required for category scope'
+                });
+            }
+            query.category = categoryId;
+        }
+
+        const result = await Service.updateMany(query, { $unset: { discountPrice: "" } });
+
+        res.json({
+            success: true,
+            message: `Discounts successfully deactivated for ${result.modifiedCount} services.`,
+            modifiedCount: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('Error disabling discounts:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to deactivate discounts'
+        });
+    }
+};
+
 
 module.exports = {
     // Admin controllers
+    disableDiscounts,
     createService,
     updateService,
     updateBasePrice,

@@ -12,6 +12,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
+import { calculateSurchargeAmount, getMergedPrice } from '../../utils/surge';
 import { getSystemSetting } from '../../services/SystemService';
 import * as CustomerService from '../../services/CustomerService';
 import { formatCurrency, formatTime } from '../../utils/format';
@@ -305,29 +306,20 @@ const BookService = () => {
   const calculateSurcharges = () => {
     let totalSurcharge = 0;
     const breakdowns = [];
-    const baseAmount = service ? service.basePrice * (formData.quantity || 1) : 0;
+    const baseAmount = service ? (service.discountPrice || service.basePrice) * (formData.quantity || 1) : 0;
 
     activeSurcharges.forEach(s => {
-      if (s.maxBookingValue && baseAmount > s.maxBookingValue) {
-        return;
+      const chargeAmount = calculateSurchargeAmount(baseAmount, s);
+      if (chargeAmount > 0) {
+        totalSurcharge += chargeAmount;
+        breakdowns.push({
+          id: s._id,
+          name: s.chargeType === 'platform' ? 'Platform Fee' : `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Charge`,
+          amount: chargeAmount,
+          mode: s.mode,
+          value: s.value
+        });
       }
-      let chargeAmount = 0;
-      if (s.mode === 'flat') {
-        chargeAmount = s.value;
-      } else if (s.mode === 'percentage') {
-        chargeAmount = (baseAmount * s.value) / 100;
-      } else if (s.mode === 'multiplier') {
-        chargeAmount = baseAmount * (s.value - 1);
-      }
-      chargeAmount = parseFloat(chargeAmount.toFixed(2));
-      totalSurcharge += chargeAmount;
-      breakdowns.push({
-        id: s._id,
-        name: s.chargeType === 'platform' ? 'Platform Fee' : `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Charge`,
-        amount: chargeAmount,
-        mode: s.mode,
-        value: s.value
-      });
     });
 
     return { totalSurcharge, breakdowns };
@@ -336,7 +328,7 @@ const BookService = () => {
   // Calculate discount
   const calculateDiscount = () => {
     if (!service?.basePrice || !formData.appliedCoupon) return 0;
-    const baseAmount = service.basePrice * (formData.quantity || 1);
+    const baseAmount = (service.discountPrice || service.basePrice) * (formData.quantity || 1);
     if (formData.appliedCoupon.discountType === 'percent') {
       return (baseAmount * formData.appliedCoupon.discountValue) / 100;
     } else {
@@ -346,7 +338,7 @@ const BookService = () => {
 
   const calculateTotal = () => {
     if (!service?.basePrice) return 0;
-    const baseAmount = service.basePrice * (formData.quantity || 1);
+    const baseAmount = (service.discountPrice || service.basePrice) * (formData.quantity || 1);
     const discount = calculateDiscount();
     const { totalSurcharge } = calculateSurcharges();
     return Math.max(0, baseAmount - discount + totalSurcharge);
@@ -373,6 +365,7 @@ const BookService = () => {
     const { breakdowns } = calculateSurcharges();
     let demand = 0;
     let visiting = 0;
+    let platformFee = 0;
     let additional = 0;
     const additionalBreakdown = [];
 
@@ -382,16 +375,20 @@ const BookService = () => {
         demand += s.amount;
       } else if (type.includes('visiting') || type.includes('festival') || type.includes('custom')) {
         visiting += s.amount;
+      } else if (type.includes('platform')) {
+        platformFee += s.amount;
       } else {
         additional += s.amount;
         additionalBreakdown.push({ name: s.name, amount: s.amount });
       }
     });
 
-    const mergedServicePrice = baseAmount + demand;
+    const localBaseAmount = service ? (service.discountPrice || service.basePrice) * (formData.quantity || 1) : 0;
+    const mergedServicePrice = localBaseAmount + demand;
     return {
       mergedServicePrice,
       visiting,
+      platformFee,
       additional,
       additionalBreakdown,
       demand
@@ -422,6 +419,36 @@ const BookService = () => {
         }
         if (settingsRes?.data?.success) {
           setSystemSettings(settingsRes.data.data);
+        }
+
+        // Fetch initial surcharges immediately to avoid rendering delays
+        let initialLat = null;
+        let initialLng = null;
+        if (prefillBooking?.address?.lat && prefillBooking?.address?.lng) {
+          initialLat = prefillBooking.address.lat;
+          initialLng = prefillBooking.address.lng;
+        } else if (addressesData.length > 0) {
+          initialLat = addressesData[0].lat;
+          initialLng = addressesData[0].lng;
+        }
+
+        const params = {
+          subtotal: serviceData ? serviceData.basePrice : undefined
+        };
+        if (initialLat && initialLng) {
+          params.lat = initialLat;
+          params.lng = initialLng;
+        }
+
+        try {
+          const surgeRes = await resolveActiveSurcharges(params);
+          if (surgeRes.data?.success) {
+            setActiveSurcharges(surgeRes.data.data || []);
+            setDetectedZoneId(surgeRes.data.zoneId || null);
+            setZoneAncestry(surgeRes.data.zoneAncestry || []);
+          }
+        } catch (surgeErr) {
+          console.error("Initial surcharges load failed:", surgeErr);
         }
 
         if (prefillBooking) {
@@ -640,7 +667,7 @@ const BookService = () => {
   };
 
   const totalAmount = calculateTotal();
-  const baseAmount = service?.basePrice * (formData.quantity || 1) || 0;
+  const baseAmount = (service?.discountPrice || service?.basePrice) * (formData.quantity || 1) || 0;
   const discountAmount = calculateDiscount();
 
   if (isLoading || !service) {
@@ -674,37 +701,93 @@ const BookService = () => {
             {/* Service Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
               <div className="flex gap-5">
-                <div className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-gray-100">
+                <div className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-gray-100 relative">
                   <img
                     src={service.images?.[0] || 'https://placehold.co/400x400?text=No+Image'}
                     alt={service.title}
                     className="w-full h-full object-cover"
                     onError={(e) => e.target.src = 'https://placehold.co/400x400?text=No+Image'}
                   />
+                  {(service.serviceType && service.serviceType !== 'standard') && (
+                    <span className={`absolute bottom-1 left-1 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${
+                      service.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
+                    }`}>
+                      {service.serviceType}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="inline-block text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-lg mb-1">
+                      <span className="inline-block text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-lg mb-1">
                         {typeof service.category === 'object' ? service.category.name : service.category}
                       </span>
-                      <h2 className="text-lg font-bold text-secondary">{service.title}</h2>
+                      {service.isFeatured && (
+                        <span className="ml-1.5 inline-block text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                          ★ Featured
+                        </span>
+                      )}
+                      <h2 className="text-base font-extrabold text-secondary">{service.title}</h2>
                     </div>
                     <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
                       <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
                       <span className="font-semibold text-secondary text-sm">{service.averageRating?.toFixed(1) || '0.0'}</span>
                     </div>
                   </div>
-                  <p className="text-gray-500 text-xs mt-1 line-clamp-2">{service.description}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                  
+                  {service.shortDescription ? (
+                    <p className="text-gray-500 text-xs mt-1 italic">"{service.shortDescription}"</p>
+                  ) : (
+                    <p className="text-gray-500 text-xs mt-1 line-clamp-2">{service.description}</p>
+                  )}
+
+                  {service.warranty?.duration && (
+                    <div className="text-[10px] text-indigo-600 font-semibold mt-1">
+                      🛡️ {service.warranty.duration} {service.warranty.unit} Warranty
+                    </div>
+                  )}
+
+                  {service.tags && service.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {service.tags.map((tag, idx) => (
+                        <span key={idx} className="text-[9px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 font-medium">
                     <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-primary" />{service.duration} hrs</div>
-                    <div className="flex items-center gap-1"><Truck className="w-3.5 h-3.5 text-primary" />Free Visit</div>
+                    {getCustomerPricingBreakdown().visiting > 0 ? (
+                      <div className="flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-primary" />
+                        Visiting Fee: {formatCurrency(getCustomerPricingBreakdown().visiting / formData.quantity)}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-primary" />
+                        Free Visit
+                      </div>
+                    )}
                   </div>
+                  
                   <div className="mt-2">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-bold text-primary">
-                        {formatCurrency(getCustomerPricingBreakdown().mergedServicePrice / formData.quantity)}
-                      </span>
+                    <div className="flex items-baseline gap-1.5">
+                      {service.discountPrice ? (
+                        <>
+                          <span className="text-lg font-black text-green-600">
+                            {formatCurrency(getMergedPrice(service.discountPrice, activeSurcharges))}
+                          </span>
+                          <span className="text-xs line-through text-gray-400 font-normal">
+                            {formatCurrency(getMergedPrice(service.basePrice, activeSurcharges))}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-lg font-black text-primary">
+                          {formatCurrency(getMergedPrice(service.basePrice, activeSurcharges))}
+                        </span>
+                      )}
                       <span className="text-xs text-gray-400">/service</span>
                     </div>
                   </div>
@@ -971,6 +1054,20 @@ const BookService = () => {
                       </div>
                     </>
                   )}
+                   {getCustomerPricingBreakdown().platformFee > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
+                        Platform Fee
+                        <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
+                          Platform Fee is non-refundable on booking cancellation.
+                        </span>
+                      </span>
+                      <span className="text-secondary font-semibold">
+                        +{formatCurrency(getCustomerPricingBreakdown().platformFee)}
+                      </span>
+                    </div>
+                  )}
                   {getCustomerPricingBreakdown().additional > 0 && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">Additional Service Charges</span>
@@ -1201,7 +1298,7 @@ const BookService = () => {
                 onClick={handleSubmit}
                 loading={isSubmitting}
                 loadingText="Processing..."
-                className="w-full bg-accent text-white py-3 rounded-xl font-semibold hover:bg-accent/90 transition-all disabled:bg-gray-300 flex items-center justify-center gap-2 text-sm"
+                className="w-full bg-accent hover:bg-accent/95 text-white py-3.5 rounded-xl font-extrabold shadow-md shadow-accent/10 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs uppercase tracking-wider disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="w-4 h-4" />
                 {formData.paymentMethod === 'cash'

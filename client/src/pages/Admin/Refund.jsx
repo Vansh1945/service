@@ -11,6 +11,7 @@ import {
 import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import PriceDisplay from '../../components/PriceDisplay';
 // ── Status Badges (Standardized Clean Designs) ────────────────────────
 const RefundStatusBadge = ({ status }) => {
   const cfg = {
@@ -201,7 +202,9 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
             <div className="bg-teal-50/20 p-4 rounded-lg border border-teal-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-primary">Transaction Value</span>
-                <p className="text-2xl font-bold text-primary mt-1">₹{booking.totalAmount}</p>
+                <p className="text-2xl font-bold text-primary mt-1">
+                  <PriceDisplay amount={booking.totalAmount} type="2xl-bold-primary" />
+                </p>
               </div>
               <div className="flex gap-6 text-xs font-semibold">
                 <div>
@@ -442,12 +445,18 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                           </div>
                           <div className="flex justify-between items-center text-xs font-medium text-gray-500">
                             <span className="uppercase tracking-wider text-[10px] bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{tx.paymentMethod}</span>
-                            <span className="font-bold text-secondary text-sm">₹{tx.isRupees || ['cash', 'wallet'].includes(tx.paymentMethod?.toLowerCase()) ? tx.amount : tx.amount / 100}</span>
+                            <span className="font-bold text-secondary text-sm">
+                              <PriceDisplay amount={tx.isRupees || ['cash', 'wallet'].includes(tx.paymentMethod?.toLowerCase()) ? tx.amount : tx.amount / 100} type="bold-secondary" />
+                            </span>
                           </div>
                           {tx.refundStatus && tx.refundStatus !== 'none' && (
                             <div className="mt-1 pt-1.5 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 font-semibold">
                               <span>Refund State: <span className="font-bold text-red-500 uppercase">{tx.refundStatus}</span></span>
-                              {tx.refundedAmount > 0 && <span className="text-gray-650">Refunded: <span className="font-bold text-secondary">₹{tx.refundedAmount}</span></span>}
+                              {tx.refundedAmount > 0 && (
+                                <span className="text-gray-650">
+                                  Refunded: <PriceDisplay amount={tx.refundedAmount} type="bold-secondary" />
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -648,15 +657,15 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Original Booking Values</p>
                           <div className="flex justify-between text-[11px]">
                             <span className="text-gray-500 font-medium">Gross Billed to Customer</span>
-                            <span className="font-bold text-secondary">{formatCurrency(grossBilled)}</span>
+                            <PriceDisplay amount={grossBilled} type="bold-secondary" />
                           </div>
                           <div className="flex justify-between text-[11px] mt-0.5">
                             <span className="text-gray-500 font-medium">Provider Earnings</span>
-                            <span className="font-semibold text-gray-700">{formatCurrency(originalProvider)}</span>
+                            <PriceDisplay amount={originalProvider} type="gray-bold" />
                           </div>
                           <div className="flex justify-between text-[11px] mt-0.5">
                             <span className="text-gray-500 font-medium">Platform Net Revenue</span>
-                            <span className="font-semibold text-gray-700">{formatCurrency(originalPlatform)}</span>
+                            <PriceDisplay amount={originalPlatform} type="gray-bold" />
                           </div>
                         </div>
 
@@ -664,15 +673,15 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                         <div className="space-y-1.5 pt-1">
                           <div className="flex justify-between font-bold text-secondary text-[13px] border-b border-dashed border-gray-200 pb-1.5">
                             <span>Total Refund Loss</span>
-                            <span className="text-red-600">{formatCurrency(refundAmount || 0)}</span>
+                            <PriceDisplay amount={refundAmount || 0} type="red-bold" />
                           </div>
                           <div className="flex justify-between font-medium">
                             <span className="text-gray-500">Deducted from Provider Earning</span>
-                            <span className="font-bold text-red-600">-{formatCurrency(providerLoss)}</span>
+                            <PriceDisplay amount={providerLoss} type="red-bold" prefix="-" />
                           </div>
                           <div className="flex justify-between font-medium">
                             <span className="text-gray-500">Absorbed by Platform (Net Loss)</span>
-                            <span className="font-bold text-purple-700">-{formatCurrency(platformLoss)}</span>
+                            <PriceDisplay amount={platformLoss} type="purple-loss" prefix="-" />
                           </div>
                         </div>
                       </div>
@@ -1010,7 +1019,7 @@ const RefundPage = () => {
 
                       {/* Amount */}
                       <td className="px-4 py-3.5">
-                        <span className="text-sm font-bold text-secondary">₹{b.totalAmount}</span>
+                        <PriceDisplay amount={b.totalAmount} type="bold-secondary" />
                       </td>
 
                       {/* Payment / Refund Status */}

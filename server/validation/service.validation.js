@@ -15,7 +15,50 @@ const createServiceSchema = z.object({
     return num;
   }),
   specialNotes: z.string().optional(),
-  materialsUsed: z.string().optional()
+  materialsUsed: z.string().optional(),
+  serviceType: z.enum(['standard', 'premium', 'emergency']).optional(),
+  warranty: z.union([z.string(), z.object({
+    duration: z.union([z.string(), z.number()]).transform(Number),
+    unit: z.enum(['days', 'months'])
+  })]).optional().transform(val => {
+    let parsed = val;
+    if (typeof val === 'string' && val.trim() !== '') {
+      try { parsed = JSON.parse(val); } catch (e) { return undefined; }
+    }
+    if (parsed && (parsed.duration === '' || parsed.duration === null || parsed.duration === undefined || isNaN(Number(parsed.duration)))) {
+      return undefined;
+    }
+    return parsed;
+  }),
+  tags: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch (e) { return [val]; }
+    }
+    return val;
+  }),
+  faqs: z.union([z.string(), z.array(z.object({
+    question: z.string(),
+    answer: z.string()
+  }))]).optional().transform(val => {
+    if (typeof val === 'string' && val.trim() !== '') {
+      try { return JSON.parse(val); } catch (e) { return []; }
+    }
+    return val;
+  }),
+  shortDescription: z.string().max(150).optional(),
+  isFeatured: z.union([z.string(), z.boolean()]).transform(val => String(val) === 'true').optional(),
+  prerequisites: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch (e) { return [val]; }
+    }
+    return val;
+  }),
+  discountPrice: z.union([z.string(), z.number()]).transform((val) => {
+    if (val === undefined || val === null || val === '') return undefined;
+    const num = Number(val);
+    if (isNaN(num)) throw new Error("Discount price must be a valid number");
+    return num;
+  }).optional()
 });
 
 const updateServiceSchema = z.object({
@@ -34,7 +77,50 @@ const updateServiceSchema = z.object({
   }).optional(),
   specialNotes: z.string().optional(),
   materialsUsed: z.string().optional(),
-  existingImages: z.string().optional()
+  existingImages: z.string().optional(),
+  serviceType: z.enum(['standard', 'premium', 'emergency']).optional(),
+  warranty: z.union([z.string(), z.object({
+    duration: z.union([z.string(), z.number()]).transform(Number),
+    unit: z.enum(['days', 'months'])
+  })]).optional().transform(val => {
+    let parsed = val;
+    if (typeof val === 'string' && val.trim() !== '') {
+      try { parsed = JSON.parse(val); } catch (e) { return undefined; }
+    }
+    if (parsed && (parsed.duration === '' || parsed.duration === null || parsed.duration === undefined || isNaN(Number(parsed.duration)))) {
+      return undefined;
+    }
+    return parsed;
+  }),
+  tags: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch (e) { return [val]; }
+    }
+    return val;
+  }),
+  faqs: z.union([z.string(), z.array(z.object({
+    question: z.string(),
+    answer: z.string()
+  }))]).optional().transform(val => {
+    if (typeof val === 'string' && val.trim() !== '') {
+      try { return JSON.parse(val); } catch (e) { return []; }
+    }
+    return val;
+  }),
+  shortDescription: z.string().max(150).optional(),
+  isFeatured: z.union([z.string(), z.boolean()]).transform(val => String(val) === 'true').optional(),
+  prerequisites: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch (e) { return [val]; }
+    }
+    return val;
+  }),
+  discountPrice: z.union([z.string(), z.number()]).transform((val) => {
+    if (val === undefined || val === null || val === '') return undefined;
+    const num = Number(val);
+    if (isNaN(num)) throw new Error("Discount price must be a valid number");
+    return num;
+  }).optional()
 });
 
 const updateBasePriceSchema = z.object({

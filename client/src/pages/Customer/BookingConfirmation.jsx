@@ -17,6 +17,7 @@ import Loader from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
 import ErrorState from '../../components/Error';
 import { formatDate, formatTime, formatCurrency } from '../../utils/format';
+import PriceDisplay from '../../components/PriceDisplay';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -176,7 +177,13 @@ const BookingConfirmation = () => {
         image: serviceDetails.images?.[0],
         basePrice: serviceDetails.basePrice,
         averageRating: serviceDetails.averageRating || 0,
-        ratingCount: serviceDetails.ratingCount || 0
+        ratingCount: serviceDetails.ratingCount || 0,
+        serviceType: serviceDetails.serviceType,
+        isFeatured: serviceDetails.isFeatured,
+        warranty: serviceDetails.warranty,
+        tags: serviceDetails.tags,
+        shortDescription: serviceDetails.shortDescription,
+        discountPrice: serviceDetails.discountPrice
       };
     }
     const firstService = bookingDetails?.services?.[0];
@@ -189,12 +196,20 @@ const BookingConfirmation = () => {
         image: source.images?.[0],
         basePrice: source.basePrice || firstService?.price || 0,
         averageRating: source.averageRating || 0,
-        ratingCount: source.ratingCount || 0
+        ratingCount: source.ratingCount || 0,
+        serviceType: source.serviceType,
+        isFeatured: source.isFeatured,
+        warranty: source.warranty,
+        tags: source.tags,
+        shortDescription: source.shortDescription,
+        discountPrice: source.discountPrice
       };
     }
     return {
       title: 'Service', category: 'General Service', duration: null,
-      image: null, basePrice: 0, averageRating: 0, ratingCount: 0
+      image: null, basePrice: 0, averageRating: 0, ratingCount: 0,
+      serviceType: null, isFeatured: false, warranty: null, tags: [],
+      shortDescription: '', discountPrice: null
     };
   };
 
@@ -494,36 +509,94 @@ const BookingConfirmation = () => {
             {/* Service Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
               <div className="flex gap-5">
-                <div className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-gray-100">
+                <div className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-gray-100 relative">
                   <img
                     src={serviceInfo.image || 'https://placehold.co/400x400?text=No+Image'}
                     alt={serviceInfo.title}
                     className="w-full h-full object-cover"
                     onError={(e) => e.target.src = 'https://placehold.co/400x400?text=No+Image'}
                   />
+                  {(serviceInfo.serviceType && serviceInfo.serviceType !== 'standard') && (
+                    <span className={`absolute bottom-1 left-1 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${
+                      serviceInfo.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
+                    }`}>
+                      {serviceInfo.serviceType}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="inline-block text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-lg mb-1">
+                      <span className="inline-block text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-lg mb-1">
                         {typeof serviceInfo.category === 'object' ? serviceInfo.category?.name : serviceInfo.category || 'Service'}
                       </span>
-                      <h2 className="text-lg font-bold text-secondary">{serviceInfo.title}</h2>
+                      {serviceInfo.isFeatured && (
+                        <span className="ml-1.5 inline-block text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                          ★ Featured
+                        </span>
+                      )}
+                      <h2 className="text-base font-extrabold text-secondary">{serviceInfo.title}</h2>
                     </div>
                     <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
                       <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
                       <span className="font-semibold text-secondary text-sm">{serviceInfo.averageRating?.toFixed(1) || '0.0'}</span>
                     </div>
                   </div>
-                  <p className="text-gray-500 text-xs mt-1 line-clamp-2">{serviceInfo.title} service</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+
+                  {serviceInfo.shortDescription ? (
+                    <p className="text-gray-500 text-xs mt-1 italic">"{serviceInfo.shortDescription}"</p>
+                  ) : (
+                    <p className="text-gray-500 text-xs mt-1 line-clamp-2">{serviceInfo.title} service</p>
+                  )}
+
+                  {serviceInfo.warranty?.duration && (
+                    <div className="text-[10px] text-indigo-600 font-semibold mt-1">
+                      🛡️ {serviceInfo.warranty.duration} {serviceInfo.warranty.unit} Warranty
+                    </div>
+                  )}
+
+                  {serviceInfo.tags && serviceInfo.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {serviceInfo.tags.map((tag, idx) => (
+                        <span key={idx} className="text-[9px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 font-medium">
                     <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-primary" />{serviceInfo.duration || 'Flexible'} hrs</div>
-                    <div className="flex items-center gap-1"><Truck className="w-3.5 h-3.5 text-primary" />Free Visit</div>
+                    {bookingDetails?.visitingCharge > 0 ? (
+                      <div className="flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-primary" />
+                        Visiting Fee: <PriceDisplay amount={bookingDetails.visitingCharge} type="text-only" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-primary" />
+                        Free Visit
+                      </div>
+                    )}
                   </div>
+                  
                   <div className="mt-2">
-                    <div className="flex items-baseline gap-1">
-                      <IndianRupee className="w-3.5 h-3.5 text-secondary" />
-                      <span className="text-xl font-bold text-primary">{formatCurrency((serviceInfo.basePrice || 0) + (bookingDetails.demandSurge || 0))}</span>
+                    <div className="flex items-baseline gap-1.5">
+                      {serviceInfo.discountPrice ? (
+                        (() => {
+                          const qty = bookingDetails.services?.[0]?.quantity || 1;
+                          const surgePerItem = (bookingDetails.demandSurge || 0) / qty;
+                          const surgeFactor = 1 + (surgePerItem / (serviceInfo.discountPrice || 1));
+                          return (
+                            <>
+                              <PriceDisplay amount={(serviceInfo.discountPrice || 0) + surgePerItem} type="large-bold-primary" className="text-green-600" />
+                              <PriceDisplay amount={(serviceInfo.basePrice || 0) * surgeFactor} type="text-only" className="text-xs line-through text-gray-400 font-normal" />
+                            </>
+                          );
+                        })()
+                      ) : (
+                        <PriceDisplay amount={(serviceInfo.basePrice || 0) + ((bookingDetails.demandSurge || 0) / (bookingDetails.services?.[0]?.quantity || 1))} type="large-bold-primary" />
+                      )}
                       <span className="text-xs text-gray-400">/service</span>
                     </div>
                   </div>
@@ -618,48 +691,59 @@ const BookingConfirmation = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Service Price ({quantity} item)</span>
-                    <span className="text-secondary font-medium">{formatCurrency(subtotal + (bookingDetails.demandSurge || 0))}</span>
+                    <PriceDisplay amount={subtotal + (bookingDetails.demandSurge || 0)} type="secondary" />
                   </div>
 
                   {discount > 0 && (
                     <>
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Discount Applied</span>
-                        <span className="text-green-600 font-medium">-{formatCurrency(discount)}</span>
+                        <PriceDisplay amount={discount} type="discount" prefix="-" />
                       </div>
                       <div className="flex justify-between text-xs pt-1 border-t border-gray-50">
                         <span className="text-gray-600 font-semibold">Price after Discount</span>
-                        <span className="text-secondary font-bold">{formatCurrency(subtotal + (bookingDetails.demandSurge || 0) - discount)}</span>
+                        <PriceDisplay amount={subtotal + (bookingDetails.demandSurge || 0) - discount} type="bold-secondary" />
                       </div>
                     </>
+                  )}
+
+                   {bookingDetails.platformFee > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
+                        Platform Fee
+                        <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
+                          Platform Fee is non-refundable on booking cancellation.
+                        </span>
+                      </span>
+                      <PriceDisplay amount={bookingDetails.platformFee} type="secondary" prefix="+" />
+                    </div>
                   )}
 
                   {((bookingDetails.rainCharge || 0) +
                     (bookingDetails.trafficCharge || 0) +
                     (bookingDetails.nightCharge || 0) +
-                    (bookingDetails.platformFee || 0) +
                     (bookingDetails.customCharges || 0)) > 0 && (
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Additional Service Charges</span>
-                        <span className="text-red-500 font-medium">+{formatCurrency(
+                        <PriceDisplay amount={
                           (bookingDetails.rainCharge || 0) +
                           (bookingDetails.trafficCharge || 0) +
                           (bookingDetails.nightCharge || 0) +
-                          (bookingDetails.platformFee || 0) +
                           (bookingDetails.customCharges || 0)
-                        )}</span>
+                        } type="charge" prefix="+" />
                       </div>
                     )}
 
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Visiting Charges</span>
-                    <span className="text-green-600 font-semibold italic">{(Number(bookingDetails.visitingCharge) > 0 ? formatCurrency(bookingDetails.visitingCharge) : "Free")}</span>
+                    <PriceDisplay amount={bookingDetails.visitingCharge} type="green-bold" freeText="Free" />
                   </div>
 
                   <div className="border-t border-gray-100 pt-3 mt-1">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-secondary text-base">Total Amount</span>
-                      <span className="font-bold text-primary text-xl">{formatCurrency(totalAmount)}</span>
+                      <PriceDisplay amount={totalAmount} type="xl-bold-primary" />
                     </div>
                   </div>
                 </div>
@@ -679,7 +763,7 @@ const BookingConfirmation = () => {
                       <Wallet className="w-4 h-4 text-teal-600" />
                       <div>
                         <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">Available Wallet Balance</p>
-                        <p className="text-sm font-black text-teal-900">{formatCurrency(walletBalance)}</p>
+                        <PriceDisplay amount={walletBalance} type="text-only" className="text-sm font-black text-teal-900" />
                       </div>
                     </div>
                     <span className="text-[10px] font-medium bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">Secure</span>
@@ -704,11 +788,10 @@ const BookingConfirmation = () => {
 
                     {/* Wallet Payment */}
                     <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
-                        paymentMethod === 'wallet'
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'wallet'
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-gray-100 hover:border-gray-200'
-                      }`}
+                        }`}
                       onClick={() => setPaymentMethod('wallet')}
                     >
                       <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
@@ -728,11 +811,10 @@ const BookingConfirmation = () => {
 
                     {/* Wallet + Online Mixed */}
                     <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
-                        paymentMethod === 'mixed'
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'mixed'
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-gray-100 hover:border-gray-200'
-                      }`}
+                        }`}
                       onClick={() => setPaymentMethod('mixed')}
                     >
                       <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
@@ -782,11 +864,11 @@ const BookingConfirmation = () => {
                       <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Mixed Payment Breakdown</p>
                       <div className="flex justify-between text-xs font-medium text-amber-900">
                         <span>Deducted from Wallet:</span>
-                        <span>{formatCurrency(Math.min(walletBalance, totalAmount))}</span>
+                        <PriceDisplay amount={Math.min(walletBalance, totalAmount)} type="text-only" />
                       </div>
                       <div className="flex justify-between text-xs font-bold text-amber-950 pt-1 border-t border-amber-100/50">
                         <span>Remaining Pay Online:</span>
-                        <span>{formatCurrency(Math.max(0, totalAmount - walletBalance))}</span>
+                        <PriceDisplay amount={Math.max(0, totalAmount - walletBalance)} type="text-only" />
                       </div>
                     </div>
                   )}
@@ -798,7 +880,7 @@ const BookingConfirmation = () => {
                       <div>
                         <p className="text-xs font-bold text-red-800">Insufficient Wallet Balance</p>
                         <p className="text-[11px] text-red-600 font-medium leading-relaxed mt-0.5">
-                          Your wallet balance is insufficient to cover the total booking amount. You need an additional <span className="font-bold">{formatCurrency(totalAmount - walletBalance)}</span> to complete this payment using your wallet.
+                          Your wallet balance is insufficient to cover the total booking amount. You need an additional <span className="font-bold"><PriceDisplay amount={totalAmount - walletBalance} type="text-only" /></span> to complete this payment using your wallet.
                         </p>
                       </div>
                     </div>
@@ -829,20 +911,22 @@ const BookingConfirmation = () => {
                       }}
                       loading={isProcessingPayment}
                       loadingText={paymentProgressMessage || 'Processing...'}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary hover:bg-primary/95 text-white rounded-xl text-xs font-extrabold shadow-md shadow-primary/10 transition-all active:scale-95 uppercase tracking-wider disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
                       {paymentMethod === 'cash' ? (
                         <Wallet className="w-4 h-4" />
                       ) : (
                         <CreditCard className="w-4 h-4" />
                       )}
-                      {paymentMethod === 'wallet'
-                        ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
-                        : paymentMethod === 'mixed'
-                          ? `Pay Remaining • ${formatCurrency(Math.max(0, totalAmount - walletBalance))}`
-                          : paymentMethod === 'cash'
-                            ? `Confirm Cash Booking • ${formatCurrency(totalAmount)}`
-                            : `Pay Online • ${formatCurrency(totalAmount)}`}
+                      {paymentMethod === 'wallet' ? (
+                        <>Pay via Wallet • <PriceDisplay amount={totalAmount} type="text-only" /></>
+                      ) : paymentMethod === 'mixed' ? (
+                        <>Pay Remaining • <PriceDisplay amount={Math.max(0, totalAmount - walletBalance)} type="text-only" /></>
+                      ) : paymentMethod === 'cash' ? (
+                        <>Confirm Cash Booking • <PriceDisplay amount={totalAmount} type="text-only" /></>
+                      ) : (
+                        <>Pay Online • <PriceDisplay amount={totalAmount} type="text-only" /></>
+                      )}
                     </Processing>
                   </div>
                   <div className="mt-3 flex justify-center gap-3 text-xs text-gray-400">
@@ -888,27 +972,27 @@ const BookingConfirmation = () => {
                 <div className="space-y-2 pt-4 border-t border-gray-100">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Service Price</span>
-                    <span className="font-medium text-secondary">{formatCurrency(subtotal)}</span>
+                    <PriceDisplay amount={subtotal} type="default" />
                   </div>
                   {discount > 0 && (
                     <>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Discount</span>
-                        <span className="font-medium text-green-600">-{formatCurrency(discount)}</span>
+                        <PriceDisplay amount={discount} type="discount" prefix="-" />
                       </div>
-                      <div className="flex justify-between text-sm pt-1 border-t border-gray-50">
+                      <div className="flex justify-between text-sm pt-1 border-t border-gray-55">
                         <span className="text-gray-500 font-semibold">Price after Discount</span>
-                        <span className="font-medium text-secondary">{formatCurrency(subtotal - discount)}</span>
+                        <PriceDisplay amount={subtotal - discount} type="default" />
                       </div>
                     </>
                   )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Visiting Charges</span>
-                    <span className="font-medium text-green-600">{(Number(bookingDetails.visitingCharge) > 0 ? formatCurrency(bookingDetails.visitingCharge) : "Free")}</span>
+                    <PriceDisplay amount={bookingDetails.visitingCharge} type="green-bold" freeText="Free" />
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-50">
                     <span className="font-bold text-secondary">Total to Pay</span>
-                    <span className="font-bold text-primary text-lg">{formatCurrency(totalAmount)}</span>
+                    <PriceDisplay amount={totalAmount} type="large-bold-primary" />
                   </div>
                 </div>
               </div>

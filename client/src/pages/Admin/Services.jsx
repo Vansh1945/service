@@ -37,6 +37,7 @@ import * as ServiceService from '../../services/ServiceService';
 import * as SystemService from '../../services/SystemService';
 import useCategory from '../../hooks/useCategory';
 import { formatCurrency, formatDuration } from '../../utils/format';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 
 
 
@@ -167,6 +168,7 @@ const AdminServices = () => {
 
   // State management
   const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -175,6 +177,10 @@ const AdminServices = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showDisableDiscountsModal, setShowDisableDiscountsModal] = useState(false);
+  const [disableDiscountsScope, setDisableDiscountsScope] = useState('all');
+  const [disableDiscountsCategory, setDisableDiscountsCategory] = useState('');
+  const [isDisablingDiscounts, setIsDisablingDiscounts] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const { categories, loading: categoriesLoading } = useCategory();
@@ -188,7 +194,15 @@ const AdminServices = () => {
     duration: '',
     specialNotes: [],
     materialsUsed: [],
-    images: []
+    images: [],
+    serviceType: 'standard',
+    warranty: { duration: '', unit: 'days' },
+    tags: [],
+    faqs: [],
+    shortDescription: '',
+    isFeatured: false,
+    prerequisites: [],
+    discountPrice: ''
   });
   const [editForm, setEditForm] = useState({});
   const [bulkFile, setBulkFile] = useState(null);
@@ -199,6 +213,16 @@ const AdminServices = () => {
   const [editNewSpecialNote, setEditNewSpecialNote] = useState('');
   const [editNewMaterial, setEditNewMaterial] = useState('');
 
+  // Dynamic input helper states
+  const [newTag, setNewTag] = useState('');
+  const [newPrerequisite, setNewPrerequisite] = useState('');
+  const [faqQuestion, setFaqQuestion] = useState('');
+  const [faqAnswer, setFaqAnswer] = useState('');
+  const [editNewTag, setEditNewTag] = useState('');
+  const [editNewPrerequisite, setEditNewPrerequisite] = useState('');
+  const [editFaqQuestion, setEditFaqQuestion] = useState('');
+  const [editFaqAnswer, setEditFaqAnswer] = useState('');
+
   // Refs
   const fileInputRef = useRef(null);
   const editFileInputRef = useRef(null);
@@ -207,12 +231,15 @@ const AdminServices = () => {
   // Fetch all services
   const fetchServices = useCallback(async () => {
     try {
+      setLoading(true);
       const response = await ServiceService.getAllServices();
       const data = response.data;
       setServices(data.data || []);
     } catch (error) {
       console.error('Fetch services error:', error);
       toast.error(error.message || 'Failed to fetch services');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -383,10 +410,93 @@ const AdminServices = () => {
     }));
   };
 
+  // Tag Handlers (Create Form)
+  const addTag = () => {
+    const trimmed = newTag.trim();
+    if (trimmed && !createForm.tags.includes(trimmed)) {
+      setCreateForm(prev => ({ ...prev, tags: [...prev.tags, trimmed] }));
+    }
+    setNewTag('');
+  };
+  const removeTag = (index) => {
+    setCreateForm(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
+  };
+
+  // Tag Handlers (Edit Form)
+  const addEditTag = () => {
+    const trimmed = editNewTag.trim();
+    if (trimmed && !editForm.tags.includes(trimmed)) {
+      setEditForm(prev => ({ ...prev, tags: [...prev.tags, trimmed] }));
+    }
+    setEditNewTag('');
+  };
+  const removeEditTag = (index) => {
+    setEditForm(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
+  };
+
+  // Prerequisite Handlers (Create Form)
+  const addPrerequisite = () => {
+    const trimmed = newPrerequisite.trim();
+    if (trimmed && !createForm.prerequisites.includes(trimmed)) {
+      setCreateForm(prev => ({ ...prev, prerequisites: [...prev.prerequisites, trimmed] }));
+    }
+    setNewPrerequisite('');
+  };
+  const removePrerequisite = (index) => {
+    setCreateForm(prev => ({ ...prev, prerequisites: prev.prerequisites.filter((_, i) => i !== index) }));
+  };
+
+  // Prerequisite Handlers (Edit Form)
+  const addEditPrerequisite = () => {
+    const trimmed = editNewPrerequisite.trim();
+    if (trimmed && !editForm.prerequisites.includes(trimmed)) {
+      setEditForm(prev => ({ ...prev, prerequisites: [...prev.prerequisites, trimmed] }));
+    }
+    setEditNewPrerequisite('');
+  };
+  const removeEditPrerequisite = (index) => {
+    setEditForm(prev => ({ ...prev, prerequisites: prev.prerequisites.filter((_, i) => i !== index) }));
+  };
+
+  // FAQ Handlers (Create Form)
+  const addFaq = () => {
+    if (faqQuestion.trim() && faqAnswer.trim()) {
+      setCreateForm(prev => ({
+        ...prev,
+        faqs: [...prev.faqs, { question: faqQuestion.trim(), answer: faqAnswer.trim() }]
+      }));
+      setFaqQuestion('');
+      setFaqAnswer('');
+    }
+  };
+  const removeFaq = (index) => {
+    setCreateForm(prev => ({ ...prev, faqs: prev.faqs.filter((_, i) => i !== index) }));
+  };
+
+  // FAQ Handlers (Edit Form)
+  const addEditFaq = () => {
+    if (editFaqQuestion.trim() && editFaqAnswer.trim()) {
+      setEditForm(prev => ({
+        ...prev,
+        faqs: [...prev.faqs, { question: editFaqQuestion.trim(), answer: editFaqAnswer.trim() }]
+      }));
+      setEditFaqQuestion('');
+      setEditFaqAnswer('');
+    }
+  };
+  const removeEditFaq = (index) => {
+    setEditForm(prev => ({ ...prev, faqs: prev.faqs.filter((_, i) => i !== index) }));
+  };
+
   // Create new service
   const handleCreateService = async (e) => {
     e.preventDefault();
     try {
+      if (createForm.discountPrice && Number(createForm.discountPrice) > Number(createForm.basePrice)) {
+        toast.error('Discount price cannot be greater than base price');
+        return;
+      }
+
       const formData = new FormData();
       formData.append('title', createForm.title);
       formData.append('category', createForm.category);
@@ -395,6 +505,16 @@ const AdminServices = () => {
       formData.append('duration', createForm.duration);
       formData.append('specialNotes', JSON.stringify(createForm.specialNotes));
       formData.append('materialsUsed', JSON.stringify(createForm.materialsUsed));
+      formData.append('serviceType', createForm.serviceType);
+      formData.append('warranty', JSON.stringify(createForm.warranty));
+      formData.append('tags', JSON.stringify(createForm.tags));
+      formData.append('faqs', JSON.stringify(createForm.faqs));
+      formData.append('shortDescription', createForm.shortDescription);
+      formData.append('isFeatured', createForm.isFeatured);
+      formData.append('prerequisites', JSON.stringify(createForm.prerequisites));
+      if (createForm.discountPrice) {
+        formData.append('discountPrice', createForm.discountPrice);
+      }
 
       // Append all images
       createForm.images.forEach(image => {
@@ -409,6 +529,7 @@ const AdminServices = () => {
       resetCreateForm();
       setShowCreateModal(false);
     } catch (error) {
+      if (error.message === 'silent_cancel') return;
       console.error('Create service error:', error);
       toast.error(error.message || 'Failed to create service');
     }
@@ -418,9 +539,24 @@ const AdminServices = () => {
   const handleUpdateService = async (e) => {
     e.preventDefault();
     try {
+      if (editForm.discountPrice && Number(editForm.discountPrice) > Number(editForm.basePrice)) {
+        toast.error('Discount price cannot be greater than base price');
+        return;
+      }
+
       const formData = new FormData();
       Object.keys(editForm).forEach(key => {
-        if (key !== 'images' && key !== 'existingImages' && key !== 'specialNotes' && key !== 'materialsUsed' && editForm[key] !== undefined) {
+        if (
+          key !== 'images' &&
+          key !== 'existingImages' &&
+          key !== 'specialNotes' &&
+          key !== 'materialsUsed' &&
+          key !== 'warranty' &&
+          key !== 'tags' &&
+          key !== 'faqs' &&
+          key !== 'prerequisites' &&
+          editForm[key] !== undefined
+        ) {
           formData.append(key, editForm[key]);
         }
       });
@@ -431,6 +567,22 @@ const AdminServices = () => {
 
       if (editForm.materialsUsed) {
         formData.append('materialsUsed', JSON.stringify(editForm.materialsUsed));
+      }
+
+      if (editForm.warranty) {
+        formData.append('warranty', JSON.stringify(editForm.warranty));
+      }
+
+      if (editForm.tags) {
+        formData.append('tags', JSON.stringify(editForm.tags));
+      }
+
+      if (editForm.faqs) {
+        formData.append('faqs', JSON.stringify(editForm.faqs));
+      }
+
+      if (editForm.prerequisites) {
+        formData.append('prerequisites', JSON.stringify(editForm.prerequisites));
       }
 
       if (editForm.existingImages) {
@@ -451,6 +603,7 @@ const AdminServices = () => {
       toast.success('Service updated successfully!');
       setShowEditModal(false);
     } catch (error) {
+      if (error.message === 'silent_cancel') return;
       console.error('Update service error:', error);
       toast.error(error.message || 'Failed to update service');
     }
@@ -464,6 +617,7 @@ const AdminServices = () => {
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
       toast.success('Price updated successfully!');
     } catch (error) {
+      if (error.message === 'silent_cancel') return;
       console.error('Update price error:', error);
       toast.error(error.message || 'Failed to update price');
     }
@@ -484,6 +638,7 @@ const AdminServices = () => {
       await fetchServices();
       toast.success(`Service ${service.isActive ? 'deactivated' : 'activated'} successfully!`);
     } catch (error) {
+      if (error.message === 'silent_cancel') return;
       console.error('Toggle status error:', error);
       toast.error(error.message || 'Failed to update service status');
     }
@@ -513,6 +668,7 @@ const AdminServices = () => {
       setShowBulkImportModal(false);
       setBulkFile(null);
     } catch (error) {
+      if (error.message === 'silent_cancel') return;
       console.error('Bulk import error:', error);
       toast.error(error.message || 'Failed to import services');
     }
@@ -563,6 +719,36 @@ const AdminServices = () => {
     }
   };
 
+  // Handle bulk disable discounts
+  const handleDisableDiscountsSubmit = async (e) => {
+    e.preventDefault();
+    if (disableDiscountsScope === 'category' && !disableDiscountsCategory) {
+      toast.error('Please select a category');
+      return;
+    }
+
+    setIsDisablingDiscounts(true);
+    try {
+      const response = await ServiceService.disableDiscounts({
+        scope: disableDiscountsScope,
+        categoryId: disableDiscountsScope === 'category' ? disableDiscountsCategory : undefined
+      });
+      if (response.data.success) {
+        toast.success(response.data.message || 'Discounts deactivated successfully!');
+        await fetchServices();
+        setShowDisableDiscountsModal(false);
+        setDisableDiscountsCategory('');
+      } else {
+        toast.error(response.data.message || 'Failed to deactivate discounts');
+      }
+    } catch (error) {
+      console.error('Disable discounts error:', error);
+      toast.error(error.response?.data?.message || error.message || 'Failed to deactivate discounts');
+    } finally {
+      setIsDisablingDiscounts(false);
+    }
+  };
+
   // Reset create form
   const resetCreateForm = () => {
     setCreateForm({
@@ -573,9 +759,21 @@ const AdminServices = () => {
       duration: '',
       specialNotes: [],
       materialsUsed: [],
-      images: []
+      images: [],
+      serviceType: 'standard',
+      warranty: { duration: '', unit: 'days' },
+      tags: [],
+      faqs: [],
+      shortDescription: '',
+      isFeatured: false,
+      prerequisites: [],
+      discountPrice: ''
     });
     setImagePreviews([]);
+    setNewTag('');
+    setNewPrerequisite('');
+    setFaqQuestion('');
+    setFaqAnswer('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -593,9 +791,21 @@ const AdminServices = () => {
       specialNotes: service.specialNotes || [],
       materialsUsed: service.materialsUsed || [],
       existingImages: service.images || [],
-      images: []
+      images: [],
+      serviceType: service.serviceType || 'standard',
+      warranty: service.warranty || { duration: '', unit: 'days' },
+      tags: service.tags || [],
+      faqs: service.faqs || [],
+      shortDescription: service.shortDescription || '',
+      isFeatured: service.isFeatured || false,
+      prerequisites: service.prerequisites || [],
+      discountPrice: service.discountPrice || ''
     });
     setEditImagePreviews([]);
+    setEditNewTag('');
+    setEditNewPrerequisite('');
+    setEditFaqQuestion('');
+    setEditFaqAnswer('');
     setShowEditModal(true);
   }, []);
 
@@ -683,6 +893,13 @@ const AdminServices = () => {
             >
               <Download className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
               Export
+            </button>
+            <button
+              onClick={() => setShowDisableDiscountsModal(true)}
+              className="flex items-center bg-red-600 hover:bg-red-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+            >
+              <XCircle className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              Disable Discounts
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -791,7 +1008,7 @@ const AdminServices = () => {
 
         {/* Services Table */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          {currentServices.length === 0 ? (
+          {currentServices.length === 0 && !loading ? (
             <div className="text-center py-12 md:py-16">
               <Package className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
               <p className="text-gray-600 text-md md:text-lg">No services found</p>
@@ -817,15 +1034,19 @@ const AdminServices = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {currentServices.map((service) => (
-                      <ServiceRow
-                        key={service._id}
-                        service={service}
-                        onViewClick={handleViewClick}
-                        onEditClick={handleEditClick}
-                        onToggleStatus={handleToggleStatus}
-                      />
-                    ))}
+                    {loading ? (
+                      <TableSkeleton rows={itemsPerPage} cols={7} />
+                    ) : (
+                      currentServices.map((service) => (
+                        <ServiceRow
+                          key={service._id}
+                          service={service}
+                          onViewClick={handleViewClick}
+                          onEditClick={handleEditClick}
+                          onToggleStatus={handleToggleStatus}
+                        />
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -927,6 +1148,218 @@ const AdminServices = () => {
                     className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Enter duration in hours"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                  Short Description (Max 150 chars)
+                </label>
+                <textarea
+                  name="shortDescription"
+                  value={createForm.shortDescription}
+                  onChange={handleCreateFormChange}
+                  maxLength={150}
+                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-20"
+                  placeholder="Enter a short description for cards (max 150 characters)"
+                />
+                <div className="text-right text-xs text-gray-500 mt-1">
+                  {createForm.shortDescription.length}/150
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Discount Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    name="discountPrice"
+                    value={createForm.discountPrice}
+                    onChange={handleCreateFormChange}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Discount price (if any)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Service Type
+                  </label>
+                  <select
+                    name="serviceType"
+                    value={createForm.serviceType}
+                    onChange={handleCreateFormChange}
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="premium">Premium</option>
+                    <option value="emergency">Emergency</option>
+                  </select>
+                </div>
+                <div className="flex items-center">
+                  <label className="flex items-center space-x-3 cursor-pointer mt-6">
+                    <input
+                      type="checkbox"
+                      name="isFeatured"
+                      checked={createForm.isFeatured}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, isFeatured: e.target.checked }))}
+                      className="form-checkbox h-5 w-5 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-secondary">Feature on Homepage</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Warranty Duration
+                  </label>
+                  <input
+                    type="number"
+                    value={createForm.warranty.duration}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, warranty: { ...prev.warranty, duration: e.target.value } }))}
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="e.g. 30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Warranty Unit
+                  </label>
+                  <select
+                    value={createForm.warranty.unit}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, warranty: { ...prev.warranty, unit: e.target.value } }))}
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="days">Days</option>
+                    <option value="months">Months</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Search Tags
+                  </label>
+                  <div className="flex space-x-2 mb-2">
+                    <input
+                      type="text"
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Add a search tag (e.g. best-seller)"
+                    />
+                    <button
+                      type="button"
+                      onClick={addTag}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {createForm.tags.map((tag, index) => (
+                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        #{tag}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(index)}
+                          className="ml-1 text-blue-600 hover:text-blue-800"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Prerequisites
+                  </label>
+                  <div className="flex space-x-2 mb-2">
+                    <input
+                      type="text"
+                      value={newPrerequisite}
+                      onChange={(e) => setNewPrerequisite(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="e.g. Accessible power supply"
+                    />
+                    <button
+                      type="button"
+                      onClick={addPrerequisite}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {createForm.prerequisites.map((item, index) => (
+                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        {item}
+                        <button
+                          type="button"
+                          onClick={() => removePrerequisite(index)}
+                          className="ml-1 text-purple-600 hover:text-purple-800"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Service FAQs
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={faqQuestion}
+                    onChange={(e) => setFaqQuestion(e.target.value)}
+                    placeholder="Enter FAQ Question"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={faqAnswer}
+                      onChange={(e) => setFaqAnswer(e.target.value)}
+                      placeholder="Enter FAQ Answer"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={addFaq}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {createForm.faqs.map((faq, index) => (
+                    <div key={index} className="flex items-start justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <p className="font-semibold text-secondary truncate">Q: {faq.question}</p>
+                        <p className="text-gray-600 mt-1">A: {faq.answer}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFaq(index)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1234,6 +1667,218 @@ const AdminServices = () => {
 
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                  Short Description (Max 150 chars)
+                </label>
+                <textarea
+                  name="shortDescription"
+                  value={editForm.shortDescription || ''}
+                  onChange={handleEditFormChange}
+                  maxLength={150}
+                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-20"
+                  placeholder="Enter a short description for cards (max 150 characters)"
+                />
+                <div className="text-right text-xs text-gray-500 mt-1">
+                  {(editForm.shortDescription || '').length}/150
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Discount Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    name="discountPrice"
+                    value={editForm.discountPrice || ''}
+                    onChange={handleEditFormChange}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Discount price (if any)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Service Type
+                  </label>
+                  <select
+                    name="serviceType"
+                    value={editForm.serviceType || 'standard'}
+                    onChange={handleEditFormChange}
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="premium">Premium</option>
+                    <option value="emergency">Emergency</option>
+                  </select>
+                </div>
+                <div className="flex items-center">
+                  <label className="flex items-center space-x-3 cursor-pointer mt-6">
+                    <input
+                      type="checkbox"
+                      name="isFeatured"
+                      checked={editForm.isFeatured || false}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, isFeatured: e.target.checked }))}
+                      className="form-checkbox h-5 w-5 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-secondary">Feature on Homepage</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Warranty Duration
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.warranty?.duration || ''}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, warranty: { ...prev.warranty, duration: e.target.value } }))}
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="e.g. 30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Warranty Unit
+                  </label>
+                  <select
+                    value={editForm.warranty?.unit || 'days'}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, warranty: { ...prev.warranty, unit: e.target.value } }))}
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="days">Days</option>
+                    <option value="months">Months</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Search Tags
+                  </label>
+                  <div className="flex space-x-2 mb-2">
+                    <input
+                      type="text"
+                      value={editNewTag}
+                      onChange={(e) => setEditNewTag(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Add a search tag (e.g. best-seller)"
+                    />
+                    <button
+                      type="button"
+                      onClick={addEditTag}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editForm.tags && editForm.tags.map((tag, index) => (
+                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        #{tag}
+                        <button
+                          type="button"
+                          onClick={() => removeEditTag(index)}
+                          className="ml-1 text-blue-600 hover:text-blue-800"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Prerequisites
+                  </label>
+                  <div className="flex space-x-2 mb-2">
+                    <input
+                      type="text"
+                      value={editNewPrerequisite}
+                      onChange={(e) => setEditNewPrerequisite(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="e.g. Accessible power supply"
+                    />
+                    <button
+                      type="button"
+                      onClick={addEditPrerequisite}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editForm.prerequisites && editForm.prerequisites.map((item, index) => (
+                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        {item}
+                        <button
+                          type="button"
+                          onClick={() => removeEditPrerequisite(index)}
+                          className="ml-1 text-purple-600 hover:text-purple-800"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Service FAQs
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={editFaqQuestion}
+                    onChange={(e) => setEditFaqQuestion(e.target.value)}
+                    placeholder="Enter FAQ Question"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={editFaqAnswer}
+                      onChange={(e) => setEditFaqAnswer(e.target.value)}
+                      placeholder="Enter FAQ Answer"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={addEditFaq}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {editForm.faqs && editForm.faqs.map((faq, index) => (
+                    <div key={index} className="flex items-start justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <p className="font-semibold text-secondary truncate">Q: {faq.question}</p>
+                        <p className="text-gray-600 mt-1">A: {faq.answer}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeEditFaq(index)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
                   Service Images
                 </label>
                 <div className="flex items-center space-x-4">
@@ -1372,8 +2017,41 @@ const AdminServices = () => {
                       <Clock className="w-3 h-3 mr-1" />
                       {formatDuration(selectedService.duration)}
                     </span>
+                    {selectedService.serviceType && (
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                        selectedService.serviceType === 'emergency' ? 'bg-red-100 text-red-800' :
+                        selectedService.serviceType === 'premium' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {selectedService.serviceType.toUpperCase()}
+                      </span>
+                    )}
+                    {selectedService.isFeatured && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        ⭐ Featured
+                      </span>
+                    )}
+                    {selectedService.warranty?.duration && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                        🛡️ {selectedService.warranty.duration} {selectedService.warranty.unit} Warranty
+                      </span>
+                    )}
                   </div>
 
+                  {selectedService.tags && selectedService.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {selectedService.tags.map((tag, i) => (
+                        <span key={i} className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedService.shortDescription && (
+                    <p className="text-sm italic text-gray-500 mb-2">
+                      "{selectedService.shortDescription}"
+                    </p>
+                  )}
                   <p className="text-gray-600 bg-gray-50 p-4 rounded-lg border border-gray-100">
                     {selectedService.description}
                   </p>
@@ -1388,7 +2066,14 @@ const AdminServices = () => {
                     <span className="text-sm font-medium text-teal-700">Base Price</span>
                   </div>
                   <p className="text-2xl font-bold text-teal-900">
-                    {formatCurrency(selectedService.basePrice)}
+                    {selectedService.discountPrice ? (
+                      <>
+                        <span className="text-green-600 mr-2">{formatCurrency(selectedService.discountPrice)}</span>
+                        <span className="text-sm line-through text-gray-400 font-normal">{formatCurrency(selectedService.basePrice)}</span>
+                      </>
+                    ) : (
+                      formatCurrency(selectedService.basePrice)
+                    )}
                   </p>
                 </div>
 
@@ -1493,6 +2178,44 @@ const AdminServices = () => {
                 </div>
               )}
 
+              {/* Prerequisites Section */}
+              {selectedService.prerequisites && parseArrayField(selectedService.prerequisites).length > 0 && (
+                <div className="bg-purple-50 p-5 rounded-xl border border-purple-100">
+                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
+                    <CheckCircle className="w-5 h-5 mr-2 text-purple-600" />
+                    Prerequisites (What to prepare)
+                  </h4>
+                  <ul className="space-y-3">
+                    {parseArrayField(selectedService.prerequisites).map((item, index) => (
+                      <li key={index} className="flex items-start">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        </div>
+                        <p className="ml-3 text-gray-700">{item}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* FAQs Section */}
+              {selectedService.faqs && selectedService.faqs.length > 0 && (
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-primary" />
+                    Frequently Asked Questions
+                  </h4>
+                  <div className="space-y-4">
+                    {selectedService.faqs.map((faq, index) => (
+                      <div key={index} className="bg-white p-4 rounded-lg border border-gray-150 shadow-sm">
+                        <p className="font-semibold text-secondary">Q: {faq.question}</p>
+                        <p className="text-gray-600 mt-2">A: {faq.answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
@@ -1592,6 +2315,93 @@ const AdminServices = () => {
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   Import Services
+                </button>
+              </div>
+            </form>
+          </Modal>
+        )}
+
+        {/* Disable Discounts Modal */}
+        {showDisableDiscountsModal && (
+          <Modal
+            isOpen={showDisableDiscountsModal}
+            onClose={() => {
+              setShowDisableDiscountsModal(false);
+              setDisableDiscountsCategory('');
+            }}
+            title="Bulk Deactivate Discounts"
+            size="medium"
+          >
+            <form onSubmit={handleDisableDiscountsSubmit} className="space-y-4 md:space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                  Select Scope
+                </label>
+                <select
+                  value={disableDiscountsScope}
+                  onChange={(e) => setDisableDiscountsScope(e.target.value)}
+                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="all">All Services</option>
+                  <option value="category">Category-wise</option>
+                </select>
+              </div>
+
+              {disableDiscountsScope === 'category' && (
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                    Select Category
+                  </label>
+                  <select
+                    value={disableDiscountsCategory}
+                    onChange={(e) => setDisableDiscountsCategory(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="" disabled hidden>Choose Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="bg-red-50 p-3 md:p-4 rounded-lg border border-red-200">
+                <p className="text-sm text-red-700 font-semibold flex items-center">
+                  <AlertCircle className="w-5 h-5 mr-2 text-red-600 flex-shrink-0" />
+                  Warning: This action will permanently remove/deactivate the discount prices for all matching services. This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDisableDiscountsModal(false);
+                    setDisableDiscountsCategory('');
+                  }}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDisablingDiscounts}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-800 text-white rounded-lg transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDisablingDiscounts ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Deactivating...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Confirm Deactivate
+                    </>
+                  )}
                 </button>
               </div>
             </form>

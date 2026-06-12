@@ -103,6 +103,40 @@ const serviceSchema = new Schema({
   ratingCount: {
     type: Number,
     default: 0
+  },
+  serviceType: {
+    type: String,
+    enum: ['standard', 'premium', 'emergency'],
+    default: 'standard'
+  },
+  warranty: {
+    duration: { type: Number },
+    unit: { type: String, enum: ['days', 'months'] }
+  },
+  tags: {
+    type: [String],
+    default: []
+  },
+  faqs: [{
+    question: { type: String, required: true },
+    answer: { type: String, required: true }
+  }],
+  shortDescription: {
+    type: String,
+    maxlength: 150,
+    trim: true
+  },
+  isFeatured: {
+    type: Boolean,
+    default: false
+  },
+  prerequisites: {
+    type: [String],
+    default: []
+  },
+  discountPrice: {
+    type: Number,
+    min: 0
   }
 }, {
   toJSON: { virtuals: true },
@@ -120,6 +154,11 @@ serviceSchema.index({ basePrice: 1 });
 // Pre-save hook to update average rating
 serviceSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
+
+  // Validate discountPrice <= basePrice
+  if (this.discountPrice !== undefined && this.discountPrice !== null && this.discountPrice > this.basePrice) {
+    return next(new Error('Discount price cannot be greater than base price'));
+  }
 
   // Calculate average rating if feedback array is modified
   if (this.isModified('feedback')) {
@@ -184,7 +223,7 @@ serviceSchema.statics.updateBasePrice = async function (adminId, serviceId, newP
 // Query active services by category
 serviceSchema.statics.findActiveByCategory = function (category) {
   return this.find({ category, isActive: true })
-    .select('title category description images basePrice duration averageRating ratingCount');
+    .select('title category description images basePrice duration averageRating ratingCount serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed');
 };
 
 // Query services with feedback stats

@@ -7,6 +7,7 @@ import Pagination from '../../components/Pagination';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
+import PriceDisplay from '../../components/PriceDisplay';
 import {
     Search,
     Filter,
@@ -412,15 +413,11 @@ const AdminTransactions = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-600' : 'text-secondary'}`}>
-                                                    {txn.type === 'refund' ? '-' : ''}{formatCurrency(grossBilled)}
-                                                </span>
+                                                <PriceDisplay amount={grossBilled} type={txn.type === 'refund' ? 'negative' : 'default'} prefix={txn.type === 'refund' ? '-' : ''} className="text-sm font-bold" />
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-600' : 'text-gray-700'}`}>
-                                                        {txn.type === 'refund' ? '-' : ''}{formatCurrency(commissionSplit)}
-                                                    </span>
+                                                    <PriceDisplay amount={commissionSplit} type={txn.type === 'refund' ? 'negative' : 'gray-bold'} prefix={txn.type === 'refund' ? '-' : ''} className="text-sm font-semibold" />
                                                     {txn.commissionRule?.name && (
                                                         <span className="text-[9px] text-gray-400 italic opacity-85">
                                                             {txn.commissionRule.name}
@@ -430,26 +427,20 @@ const AdminTransactions = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-600' : 'text-gray-700'}`}>
-                                                        {txn.type === 'refund' ? '-' : ''}{formatCurrency(totalSurcharges)}
-                                                    </span>
+                                                    <PriceDisplay amount={totalSurcharges} type={txn.type === 'refund' ? 'negative' : 'gray-bold'} prefix={txn.type === 'refund' ? '-' : ''} className="text-sm font-semibold" />
                                                     {totalSurcharges > 0 && (
                                                         <div className="flex flex-col items-end text-[9px] text-gray-400 mt-0.5">
-                                                            <span>Prov: {formatCurrency(providerSurchargeSplit)}</span>
-                                                            <span>Plat: {formatCurrency(companySurchargeSplit)}</span>
+                                                            <span>Prov: <PriceDisplay amount={providerSurchargeSplit} type="text-only" /></span>
+                                                            <span>Plat: <PriceDisplay amount={companySurchargeSplit} type="text-only" /></span>
                                                         </div>
                                                     )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-600' : 'text-green-600'}`}>
-                                                    {txn.type === 'refund' ? '-' : ''}{formatCurrency(finalProviderReceivable)}
-                                                </span>
+                                                <PriceDisplay amount={finalProviderReceivable} type={txn.type === 'refund' ? 'negative' : 'earning'} prefix={txn.type === 'refund' ? '-' : ''} className="text-sm font-bold" />
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-600' : 'text-primary'}`}>
-                                                    {txn.type === 'refund' ? '-' : ''}{formatCurrency(finalPlatformRevenue)}
-                                                </span>
+                                                <PriceDisplay amount={finalPlatformRevenue} type={txn.type === 'refund' ? 'negative' : 'primary'} prefix={txn.type === 'refund' ? '-' : ''} className="text-sm font-bold" />
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center">
@@ -515,7 +506,7 @@ const AdminTransactions = () => {
                                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Total Paid</span>
                                     <p className="text-3xl font-black text-secondary">
-                                        {formatCurrency(getAmountInRupees(selectedTransaction))}
+                                        <PriceDisplay amount={getAmountInRupees(selectedTransaction)} type="text-only" />
                                     </p>
                                 </div>
                                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
@@ -594,71 +585,55 @@ const AdminTransactions = () => {
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-500">Service Amount (Subtotal)</span>
-                                        <span className="font-semibold text-secondary">
-                                            {formatCurrency(selectedTransaction.booking?.subtotal || getAmountInRupees(selectedTransaction))}
-                                        </span>
+                                        <PriceDisplay amount={selectedTransaction.booking?.subtotal || getAmountInRupees(selectedTransaction)} type="default" />
                                     </div>
 
                                     {selectedTransaction.booking?.totalDiscount > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Discount {selectedTransaction.booking?.couponApplied?.code && '(' + selectedTransaction.booking.couponApplied.code + ')'}</span>
-                                            <span className="font-semibold text-green-600">
-                                                -{formatCurrency(selectedTransaction.booking.totalDiscount)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.totalDiscount} type="discount" prefix="-" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.visitingCharge > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Visiting Charge</span>
-                                            <span className="font-semibold text-orange-600">
-                                                +{formatCurrency(selectedTransaction.booking.visitingCharge)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.visitingCharge} type="negative" prefix="+" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.rainCharge > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Rain Charge</span>
-                                            <span className="font-semibold text-orange-600">
-                                                +{formatCurrency(selectedTransaction.booking.rainCharge)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.rainCharge} type="negative" prefix="+" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.trafficCharge > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Traffic Charge</span>
-                                            <span className="font-semibold text-orange-600">
-                                                +{formatCurrency(selectedTransaction.booking.trafficCharge)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.trafficCharge} type="negative" prefix="+" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.nightCharge > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Night Charge</span>
-                                            <span className="font-semibold text-orange-600">
-                                                +{formatCurrency(selectedTransaction.booking.nightCharge)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.nightCharge} type="negative" prefix="+" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.demandSurge > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Demand Charge</span>
-                                            <span className="font-semibold text-orange-600">
-                                                +{formatCurrency(selectedTransaction.booking.demandSurge)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.demandSurge} type="negative" prefix="+" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.platformFee > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Platform Fee</span>
-                                            <span className="font-semibold text-orange-600">
-                                                +{formatCurrency(selectedTransaction.booking.platformFee)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.platformFee} type="negative" prefix="+" />
                                         </div>
                                     )}
 
@@ -671,26 +646,20 @@ const AdminTransactions = () => {
                                                 </span>
                                             )}
                                         </div>
-                                        <span className="font-semibold text-red-500">
-                                            -{formatCurrency(getCommissionInRupees(selectedTransaction))}
-                                        </span>
+                                        <PriceDisplay amount={getCommissionInRupees(selectedTransaction)} type="negative" prefix="-" />
                                     </div>
 
                                     {selectedTransaction.booking?.providerSurgeShare > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Provider Surge Share</span>
-                                            <span className="font-semibold text-emerald-600">
-                                                +{formatCurrency(selectedTransaction.booking.providerSurgeShare)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.providerSurgeShare} type="positive" prefix="+" />
                                         </div>
                                     )}
 
                                     {selectedTransaction.booking?.companySurgeShare > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Platform Surge Share</span>
-                                            <span className="font-semibold text-purple-600">
-                                                +{formatCurrency(selectedTransaction.booking.companySurgeShare)}
-                                            </span>
+                                            <PriceDisplay amount={selectedTransaction.booking.companySurgeShare} type="purple-bold" prefix="+" />
                                         </div>
                                     )}
 
@@ -699,9 +668,7 @@ const AdminTransactions = () => {
                                             <span className="font-bold text-secondary">Provider Earning</span>
                                             <span className="text-[9px] text-gray-400">Commission-deducted base + surge share</span>
                                         </div>
-                                        <span className="text-lg font-black text-green-600">
-                                            {formatCurrency(getProviderEarningInRupees(selectedTransaction))}
-                                        </span>
+                                        <PriceDisplay amount={getProviderEarningInRupees(selectedTransaction)} type="green-bold" className="text-lg" />
                                     </div>
 
                                     <div className="pt-3 border-t border-gray-200 flex justify-between items-center">
@@ -709,12 +676,10 @@ const AdminTransactions = () => {
                                             <span className="font-bold text-secondary">Platform Earnings (Admin)</span>
                                             <span className="text-[9px] text-gray-400">Commission + platform surge share</span>
                                         </div>
-                                        <span className="text-lg font-black text-purple-600">
-                                            {formatCurrency(
+                                        <PriceDisplay amount={
                                                 getCommissionInRupees(selectedTransaction) + 
                                                 (selectedTransaction.booking?.companySurgeShare || 0)
-                                            )}
-                                        </span>
+                                            } type="purple-bold" className="text-lg" />
                                     </div>
                                 </div>
                             </div>

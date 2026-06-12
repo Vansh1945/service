@@ -17,6 +17,7 @@ import BookingCardSkeleton from '../../components/ui-skeletons/BookingCardSkelet
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage, filterGPSJitter, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
+import PriceDisplay from '../../components/PriceDisplay';
 import { isChatVisible, formatAddress, calculateSubtotal, calculateNetAmount } from '../../utils/providerHelpers';
 import * as ComplaintService from '../../services/ComplaintService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
@@ -936,8 +937,8 @@ const ProviderBooking = () => {
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
-              <span className="ml-auto text-sm font-bold text-secondary shrink-0">
-                {formatCurrency(booking.totalAmount)}
+              <span className="ml-auto shrink-0">
+                <PriceDisplay amount={booking.totalAmount} type="bold-secondary" className="text-sm" />
               </span>
             </div>
 
@@ -1390,7 +1391,7 @@ const ProviderBooking = () => {
                     {formatDate(selectedBooking.date)} · {formatTime(selectedBooking.time)}
                   </span>
                 </div>
-                <span className="text-lg font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
+                <PriceDisplay amount={calculateNetAmount(selectedBooking)} type="large-bold-primary" />
               </div>
             </div>
 
@@ -1410,18 +1411,74 @@ const ProviderBooking = () => {
                       {selectedBooking.services?.map((service, index) => (
                         <div key={index} className="bg-white rounded-xl p-4 border border-gray-100">
                           <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                            <div className="flex-grow min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
                                 {getServiceIcon(service.service?.category)}
-                                <h4 className="font-medium text-secondary text-sm">{service.service?.title || 'Service'}</h4>
+                                <h4 className="font-semibold text-secondary text-sm">{service.service?.title || 'Service'}</h4>
+                                {service.service?.serviceType && service.service?.serviceType !== 'standard' && (
+                                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
+                                    service.service?.serviceType === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'
+                                  }`}>
+                                    {service.service?.serviceType}
+                                  </span>
+                                )}
+                                {service.service?.isFeatured && (
+                                  <span className="text-[9px] font-extrabold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                                    ⭐ Featured
+                                  </span>
+                                )}
                               </div>
+                              {service.service?.shortDescription && (
+                                <p className="text-xs font-semibold text-primary mb-1 italic">"{service.service?.shortDescription}"</p>
+                              )}
                               <p className="text-xs text-gray-500 mb-2">{service.service?.description || 'No description'}</p>
-                              <div className="flex items-center gap-3 text-xs text-gray-400">
+                              
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
                                 <span className="flex items-center gap-1"><Timer className="w-3 h-3" />{formatDuration(service.service?.duration)}</span>
                                 <span>Qty: {service.quantity || 1}</span>
+                                {service.service?.warranty?.duration && (
+                                  <span className="text-[10px] text-indigo-650 font-bold bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    🛡️ {service.service.warranty.duration} {service.service.warranty.unit} Warranty
+                                  </span>
+                                )}
                               </div>
+
+                              {service.service?.tags && service.service?.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {service.service.tags.map((tag, i) => (
+                                    <span key={i} className="text-[9px] text-gray-500 bg-gray-50 px-1 py-0.5 rounded border border-gray-100">
+                                      #{tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {service.service?.prerequisites && service.service?.prerequisites.length > 0 && (
+                                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                                  <p className="text-[10px] font-bold text-purple-750 uppercase tracking-wider mb-1">Customer Prerequisites:</p>
+                                  <ul className="list-disc pl-4 space-y-0.5">
+                                    {service.service.prerequisites.map((req, i) => (
+                                      <li key={i} className="text-[11px] text-gray-600">{req}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {service.service?.faqs && service.service?.faqs.length > 0 && (
+                                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                                  <p className="text-[10px] font-bold text-secondary uppercase tracking-wider mb-1">FAQs:</p>
+                                  <div className="space-y-2">
+                                    {service.service.faqs.map((faq, i) => (
+                                      <div key={i} className="text-[11px] bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/50">
+                                        <p className="font-semibold text-secondary">Q: {faq.question}</p>
+                                        <p className="text-gray-500 mt-0.5">A: {faq.answer}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0 ml-3">
                               <p className="font-bold text-primary text-sm">{formatCurrency(service.price * (service.quantity || 1))}</p>
                               {service.discountAmount > 0 && <p className="text-xs text-primary">-{formatCurrency(service.discountAmount)}</p>}
                             </div>
@@ -1474,7 +1531,7 @@ const ProviderBooking = () => {
                           <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=COLLECT_CASH" alt="Collect Cash QR" className="w-20 h-20 opacity-60" />
                         </div>
                         <h4 className="text-sm font-bold text-secondary mb-1">Verify Cash Collection</h4>
-                        <p className="text-xs text-gray-500 mb-3">Collect ₹{calculateNetAmount(selectedBooking)} from customer.</p>
+                        <p className="text-xs text-gray-500 mb-3">Collect <PriceDisplay amount={calculateNetAmount(selectedBooking)} type="text-only" /> from customer.</p>
                         <button className="w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-xl text-sm font-bold transition-colors" onClick={() => showToast('Payment collection verified!', 'success')}>
                           Confirm & Close
                         </button>
@@ -1483,24 +1540,24 @@ const ProviderBooking = () => {
 
                     <div className="border-t border-gray-200 pt-4 space-y-2">
                       {[
-                        { label: 'Service Amount', value: formatCurrency(calculateServiceSubtotal(selectedBooking)) },
-                        ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: '-' + formatCurrency(calculateTotalDiscount(selectedBooking)), color: 'text-primary' }] : []),
-                        { label: 'Subtotal', value: formatCurrency(calculateSubtotal(selectedBooking)) },
-                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || 70) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: '+' + formatCurrency(parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
-                        { label: 'Platform Commission (Base)', value: '-' + formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0), color: 'text-rose-500 font-medium' },
-                      ].map(({ label, value, color }) => (
+                        { label: 'Service Amount', value: calculateServiceSubtotal(selectedBooking), type: 'default' },
+                        ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: calculateTotalDiscount(selectedBooking), type: 'discount', prefix: '-' }] : []),
+                        { label: 'Subtotal', value: calculateSubtotal(selectedBooking), type: 'bold-secondary' },
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        { label: 'Platform Commission (Base)', value: selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0, type: 'negative', prefix: '-' },
+                      ].map(({ label, value, type, prefix }) => (
                         <div key={label} className="flex justify-between text-sm animate-fadeIn">
                           <span className="text-gray-500">{label}</span>
-                          <span className={'font-medium ' + (color || 'text-secondary')}>{value}</span>
+                          <PriceDisplay amount={value} type={type} prefix={prefix} />
                         </div>
                       ))}
                       <div className="flex justify-between pt-2 border-t border-gray-100">
                         <span className="font-bold text-secondary">Final Receivable</span>
-                        <span className="font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
+                        <PriceDisplay amount={calculateNetAmount(selectedBooking)} type="bold-primary" />
                       </div>
                     </div>
                   </div>

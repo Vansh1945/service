@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Pagination from '../../components/Pagination';
+import Loader from '../../components/ui-skeletons/Loader';
 import { useAuth } from '../../context/auth';
 import { useConfirm } from '../../context/ConfirmContext';
 import * as QuestionService from '../../services/QuestionService';
@@ -71,7 +72,7 @@ const AdminQuestions = () => {
   const fetchQuestions = async () => {
     try {
       setLoading(true);
-      const params = {};
+      const params = { limit: 'all' };
       if (filters.search) params.search = filters.search;
       if (filters.category) params.category = filters.category;
       if (filters.isActive) params.isActive = filters.isActive;
@@ -187,7 +188,7 @@ const AdminQuestions = () => {
       if (showEditDialog) setShowEditDialog(false);
       fetchQuestions();
     } catch (error) {
-      showToast(error.message, 'error');
+      showToast(error.response?.data?.message || error.message, 'error');
     }
   };
 
@@ -287,7 +288,7 @@ const AdminQuestions = () => {
       setShowBulkUpload(false);
       fetchQuestions();
     } catch (error) {
-      showToast(error.message, 'error');
+      showToast(error.response?.data?.message || error.message, 'error');
     }
   };
 
@@ -351,6 +352,15 @@ const AdminQuestions = () => {
     };
   }, [questions]);
 
+  // Get category-wise question count for remaining slots info
+  const getCategoryQuestionCount = useCallback((categoryName) => {
+    if (!categoryName) return 0;
+    return questions.filter(q => {
+      const qCatName = q.category?.name || q.category?.label || q.category;
+      return typeof qCatName === 'string' && qCatName.toLowerCase() === categoryName.toLowerCase();
+    }).length;
+  }, [questions]);
+
   // Sorted and filtered questions
   const sortedQuestions = useMemo(() => {
     let sorted = [...questions];
@@ -379,6 +389,9 @@ const AdminQuestions = () => {
   const totalPages = Math.ceil(sortedQuestions.length / itemsPerPage);
   const paginatedQuestions = sortedQuestions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  if (loading && questions.length === 0) {
+    return <Loader />;
+  }
 
   return (
     <div className="min-h-screen  p-4 md:p-8">
@@ -590,6 +603,14 @@ const AdminQuestions = () => {
                       </option>
                     ))}
                   </select>
+                  {formData.category && (
+                    <p className={`text-xs mt-1 font-medium ${
+                      getCategoryQuestionCount(formData.category) >= 15 ? 'text-red-500' : 'text-gray-500'
+                    }`}>
+                      {getCategoryQuestionCount(formData.category)}/15 questions in this category
+                      {getCategoryQuestionCount(formData.category) >= 15 && ' (Limit reached!)'}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center">
@@ -673,6 +694,17 @@ const AdminQuestions = () => {
                         </option>
                       ))}
                     </select>
+                    {bulkCategory && (
+                      <p className={`text-xs mt-1 font-medium ${
+                        getCategoryQuestionCount(bulkCategory) >= 15 ? 'text-red-500' : 'text-gray-500'
+                      }`}>
+                        {getCategoryQuestionCount(bulkCategory)}/15 questions in this category
+                        {getCategoryQuestionCount(bulkCategory) >= 15
+                          ? ' (Limit reached!)'
+                          : ` — ${15 - getCategoryQuestionCount(bulkCategory)} remaining`
+                        }
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 mb-2 font-medium">Format example:</p>
@@ -786,10 +818,7 @@ const AdminQuestions = () => {
               </div>
 
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full mb-3 animate-spin" />
-                  <p className="text-gray-600">Loading questions...</p>
-                </div>
+                <Loader />
               ) : questions.length === 0 ? (
                 <div className="text-center py-8">
                   <FileText size={40} className="mx-auto text-gray-400 mb-3" />

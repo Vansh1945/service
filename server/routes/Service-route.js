@@ -30,6 +30,11 @@ router.put('/admin/service/:id',
     serviceController.updateService
 );
 
+router.patch('/admin/services/disable-discounts',
+    adminAuthMiddleware,
+    serviceController.disableDiscounts
+);
+
 router.patch('/admin/services/:id/price',
     adminAuthMiddleware,
     validateBody(updateBasePriceSchema),

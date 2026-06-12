@@ -38,10 +38,10 @@ const Processing = ({
       {...props}
     >
       {loading ? (
-        <span className="flex items-center gap-2">
+        <span className="flex items-center justify-center gap-2 w-full flex-row">
           {/* Animated Spinner */}
           <svg
-            className="animate-spin h-4 w-4 text-current"
+            className="animate-spin h-4 w-4 text-current flex-shrink-0"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -63,9 +63,9 @@ const Processing = ({
           {loadingText ? <span>{loadingText}</span> : children}
         </span>
       ) : (
-        <span className="flex items-center gap-2">
+        <span className="flex items-center justify-center gap-2 w-full flex-row whitespace-nowrap">
           {icon && <span className="flex-shrink-0">{icon}</span>}
-          <span>{children}</span>
+          {children}
         </span>
       )}
     </button>

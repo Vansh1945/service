@@ -16,6 +16,7 @@ import { toggleFavoriteProvider } from '../../services/CustomerService';
 import Pagination from '../../components/Pagination';
 import BookingCardSkeleton from '../../components/ui-skeletons/BookingCardSkeleton';
 import { formatDate, formatTime, formatDateTime, formatCurrency } from '../../utils/format';
+import PriceDisplay from '../../components/PriceDisplay';
 import ChatModal from '../../components/chat/ChatModal';
 import useDebounce from '../../hooks/useDebounce';
 import RescheduleModal from '../../components/modals/RescheduleModal';
@@ -281,7 +282,7 @@ const PaymentDetails = ({ booking }) => {
   const mergedServicePrice = (booking.subtotal || 0) + (booking.demandSurge || 0);
   const visitingCharge = booking.visitingCharge || 0;
   const customCharges = booking.customCharges || 0;
-  const additional = (booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0) + (booking.platformFee || 0);
+  const additional = (booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0);
 
   const additionalBreakdown = [];
   if (booking.rainCharge > 0) additionalBreakdown.push({ name: 'Rain Charge', amount: booking.rainCharge });
@@ -317,22 +318,34 @@ const PaymentDetails = ({ booking }) => {
         </div>
         <div className="flex justify-between items-center animate-fadeIn">
           <span className="text-gray-500">Service Price</span>
-          <span className="font-semibold text-secondary">{formatCurrency(mergedServicePrice)}</span>
+          <PriceDisplay amount={mergedServicePrice} type="default" />
         </div>
         {booking.totalDiscount > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
             <span className="text-gray-500">Discount</span>
-            <span className="text-emerald-600 font-medium">-{formatCurrency(booking.totalDiscount)}</span>
+            <PriceDisplay amount={booking.totalDiscount} type="discount" prefix="-" />
           </div>
         )}
         <div className="flex justify-between items-center animate-fadeIn">
           <span className="text-gray-500">Visiting Charges</span>
-          <span className="text-green-600 font-semibold italic">{visitingCharge > 0 ? formatCurrency(visitingCharge) : "Free"}</span>
+          <PriceDisplay amount={visitingCharge} type="green-bold" freeText="Free" />
         </div>
+        {booking.platformFee > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
+              Platform Fee
+              <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
+                Platform Fee is non-refundable on booking cancellation.
+              </span>
+            </span>
+            <PriceDisplay amount={booking.platformFee} type="default" prefix="+" />
+          </div>
+        )}
         {customCharges > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
             <span className="text-gray-500">Custom Charges</span>
-            <span className="text-red-500 font-medium">+{formatCurrency(customCharges)}</span>
+            <PriceDisplay amount={customCharges} type="charge" prefix="+" />
           </div>
         )}
         {additional > 0 && (
@@ -340,7 +353,7 @@ const PaymentDetails = ({ booking }) => {
             <span className="text-gray-500">
               Additional Charges
             </span>
-            <span className="text-red-500 font-semibold">+{formatCurrency(additional)}</span>
+            <PriceDisplay amount={additional} type="charge-semibold" prefix="+" />
           </div>
         )}
         {booking.couponApplied?.isValid && (
@@ -358,18 +371,18 @@ const PaymentDetails = ({ booking }) => {
         {booking.fullData?.walletAmountUsed > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
             <span className="text-gray-500">Wallet Used</span>
-            <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>
+            <PriceDisplay amount={booking.fullData.walletAmountUsed} type="purple-bold" prefix="-" />
           </div>
         )}
         {booking.fullData?.onlineAmountPaid > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
             <span className="text-gray-500">Paid Online</span>
-            <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>
+            <PriceDisplay amount={booking.fullData.onlineAmountPaid} type="blue-bold" />
           </div>
         )}
         <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary text-base">
           <span>Total Payable</span>
-          <span>{formatCurrency(booking.totalAmount || 0)}</span>
+          <PriceDisplay amount={booking.totalAmount || 0} type="default" />
         </div>
       </div>
 
@@ -416,7 +429,7 @@ const PaymentDetails = ({ booking }) => {
 
 // ─── Service Details ──────────────────────────────────────────────────────────
 
-const ServiceDetails = ({ services, useServiceDetails = false }) => (
+const ServiceDetails = ({ services, demandSurge = 0, useServiceDetails = false }) => (
   <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
       <Package className="w-3.5 h-3.5" /> Service Details
@@ -424,17 +437,19 @@ const ServiceDetails = ({ services, useServiceDetails = false }) => (
     <div className="space-y-2">
       {services?.map((item, i) => {
         const svc = useServiceDetails ? item.serviceDetails : item.service;
+        const surgePerItem = demandSurge / (item.quantity || 1);
+        const priceWithSurge = (item.price || 0) + surgePerItem;
         return (
           <div key={i} className="bg-white rounded-lg p-3 border border-gray-200">
             <div className="flex justify-between items-start mb-2">
               <p className="font-semibold text-secondary text-sm">{svc?.title || 'Service'}</p>
-              <span className="text-sm font-bold text-primary">{formatCurrency(item.price || 0)}</span>
+              <PriceDisplay amount={priceWithSurge} type="primary" className="text-sm" />
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
               <div><span className="font-medium">Category:</span> <span className="uppercase">{typeof svc?.category === 'object' ? svc.category.name : (svc?.category || 'N/A')}</span></div>
               <div><span className="font-medium">Qty:</span> {item.quantity || 1}</div>
               <div><span className="font-medium">Duration:</span> {svc?.duration ? `${svc.duration} hrs` : 'N/A'}</div>
-              <div><span className="font-medium">Discount:</span> {formatCurrency(item.discountAmount || 0)}</div>
+              <div><span className="font-medium">Discount:</span> <PriceDisplay amount={item.discountAmount || 0} type="text-only" /></div>
             </div>
           </div>
         );
@@ -548,7 +563,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
             </div>
           )}
 
-          <ServiceDetails services={booking.services} />
+          <ServiceDetails services={booking.services} demandSurge={booking.demandSurge} />
           <PaymentDetails booking={booking} />
 
           <div className="grid sm:grid-cols-2 gap-4">
@@ -720,7 +735,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
                 <p className="text-xs text-gray-400">{booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-lg font-bold text-secondary">{formatCurrency(booking.totalAmount || 0)}</p>
+                <p className="text-lg font-bold text-secondary"><PriceDisplay amount={booking.totalAmount || 0} type="large-bold-secondary" /></p>
                 <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                   ['paid', 'escrow_hold'].includes(booking.paymentStatus)
                     ? 'bg-green-100 text-green-600'
@@ -1052,9 +1067,12 @@ const CustomerBookingsPage = () => {
                   onReschedule={b => { setBookingToReschedule(b); setShowRescheduleModal(true); }}
                   onCancel={async (b) => {
                     const isStarted = !!b?.serviceStartedAt;
+                    const hasPlatformFee = (b.platformFee || 0) > 0;
                     const message = isStarted
                       ? 'Service has already started. Cancellation requires admin review and may be treated as a dispute. Are you sure you want to cancel?'
-                      : 'Any valid refund will be added directly to your wallet. Are you sure you want to cancel?';
+                      : hasPlatformFee
+                        ? `Any valid refund (excluding the non-refundable Platform Fee of ₹${b.platformFee}) will be added directly to your wallet. Are you sure you want to cancel?`
+                        : 'Any valid refund will be added directly to your wallet. Are you sure you want to cancel?';
                     const isConfirmed = await confirm({
                       title: 'Cancel Booking?',
                       message,

@@ -36,6 +36,11 @@ export const downloadServiceTemplate = (config) => {
     return axiosInstance.get("/service/admin/services-template", config);
 };
 
+export const disableDiscounts = (data) => {
+    return axiosInstance.patch("/service/admin/services/disable-discounts", data);
+};
+
+
 //PROVIDER ROUTES
 
 export const getServicesForProvider = () => {
