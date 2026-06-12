@@ -41,7 +41,7 @@ const Processing = ({
         <span className="flex items-center justify-center gap-2 w-full flex-row">
           {/* Animated Spinner */}
           <svg
-            className="animate-spin h-4 w-4 text-current flex-shrink-0"
+            className=" h-4 w-4 text-current flex-shrink-0"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"

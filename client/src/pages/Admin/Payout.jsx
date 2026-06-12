@@ -129,7 +129,7 @@ const AdminPayout = () => {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mx-auto mb-3" />
+          <div className=" rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mx-auto mb-3" />
           <p className="text-gray-500 text-sm font-poppins">Loading withdrawal requests…</p>
         </div>
       </div>

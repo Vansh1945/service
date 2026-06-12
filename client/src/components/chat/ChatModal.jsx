@@ -389,7 +389,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">
-              <Loader className="w-6 h-6 text-primary animate-spin mb-2" />
+              <Loader className="w-6 h-6 text-primary  mb-2" />
               <p className="text-xs text-gray-400 font-medium">Securing communication line...</p>
             </div>
           ) : error ? (
@@ -541,7 +541,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
                 title="Send Image"
               >
                 {uploadingFile ? (
-                  <Loader className="w-3.5 h-3.5 animate-spin text-primary" />
+                  <Loader className="w-3.5 h-3.5  text-primary" />
                 ) : (
                   <Image className="w-3.5 h-3.5" />
                 )}

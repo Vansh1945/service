@@ -429,11 +429,10 @@ const AdminChatMonitor = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveFilter(tab.id)}
-                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border ${
-                      isActive
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border ${isActive
                         ? 'bg-primary border-primary text-white shadow-sm'
                         : 'bg-gray-50 border-gray-150 hover:bg-gray-100 text-gray-500 hover:text-secondary'
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -445,7 +444,7 @@ const AdminChatMonitor = () => {
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <Loader className="w-6 h-6 text-primary animate-spin" />
+                <Loader className="w-6 h-6 text-primary " />
               </div>
             ) : filteredRooms.length === 0 ? (
               <div className="py-12 text-center text-gray-400 text-xs italic">
@@ -457,10 +456,10 @@ const AdminChatMonitor = () => {
                 const provider = room.providerId || {};
                 const booking = room.bookingId || {};
                 const isSelected = selectedRoom?._id === room._id;
-                
+
                 let typeLabel = 'Customer ↔ Provider';
                 let typeColor = 'bg-gray-150 text-gray-700 border-gray-200';
-                
+
                 if (room.roomType === 'customer_admin') {
                   typeLabel = 'Customer Support';
                   typeColor = 'bg-blue-100 text-blue-700 border-blue-200';
@@ -476,13 +475,12 @@ const AdminChatMonitor = () => {
                   <div
                     key={room._id}
                     onClick={() => handleSelectRoom(room)}
-                    className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col gap-2 relative overflow-hidden ${
-                      isSelected
+                    className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col gap-2 relative overflow-hidden ${isSelected
                         ? 'bg-primary/5 border-primary shadow-sm'
                         : room.unreadAdmin > 0
-                        ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300 shadow-sm border-l-4 border-l-amber-500'
-                        : 'bg-white hover:bg-gray-50 border-gray-150 hover:border-gray-200 shadow-sm'
-                    }`}
+                          ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300 shadow-sm border-l-4 border-l-amber-500'
+                          : 'bg-white hover:bg-gray-50 border-gray-150 hover:border-gray-200 shadow-sm'
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-[9px] font-black font-mono uppercase bg-gray-100 px-2 py-0.5 border border-gray-200 text-secondary rounded">
@@ -626,7 +624,7 @@ const AdminChatMonitor = () => {
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
                 {messagesLoading ? (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <Loader className="w-8 h-8 text-primary animate-spin" />
+                    <Loader className="w-8 h-8 text-primary " />
                   </div>
                 ) : (
                   messages.map((msg, index) => {

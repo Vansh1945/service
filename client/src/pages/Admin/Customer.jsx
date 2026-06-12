@@ -344,7 +344,7 @@ const AdminCustomersDashboard = () => {
                 {/* Loading State */}
                 {loading && (
                     <div className="bg-white rounded-xl shadow-md p-8 mb-6 text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                        <div className=" rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
                         <p className="mt-4 text-gray-600">Loading customers...</p>
                     </div>
                 )}

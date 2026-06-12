@@ -934,7 +934,7 @@ const ZoneManagement = () => {
         <div className="bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[10px] font-black uppercase tracking-wider">Active Zones</span>
-            <Compass className="w-4 h-4 text-teal-500 animate-spin-slow" />
+            <Compass className="w-4 h-4 text-teal-500 -slow" />
           </div>
           <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.activeZones}</h3>
           <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Enforcing Dispatch</p>
@@ -1719,7 +1719,7 @@ const ZoneManagement = () => {
 
             {analyticsModal.loading ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                <RefreshCw className="w-8 h-8 text-primary " />
                 <p className="text-xs text-gray-500 uppercase tracking-widest font-black">Fetching zone intelligence...</p>
               </div>
             ) : analyticsModal.zone ? (

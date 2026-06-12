@@ -699,7 +699,7 @@ const AdminServices = () => {
   const handleExportServices = async () => {
     try {
       const response = await ServiceService.exportServicesToExcel({ responseType: 'blob' });
-      
+
       // Create blob from response
       const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
@@ -2018,10 +2018,9 @@ const AdminServices = () => {
                       {formatDuration(selectedService.duration)}
                     </span>
                     {selectedService.serviceType && (
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        selectedService.serviceType === 'emergency' ? 'bg-red-100 text-red-800' :
-                        selectedService.serviceType === 'premium' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${selectedService.serviceType === 'emergency' ? 'bg-red-100 text-red-800' :
+                          selectedService.serviceType === 'premium' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {selectedService.serviceType.toUpperCase()}
                       </span>
                     )}
@@ -2393,7 +2392,7 @@ const AdminServices = () => {
                 >
                   {isDisablingDiscounts ? (
                     <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      <RefreshCw className="w-4 h-4 mr-2 " />
                       Deactivating...
                     </>
                   ) : (

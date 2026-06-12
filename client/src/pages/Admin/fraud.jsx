@@ -56,7 +56,7 @@ const AdminFraud = () => {
     cancellation: [],
     sessions: []
   });
-  
+
   // Stats
   const [stats, setStats] = useState({
     suspiciousAccounts: 0,
@@ -141,9 +141,9 @@ const AdminFraud = () => {
       const cancelData = cancelRes.data?.data || [];
 
       // Calculate stats based on actual data
-      const suspiciousAccounts = ipData.reduce((acc, curr) => acc + (curr.users?.length || 0), 0) + 
-                                 deviceData.reduce((acc, curr) => acc + (curr.users?.length || 0), 0);
-      
+      const suspiciousAccounts = ipData.reduce((acc, curr) => acc + (curr.users?.length || 0), 0) +
+        deviceData.reduce((acc, curr) => acc + (curr.users?.length || 0), 0);
+
       const totalAlerts = ipData.length + deviceData.length + cancelData.length;
       const highRiskCustomers = cancelData.filter(c => c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL').length;
       const highRiskProviders = cancelData.filter(c => c.role === 'provider' && (c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL')).length;
@@ -154,7 +154,7 @@ const AdminFraud = () => {
         highRiskProviders,
         highRiskCustomers
       });
-      
+
     } catch (err) {
       console.error("Error fetching stats:", err);
     }
@@ -226,7 +226,7 @@ const AdminFraud = () => {
         setSuspensionReason('');
         // Refresh details modal users list
         if (selectedItem && selectedItem.users) {
-          const updatedUsers = selectedItem.users.map(u => 
+          const updatedUsers = selectedItem.users.map(u =>
             u._id === userId ? { ...u, isSuspended: suspend } : u
           );
           setSelectedItem(prev => ({ ...prev, users: updatedUsers }));
@@ -253,7 +253,7 @@ const AdminFraud = () => {
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-inter text-slate-800">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in">
           <div>
@@ -265,11 +265,11 @@ const AdminFraud = () => {
             </h1>
             <p className="text-sm text-slate-500 mt-1">Real-time heuristics, proxy protection, and administrative mitigation overrides</p>
           </div>
-          <button 
+          <button
             onClick={handleRefresh}
             className="flex items-center gap-2 px-5 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all font-bold text-sm"
           >
-            <FiRefreshCw size={15} className={loading ? "animate-spin text-red-500" : "text-slate-500"} /> Sync System
+            <FiRefreshCw size={15} className={loading ? " text-red-500" : "text-slate-500"} /> Sync System
           </button>
         </div>
 
@@ -284,7 +284,7 @@ const AdminFraud = () => {
               <p className="text-2xl font-black text-slate-800">{stats.suspiciousAccounts}</p>
             </div>
           </div>
-          
+
           <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
             <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 border border-rose-100">
               <FiAlertTriangle size={24} />
@@ -329,11 +329,10 @@ const AdminFraud = () => {
               <button
                 key={t.id}
                 onClick={() => { setActiveTab(t.id); setCurrentPage(1); }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
-                  activeTab === t.id 
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' 
-                  : 'text-slate-500 hover:text-slate-900'
-                }`}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${activeTab === t.id
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                    : 'text-slate-500 hover:text-slate-900'
+                  }`}
               >
                 <t.icon size={16} /> {t.label}
               </button>
@@ -381,7 +380,7 @@ const AdminFraud = () => {
 
         {/* Content Area */}
         <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden animate-slide-up">
-          
+
           {/* TAB 1: SAME IP */}
           {activeTab === 'ip' && (
             <div className="overflow-x-auto">
@@ -455,19 +454,18 @@ const AdminFraud = () => {
                               </div>
                             </td>
                             <td className="px-6 py-5">
-                              <button 
+                              <button
                                 onClick={() => handleMarkSafe(item._id, !item.isSafe)}
-                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
-                                  item.isSafe 
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' 
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                }`}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${item.isSafe
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  }`}
                               >
                                 {item.isSafe ? '✓ Marked Safe' : 'Mark Safe'}
                               </button>
                             </td>
                             <td className="px-6 py-5">
-                              <button 
+                              <button
                                 onClick={() => setSelectedItem(item)}
                                 className="text-indigo-600 hover:text-indigo-800 font-bold text-sm flex items-center gap-1 transition-colors"
                               >
@@ -519,8 +517,8 @@ const AdminFraud = () => {
                           if (!searchQuery) return true;
                           const query = searchQuery.toLowerCase();
                           if (item._id.includes(searchQuery)) return true;
-                          const detailsStr = typeof item.deviceDetails === 'string' 
-                            ? item.deviceDetails.toLowerCase() 
+                          const detailsStr = typeof item.deviceDetails === 'string'
+                            ? item.deviceDetails.toLowerCase()
                             : JSON.stringify(item.deviceDetails || {}).toLowerCase();
                           return detailsStr.includes(query);
                         })
@@ -532,12 +530,12 @@ const AdminFraud = () => {
                                   <FiSmartphone className="text-slate-400" size={14} />
                                   {item._id.substring(0, 16)}...
                                 </span>
-                                <span 
-                                  className="text-[10px] text-slate-500 block truncate mt-0.5" 
+                                <span
+                                  className="text-[10px] text-slate-500 block truncate mt-0.5"
                                   title={typeof item.deviceDetails === 'string' ? item.deviceDetails : JSON.stringify(item.deviceDetails)}
                                 >
-                                  {typeof item.deviceDetails === 'string' 
-                                    ? item.deviceDetails 
+                                  {typeof item.deviceDetails === 'string'
+                                    ? item.deviceDetails
                                     : (item.deviceDetails ? `${item.deviceDetails.platform || 'Unknown OS'} - ${item.deviceDetails.userAgent?.substring(0, 30) || 'Unknown Browser'}` : 'Standard browser specifications')}
                                 </span>
                               </div>
@@ -571,19 +569,18 @@ const AdminFraud = () => {
                               </div>
                             </td>
                             <td className="px-6 py-5">
-                              <button 
+                              <button
                                 onClick={() => handleMarkSafe(item._id, !item.isSafe)}
-                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
-                                  item.isSafe 
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' 
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                }`}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${item.isSafe
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  }`}
                               >
                                 {item.isSafe ? '✓ Marked Safe' : 'Mark Safe'}
                               </button>
                             </td>
                             <td className="px-6 py-5">
-                              <button 
+                              <button
                                 onClick={() => setSelectedItem(item)}
                                 className="text-indigo-600 hover:text-indigo-800 font-bold text-sm flex items-center gap-1 transition-colors"
                               >
@@ -636,9 +633,9 @@ const AdminFraud = () => {
                           const name = item.user?.name || '';
                           const email = item.user?.email || '';
                           const bid = item.booking?.bookingId || '';
-                          return name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                 email.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                 bid.toLowerCase().includes(searchQuery.toLowerCase());
+                          return name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            bid.toLowerCase().includes(searchQuery.toLowerCase());
                         })
                         .map((item, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
@@ -681,7 +678,7 @@ const AdminFraud = () => {
                               <RiskBadge risk={item.riskLevel} />
                             </td>
                             <td className="px-6 py-5">
-                              <button 
+                              <button
                                 onClick={() => setSelectedItem(item)}
                                 className="text-indigo-600 hover:text-indigo-800 font-bold text-sm flex items-center gap-1 transition-colors"
                               >
@@ -754,7 +751,7 @@ const AdminFraud = () => {
                               <RiskBadge risk={item.suspiciousScore > 50 ? 'HIGH' : item.suspiciousScore > 20 ? 'MEDIUM' : 'LOW'} />
                             </td>
                             <td className="px-6 py-5">
-                              <button 
+                              <button
                                 onClick={() => handleForceLogout(item.userId, item.role)}
                                 className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
                               >
@@ -788,7 +785,7 @@ const AdminFraud = () => {
       {selectedItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-scale-in">
-            
+
             {/* Modal Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2.5">
@@ -800,8 +797,8 @@ const AdminFraud = () => {
                   <p className="text-xs text-slate-400">Analyzing signature: <span className="font-mono">{selectedItem._id?.substring(0, 24)}</span></p>
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedItem(null)} 
+              <button
+                onClick={() => setSelectedItem(null)}
                 className="w-8 h-8 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold"
               >
                 ✕
@@ -810,7 +807,7 @@ const AdminFraud = () => {
 
             {/* Modal Scrollable Body */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-slate-700">
-              
+
               {/* Top Overview Cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/50">
@@ -847,7 +844,7 @@ const AdminFraud = () => {
                   <FiUser size={14} className="text-indigo-500" />
                   Linked Accounts ({selectedItem.users?.length || (selectedItem.user ? 1 : 0)})
                 </h4>
-                
+
                 <div className="space-y-3">
                   {/* Handle IP/Device linked users array */}
                   {selectedItem.users && selectedItem.users.map((u, idx) => (
@@ -858,13 +855,13 @@ const AdminFraud = () => {
                         </div>
                         <div>
                           <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                            {u.name} 
+                            {u.name}
                             <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">{u.role}</span>
                           </p>
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">{u.email} • {u.phone || 'No phone'}</p>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => {
                           if (u.isSuspended) {
                             handleSuspendUser(u._id, false);
@@ -872,11 +869,10 @@ const AdminFraud = () => {
                             setSuspendingUser(u._id);
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                          u.isSuspended 
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' 
-                          : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                        }`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${u.isSuspended
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                            : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                          }`}
                       >
                         {u.isSuspended ? '✓ Reactivate' : 'Suspend'}
                       </button>
@@ -892,13 +888,13 @@ const AdminFraud = () => {
                         </div>
                         <div>
                           <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                            {selectedItem.user.name} 
+                            {selectedItem.user.name}
                             <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">{selectedItem.user.role}</span>
                           </p>
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">{selectedItem.user.email} • {selectedItem.user.phone || 'No phone'}</p>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => {
                           if (selectedItem.user.isSuspended) {
                             handleSuspendUser(selectedItem.userId, false);
@@ -906,11 +902,10 @@ const AdminFraud = () => {
                             setSuspendingUser(selectedItem.userId);
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                          selectedItem.user.isSuspended 
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' 
-                          : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                        }`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${selectedItem.user.isSuspended
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                            : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                          }`}
                       >
                         {selectedItem.user.isSuspended ? '✓ Reactivate' : 'Suspend'}
                       </button>
@@ -961,7 +956,7 @@ const AdminFraud = () => {
                   <FiFileText className="text-indigo-500" size={14} />
                   Case Investigation Notes
                 </h4>
-                
+
                 {/* Notes History */}
                 <div className="space-y-2 max-h-[150px] overflow-y-auto mb-3 pr-1">
                   {!selectedItem.notes || selectedItem.notes.length === 0 ? (
@@ -1017,11 +1012,10 @@ const AdminFraud = () => {
                 </button>
                 <button
                   onClick={() => handleMarkSafe(selectedItem._id, !selectedItem.isSafe)}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs transition-all border ${
-                    selectedItem.isSafe
-                    ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                    : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700 shadow'
-                  }`}
+                  className={`px-4 py-2 rounded-xl font-bold text-xs transition-all border ${selectedItem.isSafe
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                      : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700 shadow'
+                    }`}
                 >
                   {selectedItem.isSafe ? 'Revoke Safe Status' : 'Whitelist Safe'}
                 </button>
@@ -1036,7 +1030,7 @@ const AdminFraud = () => {
       {suspendingUser && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col animate-scale-in border border-rose-100">
-            
+
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-2.5 bg-rose-50">
               <div className="w-9 h-9 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600 shadow-inner">
                 <FiUserX size={18} />
@@ -1051,7 +1045,7 @@ const AdminFraud = () => {
               <p className="text-slate-500 leading-relaxed font-semibold">
                 Are you sure you want to suspend this account? The suspended user will be instantly logged out and blocked from logging into the customer or provider panels.
               </p>
-              
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Suspension Reason (Required)</label>
                 <textarea

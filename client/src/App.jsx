@@ -520,7 +520,7 @@ const App = () => {
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] w-[92%] max-w-md bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-2xl p-4 flex items-center justify-between gap-4 animate-in slide-in-from-top-6 duration-300">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0 text-teal-400">
-              <FiRefreshCw className="w-5 h-5 animate-spin" />
+              <FiRefreshCw className="w-5 h-5" />
             </div>
             <div className="space-y-0.5">
               <span className="text-xs font-black uppercase tracking-wider text-teal-400">PWA System Update</span>

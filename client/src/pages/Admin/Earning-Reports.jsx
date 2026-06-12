@@ -144,7 +144,7 @@ const AdminEarningReports = () => {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
       });
-      
+
       if (providerId && reportId !== 'provider-ledger') {
         params.providerId = providerId;
       }
@@ -352,7 +352,7 @@ const AdminEarningReports = () => {
                   >
                     {loading && activeReport === report.id ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        <div className=" rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                         <span>Preparing...</span>
                       </>
                     ) : (
@@ -401,7 +401,7 @@ const AdminEarningReports = () => {
                 >
                   {loading && activeReport === 'provider-ledger' ? (
                     <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                      <div className=" rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                       <span>Generating...</span>
                     </>
                   ) : (

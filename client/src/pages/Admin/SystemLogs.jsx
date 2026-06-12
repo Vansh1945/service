@@ -30,10 +30,10 @@ const LevelBadge = ({ level }) => {
 // Parser engine to split the raw logs into structured data properties
 const parseLogMessage = (message) => {
   if (!message) return { method: '-', endpoint: '-', status: '-', responseTime: '-', isHttp: false };
-  
+
   const trimmed = message.trim();
   const match = trimmed.match(/^(GET|POST|PUT|DELETE|PATCH|OPTIONS) ([^ ]+) ([0-9]{3}) ([0-9.]+) ms/);
-  
+
   if (match) {
     const [_, method, path, status, time] = match;
     const cleanEndpoint = path.split('?')[0];
@@ -45,7 +45,7 @@ const parseLogMessage = (message) => {
       isHttp: true
     };
   }
-  
+
   return {
     method: '-',
     endpoint: trimmed,
@@ -127,7 +127,7 @@ const SystemLogs = () => {
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Custom filter selections
   const [selectedFilter, setSelectedFilter] = useState('ALL');
   const [selectedModule, setSelectedModule] = useState('All Modules');
@@ -196,13 +196,13 @@ const SystemLogs = () => {
   // Level & Module sync state setter
   const handleFilterChange = (filter) => {
     setSelectedFilter(filter);
-    
+
     // Convert visually friendly warning to backend 'WARN'
     let backendLevel = 'ALL';
     if (filter === 'INFO') backendLevel = 'INFO';
     if (filter === 'WARNING') backendLevel = 'WARN';
     if (filter === 'ERROR') backendLevel = 'ERROR';
-    
+
     setPagination(p => ({
       ...p,
       level: backendLevel,
@@ -250,7 +250,7 @@ const SystemLogs = () => {
   const totalRequests = logs.filter(l => parseLogMessage(l.message).isHttp).length;
   const errorCount = logs.filter(l => l.level?.toUpperCase() === 'ERROR').length;
   const warningCount = logs.filter(l => l.level?.toUpperCase() === 'WARN' || l.level?.toUpperCase() === 'WARNING').length;
-  
+
   const httpLogs = logs.map(l => parseLogMessage(l.message)).filter(p => p.isHttp);
   const totalTime = httpLogs.reduce((acc, curr) => acc + parseInt(curr.responseTime), 0);
   const avgResponseTime = httpLogs.length > 0 ? `${Math.round(totalTime / httpLogs.length)} ms` : '-';
@@ -286,7 +286,7 @@ const SystemLogs = () => {
               onClick={() => fetchLogs()}
               className="flex items-center gap-2 px-4 py-2 bg-white text-secondary border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all font-bold text-sm"
             >
-              <FiRefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
+              <FiRefreshCw size={14} className={loading ? "" : ""} /> Refresh
             </button>
             <button
               onClick={handleDownload}
@@ -348,8 +348,8 @@ const SystemLogs = () => {
                 key={filter}
                 onClick={() => handleFilterChange(filter)}
                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${selectedFilter === filter
-                    ? 'bg-gray-800 text-white border-gray-800 shadow-md scale-95'
-                    : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-gray-800 text-white border-gray-800 shadow-md scale-95'
+                  : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100 hover:text-gray-900'
                   }`}
               >
                 {filter}
@@ -434,19 +434,19 @@ const SystemLogs = () => {
                           <td className="px-6 py-3.5 text-gray-500 whitespace-nowrap font-medium">
                             {log.timestamp || 'N/A'}
                           </td>
-                          
+
                           {/* Level column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             {log.level ? <LevelBadge level={log.level} /> : <span className="text-gray-400 font-bold">RAW</span>}
                           </td>
-                          
+
                           {/* Module column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black tracking-wide bg-slate-100 text-slate-700 border border-slate-200">
                               {mod}
                             </span>
                           </td>
-                          
+
                           {/* Method column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             {parsed.method === '-' ? (
@@ -457,12 +457,12 @@ const SystemLogs = () => {
                               </span>
                             )}
                           </td>
-                          
+
                           {/* Endpoint column */}
                           <td className="px-6 py-3.5 font-mono text-[11px] text-gray-700 max-w-xs truncate font-semibold" title={parsed.endpoint}>
                             {parsed.endpoint}
                           </td>
-                          
+
                           {/* Status Code column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             {parsed.status === '-' ? (
@@ -473,7 +473,7 @@ const SystemLogs = () => {
                               </span>
                             )}
                           </td>
-                          
+
                           {/* Response time Speed column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             {parsed.responseTime === '-' ? (
@@ -484,7 +484,7 @@ const SystemLogs = () => {
                               </span>
                             )}
                           </td>
-                          
+
                           {/* Copy log column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             <button

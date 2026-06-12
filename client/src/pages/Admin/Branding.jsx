@@ -517,7 +517,7 @@ const Branding = () => {
                 )}
                 {uploadingField === 'logo' && (
                   <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                    <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                    <FiRefreshCw className="w-6 h-6 text-teal-600 " />
                     <span className="text-[10px] font-bold text-teal-600">Uploading logo...</span>
                   </div>
                 )}
@@ -557,7 +557,7 @@ const Branding = () => {
                   )}
                   {uploadingField === 'icon' && (
                     <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                      <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                      <FiRefreshCw className="w-6 h-6 text-teal-600 " />
                       <span className="text-[10px] font-bold text-teal-600">Uploading icon...</span>
                     </div>
                   )}
@@ -598,7 +598,7 @@ const Branding = () => {
                   )}
                   {uploadingField === 'splashScreen' && (
                     <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                      <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                      <FiRefreshCw className="w-6 h-6 text-teal-600 " />
                       <span className="text-[10px] font-bold text-teal-600">Uploading splash...</span>
                     </div>
                   )}
@@ -639,7 +639,7 @@ const Branding = () => {
                   )}
                   {uploadingField === 'favicon' && (
                     <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                      <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                      <FiRefreshCw className="w-6 h-6 text-teal-600 " />
                       <span className="text-[10px] font-bold text-teal-600">Uploading favicon...</span>
                     </div>
                   )}
@@ -665,7 +665,7 @@ const Branding = () => {
               className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm hover:shadow"
               disabled={loading}
             >
-              {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiSave className="w-3.5 h-3.5" />}
+              {loading ? <FiRefreshCw className="w-3.5 h-3.5 " /> : <FiSave className="w-3.5 h-3.5" />}
               Save Draft
             </button>
             <button
@@ -674,7 +674,7 @@ const Branding = () => {
               className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-md hover:shadow-lg transform active:scale-95"
               disabled={loading}
             >
-              {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiSend className="w-3.5 h-3.5" />}
+              {loading ? <FiRefreshCw className="w-3.5 h-3.5 " /> : <FiSend className="w-3.5 h-3.5" />}
               Publish Live Update
             </button>
           </div>
@@ -759,7 +759,7 @@ const Branding = () => {
                 className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 uppercase tracking-wider transform hover:translate-y-[-1px] active:translate-y-[1px]"
                 disabled={loading}
               >
-                {loading ? <FiRefreshCw className="w-4 h-4 animate-spin" /> : <FiSend className="w-4 h-4" />}
+                {loading ? <FiRefreshCw className="w-4 h-4 " /> : <FiSend className="w-4 h-4" />}
                 Send App Update Notification
               </button>
             </div>

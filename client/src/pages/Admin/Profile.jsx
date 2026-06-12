@@ -303,7 +303,7 @@ const AdminProfile = () => {
         {/* Admin List */}
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+            <div className=" rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
           </div>
         ) : admins.length > 0 ? (
           <div className="space-y-3">
@@ -380,7 +380,7 @@ const AdminProfile = () => {
   if (isLoading && !profile) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className=" rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }

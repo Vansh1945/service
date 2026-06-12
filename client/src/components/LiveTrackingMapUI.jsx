@@ -176,7 +176,7 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
       {/* Route GPS detection spinner overlay */}
       {loadingRoute && routeCoords.length < 2 && (
         <div className="absolute inset-0 z-[1001] bg-white/75 flex flex-col items-center justify-center backdrop-blur-sm">
-          <Loader className="w-10 h-10 animate-spin text-primary" />
+          <Loader className="w-10 h-10  text-primary" />
           <p className="text-xs font-bold text-secondary mt-3 animate-pulse uppercase tracking-wider">Calculating route...</p>
         </div>
       )}

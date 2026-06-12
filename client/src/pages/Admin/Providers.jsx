@@ -1130,8 +1130,8 @@ const AdminProvidersPage = () => {
               setCurrentPage(1);
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all duration-300 ${activeTab === 'pending_providers'
-                ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
+              ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
               }`}
           >
             <UserPlus className="w-5 h-5" />
@@ -1143,8 +1143,8 @@ const AdminProvidersPage = () => {
               setCurrentPage(1);
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all duration-300 ${activeTab === 'bank_pending'
-                ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
+              ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
               }`}
           >
             <CreditCard className="w-5 h-5" />
@@ -1320,7 +1320,7 @@ const ApprovalModal = ({
             >
               {processing ? (
                 <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <div className=" rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Processing...
                 </div>
               ) : (

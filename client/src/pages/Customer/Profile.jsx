@@ -216,31 +216,31 @@ const UserProfile = () => {
         }
     };
 
-// Fetch profile data
-const fetchProfile = async () => {
-  try {
-    setPageLoading(true);
-    const res = await getProfile();
-    if (res?.data?.user) {
-      setProfile(prev => ({ ...prev, ...res.data.user }));
-    }
-  } catch (err) {
-    console.error(err);
-    toast.error('Failed to load profile');
-  } finally {
-    setPageLoading(false);
-  }
-};
+    // Fetch profile data
+    const fetchProfile = async () => {
+        try {
+            setPageLoading(true);
+            const res = await getProfile();
+            if (res?.data?.user) {
+                setProfile(prev => ({ ...prev, ...res.data.user }));
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to load profile');
+        } finally {
+            setPageLoading(false);
+        }
+    };
 
-useEffect(() => {
-  fetchProfile();
-}, []);
+    useEffect(() => {
+        fetchProfile();
+    }, []);
 
 
     if (pageLoading) {
-    return <ProfileSkeleton />;
-  }
-  return (
+        return <ProfileSkeleton />;
+    }
+    return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
             <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm">
@@ -519,7 +519,7 @@ useEffect(() => {
                                                 className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all active:scale-90"
                                                 title="Sync Balance"
                                             >
-                                                <RotateCcw className={`w-3.5 h-3.5 text-primary ${loading ? 'animate-spin' : ''}`} />
+                                                <RotateCcw className={`w-3.5 h-3.5 text-primary ${loading ? '' : ''}`} />
                                             </button>
                                         </div>
 

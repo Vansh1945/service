@@ -190,7 +190,7 @@ const ProviderRegistration = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     const addressFields = ['houseNumber', 'road', 'landmark', 'area', 'pincode', 'postalCode', 'city', 'state'];
-    
+
     if (addressFields.includes(name)) {
       setFormData((prev) => {
         const updated = { ...prev, [name]: value };
@@ -671,7 +671,7 @@ const ProviderRegistration = () => {
               <Field label="Service Categories (Select 1–3) *">
                 {providerServicesLoading ? (
                   <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+                    <div className=" rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
                     Loading categories...
                   </div>
                 ) : providerServicesError ? (

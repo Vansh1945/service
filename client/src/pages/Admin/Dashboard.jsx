@@ -151,7 +151,7 @@ const AdminDashboard = () => {
               <div className="flex justify-between items-start">
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Live Bookings</p>
                 <span className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg group-hover:scale-110 transition-transform">
-                  <FiClock size={14} className="animate-spin-slow" />
+                  <FiClock size={14} className="-slow" />
                 </span>
               </div>
               <h3 className="text-2xl font-black mt-2 text-white">{analytics?.bookingStats?.inProgress || 0}</h3>
@@ -407,7 +407,7 @@ const AdminDashboard = () => {
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
               <div className="flex items-center">
                 <div className="p-2 bg-teal-50 rounded-lg mr-3">
-                  <FiRefreshCw className="text-teal-600 animate-spin-slow" />
+                  <FiRefreshCw className="text-teal-600 -slow" />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900">Rebook & Retention Intelligence</h3>

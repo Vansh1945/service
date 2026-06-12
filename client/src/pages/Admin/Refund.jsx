@@ -608,11 +608,10 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                           key={opt.id}
                           type="button"
                           onClick={() => setAbsorption(opt.id)}
-                          className={`p-2 rounded-lg border text-left cursor-pointer transition-all duration-200 ${
-                            absorption === opt.id
+                          className={`p-2 rounded-lg border text-left cursor-pointer transition-all duration-200 ${absorption === opt.id
                               ? 'bg-purple-50 border-purple-500 text-purple-700 ring-1 ring-purple-500'
                               : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                          }`}
+                            }`}
                         >
                           <p className="text-xs font-bold">{opt.label}</p>
                           <p className="text-[9px] text-gray-400 mt-0.5 font-medium leading-none">{opt.desc}</p>
@@ -718,7 +717,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 disabled={updating || !decisionType || isFullyRefunded}
                 className="w-full py-2.5 bg-primary text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
-                {updating && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                {updating && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full "></div>}
                 {updating ? 'Recording Decision...' : (isFullyRefunded ? 'Resolved & Closed' : 'Execute System Decision')}
               </button>
 

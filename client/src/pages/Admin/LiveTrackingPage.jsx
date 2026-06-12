@@ -573,7 +573,7 @@ const LiveTrackingPage = () => {
             <span>City Hub:</span>
             <span className="text-secondary font-black text-right">{zone.city || 'N/A'}</span>
           </div>
-          
+
           <div className="flex justify-between items-center">
             <span>Level:</span>
             <span className="text-secondary font-black text-right">{zone.zoneLevel || 'N/A'}</span>
@@ -606,7 +606,7 @@ const LiveTrackingPage = () => {
             <span className="text-secondary/65">Providers Inside:</span>
             <span className="text-blue-600 text-xs font-black text-right">{zoneStats.providersCount}</span>
           </div>
-          
+
           <div className="flex justify-between items-center text-[#a855f7]">
             <span className="font-extrabold">Customers:</span>
             <span className="text-xs font-black text-right">{zoneStats.customersCount}</span>
@@ -694,7 +694,7 @@ const LiveTrackingPage = () => {
               onClick={fetchData}
               className="p-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-all flex items-center justify-center shrink-0 text-primary"
             >
-              <RefreshCw className="w-4 h-4 text-primary animate-spin" />
+              <RefreshCw className="w-4 h-4 text-primary " />
             </button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  FiMail, FiSend, FiRotateCcw, FiSave, FiEye, FiCode, 
+import {
+  FiMail, FiSend, FiRotateCcw, FiSave, FiEye, FiCode,
   FiInfo, FiCheck, FiX, FiActivity, FiUser, FiCalendar,
   FiSliders, FiCopy, FiExternalLink, FiHelpCircle, FiChevronRight,
   FiLayout, FiMaximize2, FiSmartphone, FiMonitor
@@ -74,7 +74,7 @@ const EmailTemplate = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  
+
   // Editor draft state
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -192,7 +192,7 @@ const EmailTemplate = () => {
             updatedAt: new Date()
           }
         }));
-        
+
         // Fetch again to update audit logs
         const refreshResponse = await SystemService.getEmailTemplates();
         if (refreshResponse.data?.success) {
@@ -225,7 +225,7 @@ const EmailTemplate = () => {
           ...prev,
           [selectedType]: response.data.data
         }));
-        
+
         // Refresh audit logs
         const refreshResponse = await SystemService.getEmailTemplates();
         if (refreshResponse.data?.success) {
@@ -294,7 +294,7 @@ const EmailTemplate = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className=" rounded-full h-12 w-12 border-b-2 border-primary"></div>
         <p className="mt-4 text-gray-500 font-inter">Loading Email Template Management Workspace...</p>
       </div>
     );
@@ -315,7 +315,7 @@ const EmailTemplate = () => {
             Convert existing hardcoded emails into admin-controlled responsive Handlebars templates in real time.
           </p>
         </div>
-        
+
         {/* Global audit meta badge */}
         {auditMeta && (
           <div className="flex items-center gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 self-start md:self-auto text-xs">
@@ -353,11 +353,10 @@ const EmailTemplate = () => {
                 <button
                   key={key}
                   onClick={() => setSelectedType(key)}
-                  className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 text-left font-medium text-sm group ${
-                    active 
-                      ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                  className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 text-left font-medium text-sm group ${active
+                      ? 'bg-primary text-white shadow-lg shadow-primary/20'
                       : 'text-secondary hover:bg-primary/5 hover:text-primary'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center space-x-3 truncate">
                     <span className={active ? 'text-white' : 'text-gray-400 group-hover:text-primary'}>
@@ -366,12 +365,10 @@ const EmailTemplate = () => {
                     <span className="truncate">{data.name}</span>
                   </div>
                   <div className="flex items-center space-x-1 flex-shrink-0">
-                    <span className={`w-2 h-2 rounded-full ${
-                      isTemplateActive ? 'bg-green-500' : 'bg-gray-300'
-                    }`}></span>
-                    <FiChevronRight className={`w-4 h-4 transition-transform duration-200 ${
-                      active ? 'translate-x-0.5 opacity-100' : 'opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'
-                    }`} />
+                    <span className={`w-2 h-2 rounded-full ${isTemplateActive ? 'bg-green-500' : 'bg-gray-300'
+                      }`}></span>
+                    <FiChevronRight className={`w-4 h-4 transition-transform duration-200 ${active ? 'translate-x-0.5 opacity-100' : 'opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'
+                      }`} />
                   </div>
                 </button>
               );
@@ -387,7 +384,7 @@ const EmailTemplate = () => {
               <h2 className="text-lg font-bold text-secondary font-inter">
                 Editing: {currentMeta?.name}
               </h2>
-              
+
               {/* Active Toggle Switch */}
               <div className="flex items-center space-x-3 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
                 <span className="text-xs font-semibold text-gray-500">
@@ -396,14 +393,12 @@ const EmailTemplate = () => {
                 <button
                   type="button"
                   onClick={() => setIsActive(!isActive)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    isActive ? 'bg-primary' : 'bg-gray-300'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isActive ? 'bg-primary' : 'bg-gray-300'
+                    }`}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      isActive ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isActive ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                   />
                 </button>
               </div>
@@ -440,7 +435,7 @@ const EmailTemplate = () => {
                   <span>Responsive Email Layout</span>
                 </div>
               </div>
-              
+
               <div className="relative rounded-xl border border-gray-200 overflow-hidden shadow-inner bg-gray-50/50">
                 <textarea
                   id="template-body-textarea"
@@ -463,7 +458,7 @@ const EmailTemplate = () => {
               disabled={isRestoring || loading}
               className="flex items-center px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm font-semibold transition-all duration-200"
             >
-              <FiRotateCcw className={`w-4 h-4 mr-2 ${isRestoring ? 'animate-spin' : ''}`} />
+              <FiRotateCcw className={`w-4 h-4 mr-2 ${isRestoring ? '' : ''}`} />
               Restore Default
             </button>
 
@@ -482,7 +477,7 @@ const EmailTemplate = () => {
                 disabled={isSaving}
                 className="flex items-center px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white font-semibold text-sm shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 disabled:opacity-50"
               >
-                <FiSave className={`w-4 h-4 mr-2 ${isSaving ? 'animate-spin' : ''}`} />
+                <FiSave className={`w-4 h-4 mr-2 ${isSaving ? '' : ''}`} />
                 Save Changes
               </button>
             </div>
@@ -491,7 +486,7 @@ const EmailTemplate = () => {
 
         {/* Right Panel: Variable Explorer & Sandboxed Live Preview */}
         <div className="lg:col-span-4 space-y-6">
-          
+
           {/* Visual Variable Badges Box */}
           <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-3">
             <div className="flex items-center space-x-2">
@@ -534,23 +529,21 @@ const EmailTemplate = () => {
                   Compiled Live Preview
                 </span>
               </div>
-              
+
               {/* Device Mode Switcher */}
               <div className="flex bg-gray-200/80 p-0.5 rounded-lg border border-gray-300">
                 <button
                   onClick={() => setPreviewDevice('desktop')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    previewDevice === 'desktop' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-secondary'
-                  }`}
+                  className={`p-1.5 rounded-md transition-all ${previewDevice === 'desktop' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-secondary'
+                    }`}
                   title="Desktop View"
                 >
                   <FiMonitor className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setPreviewDevice('mobile')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    previewDevice === 'mobile' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-secondary'
-                  }`}
+                  className={`p-1.5 rounded-md transition-all ${previewDevice === 'mobile' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-secondary'
+                    }`}
                   title="Mobile View"
                 >
                   <FiSmartphone className="w-3.5 h-3.5" />
@@ -571,17 +564,16 @@ const EmailTemplate = () => {
               {isPreviewLoading && (
                 <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-100 shadow-md">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    <div className=" rounded-full h-4 w-4 border-b-2 border-primary"></div>
                     <span className="text-xs text-gray-500 font-semibold font-inter">Compiling template...</span>
                   </div>
                 </div>
               )}
 
               {previewHtml ? (
-                <div 
-                  className={`bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col ${
-                    previewDevice === 'mobile' ? 'w-[360px] max-w-full' : 'w-full'
-                  }`}
+                <div
+                  className={`bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col ${previewDevice === 'mobile' ? 'w-[360px] max-w-full' : 'w-full'
+                    }`}
                 >
                   <iframe
                     title="Live Sandboxed Preview"
@@ -660,7 +652,7 @@ const EmailTemplate = () => {
                   disabled={isTesting}
                   className="flex items-center px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white font-semibold text-sm shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 disabled:opacity-50"
                 >
-                  <FiSend className={`w-4 h-4 mr-2 ${isTesting ? 'animate-spin' : ''}`} />
+                  <FiSend className={`w-4 h-4 mr-2 ${isTesting ? '' : ''}`} />
                   {isTesting ? 'Sending test...' : 'Send Live Test'}
                 </button>
               </div>

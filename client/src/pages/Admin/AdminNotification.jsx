@@ -562,7 +562,7 @@ const AdminNotification = () => {
                 <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Active Devices</span>
                     {loadingStats ? (
-                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                        <FiLoader className=" text-primary mt-2" size={16} />
                     ) : (
                         <div className="mt-2 flex items-baseline gap-2">
                             <span className="text-2xl font-black text-gray-900">{stats.totalActiveDevices}</span>
@@ -575,7 +575,7 @@ const AdminNotification = () => {
                 <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Customer Devices</span>
                     {loadingStats ? (
-                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                        <FiLoader className=" text-primary mt-2" size={16} />
                     ) : (
                         <div className="mt-2">
                             <span className="text-2xl font-black text-primary">{stats.customerDevices}</span>
@@ -587,7 +587,7 @@ const AdminNotification = () => {
                 <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Provider Devices</span>
                     {loadingStats ? (
-                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                        <FiLoader className=" text-primary mt-2" size={16} />
                     ) : (
                         <div className="mt-2">
                             <span className="text-2xl font-black text-teal-600">{stats.providerDevices}</span>
@@ -599,7 +599,7 @@ const AdminNotification = () => {
                 <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Admin Devices</span>
                     {loadingStats ? (
-                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                        <FiLoader className=" text-primary mt-2" size={16} />
                     ) : (
                         <div className="mt-2">
                             <span className="text-2xl font-black text-purple-600">{stats.adminDevices}</span>
@@ -614,7 +614,7 @@ const AdminNotification = () => {
                         <span className="text-[10px] text-red-500 font-extrabold bg-red-50 px-1 py-0.5 rounded">AUTO</span>
                     </div>
                     {loadingStats ? (
-                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                        <FiLoader className=" text-primary mt-2" size={16} />
                     ) : (
                         <div className="mt-2 flex items-baseline gap-1">
                             <span className="text-2xl font-black text-red-600">{stats.invalidTokenCleanupCount}</span>
@@ -632,7 +632,7 @@ const AdminNotification = () => {
                         </button>
                     </div>
                     {loadingStats ? (
-                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                        <FiLoader className=" text-primary mt-2" size={16} />
                     ) : (
                         <div className="mt-2">
                             <span className="text-sm font-black text-gray-800 break-all">{stats.lastNotificationDeliverySuccess}</span>
@@ -702,22 +702,20 @@ const AdminNotification = () => {
                                         setBroadcastScope('global');
                                         setForm(prev => ({ ...prev, targetZones: [] }));
                                     }}
-                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${
-                                        broadcastScope === 'global'
+                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${broadcastScope === 'global'
                                             ? 'border-primary bg-primary/5 text-primary'
                                             : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
-                                    }`}
+                                        }`}
                                 >
                                     🌐 Global Broadcast
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setBroadcastScope('zone_specific')}
-                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${
-                                        broadcastScope === 'zone_specific'
+                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${broadcastScope === 'zone_specific'
                                             ? 'border-primary bg-primary/5 text-primary'
                                             : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
-                                    }`}
+                                        }`}
                                 >
                                     📍 Zone-Targeted Broadcast
                                 </button>
@@ -966,7 +964,7 @@ const AdminNotification = () => {
                                 className="flex-1 bg-primary hover:bg-teal-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {status === 'loading' ? (
-                                    <><FiLoader className="animate-spin" /> Sending...</>
+                                    <><FiLoader className="" /> Sending...</>
                                 ) : (
                                     <><FiSend /> Broadcast Alert</>
                                 )}
@@ -1102,7 +1100,7 @@ const AdminNotification = () => {
 
                 {loadingHistory ? (
                     <div className="py-12 flex flex-col items-center justify-center text-gray-400">
-                        <FiLoader className="animate-spin text-primary mb-2" size={24} />
+                        <FiLoader className=" text-primary mb-2" size={24} />
                         <span className="text-sm">Loading logs...</span>
                     </div>
                 ) : filteredHistory.length === 0 ? (
@@ -1134,7 +1132,7 @@ const AdminNotification = () => {
                                             <div className="mt-2 flex flex-wrap gap-2">
                                                 {item.targetCity && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">📍 {item.targetCity}</span>}
                                                 {item.minBookings > 0 && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">⭐ Min: {item.minBookings}</span>}
-                                                
+
                                                 {/* Target Zones Display */}
                                                 {(!item.targetZones || item.targetZones.length === 0) ? (
                                                     <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold border border-blue-100">🌍 Global</span>
@@ -1337,200 +1335,200 @@ const AdminNotification = () => {
 };
 
 const HierarchicalZoneSelector = ({
-  zones,
-  selectedZoneIds,
-  onChange,
-  label = "Applicable Zones"
+    zones,
+    selectedZoneIds,
+    onChange,
+    label = "Applicable Zones"
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedNodes, setExpandedNodes] = useState({});
-  const dropdownRef = useRef(null);
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [expandedNodes, setExpandedNodes] = useState({});
+    const dropdownRef = useRef(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
-  const tree = useMemo(() => {
-    const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
-    const cities = zones.filter(z => z.zoneLevel === 'city');
-    const micros = zones.filter(z => z.zoneLevel === 'micro');
-    
-    return states.map(state => {
-      const stateCities = cities.filter(c => {
-        const pId = c.parentZone?._id || c.parentZone;
-        return pId?.toString() === (state._id || state.id)?.toString();
-      });
-      
-      const cityNodes = stateCities.map(city => {
-        const cityMicros = micros.filter(m => {
-          const pId = m.parentZone?._id || m.parentZone;
-          return pId?.toString() === (city._id || city.id)?.toString();
+    const tree = useMemo(() => {
+        const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
+        const cities = zones.filter(z => z.zoneLevel === 'city');
+        const micros = zones.filter(z => z.zoneLevel === 'micro');
+
+        return states.map(state => {
+            const stateCities = cities.filter(c => {
+                const pId = c.parentZone?._id || c.parentZone;
+                return pId?.toString() === (state._id || state.id)?.toString();
+            });
+
+            const cityNodes = stateCities.map(city => {
+                const cityMicros = micros.filter(m => {
+                    const pId = m.parentZone?._id || m.parentZone;
+                    return pId?.toString() === (city._id || city.id)?.toString();
+                });
+
+                return { ...city, children: cityMicros };
+            });
+
+            return { ...state, children: cityNodes };
         });
-        
-        return { ...city, children: cityMicros };
-      });
-      
-      return { ...state, children: cityNodes };
-    });
-  }, [zones]);
+    }, [zones]);
 
-  const filteredTree = useMemo(() => {
-    if (!searchQuery) return tree;
-    const lowerQuery = searchQuery.toLowerCase();
-    
-    const filterNodes = (nodes) => {
-      return nodes.map(node => {
-        const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
-        let filteredChildren = [];
-        if (node.children) {
-          filteredChildren = filterNodes(node.children);
-        }
-        const matchesChildren = filteredChildren.length > 0;
-        
-        if (matchesSelf || matchesChildren) {
-          return {
-            ...node,
-            children: filteredChildren,
-            forceExpanded: true
-          };
-        }
-        return null;
-      }).filter(Boolean);
+    const filteredTree = useMemo(() => {
+        if (!searchQuery) return tree;
+        const lowerQuery = searchQuery.toLowerCase();
+
+        const filterNodes = (nodes) => {
+            return nodes.map(node => {
+                const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
+                let filteredChildren = [];
+                if (node.children) {
+                    filteredChildren = filterNodes(node.children);
+                }
+                const matchesChildren = filteredChildren.length > 0;
+
+                if (matchesSelf || matchesChildren) {
+                    return {
+                        ...node,
+                        children: filteredChildren,
+                        forceExpanded: true
+                    };
+                }
+                return null;
+            }).filter(Boolean);
+        };
+
+        return filterNodes(tree);
+    }, [tree, searchQuery]);
+
+    const toggleExpand = (id, e) => {
+        e.stopPropagation();
+        setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
     };
-    
-    return filterNodes(tree);
-  }, [tree, searchQuery]);
 
-  const toggleExpand = (id, e) => {
-    e.stopPropagation();
-    setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+    const isSelected = (id) => (selectedZoneIds || []).map(z => z.toString()).includes(id.toString());
 
-  const isSelected = (id) => (selectedZoneIds || []).map(z => z.toString()).includes(id.toString());
+    const renderNode = (node, depth = 0) => {
+        const nodeId = node._id || node.id;
+        const hasChildren = node.children && node.children.length > 0;
+        const isExpanded = !!(expandedNodes[nodeId] || node.forceExpanded);
+        const checked = isSelected(nodeId);
 
-  const renderNode = (node, depth = 0) => {
-    const nodeId = node._id || node.id;
-    const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = !!(expandedNodes[nodeId] || node.forceExpanded);
-    const checked = isSelected(nodeId);
+        return (
+            <div key={nodeId} className="select-none">
+                <div
+                    className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors"
+                    style={{ paddingLeft: `${depth * 20 + 8}px` }}
+                    onClick={() => onChange(node)}
+                >
+                    {hasChildren ? (
+                        <button
+                            type="button"
+                            onClick={(e) => toggleExpand(nodeId, e)}
+                            className="p-1 hover:bg-gray-250 rounded mr-1 transition-transform duration-200"
+                        >
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+                        </button>
+                    ) : (
+                        <span className="w-6 shrink-0" />
+                    )}
+
+                    <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => { }}
+                        className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
+                    />
+
+                    <span className={`text-xs font-semibold text-secondary capitalize ${checked ? 'text-primary font-bold' : ''}`}>
+                        {node.name}
+                    </span>
+                    <span className="text-[9px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
+                        {node.zoneLevel || 'state'}
+                    </span>
+                </div>
+
+                {hasChildren && isExpanded && (
+                    <div className="mt-0.5">
+                        {node.children.map(child => renderNode(child, depth + 1))}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
-      <div key={nodeId} className="select-none">
-        <div 
-          className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors"
-          style={{ paddingLeft: `${depth * 20 + 8}px` }}
-          onClick={() => onChange(node)}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => toggleExpand(nodeId, e)}
-              className="p-1 hover:bg-gray-250 rounded mr-1 transition-transform duration-200"
+        <div className="relative w-full" ref={dropdownRef}>
+            <label className="block text-sm font-medium text-secondary mb-1.5">
+                {label}
+            </label>
+            <div
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm shadow-sm hover:border-gray-400 transition-all font-semibold"
             >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
-            </button>
-          ) : (
-            <span className="w-6 shrink-0" />
-          )}
+                <span className="text-gray-700 truncate font-semibold">
+                    {(selectedZoneIds || []).length === 0 ? 'Select Zones (Leave empty for Global)' : `${(selectedZoneIds || []).length} Zones Selected`}
+                </span>
+                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </div>
 
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={() => {}}
-            className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
-          />
+            {isOpen && (
+                <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
+                    <div className="relative mb-2 shrink-0">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search by state, city, or micro zone..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
+                        />
+                    </div>
 
-          <span className={`text-xs font-semibold text-secondary capitalize ${checked ? 'text-primary font-bold' : ''}`}>
-            {node.name}
-          </span>
-          <span className="text-[9px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
-            {node.zoneLevel || 'state'}
-          </span>
-        </div>
-
-        {hasChildren && isExpanded && (
-          <div className="mt-0.5">
-            {node.children.map(child => renderNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="relative w-full" ref={dropdownRef}>
-      <label className="block text-sm font-medium text-secondary mb-1.5">
-        {label}
-      </label>
-      <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm shadow-sm hover:border-gray-400 transition-all font-semibold"
-      >
-        <span className="text-gray-700 truncate font-semibold">
-          {(selectedZoneIds || []).length === 0 ? 'Select Zones (Leave empty for Global)' : `${(selectedZoneIds || []).length} Zones Selected`}
-        </span>
-        {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-      </div>
-
-      {isOpen && (
-        <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
-          <div className="relative mb-2 shrink-0">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by state, city, or micro zone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
-            />
-          </div>
-
-          <div className="overflow-y-auto flex-1 space-y-1 pr-1">
-            {filteredTree.length === 0 ? (
-              <div className="text-xs text-gray-400 italic text-center py-6">
-                No matching zones found.
-              </div>
-            ) : (
-              filteredTree.map(node => renderNode(node, 0))
+                    <div className="overflow-y-auto flex-1 space-y-1 pr-1">
+                        {filteredTree.length === 0 ? (
+                            <div className="text-xs text-gray-400 italic text-center py-6">
+                                No matching zones found.
+                            </div>
+                        ) : (
+                            filteredTree.map(node => renderNode(node, 0))
+                        )}
+                    </div>
+                </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {(selectedZoneIds || []).length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
-          {(selectedZoneIds || []).map(id => {
-            const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
-            if (!zone) return null;
-            
-            let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
-            if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
-            if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+            {(selectedZoneIds || []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+                    {(selectedZoneIds || []).map(id => {
+                        const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
+                        if (!zone) return null;
 
-            return (
-              <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border shadow-sm capitalize ${badgeColor}`}>
-                <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
-                <button
-                  type="button"
-                  onClick={() => onChange(zone)}
-                  className="ml-1 inline-flex items-center justify-center focus:outline-none text-gray-400 hover:text-gray-650"
-                >
-                  <X className="w-2.5 h-2.5 ml-0.5" />
-                </button>
-              </span>
-            );
-          })}
+                        let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
+                        if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+                        if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+
+                        return (
+                            <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border shadow-sm capitalize ${badgeColor}`}>
+                                <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
+                                <button
+                                    type="button"
+                                    onClick={() => onChange(zone)}
+                                    className="ml-1 inline-flex items-center justify-center focus:outline-none text-gray-400 hover:text-gray-650"
+                                >
+                                    <X className="w-2.5 h-2.5 ml-0.5" />
+                                </button>
+                            </span>
+                        );
+                    })}
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default AdminNotification;

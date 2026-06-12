@@ -411,7 +411,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
             </div>
             {searching && (
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                <div className=" rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
               </div>
             )}
             {!searching && searchQuery && (

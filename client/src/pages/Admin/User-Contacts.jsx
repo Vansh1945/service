@@ -117,11 +117,10 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
                     <p className="font-medium text-secondary">{formatDateTime(contact.createdAt)}</p>
                   </div>
                 </div>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                  contact.status === 'REPLIED'
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${contact.status === 'REPLIED'
                     ? 'bg-green-50 text-green-800 border-green-200'
                     : 'bg-yellow-50 text-yellow-800 border-yellow-200'
-                }`}>{contact.status}</span>
+                  }`}>{contact.status}</span>
               </div>
             </div>
           </div>
@@ -173,7 +172,7 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
                   >
                     {isReplying ? (
                       <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        <RefreshCw className="w-4 h-4 mr-2 " />
                         Sending...
                       </>
                     ) : (
@@ -415,8 +414,8 @@ const UserContacts = () => {
                     key={option.value}
                     onClick={() => handleFilterChange('status', option.value)}
                     className={`px-4 py-2.5 rounded-lg border transition-colors flex items-center ${filters.status === option.value
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                       }`}
                   >
                     <Icon className="w-4 h-4 mr-2" />
@@ -520,11 +519,10 @@ const UserContacts = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                          contact.status === 'REPLIED'
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${contact.status === 'REPLIED'
                             ? 'bg-green-50 text-green-800 border-green-200'
                             : 'bg-yellow-50 text-yellow-800 border-yellow-200'
-                        }`}>{contact.status}</span>
+                          }`}>{contact.status}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-secondary">{formatDate(contact.createdAt)}</div>
