@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Helmet } from 'react-helmet-async';
+import { Link } from 'react-router-dom';
 import HeroSection from '../components/HeroSection';
 import Services from './Services';
 import { useAuth } from '../context/auth';
@@ -8,41 +9,49 @@ import {
   Clock,
   Award,
   Zap,
-  ChevronDown,
-  MapPin,
-  ThumbsUp,
   CheckCircle2,
-  Users
+  Users,
+  Headphones,
+  Receipt
 } from 'lucide-react';
-import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'framer-motion';
+import electricanimg from "../assets/electrician.png"
 
 const Home = () => {
   const { systemSettings = {} } = useAuth();
-  const [openFaq, setOpenFaq] = useState(null);
-  const prefersReducedMotion = useReducedMotion();
 
-  const toggleFaq = (index) => {
-    setOpenFaq(openFaq === index ? null : index);
-  };
-
-  const faqs = [
+  const features = [
     {
-      q: "What types of residential electrical services do you offer?",
-      a: "We offer comprehensive residential electrical services in North India, including full house wiring, smart home installations, panel upgrades, detailed safety audits, lighting designs, and 24/7 professional electrical repair for any sudden faults."
+      icon: ShieldCheck,
+      title: "Verified Professionals",
+      desc: "Background checked experts",
+      bgColor: "bg-teal-50 text-teal-600 border border-teal-100/50"
     },
     {
-      q: "Are your electricians certified and background-verified?",
-      a: "Yes! Every electrician on our platform undergoes rigorous training, background verification, and identity checks. We hold safety and quality standards as our absolute priority to ensure maximum peace of mind for our residential and commercial clients."
+      icon: Clock,
+      title: "On-Time Service",
+      desc: "Punctual & reliable",
+      bgColor: "bg-amber-50 text-amber-600 border border-amber-100/50"
     },
     {
-      q: "Do you offer emergency electrical support?",
-      a: "Absolutely. We understand that electrical faults can be hazardous. We provide rapid-response emergency electrical support across North India for critical issues such as short circuits, sparking, sudden power failures, and burning smells."
+      icon: Receipt,
+      title: "Upfront Pricing",
+      desc: "No hidden charges",
+      bgColor: "bg-blue-50 text-blue-600 border border-blue-100/50"
     },
     {
-      q: "How does your pricing work?",
-      a: "We offer clear, transparent, and upfront pricing. Before starting any job, the provider provides a detailed cost estimate based on standard rate lists. There are absolutely no hidden fees or surprise costs."
+      icon: CheckCircle2,
+      title: "Satisfaction Guarantee",
+      desc: "Quality service assured",
+      bgColor: "bg-green-50 text-green-600 border border-green-100/50"
+    },
+    {
+      icon: Headphones,
+      title: "24/7 Support",
+      desc: "We're here to help",
+      bgColor: "bg-indigo-50 text-indigo-600 border border-indigo-100/50"
     }
   ];
+
 
   return (
     <div className="overflow-hidden bg-transparent">
@@ -60,56 +69,176 @@ const Home = () => {
       {/* Hero Section */}
       <HeroSection />
 
+      {/* Trust Badges / Features Section */}
+      <div className="w-full px-4 md:px-8 mt-2 mb-2">
+        <div className="flex overflow-x-auto gap-4 pb-2 lg:pb-0 lg:grid lg:grid-cols-5 scrollbar-hide snap-x snap-mandatory">
+          {features.map((item, idx) => {
+            const IconComponent = item.icon;
+            return (
+              <div
+                key={idx}
+                className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 min-w-[260px] sm:min-w-[280px] lg:min-w-0 flex-shrink-0 snap-start"
+              >
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${item.bgColor}`}>
+                  <IconComponent className="w-5.5 h-5.5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-secondary font-poppins leading-tight">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium mt-1 leading-tight">
+                    {item.desc}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Limited Services Section */}
       <Services />
 
 
       {/* Why Choose Us Section */}
-      <section className="py-16 bg-gray-50 border-t border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
-              Trust & Quality
-            </span>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
-              Why Choose {systemSettings.companyName || "Raj Electrical Services"}?
-            </h2>
-            <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
-              We standardise quality, safety, and reliability for all your home and office electrical maintenance needs.
-            </p>
-          </div>
+      <section className="py-8 bg-white border-t border-gray-100">
+        <div className="max-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left Column - Content */}
+            <div className="space-y-6">
+              <h2 className="text-2xl md:text-3xl font-extrabold text-secondary font-poppins leading-tight">
+                Why Choose {systemSettings.companyName || "Raj Electrical Service"}?
+              </h2>
+              <p className="text-gray-500 text-sm font-medium leading-relaxed">
+                We deliver safe, reliable and high-quality electrical solutions with a customer-first approach.
+              </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-4 pt-2">
+                {[
+                  {
+                    title: "Experienced & Skilled Technicians",
+                    desc: "Trained experts with years of experience"
+                  },
+                  {
+                    title: "Safe & Reliable Work",
+                    desc: "We follow safety standards and best practices"
+                  },
+                  {
+                    title: "Transparent Pricing",
+                    desc: "Clear quotes with no hidden costs"
+                  },
+                  {
+                    title: "Customer Satisfaction",
+                    desc: "Thousands of happy customers trust us"
+                  }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full border border-teal-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-teal-600 font-bold text-xs">✓</span>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-secondary font-poppins">
+                        {item.title}
+                      </h4>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        {item.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-4">
+                <Link
+                  to="/about"
+                  className="inline-block bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs px-6 py-3 rounded-xl transition-all shadow-sm shadow-teal-950/20 active:scale-95"
+                >
+                  Learn More About Us
+                </Link>
+              </div>
+            </div>
+
+            {/* Right Column - Image & Floating Cards */}
+            <div className="relative flex justify-center lg:justify-end">
+              <div className="relative w-full max-w-[440px] aspect-[4/3] rounded-3xl overflow-hidden shadow-xl border border-gray-100">
+                <img
+                  src={electricanimg}
+                  alt="Professional Electrician"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Floating Badge 1 - Happy Customers */}
+              <div className="absolute -left-4 top-1/2 -translate-y-1/2 bg-white rounded-2xl p-3 shadow-xl border border-gray-100/50 flex flex-col gap-1.5 z-10 animate-fade-in min-w-[120px]">
+                <div className="flex items-center gap-1">
+                  <span className="text-sm font-black text-secondary font-poppins">10,000+</span>
+                </div>
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Happy Customers</span>
+
+                {/* Avatars */}
+                <div className="flex -space-x-1.5 overflow-hidden">
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="avatar" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="avatar" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="avatar" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="avatar" />
+                </div>
+              </div>
+
+              {/* Floating Badge 2 - Customer Rating */}
+              <div className="absolute -right-4 bottom-8 bg-white rounded-2xl p-3 shadow-xl border border-gray-100/50 flex flex-col gap-1 z-10 animate-fade-in min-w-[110px]">
+                <span className="text-sm font-black text-secondary font-poppins">4.8/5</span>
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Customer Rating</span>
+                <div className="flex text-amber-500 gap-0.5">
+                  {"★".repeat(5).split("").map((star, i) => (
+                    <span key={i} className="text-xs">{star}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Ribbon Strip */}
+      <section className="bg-teal-900 text-white py-6">
+        <div className="max-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center divide-x-0 md:divide-x divide-teal-800">
             {[
               {
-                icon: ShieldCheck,
-                title: "100% Safe & Insured",
-                desc: "Safety is our priority. We employ high-grade safety protocols and certified diagnostic tools."
+                icon: Users,
+                value: "10,000+",
+                label: "Happy Customers"
               },
               {
-                icon: Clock,
-                title: "Prompt Emergency Support",
-                desc: "Immediate assistance for short circuits, power failures, and hazardous sparking."
+                icon: ShieldCheck,
+                value: "25+",
+                label: "Expert Technicians"
+              },
+              {
+                icon: Zap,
+                value: "50+",
+                label: "Services Available"
               },
               {
                 icon: Award,
-                title: "Background-Verified Experts",
-                desc: "Strict verification ensures highly-skilled and polite professional electricians."
-              },
-              {
-                icon: ThumbsUp,
-                title: "No Hidden Costs",
-                desc: "Upfront pricing estimates so you pay precisely what was agreed on. No surprises."
+                value: "5+",
+                label: "Years of Experience"
               }
-            ].map((benefit, idx) => {
-              const IconComponent = benefit.icon;
+            ].map((stat, idx) => {
+              const IconComponent = stat.icon;
               return (
-                <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <IconComponent className="w-6 h-6 text-primary" />
+                <div key={idx} className="flex items-center gap-3 justify-center px-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                    <IconComponent className="w-5.5 h-5.5 text-white" />
                   </div>
-                  <h3 className="text-base font-bold text-secondary mb-2 font-poppins">{benefit.title}</h3>
-                  <p className="text-xs text-gray-500 leading-relaxed font-normal">{benefit.desc}</p>
+                  <div>
+                    <h3 className="text-base md:text-lg font-black font-poppins leading-none">
+                      {stat.value}
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-white/80 font-medium mt-1">
+                      {stat.label}
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -117,100 +246,33 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Service Coverage Section */}
-      <section className="py-8 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-gradient-to-br from-primary to-teal-800 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-              <MapPin className="w-48 h-48 -mr-12 -mt-12 text-white" />
-            </div>
-
-            <div className="relative z-10 max-w-2xl">
-              <span className="text-[10px] uppercase tracking-widest font-black bg-white/20 px-3 py-1 rounded-lg">
-                Active Operations
-              </span>
-
-              <h2 className="text-2xl md:text-3xl font-bold mt-4 mb-4 font-poppins">
-                Reliable Electrical Services
-              </h2>
-
-              <p className="text-white/90 text-sm leading-relaxed mb-6 font-normal">
-                {systemSettings.companyName || "Raj Electrical Services"} connects customers with verified electrical professionals for residential, commercial, and emergency electrical needs. Our focus is on quality workmanship, transparent service, and customer satisfaction.
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  "Verified Professionals",
-                  "Quality Service Standards",
-                  "Residential & Commercial Solutions",
-                  "Dedicated Customer Support",
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
-                    <span className="text-xs font-semibold text-white/90">
-                      {item}
-                    </span>
-                  </div>
-                ))}
+      {/* Need Help Banner */}
+      <section className="py-6 bg-teal-50/50">
+        <div className="max-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-teal-50/70 border border-teal-100/50 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full border border-teal-600 flex items-center justify-center shrink-0 bg-teal-100/30">
+                <span className="text-teal-600 font-bold text-sm">?</span>
+              </div>
+              <div>
+                <h3 className="text-sm md:text-base font-extrabold text-secondary font-poppins">
+                  Need Help with Electrical Work?
+                </h3>
+                <p className="text-[11px] md:text-xs text-gray-500 font-medium mt-0.5">
+                  Book trusted electricians for your home or office – fast, reliable & affordable.
+                </p>
               </div>
             </div>
+            <Link
+              to="/customer/services-list"
+              className="w-full md:w-auto bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs px-6 py-3 rounded-xl transition-all shadow-sm shadow-teal-950/20 active:scale-95 text-center flex items-center justify-center gap-2"
+            >
+              Book Service Now
+              <span className="text-sm">→</span>
+            </Link>
           </div>
         </div>
       </section>
-
-      {/* FAQ Section */}
-      <section className="py-16 bg-gray-50 border-t border-gray-100">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
-            <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
-              Common Queries
-            </span>
-            <h2 className="text-2xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
-              Frequently Asked Questions
-            </h2>
-            <p className="text-gray-500 text-xs font-semibold">
-              Find instant answers to typical booking and safety inquiries.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <div
-                key={idx}
-                className="bg-white rounded-xl border border-gray-150 overflow-hidden shadow-sm transition-all"
-              >
-                <button
-                  onClick={() => toggleFaq(idx)}
-                  className="w-full px-6 py-4 flex items-center justify-between text-left focus:outline-none"
-                >
-                  <span className="text-sm font-bold text-secondary font-poppins">{faq.q}</span>
-                  <ChevronDown
-                    className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${openFaq === idx ? 'transform rotate-180 text-primary' : ''}`}
-                  />
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {openFaq === idx && (
-                    <LazyMotion features={domAnimation}>
-                      <m.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                      >
-                        <div className="px-6 pb-4 text-xs text-gray-500 leading-relaxed font-normal border-t border-gray-50 pt-3">
-                          {faq.a}
-                        </div>
-                      </m.div>
-                    </LazyMotion>
-                  )}
-                </AnimatePresence>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
     </div>
   );
 };

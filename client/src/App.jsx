@@ -196,6 +196,13 @@ const App = () => {
   const [updateNotes, setUpdateNotes] = useState('');
   const reloadTimerRef = useRef(null);
 
+  // Scroll to top on pathname change (Scroll Restoration)
+  useEffect(() => {
+    if (!loc.hash) {
+      window.scrollTo(0, 0);
+    }
+  }, [loc.pathname, loc.hash]);
+
   const triggerCacheClearAndPrompt = async (data) => {
     console.log('[PWA Update] Triggering asset clear and upgrade flow...');
 

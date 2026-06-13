@@ -126,7 +126,7 @@ const HeroSection = ({ noMargin = false }) => {
           })}
         </Swiper>
       </div>
-      
+
       {/* Custom Styles to Override Swiper Bullets color to match the design (e.g. brownish active dot) */}
       <style>{`
         .swiper-pagination-bullet {
