@@ -69,19 +69,18 @@ exports.initiateRegistration = async (req, res) => {
         }
 
         // Check if provider already exists (any status, not deleted)
-        const existingProvider = await Provider.findOne({
-            email: { $regex: new RegExp(`^${email}$`, 'i') },
-            isDeleted: false
-        });
-
-        // Check if email is already registered with user or admin
-        const emailExistsInUser = await User.findOne({
-            email: email.trim().toLowerCase()
-        });
-
-        const emailExistsInAdmin = await Admin.findOne({
-            email: email.trim().toLowerCase()
-        });
+        const [existingProvider, emailExistsInUser, emailExistsInAdmin] = await Promise.all([
+            Provider.findOne({
+                email: { $regex: new RegExp(`^${email}$`, 'i') },
+                isDeleted: false
+            }),
+            User.findOne({
+                email: email.trim().toLowerCase()
+            }),
+            Admin.findOne({
+                email: email.trim().toLowerCase()
+            })
+        ]);
 
         if (existingProvider || emailExistsInUser || emailExistsInAdmin) {
             if (existingProvider) {
@@ -488,20 +487,25 @@ exports.completeProfile = async (req, res) => {
                 servicesArray = Array.isArray(services) ? services : [services];
             }
 
+            const { Category } = require('../models/SystemSetting');
+            const allCategories = await Category.find({ isActive: true });
+            const categoryMap = new Map();
+            allCategories.forEach(c => {
+                categoryMap.set(c.name.toLowerCase(), c);
+                categoryMap.set(c._id.toString(), c);
+            });
+
             for (const service of servicesArray) {
                 let categoryId = null;
 
                 if (typeof service === 'string') {
                     // Check if it's already a valid ObjectId
-                    if (mongoose.Types.ObjectId.isValid(service.trim())) {
-                        categoryId = new mongoose.Types.ObjectId(service.trim());
+                    const trimmed = service.trim();
+                    if (mongoose.Types.ObjectId.isValid(trimmed)) {
+                        categoryId = new mongoose.Types.ObjectId(trimmed);
                     } else {
-                        // Try to find category by name
-                        const { Category } = require('../models/SystemSetting');
-                        const foundCategory = await Category.findOne({
-                            name: { $regex: new RegExp(`^${service.trim()}$`, 'i') },
-                            isActive: true
-                        });
+                        // Try to find category by name from pre-loaded map
+                        const foundCategory = categoryMap.get(trimmed.toLowerCase()) || categoryMap.get(trimmed);
                         if (foundCategory) {
                             categoryId = foundCategory._id;
                         } else {
@@ -858,20 +862,25 @@ exports.updateProviderProfile = async (req, res) => {
                         servicesArray = Array.isArray(services) ? services : [services];
                     }
 
+                    const { Category } = require('../models/SystemSetting');
+                    const allCategories = await Category.find({ isActive: true });
+                    const categoryMap = new Map();
+                    allCategories.forEach(c => {
+                        categoryMap.set(c.name.toLowerCase(), c);
+                        categoryMap.set(c._id.toString(), c);
+                    });
+
                     for (const service of servicesArray) {
                         let categoryId = null;
 
                         if (typeof service === 'string') {
                             // Check if it's already a valid ObjectId
-                            if (mongoose.Types.ObjectId.isValid(service.trim())) {
-                                categoryId = new mongoose.Types.ObjectId(service.trim());
+                            const trimmed = service.trim();
+                            if (mongoose.Types.ObjectId.isValid(trimmed)) {
+                                categoryId = new mongoose.Types.ObjectId(trimmed);
                             } else {
-                                // Try to find category by name
-                                const { Category } = require('../models/SystemSetting');
-                                const foundCategory = await Category.findOne({
-                                    name: { $regex: new RegExp(`^${service.trim()}$`, 'i') },
-                                    isActive: true
-                                });
+                                // Try to find category by name from pre-loaded map
+                                const foundCategory = categoryMap.get(trimmed.toLowerCase()) || categoryMap.get(trimmed);
                                 if (foundCategory) {
                                     categoryId = foundCategory._id;
                                 } else {

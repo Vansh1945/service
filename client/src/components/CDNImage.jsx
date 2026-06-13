@@ -50,11 +50,12 @@ const CDNImage = ({
     };
   }, [lazy, src]);
 
-  // Reset loading and error states if image source changes
-  useEffect(() => {
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) {
+    setPrevSrc(src);
     setIsLoaded(false);
     setHasError(false);
-  }, [src]);
+  }
 
   if (!src) {
     return fallback || (

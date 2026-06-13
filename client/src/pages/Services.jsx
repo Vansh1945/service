@@ -10,6 +10,94 @@ import Rating from '@mui/material/Rating';
 import ServiceCardSkeleton from '../components/ui-skeletons/ServiceCardSkeleton';
 import { getActiveServices } from '../services/ServiceService';
 
+const ServiceCard = ({ service, handleBookNow }) => {
+  const imageUrl = service.displayImage || (service.images && service.images[0]) || service.image || 'https://via.placeholder.com/400x300?text=Service';
+  const isAvailable = service.isActive !== false;
+
+  return (
+    <div className="group bg-white rounded-xl border border-gray-100 hover:border-primary/20 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col h-full ring-1 ring-gray-100">
+      {/* Image Area */}
+      <div className="relative h-36 md:h-44 overflow-hidden bg-gray-50">
+        <img
+          src={imageUrl}
+          alt={service.title}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
+        />
+        <div className="absolute top-2 left-2 flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold bg-white/95 backdrop-blur-sm text-primary px-2 py-0.5 rounded-lg shadow-sm">
+            {service.category?.name || 'Service'}
+          </span>
+        </div>
+        {service.basePrice > 1500 && (
+          <div className="absolute top-2 right-2">
+            <span className="text-[10px] uppercase font-bold bg-accent text-secondary px-2 py-0.5 rounded-lg shadow-sm">
+              Premium
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Info Area */}
+      <div className="p-3 md:p-4 flex flex-col flex-grow">
+        <div className="flex-grow">
+          <h3 className="font-bold text-secondary text-sm md:text-base mb-1 line-clamp-1 group-hover:text-primary transition-colors duration-300 leading-tight">
+            {service.title}
+          </h3>
+          <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed font-normal">
+            {service.shortDescription}
+          </p>
+        </div>
+
+        {/* Metrics */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1 text-gray-500">
+            <Clock className="w-3 h-3" />
+            <span className="text-[11px] font-medium">
+              {service.duration || 1} hr
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Rating
+              value={service.averageRating || 4.5}
+              precision={0.5}
+              readOnly
+              size="small"
+              sx={{ '& .MuiRating-iconFilled': { color: '#F97316' }, fontSize: '14px' }}
+            />
+            <span className="text-[10px] text-gray-400">({service.ratingCount || 0})</span>
+          </div>
+        </div>
+
+        {/* Pricing Row */}
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-auto">
+          <div className="flex flex-col">
+            <div className="flex items-center text-secondary">
+              <IndianRupee className="w-3.5 h-3.5 font-bold" />
+              <span className="font-bold text-secondary text-sm md:text-lg">
+                {service.basePrice?.toLocaleString()}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleBookNow(service._id, isAvailable);
+            }}
+            disabled={!isAvailable}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all transform active:scale-95 ${isAvailable
+              ? 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
+          >
+            {isAvailable ? 'Book' : 'Off'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Services = ({ limit }) => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,94 +148,6 @@ const Services = ({ limit }) => {
     navigate(`/customer/services/${serviceId}`);
   };
 
-  const ServiceCard = ({ service }) => {
-    const imageUrl = service.displayImage || (service.images && service.images[0]) || service.image || 'https://via.placeholder.com/400x300?text=Service';
-    const isAvailable = service.isActive !== false;
-
-    return (
-      <div className="group bg-white rounded-xl border border-gray-100 hover:border-primary/20 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col h-full ring-1 ring-gray-100">
-        {/* Image Area */}
-        <div className="relative h-36 md:h-44 overflow-hidden bg-gray-50">
-          <img
-            src={imageUrl}
-            alt={service.title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-            onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
-          />
-          <div className="absolute top-2 left-2 flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold bg-white/95 backdrop-blur-sm text-primary px-2 py-0.5 rounded-lg shadow-sm">
-              {service.category?.name || 'Service'}
-            </span>
-          </div>
-          {service.basePrice > 1500 && (
-            <div className="absolute top-2 right-2">
-              <span className="text-[10px] uppercase font-bold bg-accent text-secondary px-2 py-0.5 rounded-lg shadow-sm">
-                Premium
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Info Area */}
-        <div className="p-3 md:p-4 flex flex-col flex-grow">
-          <div className="flex-grow">
-            <h3 className="font-bold text-secondary text-sm md:text-base mb-1 line-clamp-1 group-hover:text-primary transition-colors duration-300 leading-tight">
-              {service.title}
-            </h3>
-            <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed font-normal">
-              {service.description}
-            </p>
-          </div>
-
-          {/* Metrics */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1 text-gray-500">
-              <Clock className="w-3 h-3" />
-              <span className="text-[11px] font-medium">
-                {service.duration || 1} hr
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Rating
-                value={service.averageRating || 4.5}
-                precision={0.5}
-                readOnly
-                size="small"
-                sx={{ '& .MuiRating-iconFilled': { color: '#F97316' }, fontSize: '14px' }}
-              />
-              <span className="text-[10px] text-gray-400">({service.ratingCount || 0})</span>
-            </div>
-          </div>
-
-          {/* Pricing Row */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-auto">
-            <div className="flex flex-col">
-              <div className="flex items-center text-secondary">
-                <IndianRupee className="w-3.5 h-3.5 font-bold" />
-                <span className="font-bold text-secondary text-sm md:text-lg">
-                  {service.basePrice?.toLocaleString()}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleBookNow(service._id, isAvailable);
-              }}
-              disabled={!isAvailable}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all transform active:scale-95 ${isAvailable
-                ? 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-            >
-              {isAvailable ? 'Book' : 'Off'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   if (loading) {
     return (
       <section className={`bg-transparent min-h-screen ${limit ? 'py-4' : 'py-10'} px-4 md:px-8`}>
@@ -169,7 +169,7 @@ const Services = ({ limit }) => {
       <div className="max-w-[1500px] mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
           {displayedServices.map((service) => (
-            <ServiceCard key={service._id} service={service} />
+            <ServiceCard key={service._id} service={service} handleBookNow={handleBookNow} />
           ))}
         </div>
 

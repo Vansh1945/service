@@ -11,6 +11,26 @@ import {
   ChevronDown
 } from 'lucide-react';
 
+const ToggleSwitch = ({ label, description, checked, onChange }) => (
+  <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all duration-200">
+    <div className="space-y-0.5 pr-4">
+      <label className="text-sm font-semibold text-secondary font-inter">{label}</label>
+      {description && <p className="text-xs text-gray-500 font-inter">{description}</p>}
+    </div>
+    <button
+      onClick={() => onChange(!checked)}
+      type="button"
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 outline-none ${checked ? 'bg-primary shadow-[0_0_8px_rgba(59,130,246,0.3)]' : 'bg-gray-300'
+        }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+      />
+    </button>
+  </div>
+);
+
 const SystemSetting = () => {
   const [systemSettings, setSystemSettings] = useState({
     companyName: '',
@@ -424,25 +444,7 @@ const SystemSetting = () => {
 
   const activeTabDetails = tabs.find(t => t.id === activeTab);
 
-  const ToggleSwitch = ({ label, description, checked, onChange }) => (
-    <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all duration-200">
-      <div className="space-y-0.5 pr-4">
-        <label className="text-sm font-semibold text-secondary font-inter">{label}</label>
-        {description && <p className="text-xs text-gray-500 font-inter">{description}</p>}
-      </div>
-      <button
-        onClick={() => onChange(!checked)}
-        type="button"
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 outline-none ${checked ? 'bg-primary shadow-[0_0_8px_rgba(59,130,246,0.3)]' : 'bg-gray-300'
-          }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${checked ? 'translate-x-6' : 'translate-x-1'
-            }`}
-        />
-      </button>
-    </div>
-  );
+
 
   return (
     <div className="font-roboto">

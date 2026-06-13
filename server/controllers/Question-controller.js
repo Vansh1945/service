@@ -353,6 +353,12 @@ const createBulkQuestions = async (req, res) => {
     }
 
     const { Category } = require('../models/SystemSetting');
+    const allCategories = await Category.find({ isActive: true });
+    const categoryMap = new Map();
+    allCategories.forEach(c => {
+      categoryMap.set(c.name.toLowerCase(), c);
+      categoryMap.set(c._id.toString(), c);
+    });
 
     // Process each question to handle category conversion
     const processedQuestions = [];
@@ -366,18 +372,7 @@ const createBulkQuestions = async (req, res) => {
       let categoryId = question.category;
 
       if (question.category && typeof question.category === 'string') {
-        let categoryDoc = null;
-
-        // Check if the string is a valid ObjectId
-        if (mongoose.isValidObjectId(question.category)) {
-          // First try to find by _id
-          categoryDoc = await Category.findById(question.category);
-        }
-
-        // If not found by _id or not a valid ObjectId, try to find by name
-        if (!categoryDoc) {
-          categoryDoc = await Category.findOne({ name: new RegExp('^' + question.category + '$', 'i') });
-        }
+        const categoryDoc = categoryMap.get(question.category.trim().toLowerCase()) || categoryMap.get(question.category.trim());
 
         if (!categoryDoc) {
           return res.status(400).json({

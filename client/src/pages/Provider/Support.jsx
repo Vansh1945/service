@@ -636,7 +636,7 @@ const ProviderSupportPage = () => {
       <ChatModal
         roomType="provider_admin"
         providerId={user?._id}
-        role="provider"
+        userRole="provider"
         isOpen={chatOpen}
         onClose={() => setChatOpen(false)}
       />

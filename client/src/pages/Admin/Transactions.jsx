@@ -163,17 +163,17 @@ const AdminTransactions = () => {
         }
     }, [pagination.page, pagination.limit, filters, showToast, getMergedQuery]);
 
-    const location = useLocation();
+    const loc = useLocation();
 
     // Update filters from URL search param if exists (for in-page navigation)
     useEffect(() => {
-        const params = new URLSearchParams(location.search);
+        const params = new URLSearchParams(loc.search);
         const bookingIdParam = params.get('bookingId');
         if (bookingIdParam !== undefined && bookingIdParam !== filters.bookingId) {
             setFilters(prev => ({ ...prev, bookingId: bookingIdParam || '' }));
             setPagination(prev => ({ ...prev, page: 1 }));
         }
-    }, [location.search]);
+    }, [loc.search, filters.bookingId]);
 
     useEffect(() => {
         fetchTransactions();

@@ -44,6 +44,68 @@ const Section = ({ title, icon: Icon, accent = false, children }) => (
   </div>
 );
 
+
+const BenefitsSection = ({ systemSettings = {} }) => (
+  <div className="space-y-6">
+    <div className="text-center flex flex-col items-center">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
+        <Sparkles className="w-3.5 h-3.5 text-primary" />
+        <span className="text-xs font-bold text-primary">Welcome Back to {systemSettings.companyName || "Raj Electrical Services"}</span>
+      </div>
+      <h1 className="text-4xl font-bold text-secondary leading-tight">
+        Login to <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>
+      </h1>
+      <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
+        Access your dashboard, manage bookings, and stay connected with our premium services.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3">
+      {[
+        { icon: Zap, title: 'Instant Access', desc: 'Secure login', color: 'primary' },
+        { icon: Shield, title: 'Safe & Secure', desc: 'Encrypted data', color: 'accent' },
+        { icon: Activity, title: 'Real-time Updates', desc: 'Stay notified', color: 'primary' },
+        { icon: HeadphonesIcon, title: 'Support', desc: '24/7 Assistance', color: 'accent' },
+      ].map(({ icon: Icon, title, desc, color }) => (
+        <div
+          key={title}
+          className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
+            ? 'border-primary/20 bg-primary/5 hover:border-primary/40'
+            : 'border-accent/20 bg-accent/5 hover:border-accent/40'
+            }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+              }`}
+          >
+            <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
+          </div>
+          <p className="text-sm font-bold text-secondary">{title}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+        </div>
+      ))}
+    </div>
+
+    <div className="bg-background border border-gray-200 rounded-xl p-5">
+      <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+        <Award className="w-4 h-4 text-primary" /> Premium Benefits
+      </h3>
+      <div className="space-y-2.5">
+        {[
+          'Manage service bookings with one click',
+          'Safe & secure payment tracking',
+          'Verified professionals at your doorstep',
+        ].map((text) => (
+          <div key={text} className="flex items-start gap-2">
+            <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+            <span className="text-xs text-secondary/70">{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { loginUser, showToast, isAuthenticated, role, user, systemSettings = {} } = useAuth();
@@ -129,68 +191,6 @@ const LoginPage = () => {
 
 
 
-  // ── Benefits sidebar ──────────────────────────────────────────────────────
-  const BenefitsSection = () => (
-    <div className="space-y-6">
-      <div className="text-center flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-bold text-primary">Welcome Back to {systemSettings.companyName || "Raj Electrical Services"}</span>
-        </div>
-        <h1 className="text-4xl font-bold text-secondary leading-tight">
-          Login to <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>
-        </h1>
-        <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
-          Access your dashboard, manage bookings, and stay connected with our premium services.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { icon: Zap, title: 'Instant Access', desc: 'Secure login', color: 'primary' },
-          { icon: Shield, title: 'Safe & Secure', desc: 'Encrypted data', color: 'accent' },
-          { icon: Activity, title: 'Real-time Updates', desc: 'Stay notified', color: 'primary' },
-          { icon: HeadphonesIcon, title: 'Support', desc: '24/7 Assistance', color: 'accent' },
-        ].map(({ icon: Icon, title, desc, color }) => (
-          <div
-            key={title}
-            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
-              ? 'border-primary/20 bg-primary/5 hover:border-primary/40'
-              : 'border-accent/20 bg-accent/5 hover:border-accent/40'
-              }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
-                }`}
-            >
-              <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
-            </div>
-            <p className="text-sm font-bold text-secondary">{title}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-background border border-gray-200 rounded-xl p-5">
-        <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Award className="w-4 h-4 text-primary" /> Premium Benefits
-        </h3>
-        <div className="space-y-2.5">
-          {[
-            'Manage service bookings with one click',
-            'Safe & secure payment tracking',
-            'Verified professionals at your doorstep',
-          ].map((text) => (
-            <div key={text} className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <span className="text-xs text-secondary/70">{text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gray-50 pt-20 pb-14 px-4 flex items-center">
       <div className="max-w-7xl mx-auto w-full">
@@ -209,7 +209,7 @@ const LoginPage = () => {
         <div className="lg:flex lg:flex-row lg:gap-14 lg:items-center">
           {/* Left: Benefits - Visible on desktop */}
           <div className="hidden lg:block lg:flex-1">
-            <BenefitsSection />
+            <BenefitsSection systemSettings={systemSettings} />
           </div>
 
           {/* Right: Login Card */}

@@ -235,7 +235,7 @@ const AdminProfile = () => {
   }, []);
 
   // Delete admin
-  const handleDeleteAdmin = async (adminId) => {
+  const handleDeleteAdmin = useCallback(async (adminId) => {
     const isConfirmed = await confirm({
       title: 'Delete Admin',
       message: 'Are you sure you want to delete this admin? This action cannot be undone.',
@@ -252,7 +252,7 @@ const AdminProfile = () => {
     } catch (error) {
       toast.error(error.message);
     }
-  };
+  }, [confirm, fetchAdmins, currentPage, searchTerm]);
 
   // Handle search
   const handleSearch = (e) => {
@@ -261,9 +261,9 @@ const AdminProfile = () => {
   };
 
   // Handle pagination
-  const handlePageChange = (newPage) => {
+  const handlePageChange = useCallback((newPage) => {
     setCurrentPage(newPage);
-  };
+  }, []);
 
   // Toggle admin list view
   const toggleAdminList = () => {

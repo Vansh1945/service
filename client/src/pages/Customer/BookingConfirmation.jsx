@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
@@ -22,7 +22,7 @@ const BookingConfirmation = () => {
   const { bookingId } = useParams();
   const { token, user, isAuthenticated, API, showToast, systemSettings = {} } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const loc = useLocation();
 
   // State management
   const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +38,9 @@ const BookingConfirmation = () => {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentProgressMessage, setPaymentProgressMessage] = useState('');
   const [defaultCurrency, setDefaultCurrency] = useState('INR');
+
+  // Ref for timer cleanups
+  const timeoutRef = useRef(null);
 
   // Load Razorpay script
   useEffect(() => {
@@ -57,6 +60,13 @@ const BookingConfirmation = () => {
       }, 100);
       return () => clearInterval(interval);
     }
+  }, []);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   const fetchServiceDetails = async (serviceId) => {
@@ -87,21 +97,22 @@ const BookingConfirmation = () => {
       }
       setBookingDetails(booking);
 
-      if (!location.state?.service) {
+      if (!loc.state?.service) {
         const serviceId = booking.serviceId || (booking.services?.[0]?.serviceId);
         if (serviceId) {
           const service = await fetchServiceDetails(serviceId);
           if (service) setServiceDetails(service);
         }
-      } else if (location.state?.service) {
-        setServiceDetails(location.state.service);
+      } else if (loc.state?.service) {
+        setServiceDetails(loc.state.service);
       }
     } catch (error) {
       console.error('Error fetching booking details:', error);
       let errorMessage = 'Failed to load booking details';
       if (error.response?.status === 401) {
         errorMessage = 'Session expired. Please login again.';
-        setTimeout(() => navigate('/login'), 3000);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => navigate('/login'), 3000);
       } else if (error.response?.status === 404) {
         errorMessage = 'Booking not found.';
       } else if (error.response?.data?.message) {
@@ -125,7 +136,8 @@ const BookingConfirmation = () => {
 
       if (!bookingId || bookingId === 'undefined' || bookingId === 'null') {
         setError('Invalid booking ID');
-        setTimeout(() => navigate('/customer/services'), 3000);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => navigate('/customer/services'), 3000);
         return;
       }
 
@@ -140,10 +152,10 @@ const BookingConfirmation = () => {
           setDefaultCurrency(systemSettings.defaultCurrency || 'INR');
         }
 
-        if (location.state?.booking) {
-          const b = location.state.booking;
+        if (loc.state?.booking) {
+          const b = loc.state.booking;
           setBookingDetails(b);
-          setServiceDetails(location.state.service);
+          setServiceDetails(loc.state.service);
           // If it's a cash booking not yet paid (Pay Now flow), default to online so
           // the customer can choose how to pay — 'cash' is not a valid createOrder method
           if (b.paymentMethod === 'cash' && !['paid', 'escrow_hold'].includes(b.paymentStatus)) {
@@ -163,7 +175,7 @@ const BookingConfirmation = () => {
     };
 
     if (!isInitialized) initializeComponent();
-  }, [bookingId, isAuthenticated, token, location.state, isInitialized]);
+  }, [bookingId, isAuthenticated, token, loc.state, isInitialized]);
 
 
   const getServiceInfo = () => {

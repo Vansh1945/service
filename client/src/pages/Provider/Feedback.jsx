@@ -13,6 +13,66 @@ import { useNavigate } from 'react-router-dom';
 import ErrorState from '../../components/Error';
 import Rating from '../../components/Rating';
 
+// Hoisted Components
+const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab }) => {
+    const isActive = activeTab === id;
+    return (
+        <button
+            onClick={() => setActiveTab(id)}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5 transition-colors border ${isActive ? 'bg-primary/5 text-primary border-primary/20' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}
+        >
+            <Icon className="w-3.5 h-3.5" /> {label}
+        </button>
+    );
+};
+
+const FeedbackCard = ({ feedback }) => (
+    <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-all shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3 flex-grow min-w-0">
+                <img
+                    src={feedback.customerAvatar || `https://ui-avatars.com/api/?name=${feedback.customerName || 'Customer'}&background=0D9488&color=fff`}
+                    alt={feedback.customerName}
+                    className="w-10 h-10 rounded-full object-cover bg-gray-50 border border-gray-100 flex-shrink-0"
+                />
+                <div className="flex-grow min-w-0">
+                    <h3 className="text-sm font-bold text-secondary truncate">
+                        ID: #{feedback.bookingId.slice(-8)}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5" />
+                        <span>{feedback.customerName}</span>
+                        <span className="text-gray-300">•</span>
+                        <span className="truncate">{feedback.service}</span>
+                    </p>
+
+                    <div className="mt-3">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Rating</span>
+                                <Rating rating={feedback.rating} />
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1 italic">
+                                "{feedback.comment}"
+                            </p>
+                        </div>
+                        {feedback.isEdited && (
+                            <p className="text-[10px] text-gray-400 mt-1 italic text-right">(Edited)</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <span className="text-[10px] text-gray-400 flex items-center gap-1 font-medium">
+                    <Calendar className="w-3 h-3" />
+                    {formatDate(feedback.date)}
+                </span>
+            </div>
+        </div>
+    </div>
+);
+
 const ProviderFeedback = () => {
     const { token, showToast } = useAuth();
     const navigate = useNavigate();
@@ -40,9 +100,7 @@ const ProviderFeedback = () => {
         onPageChange
     } = usePagination(1, 10);
 
-    const StarRating = ({ rating }) => (
-        <Rating rating={rating} />
-    );
+    // StarRating component removed; using Rating component directly
 
     const fetchProviderFeedbacks = async () => {
         try {
@@ -169,64 +227,9 @@ const ProviderFeedback = () => {
         setTotalItems(finalFilteredFeedback.length);
     }, [finalFilteredFeedback.length, setTotalItems]);
 
-    const TabButton = ({ id, label, icon: Icon }) => {
-        const isActive = activeTab === id;
-        return (
-            <button
-                onClick={() => setActiveTab(id)}
-                className={`px-4 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5 transition-colors border ${isActive ? 'bg-primary/5 text-primary border-primary/20' : 'text-gray-500 hover:bg-gray-100 border-transparent'}`}
-            >
-                <Icon className="w-3.5 h-3.5" /> {label}
-            </button>
-        );
-    };
+    // TabButton hoisted to module scope
 
-    const FeedbackCard = ({ feedback }) => (
-        <div className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-all shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3 flex-grow min-w-0">
-                    <img
-                        src={feedback.customerAvatar || `https://ui-avatars.com/api/?name=${feedback.customerName || 'Customer'}&background=0D9488&color=fff`}
-                        alt={feedback.customerName}
-                        className="w-10 h-10 rounded-full object-cover bg-gray-50 border border-gray-100 flex-shrink-0"
-                    />
-                    <div className="flex-grow min-w-0">
-                        <h3 className="text-sm font-bold text-secondary truncate">
-                            ID: #{feedback.bookingId.slice(-8)}
-                        </h3>
-                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                            <User className="w-3.5 h-3.5" />
-                            <span>{feedback.customerName}</span>
-                            <span className="text-gray-300">•</span>
-                            <span className="truncate">{feedback.service}</span>
-                        </p>
-
-                        <div className="mt-3">
-                            <div className="bg-gray-50 rounded-lg p-3">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Rating</span>
-                                    <StarRating rating={feedback.rating} />
-                                </div>
-                                <p className="text-xs text-gray-600 mt-1 italic">
-                                    "{feedback.comment}"
-                                </p>
-                            </div>
-                            {feedback.isEdited && (
-                                <p className="text-[10px] text-gray-400 mt-1 italic text-right">(Edited)</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-gray-400 flex items-center gap-1 font-medium">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(feedback.date)}
-                    </span>
-                </div>
-            </div>
-        </div>
-    );
+    // FeedbackCard hoisted to module scope
 
     if (isLoading) {
         return (
@@ -329,8 +332,8 @@ const ProviderFeedback = () => {
 
                 {/* Tabs */}
                 <div className="flex gap-2">
-                    <TabButton id="ratings" label="Analytics" icon={TrendingUp} />
-                    <TabButton id="feedback" label="All Feedback" icon={MessageSquare} />
+                    <TabButton id="ratings" label="Analytics" icon={TrendingUp} activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <TabButton id="feedback" label="All Feedback" icon={MessageSquare} activeTab={activeTab} setActiveTab={setActiveTab} />
                 </div>
 
                 {/* Analytics Tab */}

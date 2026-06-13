@@ -455,625 +455,10 @@ const AdminProvidersPage = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentProviders = filteredProviders.slice(startIndex, endIndex);
 
-  // Optimized Table Row Component
-  const ProviderTableRow = React.memo(({ provider, onViewDetails, onApprove, onReject }) => {
-    const daysPending = getDaysPending(provider.registrationDate || provider.createdAt);
-    const status = getProviderStatus(provider);
-
-    return (
-      <tr className="border-b border-gray-200 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-white transition-all duration-200 group">
-        <td className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
-              {provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg' ? (
-                <img
-                  src={provider.profilePicUrl}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <User className="w-5 h-5 text-white" />
-              )}
-            </div>
-            <div>
-              <div className="font-semibold text-secondary group-hover:text-primary transition-colors flex items-center gap-2">
-                {provider.name}
-                {provider.providerId && (
-                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-primary/20">
-                    {provider.providerId}
-                  </span>
-                )}
-              </div>
-              <div className="text-xs text-gray-500 flex items-center mt-1">
-                <Mail className="w-3 h-3 mr-1" />
-                {provider.email}
-              </div>
-            </div>
-          </div>
-        </td>
-        <td className="p-4">
-          <div className="text-sm text-gray-900 font-medium">{provider.phone}</div>
-        </td>
-        <td className="p-4">
-          <div className="text-sm text-gray-900 flex items-center">
-            <MapPin className="w-3 h-3 mr-1 text-primary" />
-            {provider.serviceArea || (provider.address?.city || 'N/A')}
-          </div>
-        </td>
-        <td className="p-4">
-          <div className="text-sm text-gray-900">
-            {provider.services?.slice(0, 2).join(', ')}
-            {provider.services?.length > 2 && '...'}
-          </div>
-        </td>
-        <td className="p-4">
-          <div className="text-sm text-gray-900 font-medium">{provider.experience || '0'} yrs</div>
-        </td>
-        <td className="p-4">
-          <div className="text-sm text-gray-900">
-            {formatDate(provider.createdAt || provider.registrationDate)}
-          </div>
-        </td>
-        <td className="p-4">
-          <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold transition-all ${daysPending > 7 ? 'bg-accent text-white shadow-sm' : 'bg-yellow-100 text-yellow-800'
-            }`}>
-            <Clock className="w-3 h-3 mr-1" />
-            {daysPending} days
-          </div>
-
-        </td>
-
-        <td className="p-4">
-          <div className="flex flex-col gap-1">
-            <div className="text-sm font-medium text-gray-900 flex items-center">
-              <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 mr-1" />
-              {provider.performanceScore?.rating ? provider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
-            </div>
-            <div className="text-xs text-gray-500 flex items-center mt-1">
-              <Clock className="w-3 h-3 mr-1" /> On-Time: {provider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
-            </div>
-            <div className="text-xs text-gray-500 flex items-center">
-              <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
-            </div>
-          </div>
-        </td>
-
-        <td className="p-4">
-
-          <div className="flex items-center gap-2">
-
-            <button
-
-              onClick={() => onViewDetails(provider._id)}
-              className="p-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
-              title="View Details"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onApprove(provider)}
-              className="p-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
-              title="Approve"
-            >
-              <CheckCircle className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onReject(provider)}
-              className="p-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
-              title="Reject"
-            >
-              <XCircle className="w-4 h-4" />
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  });
+  // ProviderTableRow is hoisted to module scope
 
 
-  // Document View Modal
-  const DocumentViewModal = React.memo(() => (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden transform transition-all duration-300 scale-100">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white">
-          <h3 className="text-lg font-semibold text-secondary">
-            {documentView.type === 'image' ? 'Image Preview' : 'Document View'}
-          </h3>
-          <button
-            onClick={closeDocumentView}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        <div className="p-4 flex items-center justify-center bg-gray-50 min-h-[400px]">
-          {documentView.type === 'image' ? (
-            <img
-              src={documentView.url}
-              alt="Document"
-              className="max-w-full max-h-[calc(90vh-100px)] object-contain rounded-lg shadow-sm"
-            />
-          ) : (
-            <iframe
-              src={documentView.url}
-              className="w-full h-[calc(90vh-100px)] min-h-[400px] border-0 bg-white rounded-lg shadow-sm"
-              title="Document"
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  ));
-
-  // Provider Details Modal Component
-  const ProviderDetailsModal = () => {
-    if (!selectedProvider) return null;
-    const status = getProviderStatus(selectedProvider);
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-        <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-8 max-h-[90vh] overflow-y-auto">
-          <div className="p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-secondary">Provider Details</h2>
-              <button
-                onClick={closeModal}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-6">
-            {/* Profile Header */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 mb-8 pb-6 border-b">
-              <div className="w-24 h-24 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden shadow-lg">
-                {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
-                  <img
-                    src={selectedProvider.profilePicUrl}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="w-12 h-12 text-white" />
-                )}
-              </div>
-              <div className="flex-1 text-center sm:text-left">
-                <h3 className="text-2xl font-bold text-secondary">{selectedProvider.name}</h3>
-                <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 text-gray-600">
-                  <span className="flex items-center">
-                    <Mail className="w-4 h-4 mr-2" />
-                    {selectedProvider.email}
-                  </span>
-                  <span className="flex items-center">
-                    <Phone className="w-4 h-4 mr-2" />
-                    {selectedProvider.phone}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <span className={`px-4 py-2 rounded-full text-sm font-semibold ${status === 'approved'
-                  ? 'bg-green-100 text-green-800 border border-green-200'
-                  : status === 'rejected'
-                    ? 'bg-red-100 text-red-800 border border-red-200'
-                    : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                  }`}>
-                  {status.toUpperCase()}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Personal Information */}
-              <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                  <User className="w-5 h-5 mr-2 text-primary" />
-                  Personal Information
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Date of Birth</span>
-                    <span className="font-medium text-secondary">
-                      {formatDate(selectedProvider.dateOfBirth)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Age</span>
-                    <span className="font-medium text-secondary">{selectedProvider.age || 'N/A'} years</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Registration Date</span>
-                    <span className="font-medium text-secondary">
-                      {formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-gray-600">Profile Complete</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.profileComplete
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                      }`}>
-                      {selectedProvider.profileComplete ? 'Yes' : 'No'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Professional Details */}
-              <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                  <Briefcase className="w-5 h-5 mr-2 text-primary" />
-                  Professional Details
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-sm text-gray-600">Services</span>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedProvider.services?.map((service, index) => (
-                        <span key={index} className="px-3 py-1 bg-gradient-to-r from-primary to-teal-600 text-white rounded-full text-xs font-medium">
-                          {service.name || service}
-                        </span>
-                      )) || <span className="text-secondary text-sm">N/A</span>}
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Experience</span>
-                    <span className="font-medium text-secondary">{selectedProvider.experience || '0'} years</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Service Area</span>
-                    <span className="font-medium text-secondary">{selectedProvider.serviceArea || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Test Status</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.testPassed
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                      }`}>
-                      {selectedProvider.testPassed ? 'Passed' : 'Not Taken'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">Rating</span>
-                    <span className="font-medium text-secondary">
-                      ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                    <span className="text-sm text-gray-600">On-Time</span>
-                    <span className="font-medium text-secondary">
-                      {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-gray-600">Completion</span>
-                    <span className="font-medium text-secondary">
-                      {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Address Information */}
-              <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                  <Home className="w-5 h-5 mr-2 text-primary" />
-                  Address Information
-                </h3>
-                <div className="space-y-3">
-                  {selectedProvider.address ? (
-                    <>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">Street</span>
-                        <span className="font-medium text-secondary text-right">{selectedProvider.address.street || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">City</span>
-                        <span className="font-medium text-secondary">{selectedProvider.address.city || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">State</span>
-                        <span className="font-medium text-secondary">{selectedProvider.address.state || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-sm text-gray-600">Postal Code</span>
-                        <span className="font-medium text-secondary">{selectedProvider.address.postalCode || 'N/A'}</span>
-                      </div>
-                      {/* S2 Geofence Telemetry */}
-                      {(selectedProvider.address?.s2CellId || selectedProvider.address?.s2CellIdPrecise) && (
-                        <div className="mt-3 bg-slate-900 p-3 rounded-lg border border-slate-700">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                            <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
-                          </p>
-                          <div className="space-y-1.5">
-                            {selectedProvider.address?.s2CellId && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
-                                <span className="font-mono text-[10px] text-teal-300 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-800/50">
-                                  {selectedProvider.address.s2CellId}
-                                </span>
-                              </div>
-                            )}
-                            {selectedProvider.address?.s2CellIdPrecise && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
-                                <span className="font-mono text-[10px] text-emerald-300 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">
-                                  {selectedProvider.address.s2CellIdPrecise}
-                                </span>
-                              </div>
-                            )}
-                            {selectedProvider.address?.lat && selectedProvider.address?.lng && (
-                              <div className="flex justify-between items-center pt-1 border-t border-slate-700">
-                                <span className="text-[10px] text-slate-500">Coordinates</span>
-                                <span className="font-mono text-[10px] text-slate-300">
-                                  {parseFloat(selectedProvider.address.lat).toFixed(6)}, {parseFloat(selectedProvider.address.lng).toFixed(6)}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-gray-500 text-center py-4">Address not provided</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Bank Details */}
-              <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                  <CreditCard className="w-5 h-5 mr-2 text-primary" />
-                  Bank Details
-                </h3>
-                <div className="space-y-3">
-                  {selectedProvider.bankDetails ? (
-                    <>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">Bank Name</span>
-                        <span className="font-medium text-secondary">
-                          {selectedProvider.bankDetails.accountName || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">Account Number</span>
-                        <span className="font-medium text-secondary font-mono">
-                          {selectedProvider.bankDetails.accountNo || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">IFSC Code</span>
-                        <span className="font-medium text-secondary font-mono">
-                          {selectedProvider.bankDetails.ifsc || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600">Bank Name</span>
-                        <span className="font-medium text-secondary">
-                          {selectedProvider.bankDetails.bankName || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-sm text-gray-600">Verification Status</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.verified
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                          {selectedProvider.bankDetails.verified ? 'Verified' : 'Pending'}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-gray-500 text-center py-4">Bank details not provided</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Documents Section */}
-            <div className="mt-8 bg-gradient-to-br from-teal-50 to-white rounded-xl p-6 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold mb-6 text-secondary">Documents</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Profile Picture */}
-                <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center mb-4">
-                    <Image className="w-5 h-5 mr-2 text-primary" />
-                    <span className="font-semibold text-secondary">Profile Picture</span>
-                  </div>
-                  {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
-                    <>
-                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
-                        <img
-                          src={selectedProvider.profilePicUrl}
-                          alt="Profile"
-                          className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
-                          onClick={() => viewDocument(selectedProvider, 'profile')}
-                        />
-                      </div>
-                      <button
-                        onClick={() => viewDocument(selectedProvider, 'profile')}
-                        className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
-                      >
-                        View Full Size
-                      </button>
-                    </>
-                  ) : (
-                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
-                      <p className="text-gray-400">Not uploaded</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Resume */}
-                <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center mb-4">
-                    <FileText className="w-5 h-5 mr-2 text-primary" />
-                    <span className="font-semibold text-secondary">Resume/CV</span>
-                  </div>
-                  {selectedProvider.resume ? (
-                    <>
-                      <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 cursor-pointer hover:bg-gray-200 transition-colors border border-teal-100"
-                        onClick={() => viewDocument(selectedProvider, 'resume')}>
-                        <FileText className="w-12 h-12 text-primary" />
-                      </div>
-                      <button
-                        onClick={() => viewDocument(selectedProvider, 'resume')}
-                        className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
-                      >
-                        View Document
-                      </button>
-                    </>
-                  ) : (
-                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
-                      <p className="text-gray-400">Not uploaded</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Passbook */}
-                <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center mb-4">
-                    <FileImage className="w-5 h-5 mr-2 text-primary" />
-                    <span className="font-semibold text-secondary">Bank Passbook</span>
-                  </div>
-                  {selectedProvider.bankDetails?.passbookImage ? (
-                    <>
-                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
-                        <img
-                          src={selectedProvider.bankDetails.passbookImage}
-                          alt="Passbook"
-                          className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
-                          onClick={() => viewDocument(selectedProvider, 'passbook')}
-                        />
-                      </div>
-                      <button
-                        onClick={() => viewDocument(selectedProvider, 'passbook')}
-                        className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
-                      >
-                        View Full Size
-                      </button>
-                    </>
-                  ) : (
-                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
-                      <p className="text-gray-400">Not uploaded</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {activeTab === 'pending_providers' ? (
-              <div className="mt-8 flex gap-4">
-                <button
-                  onClick={() => openApprovalModal('approved', selectedProvider)}
-                  className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
-                >
-                  <CheckCircle className="w-5 h-5 mr-2" />
-                  Approve Provider
-                </button>
-                <button
-                  onClick={() => openApprovalModal('rejected', selectedProvider)}
-                  className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
-                >
-                  <XCircle className="w-5 h-5 mr-2" />
-                  Reject Provider
-                </button>
-              </div>
-            ) : (
-              <div className="mt-8 flex gap-4">
-                <button
-                  onClick={() => openApprovalModal('bank_approved', selectedProvider)}
-                  className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
-                >
-                  <CheckCircle className="w-5 h-5 mr-2" />
-                  Approve Bank Update
-                </button>
-                <button
-                  onClick={() => openApprovalModal('bank_rejected', selectedProvider)}
-                  className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
-                >
-                  <XCircle className="w-5 h-5 mr-2" />
-                  Reject Bank Update
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-
-  const FilterSection = () => (
-    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-secondary flex items-center">
-          <Filter className="w-5 h-5 mr-2" />
-          Advanced Filters
-        </h3>
-        <div className="flex gap-2">
-          <button
-            onClick={clearFilters}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium"
-          >
-            Clear All
-          </button>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            {showFilters ? <X className="w-5 h-5" /> : <Filter className="w-5 h-5" />}
-          </button>
-        </div>
-      </div>
-
-      {showFilters && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[
-            { key: 'services', label: 'Services', placeholder: 'e.g., Cleaning', type: 'text' },
-            { key: 'city', label: 'City', placeholder: 'Filter by city', type: 'text' },
-            { key: 'state', label: 'State', placeholder: 'Filter by state', type: 'text' },
-            { key: 'experience', label: 'Min Experience', placeholder: 'Years', type: 'number' },
-            { key: 'age', label: 'Min Age', placeholder: 'Age', type: 'number' },
-            { key: 'testPassed', label: 'Test Status', type: 'select', options: ['All', 'Passed', 'Not Passed'] },
-            { key: 'profileComplete', label: 'Profile Status', type: 'select', options: ['All', 'Complete', 'Incomplete'] },
-            { key: 'bankVerified', label: 'Bank Verification', type: 'select', options: ['All', 'Verified', 'Not Verified'] },
-            { key: 'hasResume', label: 'Has Resume', type: 'select', options: ['All', 'Yes', 'No'] },
-            { key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: ['All', 'Yes', 'No'] },
-            { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
-            { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' },
-          ].map(({ key, label, placeholder, type, options }) => (
-            <div key={key}>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-              {type === 'select' ? (
-                <select
-                  value={filters[key]}
-                  onChange={(e) => setFilters({ ...filters, [key]: e.target.value.toLowerCase() })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
-                >
-                  {options.map(option => (
-                    <option key={option} value={option === 'All' ? '' : option.toLowerCase()}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type={type}
-                  value={filters[key]}
-                  onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}
-                  placeholder={placeholder}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  // Modals and FilterSection hoisted to module scope
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30 p-6">
@@ -1170,7 +555,13 @@ const AdminProvidersPage = () => {
         </div>
 
         {/* Filters and Sorting */}
-        <FilterSection />
+        <FilterSection
+          filters={filters}
+          setFilters={setFilters}
+          clearFilters={clearFilters}
+          showFilters={showFilters}
+          setShowFilters={setShowFilters}
+        />
 
         {/* Content */}
         {loading ? (
@@ -1207,6 +598,8 @@ const AdminProvidersPage = () => {
                         onViewDetails={fetchProviderDetails}
                         onApprove={handleApproveProvider}
                         onReject={handleRejectProvider}
+                        daysPending={getDaysPending(provider.registrationDate || provider.createdAt)}
+                        status={getProviderStatus(provider)}
                       />
                     ))}
                   </tbody>
@@ -1228,7 +621,16 @@ const AdminProvidersPage = () => {
         )}
 
         {/* Modals */}
-        {selectedProvider && !showApprovalModal && <ProviderDetailsModal />}
+        {selectedProvider && !showApprovalModal && (
+          <ProviderDetailsModal
+            selectedProvider={selectedProvider}
+            status={getProviderStatus(selectedProvider)}
+            closeModal={closeModal}
+            viewDocument={viewDocument}
+            activeTab={activeTab}
+            openApprovalModal={openApprovalModal}
+          />
+        )}
         <ApprovalModal
           show={showApprovalModal}
           action={approvalAction}
@@ -1239,11 +641,638 @@ const AdminProvidersPage = () => {
           onCancel={handleModalCancel}
           processing={processingAction === approvalAction}
         />
-        {documentView.visible && <DocumentViewModal />}
+        {documentView.visible && (
+          <DocumentViewModal
+            documentView={documentView}
+            closeDocumentView={closeDocumentView}
+          />
+        )}
       </div>
     </div>
   );
 };
+
+// Hoisted Provider Table Row Component
+const ProviderTableRow = React.memo(({ provider, onViewDetails, onApprove, onReject, daysPending, status }) => {
+  return (
+    <tr className="border-b border-gray-200 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-white transition-all duration-200 group">
+      <td className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+            {provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg' ? (
+              <img
+                src={provider.profilePicUrl}
+                alt="Profile"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <User className="w-5 h-5 text-white" />
+            )}
+          </div>
+          <div>
+            <div className="font-semibold text-secondary group-hover:text-primary transition-colors flex items-center gap-2">
+              {provider.name}
+              {provider.providerId && (
+                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-primary/20">
+                  {provider.providerId}
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500 flex items-center mt-1">
+              <Mail className="w-3 h-3 mr-1" />
+              {provider.email}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="text-sm text-gray-900 font-medium">{provider.phone}</div>
+      </td>
+      <td className="p-4">
+        <div className="text-sm text-gray-900 flex items-center">
+          <MapPin className="w-3 h-3 mr-1 text-primary" />
+          {provider.serviceArea || (provider.address?.city || 'N/A')}
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="text-sm text-gray-900">
+          {provider.services?.slice(0, 2).join(', ')}
+          {provider.services?.length > 2 && '...'}
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="text-sm text-gray-900 font-medium">{provider.experience || '0'} yrs</div>
+      </td>
+      <td className="p-4">
+        <div className="text-sm text-gray-900">
+          {formatDate(provider.createdAt || provider.registrationDate)}
+        </div>
+      </td>
+      <td className="p-4">
+        <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold transition-all ${daysPending > 7 ? 'bg-accent text-white shadow-sm' : 'bg-yellow-100 text-yellow-800'
+          }`}>
+          <Clock className="w-3 h-3 mr-1" />
+          {daysPending} days
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="flex flex-col gap-1">
+          <div className="text-sm font-medium text-gray-900 flex items-center">
+            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 mr-1" />
+            {provider.performanceScore?.rating ? provider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
+          </div>
+          <div className="text-xs text-gray-500 flex items-center mt-1">
+            <Clock className="w-3 h-3 mr-1" /> On-Time: {provider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
+          </div>
+          <div className="text-xs text-gray-500 flex items-center">
+            <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
+          </div>
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onViewDetails(provider._id)}
+            className="p-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onApprove(provider)}
+            className="p-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
+            title="Approve"
+          >
+            <CheckCircle className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onReject(provider)}
+            className="p-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
+            title="Reject"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+// Hoisted Document View Modal
+const DocumentViewModal = React.memo(({ documentView, closeDocumentView }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden transform transition-all duration-300 scale-100">
+      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white">
+        <h3 className="text-lg font-semibold text-secondary">
+          {documentView.type === 'image' ? 'Image Preview' : 'Document View'}
+        </h3>
+        <button
+          onClick={closeDocumentView}
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+      <div className="p-4 flex items-center justify-center bg-gray-50 min-h-[400px]">
+        {documentView.type === 'image' ? (
+          <img
+            src={documentView.url}
+            alt="Document"
+            className="max-w-full max-h-[calc(90vh-100px)] object-contain rounded-lg shadow-sm"
+          />
+        ) : (
+          <iframe
+            src={documentView.url}
+            className="w-full h-[calc(90vh-100px)] min-h-[400px] border-0 bg-white rounded-lg shadow-sm"
+            title="Document"
+          />
+        )}
+      </div>
+    </div>
+  </div>
+));
+
+// Hoisted Provider Details Modal Component
+const ProviderDetailsModal = ({
+  selectedProvider,
+  status,
+  closeModal,
+  viewDocument,
+  activeTab,
+  openApprovalModal
+}) => {
+  if (!selectedProvider) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-secondary">Provider Details</h2>
+            <button
+              onClick={closeModal}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {/* Profile Header */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 mb-8 pb-6 border-b">
+            <div className="w-24 h-24 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden shadow-lg">
+              {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
+                <img
+                  src={selectedProvider.profilePicUrl}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-12 h-12 text-white" />
+              )}
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <h3 className="text-2xl font-bold text-secondary">{selectedProvider.name}</h3>
+              <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 text-gray-600">
+                <span className="flex items-center">
+                  <Mail className="w-4 h-4 mr-2" />
+                  {selectedProvider.email}
+                </span>
+                <span className="flex items-center">
+                  <Phone className="w-4 h-4 mr-2" />
+                  {selectedProvider.phone}
+                </span>
+              </div>
+            </div>
+            <div>
+              <span className={`px-4 py-2 rounded-full text-sm font-semibold ${status === 'approved'
+                ? 'bg-green-100 text-green-800 border border-green-200'
+                : status === 'rejected'
+                  ? 'bg-red-100 text-red-800 border border-red-200'
+                  : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                }`}>
+                {status.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Personal Information */}
+            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
+                <User className="w-5 h-5 mr-2 text-primary" />
+                Personal Information
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Date of Birth</span>
+                  <span className="font-medium text-secondary">
+                    {formatDate(selectedProvider.dateOfBirth)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Age</span>
+                  <span className="font-medium text-secondary">{selectedProvider.age || 'N/A'} years</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Registration Date</span>
+                  <span className="font-medium text-secondary">
+                    {formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Profile Complete</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.profileComplete
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                    }`}>
+                    {selectedProvider.profileComplete ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Professional Details */}
+            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
+                <Briefcase className="w-5 h-5 mr-2 text-primary" />
+                Professional Details
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <span className="text-sm text-gray-600">Services</span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedProvider.services?.map((service, index) => (
+                      <span key={index} className="px-3 py-1 bg-gradient-to-r from-primary to-teal-600 text-white rounded-full text-xs font-medium">
+                        {service.name || service}
+                      </span>
+                    )) || <span className="text-secondary text-sm">N/A</span>}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Experience</span>
+                  <span className="font-medium text-secondary">{selectedProvider.experience || '0'} years</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Service Area</span>
+                  <span className="font-medium text-secondary">{selectedProvider.serviceArea || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Test Status</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.testPassed
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-gray-100 text-gray-800'
+                    }`}>
+                    {selectedProvider.testPassed ? 'Passed' : 'Not Taken'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Rating</span>
+                  <span className="font-medium text-secondary">
+                    ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">On-Time</span>
+                  <span className="font-medium text-secondary">
+                    {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Completion</span>
+                  <span className="font-medium text-secondary">
+                    {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Address Information */}
+            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
+                <Home className="w-5 h-5 mr-2 text-primary" />
+                Address Information
+              </h3>
+              <div className="space-y-3">
+                {selectedProvider.address ? (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">Street</span>
+                      <span className="font-medium text-secondary text-right">{selectedProvider.address.street || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">City</span>
+                      <span className="font-medium text-secondary">{selectedProvider.address.city || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">State</span>
+                      <span className="font-medium text-secondary">{selectedProvider.address.state || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-600">Postal Code</span>
+                      <span className="font-medium text-secondary">{selectedProvider.address.postalCode || 'N/A'}</span>
+                    </div>
+                    {/* S2 Geofence Telemetry */}
+                    {(selectedProvider.address?.s2CellId || selectedProvider.address?.s2CellIdPrecise) && (
+                      <div className="mt-3 bg-slate-900 p-3 rounded-lg border border-slate-700">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
+                        </p>
+                        <div className="space-y-1.5">
+                          {selectedProvider.address?.s2CellId && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
+                              <span className="font-mono text-[10px] text-teal-300 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-800/50">
+                                {selectedProvider.address.s2CellId}
+                              </span>
+                            </div>
+                          )}
+                          {selectedProvider.address?.s2CellIdPrecise && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
+                              <span className="font-mono text-[10px] text-emerald-300 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">
+                                {selectedProvider.address.s2CellIdPrecise}
+                              </span>
+                            </div>
+                          )}
+                          {selectedProvider.address?.lat && selectedProvider.address?.lng && (
+                            <div className="flex justify-between items-center pt-1 border-t border-slate-700">
+                              <span className="text-[10px] text-slate-500">Coordinates</span>
+                              <span className="font-mono text-[10px] text-slate-300">
+                                {parseFloat(selectedProvider.address.lat).toFixed(6)}, {parseFloat(selectedProvider.address.lng).toFixed(6)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">Address not provided</p>
+                )}
+              </div>
+            </div>
+
+            {/* Bank Details */}
+            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
+                <CreditCard className="w-5 h-5 mr-2 text-primary" />
+                Bank Details
+              </h3>
+              <div className="space-y-3">
+                {selectedProvider.bankDetails ? (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">Bank Name</span>
+                      <span className="font-medium text-secondary">
+                        {selectedProvider.bankDetails.accountName || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">Account Number</span>
+                      <span className="font-medium text-secondary font-mono">
+                        {selectedProvider.bankDetails.accountNo || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">IFSC Code</span>
+                      <span className="font-medium text-secondary font-mono">
+                        {selectedProvider.bankDetails.ifsc || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">Bank Name</span>
+                      <span className="font-medium text-secondary">
+                        {selectedProvider.bankDetails.bankName || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-600">Verification Status</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.verified
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                        {selectedProvider.bankDetails.verified ? 'Verified' : 'Pending'}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">Bank details not provided</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Documents Section */}
+          <div className="mt-8 bg-gradient-to-br from-teal-50 to-white rounded-xl p-6 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-lg font-semibold mb-6 text-secondary">Documents</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Profile Picture */}
+              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center mb-4">
+                  <Image className="w-5 h-5 mr-2 text-primary" />
+                  <span className="font-semibold text-secondary">Profile Picture</span>
+                </div>
+                {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
+                  <>
+                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
+                      <img
+                        src={selectedProvider.profilePicUrl}
+                        alt="Profile"
+                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                        onClick={() => viewDocument(selectedProvider, 'profile')}
+                      />
+                    </div>
+                    <button
+                      onClick={() => viewDocument(selectedProvider, 'profile')}
+                      className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
+                    >
+                      View Full Size
+                    </button>
+                  </>
+                ) : (
+                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
+                    <p className="text-gray-400">Not uploaded</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Resume */}
+              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center mb-4">
+                  <FileText className="w-5 h-5 mr-2 text-primary" />
+                  <span className="font-semibold text-secondary">Resume/CV</span>
+                </div>
+                {selectedProvider.resume ? (
+                  <>
+                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 cursor-pointer hover:bg-gray-200 transition-colors border border-teal-100"
+                      onClick={() => viewDocument(selectedProvider, 'resume')}>
+                      <FileText className="w-12 h-12 text-primary" />
+                    </div>
+                    <button
+                      onClick={() => viewDocument(selectedProvider, 'resume')}
+                      className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
+                    >
+                      View Document
+                    </button>
+                  </>
+                ) : (
+                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
+                    <p className="text-gray-400">Not uploaded</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Passbook */}
+              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center mb-4">
+                  <FileImage className="w-5 h-5 mr-2 text-primary" />
+                  <span className="font-semibold text-secondary">Bank Passbook</span>
+                </div>
+                {selectedProvider.bankDetails?.passbookImage ? (
+                  <>
+                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
+                      <img
+                        src={selectedProvider.bankDetails.passbookImage}
+                        alt="Passbook"
+                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                        onClick={() => viewDocument(selectedProvider, 'passbook')}
+                      />
+                    </div>
+                    <button
+                      onClick={() => viewDocument(selectedProvider, 'passbook')}
+                      className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
+                    >
+                      View Full Size
+                    </button>
+                  </>
+                ) : (
+                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
+                    <p className="text-gray-400">Not uploaded</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {activeTab === 'pending_providers' ? (
+            <div className="mt-8 flex gap-4">
+              <button
+                onClick={() => openApprovalModal('approved', selectedProvider)}
+                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+              >
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Approve Provider
+              </button>
+              <button
+                onClick={() => openApprovalModal('rejected', selectedProvider)}
+                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+              >
+                <XCircle className="w-5 h-5 mr-2" />
+                Reject Provider
+              </button>
+            </div>
+          ) : (
+            <div className="mt-8 flex gap-4">
+              <button
+                onClick={() => openApprovalModal('bank_approved', selectedProvider)}
+                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+              >
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Approve Bank Update
+              </button>
+              <button
+                onClick={() => openApprovalModal('bank_rejected', selectedProvider)}
+                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+              >
+                <XCircle className="w-5 h-5 mr-2" />
+                Reject Bank Update
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Hoisted Filter Section Component
+const FilterSection = ({
+  filters,
+  setFilters,
+  clearFilters,
+  showFilters,
+  setShowFilters
+}) => (
+  <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-6">
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-lg font-semibold text-secondary flex items-center">
+        <Filter className="w-5 h-5 mr-2" />
+        Advanced Filters
+      </h3>
+      <div className="flex gap-2">
+        <button
+          onClick={clearFilters}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium"
+        >
+          Clear All
+        </button>
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          {showFilters ? <X className="w-5 h-5" /> : <Filter className="w-5 h-5" />}
+        </button>
+      </div>
+    </div>
+
+    {showFilters && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {[
+          { key: 'services', label: 'Services', placeholder: 'e.g., Cleaning', type: 'text' },
+          { key: 'city', label: 'City', placeholder: 'Filter by city', type: 'text' },
+          { key: 'state', label: 'State', placeholder: 'Filter by state', type: 'text' },
+          { key: 'experience', label: 'Min Experience', placeholder: 'Years', type: 'number' },
+          { key: 'age', label: 'Min Age', placeholder: 'Age', type: 'number' },
+          { key: 'testPassed', label: 'Test Status', type: 'select', options: ['All', 'Passed', 'Not Passed'] },
+          { key: 'profileComplete', label: 'Profile Status', type: 'select', options: ['All', 'Complete', 'Incomplete'] },
+          { key: 'bankVerified', label: 'Bank Verification', type: 'select', options: ['All', 'Verified', 'Not Verified'] },
+          { key: 'hasResume', label: 'Has Resume', type: 'select', options: ['All', 'Yes', 'No'] },
+          { key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: ['All', 'Yes', 'No'] },
+          { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
+          { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' },
+        ].map(({ key, label, placeholder, type, options }) => (
+          <div key={key}>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+            {type === 'select' ? (
+              <select
+                value={filters[key]}
+                onChange={(e) => setFilters({ ...filters, [key]: e.target.value.toLowerCase() })}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+              >
+                {options.map(option => (
+                  <option key={option} value={option === 'All' ? '' : option.toLowerCase()}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={type}
+                value={filters[key]}
+                onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}
+                placeholder={placeholder}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
 
 // Approval Modal Component
 const ApprovalModal = ({

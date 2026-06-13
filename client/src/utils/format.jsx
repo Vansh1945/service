@@ -112,6 +112,9 @@ export const formatDateTime = (date) => {
   return `${d}, ${t}`;
 };
 
+const currencyFormatters = new Map();
+const numberFormatters = new Map();
+
 /**
  * Format currency to INR (e.g., ₹1,250.00)
  * @param {number|string} amount - The amount to format
@@ -122,12 +125,18 @@ export const formatCurrency = (amount) => {
   const settings = readCachedSystemSettings();
   const currency = settings.defaultCurrency || "INR";
   const locale = currency === "INR" ? "en-IN" : "en-US";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  const cacheKey = `${locale}-${currency}`;
+  let formatter = currencyFormatters.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+    currencyFormatters.set(cacheKey, formatter);
+  }
+  return formatter.format(amount);
 };
 
 /**
@@ -140,7 +149,12 @@ export const formatNumber = (num) => {
   const settings = readCachedSystemSettings();
   const currency = settings.defaultCurrency || "INR";
   const locale = currency === "INR" ? "en-IN" : "en-US";
-  return new Intl.NumberFormat(locale).format(num);
+  let formatter = numberFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale);
+    numberFormatters.set(locale, formatter);
+  }
+  return formatter.format(num);
 };
 
 /**

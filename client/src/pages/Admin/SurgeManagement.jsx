@@ -50,7 +50,7 @@ const getChargeTypeConfig = (val) => CHARGE_TYPES.find(t => t.value === val) || 
 
 const SurgeManagement = () => {
   const { showToast } = useAuth();
-  const location = useLocation();
+  const loc = useLocation();
   const confirm = useConfirm();
 
   // Data
@@ -186,7 +186,7 @@ const SurgeManagement = () => {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(loc.search);
     const prefillZone = params.get('prefillZone');
     if (prefillZone) {
       setCreateForm(prev => ({
@@ -197,7 +197,7 @@ const SurgeManagement = () => {
       }));
       setShowCreateModal(true);
     }
-  }, [location.search]);
+  }, [loc.search]);
 
   // ----- Stats -----
   useEffect(() => {
@@ -441,338 +441,7 @@ const SurgeManagement = () => {
     return path;
   };
 
-  // ----- Zone Cascade Dropdown Component -----
-  const ZoneCascadeSelector = ({ isCreate }) => {
-    const form = isCreate ? createForm : editForm;
-    const stateSearch = isCreate ? createStateSearch : editStateSearch;
-    const setStateSearchFn = isCreate ? setCreateStateSearch : setEditStateSearch;
-    const stateOpen = isCreate ? createStateOpen : editStateOpen;
-    const setStateOpenFn = isCreate ? setCreateStateOpen : setEditStateOpen;
-    const citySearch = isCreate ? createCitySearch : editCitySearch;
-    const setCitySearchFn = isCreate ? setCreateCitySearch : setEditCitySearch;
-    const cityOpen = isCreate ? createCityOpen : editCityOpen;
-    const setCityOpenFn = isCreate ? setCreateCityOpen : setEditCityOpen;
-    const microSearch = isCreate ? createMicroSearch : editMicroSearch;
-    const setMicroSearchFn = isCreate ? setCreateMicroSearch : setEditMicroSearch;
-    const microOpen = isCreate ? createMicroOpen : editMicroOpen;
-    const setMicroOpenFn = isCreate ? setCreateMicroOpen : setEditMicroOpen;
 
-    return (
-      <div className="space-y-3">
-        <label className="block text-sm font-semibold text-secondary mb-1">Target Zone (Hierarchical Selector) *</label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* STATE */}
-          <div className="relative">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">State</label>
-            <div
-              onClick={() => { setStateOpenFn(!stateOpen); setCityOpenFn(false); setMicroOpenFn(false); }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-            >
-              <span className="text-gray-700 truncate">
-                {(() => {
-                  const sel = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
-                  return sel.length === 0 ? 'Select States' : `${sel.length} Selected`;
-                })()}
-              </span>
-              {stateOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-            </div>
-            {stateOpen && (
-              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto p-2">
-                <input type="text" placeholder="Search state..." value={stateSearch} onChange={(e) => setStateSearchFn(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full px-2 py-1 text-xs border border-gray-200 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary" />
-                <div className="space-y-0.5">
-                  {zones.filter(z => z.zoneLevel === 'state' && z.name.toLowerCase().includes(stateSearch.toLowerCase())).map(s => (
-                    <label key={s._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={(form.zoneIds || []).includes(s._id)} onChange={() => handleZoneToggleCascade(s, isCreate)} className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2" />
-                      {s.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* CITY */}
-          <div className="relative">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">City</label>
-            <div
-              onClick={() => { setCityOpenFn(!cityOpen); setStateOpenFn(false); setMicroOpenFn(false); }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-            >
-              <span className="text-gray-700 truncate">
-                {(() => {
-                  const sel = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
-                  return sel.length === 0 ? 'Select Cities' : `${sel.length} Selected`;
-                })()}
-              </span>
-              {cityOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-            </div>
-            {cityOpen && (
-              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto p-2">
-                <input type="text" placeholder="Search city..." value={citySearch} onChange={(e) => setCitySearchFn(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full px-2 py-1 text-xs border border-gray-200 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary" />
-                <div className="space-y-0.5">
-                  {(() => {
-                    const selectedStateIds = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
-                    const cities = selectedStateIds.length > 0
-                      ? zones.filter(z => z.zoneLevel === 'city' && selectedStateIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
-                      : zones.filter(z => z.zoneLevel === 'city');
-                    const fc = cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase()));
-                    if (fc.length === 0) return <p className="text-[10px] text-gray-400 italic text-center py-2">No cities available.</p>;
-                    return fc.map(c => (
-                      <label key={c._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={(form.zoneIds || []).includes(c._id)} onChange={() => handleZoneToggleCascade(c, isCreate)} className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2" />
-                        {c.name}
-                      </label>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* MICRO */}
-          <div className="relative">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Micro Zone</label>
-            <div
-              onClick={() => { setMicroOpenFn(!microOpen); setStateOpenFn(false); setCityOpenFn(false); }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-            >
-              <span className="text-gray-700 truncate">
-                {(() => {
-                  const sel = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'micro');
-                  return sel.length === 0 ? 'Select Micro Zones' : `${sel.length} Selected`;
-                })()}
-              </span>
-              {microOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-            </div>
-            {microOpen && (
-              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto p-2">
-                <input type="text" placeholder="Search micro zone..." value={microSearch} onChange={(e) => setMicroSearchFn(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full px-2 py-1 text-xs border border-gray-200 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary" />
-                <div className="space-y-0.5">
-                  {(() => {
-                    const selectedCityIds = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
-                    const micros = selectedCityIds.length > 0
-                      ? zones.filter(z => z.zoneLevel === 'micro' && selectedCityIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
-                      : zones.filter(z => z.zoneLevel === 'micro');
-                    const fm = micros.filter(m => m.name.toLowerCase().includes(microSearch.toLowerCase()));
-                    if (fm.length === 0) return <p className="text-[10px] text-gray-400 italic text-center py-2">No micro zones available.</p>;
-                    return fm.map(m => (
-                      <label key={m._id} className="flex items-center text-xs font-medium text-gray-700 hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={(form.zoneIds || []).includes(m._id)} onChange={() => handleZoneToggleCascade(m, isCreate)} className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2" />
-                        {m.name}
-                      </label>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Zone Chips */}
-        {(form.zoneIds || []).length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2 max-h-20 overflow-y-auto p-2 bg-gray-50 rounded-lg border border-gray-100">
-            {(form.zoneIds || []).map(id => {
-              const zone = zones.find(z => z._id.toString() === id.toString());
-              if (!zone) return null;
-              let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
-              if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
-              if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
-              return (
-                <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-xs ${badgeColor}`}>
-                  {zone.name} ({zone.zoneLevel?.toUpperCase()})
-                  <button type="button" onClick={() => handleZoneToggleCascade(zone, isCreate)} className="ml-1 focus:outline-none">
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ----- Surge Form Component -----
-  const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel }) => {
-    const handleChange = (e) => {
-      const { name, value, type, checked } = e.target;
-      setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-    };
-
-    return (
-      <form onSubmit={onSubmit} className="space-y-5">
-        {/* Charge Type Selector — visual cards */}
-        <div>
-          <label className="block text-sm font-semibold text-secondary mb-2">Charge Type *</label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {CHARGE_TYPES.map(ct => {
-              const Icon = ct.icon;
-              const isActive = form.chargeType === ct.value;
-              return (
-                <button
-                  key={ct.value}
-                  type="button"
-                  onClick={() => setForm(prev => ({ ...prev, chargeType: ct.value }))}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 transition-all duration-200 text-sm font-semibold ${isActive
-                    ? 'border-primary bg-primary/5 text-primary ring-2 ring-primary/20 shadow-sm'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
-                  {ct.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Scope + Active Toggle Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-semibold text-secondary mb-1.5">Scope *</label>
-            <select
-              name="scope"
-              value={form.scope}
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm(prev => ({ ...prev, scope: val, zoneId: '', zoneIds: [] }));
-              }}
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white font-medium"
-            >
-              <option value="global">🌐 Global (All Zones)</option>
-              <option value="zone">📍 Zone Specific</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-secondary mb-1.5">Status</label>
-            <button
-              type="button"
-              onClick={() => setForm(prev => ({ ...prev, active: !prev.active }))}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border transition-all duration-200 text-sm font-semibold ${form.active
-                ? 'bg-green-50 border-green-200 text-green-700'
-                : 'bg-red-50 border-red-200 text-red-600'
-                }`}
-            >
-              <span>{form.active ? 'Active — Rule is live' : 'Inactive — Rule is paused'}</span>
-              {form.active
-                ? <ToggleRight className="w-6 h-6 text-green-600" />
-                : <ToggleLeft className="w-6 h-6 text-red-400" />
-              }
-            </button>
-          </div>
-        </div>
-
-        {/* Zone Selector */}
-        {form.scope === 'zone' && (
-          <HierarchicalZoneSelector
-            zones={zones}
-            selectedZoneIds={form.zoneIds}
-            onChange={(newZoneIds) => {
-              if (Array.isArray(newZoneIds)) {
-                setForm(prev => ({ ...prev, zoneIds: newZoneIds }));
-              } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
-                const targetId = (newZoneIds._id || newZoneIds.id).toString();
-                setForm(prev => ({ ...prev, zoneIds: (prev.zoneIds || []).filter(id => id.toString() !== targetId) }));
-              }
-            }}
-            label="Target Zone (Hierarchical Selector) *"
-          />
-        )}
-
-        {/* Charge Mode + Value */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-semibold text-secondary mb-1.5">Charge Mode *</label>
-            <select
-              name="mode"
-              value={form.mode}
-              onChange={handleChange}
-              required
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white font-medium"
-            >
-              <option value="flat">💵 Flat Amount (₹)</option>
-              <option value="percentage">📊 Percentage (%)</option>
-              <option value="multiplier">✖️ Multiplier (x)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-secondary mb-1.5">
-              Charge Value * {form.mode === 'flat' ? '(₹)' : form.mode === 'percentage' ? '(%)' : '(x)'}
-            </label>
-            <input
-              type="number"
-              name="value"
-              value={form.value}
-              onChange={handleChange}
-              required
-              min="0"
-              step="any"
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
-              placeholder={form.mode === 'flat' ? 'e.g. 50' : form.mode === 'percentage' ? 'e.g. 10' : 'e.g. 1.5'}
-            />
-          </div>
-        </div>
-
-        {/* Time Window */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-semibold text-secondary mb-1.5">Start Time (Optional)</label>
-            <input
-              type="text"
-              name="startTime"
-              value={form.startTime}
-              onChange={handleChange}
-              placeholder="e.g. 18:00"
-              pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
-              title="Time in HH:MM format"
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-secondary mb-1.5">End Time (Optional)</label>
-            <input
-              type="text"
-              name="endTime"
-              value={form.endTime}
-              onChange={handleChange}
-              placeholder="e.g. 23:00"
-              pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
-              title="Time in HH:MM format"
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Booking Value Limit */}
-        <div>
-          <label className="block text-sm font-semibold text-secondary mb-1.5">
-            Booking Value Limit (Optional) — Surcharge will NOT apply if order subtotal exceeds this amount
-          </label>
-          <input
-            type="number"
-            name="maxBookingValue"
-            value={form.maxBookingValue}
-            onChange={handleChange}
-            min="0"
-            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
-            placeholder="e.g. 500 (Free for orders above 500)"
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
-          <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
-            Cancel
-          </button>
-          <button type="submit" className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-semibold flex items-center shadow-md">
-            <Save className="w-4 h-4 mr-2" />
-            {isCreate ? 'Create Surge Rule' : 'Save Changes'}
-          </button>
-        </div>
-      </form>
-    );
-  };
 
   // ----- Tab counts -----
   const tabCounts = useMemo(() => {
@@ -1142,6 +811,7 @@ const SurgeManagement = () => {
               onSubmit={handleCreateRule}
               isCreate={true}
               onCancel={() => setShowCreateModal(false)}
+              zones={zones}
             />
           </Modal>
         )}
@@ -1155,6 +825,7 @@ const SurgeManagement = () => {
               onSubmit={handleUpdateRule}
               isCreate={false}
               onCancel={() => setShowEditModal(false)}
+              zones={zones}
             />
           </Modal>
         )}
@@ -1189,6 +860,342 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+// ----- Zone Cascade Dropdown Component -----
+const ZoneCascadeSelector = ({
+  form,
+  stateSearch,
+  setStateSearchFn,
+  stateOpen,
+  setStateOpenFn,
+  citySearch,
+  setCitySearchFn,
+  cityOpen,
+  setCityOpenFn,
+  microSearch,
+  setMicroSearchFn,
+  microOpen,
+  setMicroOpenFn,
+  zones,
+  handleZoneToggleCascade,
+  isCreate
+}) => {
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-semibold text-secondary mb-1">Target Zone (Hierarchical Selector) *</label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* STATE */}
+        <div className="relative">
+          <label className="block text-xs font-semibold text-gray-500 mb-1">State</label>
+          <div
+            onClick={() => { setStateOpenFn(!stateOpen); setCityOpenFn(false); setMicroOpenFn(false); }}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
+          >
+            <span className="text-gray-700 truncate">
+              {(() => {
+                const sel = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
+                return sel.length === 0 ? 'Select States' : `${sel.length} Selected`;
+              })()}
+            </span>
+            {stateOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </div>
+          {stateOpen && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto p-2">
+              <input type="text" placeholder="Search state..." value={stateSearch} onChange={(e) => setStateSearchFn(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full px-2 py-1 text-xs border border-gray-200 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary" />
+              <div className="space-y-0.5">
+                {zones.filter(z => z.zoneLevel === 'state' && z.name.toLowerCase().includes(stateSearch.toLowerCase())).map(s => (
+                  <label key={s._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={(form.zoneIds || []).includes(s._id)} onChange={() => handleZoneToggleCascade(s, isCreate)} className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2" />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CITY */}
+        <div className="relative">
+          <label className="block text-xs font-semibold text-gray-500 mb-1">City</label>
+          <div
+            onClick={() => { setCityOpenFn(!cityOpen); setStateOpenFn(false); setMicroOpenFn(false); }}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
+          >
+            <span className="text-gray-700 truncate">
+              {(() => {
+                const sel = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
+                return sel.length === 0 ? 'Select Cities' : `${sel.length} Selected`;
+              })()}
+            </span>
+            {cityOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </div>
+          {cityOpen && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto p-2">
+              <input type="text" placeholder="Search city..." value={citySearch} onChange={(e) => setCitySearchFn(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full px-2 py-1 text-xs border border-gray-200 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary" />
+              <div className="space-y-0.5">
+                {(() => {
+                  const selectedStateIds = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
+                  const cities = selectedStateIds.length > 0
+                    ? zones.filter(z => z.zoneLevel === 'city' && selectedStateIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
+                    : zones.filter(z => z.zoneLevel === 'city');
+                  const fc = cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase()));
+                  if (fc.length === 0) return <p className="text-[10px] text-gray-400 italic text-center py-2">No cities available.</p>;
+                  return fc.map(c => (
+                    <label key={c._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={(form.zoneIds || []).includes(c._id)} onChange={() => handleZoneToggleCascade(c, isCreate)} className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2" />
+                      {c.name}
+                    </label>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* MICRO */}
+        <div className="relative">
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Micro Zone</label>
+          <div
+            onClick={() => { setMicroOpenFn(!microOpen); setStateOpenFn(false); setCityOpenFn(false); }}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
+          >
+            <span className="text-gray-700 truncate">
+              {(() => {
+                const sel = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'micro');
+                return sel.length === 0 ? 'Select Micro Zones' : `${sel.length} Selected`;
+              })()}
+            </span>
+            {microOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </div>
+          {microOpen && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto p-2">
+              <input type="text" placeholder="Search micro zone..." value={microSearch} onChange={(e) => setMicroSearchFn(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full px-2 py-1 text-xs border border-gray-200 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary" />
+              <div className="space-y-0.5">
+                {(() => {
+                  const selectedCityIds = (form.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
+                  const micros = selectedCityIds.length > 0
+                    ? zones.filter(z => z.zoneLevel === 'micro' && selectedCityIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
+                    : zones.filter(z => z.zoneLevel === 'micro');
+                  const fm = micros.filter(m => m.name.toLowerCase().includes(microSearch.toLowerCase()));
+                  if (fm.length === 0) return <p className="text-[10px] text-gray-400 italic text-center py-2">No micro zones available.</p>;
+                  return fm.map(m => (
+                    <label key={m._id} className="flex items-center text-xs font-medium text-gray-700 hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={(form.zoneIds || []).includes(m._id)} onChange={() => handleZoneToggleCascade(m, isCreate)} className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2" />
+                      {m.name}
+                    </label>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Zone Chips */}
+      {(form.zoneIds || []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2 max-h-20 overflow-y-auto p-2 bg-gray-50 rounded-lg border border-gray-100">
+          {(form.zoneIds || []).map(id => {
+            const zone = zones.find(z => z._id.toString() === id.toString());
+            if (!zone) return null;
+            let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
+            if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+            if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+            return (
+              <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-xs ${badgeColor}`}>
+                {zone.name} ({zone.zoneLevel?.toUpperCase()})
+                <button type="button" onClick={() => handleZoneToggleCascade(zone, isCreate)} className="ml-1 focus:outline-none">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ----- Surge Form Component -----
+const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones }) => {
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-5">
+      {/* Charge Type Selector — visual cards */}
+      <div>
+        <label className="block text-sm font-semibold text-secondary mb-2">Charge Type *</label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {CHARGE_TYPES.map(ct => {
+            const Icon = ct.icon;
+            const isActive = form.chargeType === ct.value;
+            return (
+              <button
+                key={ct.value}
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, chargeType: ct.value }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 transition-all duration-200 text-sm font-semibold ${isActive
+                  ? 'border-primary bg-primary/5 text-primary ring-2 ring-primary/20 shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
+                {ct.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Scope + Active Toggle Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">Scope *</label>
+          <select
+            name="scope"
+            value={form.scope}
+            onChange={(e) => {
+              const val = e.target.value;
+              setForm(prev => ({ ...prev, scope: val, zoneId: '', zoneIds: [] }));
+            }}
+            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white font-medium"
+          >
+            <option value="global">🌐 Global (All Zones)</option>
+            <option value="zone">📍 Zone Specific</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">Status</label>
+          <button
+            type="button"
+            onClick={() => setForm(prev => ({ ...prev, active: !prev.active }))}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border transition-all duration-200 text-sm font-semibold ${form.active
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-600'
+              }`}
+          >
+            <span>{form.active ? 'Active — Rule is live' : 'Inactive — Rule is paused'}</span>
+            {form.active
+              ? <ToggleRight className="w-6 h-6 text-green-600" />
+              : <ToggleLeft className="w-6 h-6 text-red-400" />
+            }
+          </button>
+        </div>
+      </div>
+
+      {/* Zone Selector */}
+      {form.scope === 'zone' && (
+        <HierarchicalZoneSelector
+          zones={zones}
+          selectedZoneIds={form.zoneIds}
+          onChange={(newZoneIds) => {
+            if (Array.isArray(newZoneIds)) {
+              setForm(prev => ({ ...prev, zoneIds: newZoneIds }));
+            } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+              const targetId = (newZoneIds._id || newZoneIds.id).toString();
+              setForm(prev => ({ ...prev, zoneIds: (prev.zoneIds || []).filter(id => id.toString() !== targetId) }));
+            }
+          }}
+          label="Target Zone (Hierarchical Selector) *"
+        />
+      )}
+
+      {/* Charge Mode + Value */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">Charge Mode *</label>
+          <select
+            name="mode"
+            value={form.mode}
+            onChange={handleChange}
+            required
+            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white font-medium"
+          >
+            <option value="flat">💵 Flat Amount (₹)</option>
+            <option value="percentage">📊 Percentage (%)</option>
+            <option value="multiplier">✖️ Multiplier (x)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">
+            Charge Value * {form.mode === 'flat' ? '(₹)' : form.mode === 'percentage' ? '(%)' : '(x)'}
+          </label>
+          <input
+            type="number"
+            name="value"
+            value={form.value}
+            onChange={handleChange}
+            required
+            min="0"
+            step="any"
+            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
+            placeholder={form.mode === 'flat' ? 'e.g. 50' : form.mode === 'percentage' ? 'e.g. 10' : 'e.g. 1.5'}
+          />
+        </div>
+      </div>
+
+      {/* Time Window */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">Start Time (Optional)</label>
+          <input
+            type="text"
+            name="startTime"
+            value={form.startTime}
+            onChange={handleChange}
+            placeholder="e.g. 18:00"
+            pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+            title="Time in HH:MM format"
+            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">End Time (Optional)</label>
+          <input
+            type="text"
+            name="endTime"
+            value={form.endTime}
+            onChange={handleChange}
+            placeholder="e.g. 23:00"
+            pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+            title="Time in HH:MM format"
+            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+          />
+        </div>
+      </div>
+
+      {/* Booking Value Limit */}
+      <div>
+        <label className="block text-sm font-semibold text-secondary mb-1.5">
+          Booking Value Limit (Optional) — Surcharge will NOT apply if order subtotal exceeds this amount
+        </label>
+        <input
+          type="number"
+          name="maxBookingValue"
+          value={form.maxBookingValue}
+          onChange={handleChange}
+          min="0"
+          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
+          placeholder="e.g. 500 (Free for orders above 500)"
+        />
+      </div>
+
+      {/* Actions */}
+      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+        <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
+          Cancel
+        </button>
+        <button type="submit" className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-semibold flex items-center shadow-md">
+          <Save className="w-4 h-4 mr-2" />
+          {isCreate ? 'Create Surge Rule' : 'Save Changes'}
+        </button>
+      </div>
+    </form>
   );
 };
 

@@ -1,57 +1,33 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Search, Filter, Clock, IndianRupee, CheckCircle,
-  AlertCircle, RefreshCw, Sliders, Star, X
+  Search, Filter, Clock, IndianRupee,
+  RefreshCw, X, LayoutGrid, ShieldCheck,
+  ThumbsUp, ChevronRight, ChevronDown
 } from 'lucide-react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { useAuth } from '../../context/auth';
-import Rating from '@mui/material/Rating';
 import ServiceCardSkeleton from '../../components/ui-skeletons/ServiceCardSkeleton';
 import HeroSection from '../../components/HeroSection';
 import ErrorState from '../../components/Error';
 import { getPublicServices } from '../../services/ServiceService';
 import useCategory from '../../hooks/useCategory';
-import { resolveActiveSurcharges } from '../../services/SurgeService';
-import { getMergedPrice as getMergedPriceUtil } from '../../utils/surge';
+import useSurchargeBooking from '../../hooks/useSurchargeBooking';
+import ServiceCard from './components/ServiceCard';
+import ServiceEmptyState from './components/ServiceEmptyState';
+import { getDynamicCategoryIcon } from './components/categoryIconHelper';
+import ServiceFilterPanel from './components/ServiceFilterPanel';
+import SearchBar from './components/SearchBar';
 
 const ServiceListingPage = () => {
-  const { API, user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const { getMergedPrice, handleBookNow } = useSurchargeBooking();
   // State
-  const [services, setServices] = useState([]);
   const [allServices, setAllServices] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [activeSurcharges, setActiveSurcharges] = useState([]);
 
-  // Fetch active surcharges
-  useEffect(() => {
-    const fetchSurcharges = async () => {
-      try {
-        const params = {};
-        if (user?.address?.lat && user?.address?.lng) {
-          params.lat = user.address.lat;
-          params.lng = user.address.lng;
-        }
-        const response = await resolveActiveSurcharges(params);
-        if (response.data?.success) {
-          setActiveSurcharges(response.data.data || []);
-        }
-      } catch (err) {
-        console.error("Error fetching active surcharges:", err);
-      }
-    };
-    fetchSurcharges();
-  }, [user]);
-
-  // Helper to get merged price (base price + active demand surge)
-  const getMergedPrice = (basePrice) => {
-    return getMergedPriceUtil(basePrice, activeSurcharges);
-  };
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All');
@@ -64,8 +40,8 @@ const ServiceListingPage = () => {
   const [maxPrice, setMaxPrice] = useState(10000);
 
   const searchTimeoutRef = useRef(null);
+  const lastPushedSearchRef = useRef(searchParams.get('search') || '');
   const isInitialMount = useRef(true);
-
 
   // Fetch all services
   const fetchAllServices = async () => {
@@ -83,7 +59,6 @@ const ServiceListingPage = () => {
         }));
 
         setAllServices(transformedServices);
-        setServices(transformedServices);
 
         const maxServicePrice = Math.max(...transformedServices.map(s => s.basePrice || 0), 10000);
         setMaxPrice(maxServicePrice);
@@ -109,34 +84,6 @@ const ServiceListingPage = () => {
     }
   };
 
-  // Apply local filters
-  const applyLocalFilters = (searchValue, categoryValue) => {
-    let filtered = [...allServices];
-
-    const getCatName = (cat) => {
-      if (typeof cat === 'object' && cat !== null) return cat.name || '';
-      return categoriesData.find(c => c.value === cat)?.label || '';
-    };
-
-    if (searchValue?.trim()) {
-      const searchLower = searchValue.toLowerCase().trim();
-      filtered = filtered.filter(service =>
-        service.title?.toLowerCase().includes(searchLower) ||
-        service.description?.toLowerCase().includes(searchLower) ||
-        getCatName(service.category).toLowerCase().includes(searchLower)
-      );
-    }
-
-    if (categoryValue && categoryValue !== 'All') {
-      filtered = filtered.filter(service => {
-        const catId = typeof service.category === 'object' ? service.category?._id : service.category;
-        return catId === categoryValue;
-      });
-    }
-
-    setServices(filtered);
-  };
-
   const handleSearch = (value) => {
     setSearchTerm(value);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -144,18 +91,13 @@ const ServiceListingPage = () => {
       const params = {};
       if (value) params.search = value;
       if (selectedCategory !== 'All') params.category = selectedCategory;
+      lastPushedSearchRef.current = value;
       setSearchParams(params);
-      applyLocalFilters(value, selectedCategory);
     }, 300);
   };
 
   const handleCategoryChange = (categoryId) => {
-    setSelectedCategory(categoryId);
-    const params = {};
-    if (searchTerm) params.search = searchTerm;
-    if (categoryId !== 'All') params.category = categoryId;
-    setSearchParams(params);
-    applyLocalFilters(searchTerm, categoryId);
+    navigate(`/customer/services-list?category=${categoryId}`);
   };
 
   useEffect(() => {
@@ -165,58 +107,71 @@ const ServiceListingPage = () => {
     }
   }, []);
 
-  // Sync url search parameters to state and apply initial filtering when loaded
+  // Sync url search parameters to state without overwriting active typing
   useEffect(() => {
     const searchVal = searchParams.get('search') || '';
     const categoryVal = searchParams.get('category') || 'All';
-    setSearchTerm(searchVal);
-    setSelectedCategory(categoryVal);
-    
-    if (allServices.length > 0) {
-      let filtered = [...allServices];
-      const getCatName = (cat) => {
-        if (typeof cat === 'object' && cat !== null) return cat.name || '';
-        return categoriesData.find(c => c.value === cat)?.label || '';
-      };
 
-      if (searchVal?.trim()) {
-        const searchLower = searchVal.toLowerCase().trim();
-        filtered = filtered.filter(service =>
-          service.title?.toLowerCase().includes(searchLower) ||
-          service.description?.toLowerCase().includes(searchLower) ||
-          getCatName(service.category).toLowerCase().includes(searchLower)
-        );
-      }
-
-      if (categoryVal && categoryVal !== 'All') {
-        filtered = filtered.filter(service => {
-          const catId = typeof service.category === 'object' ? service.category?._id : service.category;
-          return catId === categoryVal;
-        });
-      }
-
-      setServices(filtered);
+    if (searchVal !== lastPushedSearchRef.current) {
+      setSearchTerm(searchVal);
+      lastPushedSearchRef.current = searchVal;
     }
-  }, [searchParams, allServices, categoriesData]);
+    setSelectedCategory(categoryVal);
+  }, [searchParams]);
 
   const categoriesForFilter = useMemo(() => {
-    return [{ value: 'All', label: 'All' }, ...categoriesData];
+    return [{ value: 'All', label: 'All Categories' }, ...categoriesData];
   }, [categoriesData]);
 
-  // Filter and sort services
+  // Filter and sort services instantly on client side
   const filteredServices = useMemo(() => {
-    let results = [...services];
+    let results = [...allServices];
 
+    // 1. Filter by category
+    if (selectedCategory && selectedCategory !== 'All') {
+      results = results.filter(service => {
+        const catId = typeof service.category === 'object' ? service.category?._id : service.category;
+        return catId === selectedCategory;
+      });
+    }
+
+    // 2. Filter by search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      const getCatName = (cat) => {
+        if (typeof cat === 'object' && cat !== null) return cat.name || '';
+        const found = categoriesData.find(c => c.value === cat);
+        return found ? found.label : '';
+      };
+
+      results = results.filter(service => {
+        const titleMatch = service.title?.toLowerCase().includes(searchLower);
+        const descMatch = service.description?.toLowerCase().includes(searchLower);
+        const catMatch = getCatName(service.category).toLowerCase().includes(searchLower);
+
+        // Custom stemming for wire/wiring/wires
+        const wireMatch = (searchLower === 'wire' && service.title?.toLowerCase().includes('wiring')) ||
+          (searchLower === 'wiring' && service.title?.toLowerCase().includes('wire')) ||
+          (searchLower === 'wire' && service.description?.toLowerCase().includes('wiring')) ||
+          (searchLower === 'wiring' && service.description?.toLowerCase().includes('wire'));
+
+        return titleMatch || descMatch || catMatch || wireMatch;
+      });
+    }
+
+    // 3. Filter by price range
     results = results.filter(service =>
       service.basePrice >= priceRange[0] && service.basePrice <= priceRange[1]
     );
 
+    // 4. Filter by ratings
     if (selectedRatings.length > 0) {
       results = results.filter(service =>
         selectedRatings.includes(Math.floor(service.averageRating || 0))
       );
     }
 
+    // 5. Sort
     results.sort((a, b) => {
       switch (sortBy) {
         case 'price-low': return (a.basePrice || 0) - (b.basePrice || 0);
@@ -228,38 +183,23 @@ const ServiceListingPage = () => {
     });
 
     return results;
-  }, [services, priceRange, sortBy, selectedRatings]);
-
-  const handleBookNow = (serviceId, isActive) => {
-    if (!isActive) {
-      toast.error('This service is currently unavailable');
-      return;
-    }
-    if (!user) {
-      toast.info('Please login to book a service');
-      navigate('/login');
-      return;
-    }
-    navigate(`/customer/services/${serviceId}`, {
-      state: { prefillBooking: location.state?.prefillBooking }
-    });
-  };
+  }, [allServices, searchTerm, selectedCategory, priceRange, sortBy, selectedRatings, categoriesData]);
 
   const resetFilters = () => {
     setSearchTerm('');
+    lastPushedSearchRef.current = '';
     setSelectedCategory('All');
     setPriceRange([0, maxPrice]);
     setSortBy('popular');
     setSelectedRatings([]);
     setSearchParams({});
-    setServices(allServices);
   };
 
   const clearSearch = () => {
     setSearchTerm('');
+    lastPushedSearchRef.current = '';
     setSelectedCategory('All');
     setSearchParams({});
-    setServices(allServices);
   };
 
   const toggleRating = (rating) => {
@@ -274,11 +214,21 @@ const ServiceListingPage = () => {
     };
   }, []);
 
+  // Category scrolling ref
+  const categoryScrollRef = useRef(null);
+  const scrollCategories = (direction) => {
+    if (categoryScrollRef.current) {
+      const { scrollLeft, clientWidth } = categoryScrollRef.current;
+      const scrollTo = direction === 'left' ? scrollLeft - 200 : scrollLeft + 200;
+      categoryScrollRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  };
+
   if (initialLoading) {
     return (
-      <div className="min-h-screen pt-20 md:pt-24 lg:pt-28">
+      <div className="min-h-screen bg-gray-50/50">
         <HeroSection noMargin />
-        <div className="max-w-[98%] mx-auto px-2 md:px-4 py-6 pb-24 md:pb-6">
+        <div className="max-w-[98%] mx-auto px-4 md:px-6 py-6 pb-24 md:pb-6">
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <ServiceCardSkeleton key={i} />
@@ -303,418 +253,277 @@ const ServiceListingPage = () => {
   }
 
   return (
-    <div className="min-h-screen pt-20 md:pt-24 lg:pt-28">
+    <div className="min-h-screen bg-gray-50/30 pb-4 md:pb-0">
+      {/* Search Bar (Below Navbar) */}
+      <div className="bg-white border-b border-gray-150 py-3 px-4 shadow-sm -mt-4 lg:-mt-6 mb-4">
+        <div className="max-w-[98%] mx-auto">
+          <SearchBar value={searchTerm} onChange={handleSearch} />
+        </div>
+      </div>
+
+      {/* Slider Banner Section */}
       <HeroSection noMargin />
 
-      {/* Search Section */}
-      <div className="fixed top-16 md:top-[72px] lg:top-20 left-0 right-0 z-20 bg-white/95 backdrop-blur-md py-4 px-3 md:px-6 border-b border-gray-200 shadow-sm">
-        <div className="max-w-[98%] mx-auto">
-          <div className="flex flex-col md:flex-row gap-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-11 pr-10 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              />
-              {searchTerm && (
-                <button onClick={clearSearch} className="absolute right-4 top-1/2 -translate-y-1/2">
-                  <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                </button>
-              )}
-            </div>
-            {/* Desktop Category Select */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-              className="hidden md:block px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
-            >
-              {categoriesForFilter.map(cat => (
-                <option key={cat.value} value={cat.value}>{cat.label}</option>
-              ))}
-            </select>
-            {/* Desktop Filters Button */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="hidden md:flex items-center justify-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
-            >
-              <Filter className="w-4 h-4 text-primary" />
-              <span className="font-medium">Filters</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Main Container */}
+      <div className="max-w-[98%] mx-auto px-2 md:px-4 py-2 flex flex-col gap-5">
 
-      {/* Mobile Bottom Filter Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-white/95 backdrop-blur-md py-3 px-4 border-t border-gray-200 flex gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
-        <select
-          value={selectedCategory}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-          className="flex-1 px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-semibold cursor-pointer"
-        >
-          {categoriesForFilter.map(cat => (
-            <option key={cat.value} value={cat.value}>{cat.label}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-all text-sm font-semibold"
-        >
-          <Filter className="w-4.5 h-4.5 text-primary" />
-          <span>Filters</span>
-        </button>
-      </div>
-
-      {/* Desktop Filters Panel */}
-      {showFilters && (
-        <div className="hidden md:block bg-white border-b border-gray-200 py-5 px-4">
-          <div className="max-w-[98%] mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Price Range */}
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-3">Price Range</label>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-sm text-gray-600">₹{priceRange[0].toLocaleString()}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={maxPrice}
-                    value={priceRange[0]}
-                    onChange={(e) => setPriceRange([+e.target.value, priceRange[1]])}
-                    className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={maxPrice}
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], +e.target.value])}
-                    className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                  <span className="text-sm text-gray-600">₹{priceRange[1].toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Rating Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-3">Rating</label>
-                <div className="flex gap-2">
-                  {[5, 4, 3, 2, 1].map(rating => (
-                    <button
-                      key={rating}
-                      onClick={() => toggleRating(rating)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all ${selectedRatings.includes(rating)
-                        ? 'bg-accent/10 border-accent text-accent'
-                        : 'bg-white border-gray-200 text-gray-600 hover:border-primary/50'
-                        }`}
-                    >
-                      <Star className={`w-3.5 h-3.5 ${selectedRatings.includes(rating) ? 'fill-accent' : ''}`} />
-                      <span className="text-sm font-medium">{rating}+</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sort & Reset */}
-              <div className="flex items-end justify-between gap-3">
-                <div className="flex-1">
-                  <label className="block text-sm font-semibold text-secondary mb-3">Sort By</label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="popular">Most Recent</option>
-                    <option value="rating">Top Rated</option>
-                    <option value="price-low">Price: Low to High</option>
-                    <option value="price-high">Price: High to Low</option>
-                    <option value="name">A - Z</option>
-                  </select>
-                </div>
-                <button
-                  onClick={resetFilters}
-                  className="px-4 py-2 text-sm text-gray-500 hover:text-primary transition-colors"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Bottom Sheet Filters Drawer */}
-      {showFilters && (
-        <div className="fixed inset-0 z-[60] md:hidden flex flex-col justify-end">
-          {/* Backdrop Overlay */}
+        {/* Horizontal Categories Ribbon */}
+        <div className="relative bg-white rounded-2xl border border-gray-100 p-2 md:p-3.5 shadow-sm">
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-            onClick={() => setShowFilters(false)}
-          />
-          {/* Sheet Panel */}
-          <div className="relative bg-white rounded-t-2xl max-h-[80vh] overflow-y-auto p-5 pb-8 shadow-2xl transition-transform duration-300 ease-out transform translate-y-0 z-10">
-            {/* Header / Handle */}
-            <div className="flex justify-between items-center mb-5 pb-3 border-b border-gray-100">
-              <h3 className="text-base font-bold text-secondary flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-primary" />
-                Filters & Sorting
-              </h3>
-              <button
-                onClick={() => setShowFilters(false)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+            className="flex items-center gap-4 md:gap-6 overflow-x-auto py-1.5 px-1 scrollbar-hide scroll-smooth"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              WebkitOverflowScrolling: 'touch'
+            }}
+          >
+            {categoriesForFilter.map((cat) => {
+              const IconComp = cat.value === 'All' ? LayoutGrid : getDynamicCategoryIcon(cat.icon);
+              const isActive = selectedCategory === cat.value;
+              const isUrlIcon = cat.icon && (cat.icon.startsWith('http') || cat.icon.startsWith('/') || cat.icon.startsWith('data:'));
+
+              return (
+                <button
+                  key={cat.value}
+                  onClick={() => handleCategoryChange(cat.value)}
+                  className="flex flex-col items-center min-w-[64px] md:min-w-[80px] focus:outline-none group flex-shrink-0"
+                >
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm border ${isActive
+                    ? 'bg-primary/10 border-primary text-primary scale-105 ring-2 ring-primary/20'
+                    : 'bg-gray-50 border-gray-150 text-gray-500 hover:border-primary/30 hover:bg-white group-hover:scale-105'
+                    }`}>
+                    {isUrlIcon ? (
+                      <img
+                        src={cat.icon}
+                        alt={cat.label}
+                        className={`w-5 h-5 md:w-6 md:h-6 object-contain ${isActive ? '' : 'opacity-80 group-hover:opacity-100'}`}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      IconComp && <IconComp className="w-4 h-4 md:w-5 md:h-5" />
+                    )}
+                  </div>
+                  <span className={`text-[10px] md:text-[11px] font-semibold tracking-wide text-center mt-2 md:mt-2.5 line-clamp-1 transition-colors ${isActive ? 'text-primary font-bold' : 'text-gray-600 group-hover:text-primary'
+                    }`}>
+                    {cat.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Popular Services & Controls Section */}
+        <div>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 pb-4 border-b border-gray-100">
+            <div>
+              <h2 className="text-xl md:text-2xl font-extrabold text-secondary tracking-tight font-poppins">
+                Popular Services
+              </h2>
+              <p className="text-xs md:text-sm text-gray-500 mt-1 font-inter">
+                Book trusted technicians for top-rated, safe, and professional services
+              </p>
             </div>
 
-            {/* Form Fields inside sheet */}
-            <div className="flex flex-col gap-6">
-              {/* Price Range */}
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-3">Price Range</label>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 font-medium">₹{priceRange[0].toLocaleString()}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={maxPrice}
-                    value={priceRange[0]}
-                    onChange={(e) => setPriceRange([+e.target.value, priceRange[1]])}
-                    className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={maxPrice}
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], +e.target.value])}
-                    className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                  <span className="text-xs text-gray-500 font-medium">₹{priceRange[1].toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Rating Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-3">Rating</label>
-                <div className="flex flex-wrap gap-2">
-                  {[5, 4, 3, 2, 1].map(rating => (
-                    <button
-                      key={rating}
-                      onClick={() => toggleRating(rating)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${selectedRatings.includes(rating)
-                        ? 'bg-accent/10 border-accent text-accent'
-                        : 'bg-white border-gray-200 text-gray-600'
-                        }`}
-                    >
-                      <Star className={`w-4 h-4 ${selectedRatings.includes(rating) ? 'fill-accent' : ''}`} />
-                      <span className="text-sm font-medium">{rating}+</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-3">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
-                >
-                  {categoriesForFilter.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Sort By */}
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-3">Sort By</label>
+            {/* Premium Controls Row */}
+            <div className="flex items-center gap-2.5 self-start md:self-end">
+              {/* Sort Dropdown */}
+              <div className="relative">
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
+                  className="pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 text-xs font-semibold text-gray-700 cursor-pointer appearance-none shadow-sm min-w-[130px]"
                 >
-                  <option value="popular">Most Recent</option>
-                  <option value="rating">Top Rated</option>
+                  <option value="popular">Sort by: Popular</option>
+                  <option value="rating">Sort by: Top Rated</option>
                   <option value="price-low">Price: Low to High</option>
                   <option value="price-high">Price: High to Low</option>
-                  <option value="name">A - Z</option>
+                  <option value="name">Name: A - Z</option>
                 </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                  <ChevronRight className="w-3.5 h-3.5 rotate-90" />
+                </div>
               </div>
 
-              {/* Bottom Actions inside drawer */}
-              <div className="flex gap-3 mt-4 pt-3 border-t border-gray-100">
-                <button
-                  onClick={() => { resetFilters(); setShowFilters(false); }}
-                  className="flex-1 py-3 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 transition-colors text-sm font-semibold"
-                >
-                  Reset All
-                </button>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="flex-1 py-3 bg-primary text-white rounded-xl hover:bg-primary/95 transition-colors text-sm font-semibold"
-                >
-                  Apply Filters
-                </button>
-              </div>
+              {/* Filters Trigger */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-4 py-2.5 bg-white border rounded-xl hover:bg-gray-50 active:scale-95 transition-all text-xs font-semibold shadow-sm ${showFilters ? 'border-primary text-primary bg-primary/5' : 'border-gray-200 text-gray-700'
+                  }`}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                <span>Filters</span>
+              </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Results */}
-      <div className="max-w-[98%] mx-auto px-2 md:px-4 py-6 pb-24 md:pb-6">
-        <div className="flex justify-between items-center mb-5">
-          <p className="text-sm text-gray-500">
-            Showing <span className="font-semibold text-secondary">{filteredServices.length}</span> services
-            {searchTerm && <span> for "<span className="font-semibold">{searchTerm}</span>"</span>}
-          </p>
-        </div>
-
-        {filteredServices.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Search className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-secondary mb-2">No services found</h3>
-            <p className="text-gray-500 mb-5">Try adjusting your search or filters</p>
-            <button onClick={resetFilters} className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all">
-              Reset Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
-            {filteredServices.map((service) => (
-              <ServiceCard
-                key={service._id}
-                service={service}
-                categoryMap={categoriesData.reduce((acc, cat) => ({ ...acc, [cat.value]: cat.label }), {})}
-                onBook={handleBookNow}
-                getMergedPrice={getMergedPrice}
+          {/* Filters Panel (Drawer on Mobile, Inline on Desktop) */}
+          {showFilters && (
+            <div className="fixed inset-0 z-50 lg:relative lg:inset-auto lg:z-auto flex flex-col justify-end lg:justify-start">
+              {/* Backdrop for mobile */}
+              <div
+                className="fixed inset-0 bg-black/45 lg:hidden"
+                onClick={() => setShowFilters(false)}
+                role="button"
+                tabIndex={0}
+                onKeyUp={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowFilters(false); }}
+                aria-label="Close filters"
               />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
-// Service Card Component
-const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
-  const imageUrl = service.displayImage || 'https://via.placeholder.com/400x300?text=Service';
-  const isAvailable = service.isActive !== false;
-  const categoryName = typeof service.category === 'object'
-    ? service.category?.name
-    : categoryMap[service.category] || 'Service';
+              {/* Drawer Content */}
+              <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto bg-white rounded-t-3xl p-5 shadow-2xl lg:relative lg:bottom-auto lg:left-auto lg:right-auto lg:max-h-none lg:bg-transparent lg:p-0 lg:shadow-none z-10 transition-transform duration-300">
+                {/* Drawer Header for mobile */}
+                <div className="flex flex-col items-center gap-2 lg:hidden mb-4">
+                  <div className="w-12 h-1 bg-gray-250 rounded-full" />
+                  <div className="flex items-center justify-between w-full mt-2">
+                    <span className="text-sm font-extrabold text-secondary font-poppins">Filters</span>
+                    <button type="button" onClick={() => setShowFilters(false)} className="text-xs font-bold text-primary">Done</button>
+                  </div>
+                </div>
 
-  // Format rating count nicely
-  const displayRating = service.averageRating ? service.averageRating.toFixed(1) : '0.0';
-  const displayRatingCount = service.ratingCount || 0;
-
-  return (
-    <div className="group bg-white rounded-2xl border border-gray-150 hover:border-primary/40 hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between transform hover:-translate-y-0.5">
-      <div>
-        {/* Image Container */}
-        <div className="relative h-40 overflow-hidden bg-gray-50">
-          <img
-            src={imageUrl}
-            alt={service.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
-          />
-          {/* Top-Left Badges (Popular / Featured / Service Type) */}
-          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
-            {service.isFeatured && (
-              <span className="text-[9px] font-black bg-amber-50/90 text-amber-700 backdrop-blur-sm px-2 py-0.5 rounded-md shadow-sm border border-amber-100 flex items-center gap-1">
-                ★ Featured
-              </span>
-            )}
-            {service.serviceType && service.serviceType !== 'standard' && (
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase shadow-sm tracking-wider text-white ${service.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
-                }`}>
-                {service.serviceType}
-              </span>
-            )}
-            {!service.isFeatured && service.averageRating >= 4.5 && (
-              <span className="text-[9px] font-black bg-emerald-50/90 text-emerald-700 backdrop-blur-sm px-2 py-0.5 rounded-md shadow-sm border border-emerald-100 flex items-center gap-1">
-                ★ Popular
-              </span>
-            )}
-          </div>
-          {/* Bottom-Left Category Tag Overlay */}
-          <div className="absolute bottom-2.5 left-2.5 z-10">
-            <span className="text-[10px] font-extrabold bg-white/95 backdrop-blur-sm text-teal-700 px-2.5 py-1 rounded-lg shadow-md border border-teal-50">
-              {categoryName}
-            </span>
-          </div>
-        </div>
-
-        {/* Details Container */}
-        <div className="p-4">
-          <h3 className="font-extrabold text-secondary text-sm line-clamp-1 mb-1 group-hover:text-primary transition-colors">
-            {service.title}
-          </h3>
-
-          {service.shortDescription ? (
-            <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed">
-              {service.shortDescription}
-            </p>
-          ) : (
-            <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed">
-              {service.description}
-            </p>
+                <ServiceFilterPanel
+                  layout="horizontal"
+                  priceRange={priceRange}
+                  setPriceRange={setPriceRange}
+                  maxPrice={maxPrice}
+                  selectedRatings={selectedRatings}
+                  toggleRating={toggleRating}
+                  resetFilters={resetFilters}
+                />
+              </div>
+            </div>
           )}
 
-          {/* Icons & Rating Row (Duration on Left, Rating on Right) */}
-          <div className="flex items-center justify-between mb-3 text-xs text-gray-500 font-medium">
-            <div className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-              <span>{service.duration || 1} Hr</span>
+          {/* Results Grid / List container */}
+          {filteredServices.length === 0 ? (
+            <ServiceEmptyState
+              message="We couldn't find any services matching your current selection. Try resetting filters."
+              buttonText="Reset Filters"
+              onReset={resetFilters}
+            />
+          ) : (
+            <div className="space-y-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 md:gap-4">
+                {filteredServices.slice(0, 18).map((service) => {
+                  return (
+                    <div key={service._id} className="block h-full">
+                      <ServiceCard
+                        service={service}
+                        categoryMap={categoriesData.reduce((acc, cat) => ({ ...acc, [cat.value]: cat.label }), {})}
+                        onBook={handleBookNow}
+                        getMergedPrice={getMergedPrice}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {filteredServices.length > 18 && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    onClick={() => navigate('/customer/services-list')}
+                    className="px-8 py-3 bg-white hover:bg-gray-50 text-primary border border-primary/20 hover:border-primary/40 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 duration-200"
+                  >
+                    View More Services
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-lg border border-gray-100">
-              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 flex-shrink-0" />
-              <span className="text-xs font-bold text-secondary">{displayRating}</span>
-              <span className="text-[10px] text-gray-400">({displayRatingCount})</span>
+          )}
+        </div>
+
+        {/* Bottom Features Strip */}
+        <div className="bg-white rounded-2xl border border-gray-150 p-4 md:p-6 shadow-sm mt-1.5">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 md:divide-x md:divide-gray-100">
+            <div className="flex flex-col items-center text-center px-2">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+              </div>
+              <h4 className="text-xs font-bold text-secondary">Verified Professionals</h4>
+              <p className="text-[10px] text-gray-400 mt-1">Background-checked experts</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center px-2">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <Clock className="w-5 h-5 text-primary" />
+              </div>
+              <h4 className="text-xs font-bold text-secondary">On-time Service</h4>
+              <p className="text-[10px] text-gray-400 mt-1">Punctual & reliable experts</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center px-2">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <IndianRupee className="w-5 h-5 text-primary" />
+              </div>
+              <h4 className="text-xs font-bold text-secondary">Upfront Pricing</h4>
+              <p className="text-[10px] text-gray-400 mt-1">No hidden surcharges/fees</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center px-2">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <ThumbsUp className="w-5 h-5 text-primary" />
+              </div>
+              <h4 className="text-xs font-bold text-secondary">Satisfaction Guarantee</h4>
+              <p className="text-[10px] text-gray-400 mt-1">Quality workmanship assured</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center px-2 col-span-2 md:col-span-1">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <RefreshCw className="w-5 h-5 text-primary" />
+              </div>
+              <h4 className="text-xs font-bold text-secondary">24/7 Support</h4>
+              <p className="text-[10px] text-gray-400 mt-1">Always here to assist you</p>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Footer / Price & Button */}
-      <div className="p-4 pt-0">
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-          <div className="flex flex-col flex-shrink-0">
-            {service.discountPrice ? (
-              <>
-                <span className="text-base font-extrabold text-emerald-600 whitespace-nowrap">
-                  ₹{getMergedPrice ? getMergedPrice(service.discountPrice)?.toLocaleString() : service.discountPrice?.toLocaleString()}
-                </span>
-                <span className="text-[10px] line-through text-gray-400 font-normal whitespace-nowrap">
-                  ₹{getMergedPrice ? getMergedPrice(service.basePrice)?.toLocaleString() : service.basePrice?.toLocaleString()}
-                </span>
-              </>
-            ) : (
-              <span className="text-base font-extrabold text-emerald-600 whitespace-nowrap">
-                ₹{getMergedPrice ? getMergedPrice(service.basePrice)?.toLocaleString() : service.basePrice?.toLocaleString()}
-              </span>
-            )}
+        {/* Sticky Bottom Bar for Mobile */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 px-3 py-3 shadow-lg flex items-center gap-2 z-40">
+          {/* Category Select Dropdown */}
+          <div className="flex-1 relative">
+            <select
+              value={selectedCategory}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="w-full pl-2.5 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 text-xs font-bold text-gray-700 appearance-none cursor-pointer truncate"
+            >
+              {categoriesForFilter.map((cat) => (
+                <option key={cat.value} value={cat.value}>{cat.label}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+              <ChevronDown className="w-3.5 h-3.5" />
+            </div>
           </div>
+
+          {/* Sort By Select Dropdown */}
+          <div className="flex-1 relative">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full pl-2.5 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 text-xs font-bold text-gray-700 appearance-none cursor-pointer truncate"
+            >
+              <option value="popular">Sort: Popular</option>
+              <option value="rating">Sort: Rated</option>
+              <option value="price-low">Price: Low-High</option>
+              <option value="price-high">Price: High-Low</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+              <ChevronDown className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Filter Button */}
           <button
-            onClick={() => onBook(service._id, isAvailable)}
-            disabled={!isAvailable}
-            className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 whitespace-nowrap ${isAvailable
-              ? 'bg-primary text-white hover:bg-primary/95 shadow-sm shadow-primary/10'
-              : 'bg-gray-150 text-gray-400 cursor-not-allowed'
-              }`}
+            onClick={() => setShowFilters(true)}
+            className="flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 active:scale-95 transition-all shadow-sm"
           >
-            Book Now
+            <Filter className="w-3.5 h-3.5 text-primary" />
+            <span>Filters</span>
           </button>
         </div>
+
       </div>
     </div>
   );

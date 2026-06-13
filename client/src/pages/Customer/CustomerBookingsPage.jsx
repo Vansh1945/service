@@ -1135,7 +1135,7 @@ const CustomerBookingsPage = () => {
         bookingId={chatRoomType === 'provider_customer' ? chatBookingId : null}
         roomType={chatRoomType}
         customerId={chatRoomType === 'customer_admin' ? user?._id : null}
-        role="customer"
+        userRole="customer"
         isOpen={!!chatBookingId}
         onClose={() => { setChatBookingId(null); setChatRoomType('provider_customer'); }}
       />

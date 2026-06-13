@@ -14,11 +14,12 @@ import {
   CheckCircle2,
   Users
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 const Home = () => {
   const { systemSettings = {} } = useAuth();
   const [openFaq, setOpenFaq] = useState(null);
+  const prefersReducedMotion = useReducedMotion();
 
   const toggleFaq = (index) => {
     setOpenFaq(openFaq === index ? null : index);
@@ -62,7 +63,6 @@ const Home = () => {
       {/* Limited Services Section */}
       <Services />
 
-      {/* ── Supplementary SEO-Rich Sections ── */}
 
       {/* Why Choose Us Section */}
       <section className="py-16 bg-gray-50 border-t border-gray-100">
@@ -191,16 +191,18 @@ const Home = () => {
 
                 <AnimatePresence initial={false}>
                   {openFaq === idx && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <div className="px-6 pb-4 text-xs text-gray-500 leading-relaxed font-normal border-t border-gray-50 pt-3">
-                        {faq.a}
-                      </div>
-                    </motion.div>
+                    <LazyMotion features={domAnimation}>
+                      <m.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+                      >
+                        <div className="px-6 pb-4 text-xs text-gray-500 leading-relaxed font-normal border-t border-gray-50 pt-3">
+                          {faq.a}
+                        </div>
+                      </m.div>
+                    </LazyMotion>
                   )}
                 </AnimatePresence>
               </div>

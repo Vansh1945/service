@@ -197,3 +197,33 @@
     /* Firefox */
   }
 }
+
+/* Accessibility: Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce,
+  .animate-spin,
+  .animate-shimmer,
+  .animate-fade-in,
+  .animate-scale-up,
+  .animate-slide-up {
+    animation: none !important;
+  }
+
+  .radar-pulse-green,
+  .radar-pulse-red {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+}

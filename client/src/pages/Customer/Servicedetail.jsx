@@ -12,7 +12,7 @@ import {
   ChatBubbleLeftEllipsisIcon, ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/ui-skeletons/Loader';
-import RelatedServicesComponent from '../../components/RelatedServices';
+import RelatedServicesComponent from './components/RelatedServices';
 import ErrorState from '../../components/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';
 import { getMergedPrice as getMergedPriceUtil } from '../../utils/surge';
@@ -256,7 +256,7 @@ const ServiceDetailPage = () => {
             </li>
             <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
             <li className="truncate max-w-[100px] sm:max-w-[150px]">
-              <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="hover:text-primary transition-colors truncate whitespace-nowrap block w-full text-left">
+              <button type="button" onClick={() => navigate(`/customer/services-list?category=${getCategoryId}`)} className="hover:text-primary transition-colors truncate whitespace-nowrap block w-full text-left">
                 {categoryName}
               </button>
             </li>
@@ -583,7 +583,10 @@ const ServiceDetailPage = () => {
                         <div
                           key={index}
                           className="border border-gray-100 rounded-xl p-3 hover:border-primary/20 transition-all cursor-pointer group"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => toggleAccordion(index)}
+                          onKeyUp={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAccordion(index); } }}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-xs md:text-sm font-semibold text-secondary group-hover:text-primary transition-colors">
@@ -686,10 +689,12 @@ const ServiceDetailPage = () => {
                   {/* Comments Grid */}
                   <div className="flex-1">
                     <div className="grid grid-cols-1 gap-4">
-                      {service.feedback?.filter(r => r.comment && r.comment.trim() !== "").length > 0 ? (
-                        service.feedback
-                          .filter(review => review.comment && review.comment.trim() !== "")
-                          .map((review, index) => (
+                      {(() => {
+                        const reviewsWithComments = service.feedback?.flatMap(review =>
+                          (review.comment && review.comment.trim() !== "") ? [review] : []
+                        ) || [];
+                        return reviewsWithComments.length > 0 ? (
+                          reviewsWithComments.map((review, index) => (
                             <div key={index} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group text-xs md:text-sm">
                               <div className="flex items-center gap-3 mb-3">
                                 <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-xs">
@@ -712,17 +717,18 @@ const ServiceDetailPage = () => {
                               </p>
                             </div>
                           ))
-                      ) : (
-                        <div className="py-12 px-6 text-center bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-dashed border-gray-200 shadow-inner flex flex-col items-center justify-center w-full">
-                          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary animate-pulse">
-                            <ChatBubbleLeftEllipsisIcon className="w-8 h-8" />
+                        ) : (
+                          <div className="py-12 px-6 text-center bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-dashed border-gray-200 shadow-inner flex flex-col items-center justify-center w-full">
+                            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary animate-pulse">
+                              <ChatBubbleLeftEllipsisIcon className="w-8 h-8" />
+                            </div>
+                            <h4 className="text-secondary font-bold text-sm mb-1">No Reviews Yet</h4>
+                            <p className="text-gray-400 text-xs max-w-[250px] leading-relaxed">
+                              There are currently no review comments for this service. Book now and be the first to share your experience!
+                            </p>
                           </div>
-                          <h4 className="text-secondary font-bold text-sm mb-1">No Reviews Yet</h4>
-                          <p className="text-gray-400 text-xs max-w-[250px] leading-relaxed">
-                            There are currently no review comments for this service. Book now and be the first to share your experience!
-                          </p>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

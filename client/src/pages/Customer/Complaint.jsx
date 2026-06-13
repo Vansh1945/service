@@ -13,10 +13,56 @@ import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
 import ChatModal from '../../components/chat/ChatModal';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
+
+const STATUS_CONFIG = {
+  'Open': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
+  'In-Progress': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+  'Solved': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
+  'Reopened': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+  'Closed': { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
+  submitted: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
+  under_review: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
+  provider_responded: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
+  admin_review: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
+  resolved: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
+  refunded: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500' },
+};
+
+const STATUS_LABELS = {
+  'Open': 'Open',
+  'In-Progress': 'In Review',
+  'Solved': 'Resolved',
+  'Reopened': 'Reopened',
+  'Closed': 'Closed',
+  'submitted': 'Submitted',
+  'under_review': 'Under Review',
+  'provider_responded': 'Provider Responded',
+  'admin_review': 'Admin Review',
+  'resolved': 'Resolved',
+  'rejected': 'Rejected',
+  'refunded': 'Refunded',
+};
+
+const STATUS_DETAIL_LABELS = {
+  'Open': '○ Open',
+  'In-Progress': '⏳ Being Reviewed',
+  'Solved': '✓ Issue Resolved',
+  'Reopened': '↩ Reopened',
+  'Closed': 'Closed',
+  'submitted': 'Submitted',
+  'under_review': 'Under Review',
+  'provider_responded': 'Provider Responded',
+  'admin_review': 'Admin Review',
+  'resolved': 'Resolved',
+  'rejected': 'Rejected',
+  'refunded': 'Refunded',
+};
 
 const ComplaintsPage = () => {
   const { token, user, logoutUser, isAuthenticated, API, API_URL_IMAGE } = useAuth();
@@ -210,20 +256,7 @@ const ComplaintsPage = () => {
   };
 
 
-  const STATUS_CONFIG = {
-    'Open': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
-    'In-Progress': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-    'Solved': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
-    'Reopened': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-    'Closed': { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
-    submitted: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
-    under_review: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
-    provider_responded: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
-    admin_review: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
-    resolved: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-    rejected: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
-    refunded: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500' },
-  };
+
 
   const getStatusStyle = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Open'];
 
@@ -294,7 +327,10 @@ const ComplaintsPage = () => {
                 return (
                   <div
                     key={complaint._id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => viewComplaintDetails(complaint._id)}
+                    onKeyUp={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viewComplaintDetails(complaint._id); } }}
                     className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors flex items-center justify-between group"
                   >
                     <div className="flex items-start gap-3">
@@ -305,17 +341,7 @@ const ComplaintsPage = () => {
                         <div className="flex items-center gap-2 mb-0.5">
                           <p className="text-sm font-semibold text-secondary truncate max-w-[150px]">{complaint.title || 'Support Request'}</p>
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-tighter ${s.bg} ${s.text}`}>
-                            {complaint.status === 'Solved' ? 'Resolved' :
-                              complaint.status === 'In-Progress' ? 'In Review' :
-                                complaint.status === 'Reopened' ? 'Reopened' :
-                                  complaint.status === 'Closed' ? 'Closed' :
-                                    complaint.status === 'submitted' ? 'Submitted' :
-                                      complaint.status === 'under_review' ? 'Under Review' :
-                                        complaint.status === 'provider_responded' ? 'Provider Responded' :
-                                          complaint.status === 'admin_review' ? 'Admin Review' :
-                                            complaint.status === 'resolved' ? 'Resolved' :
-                                              complaint.status === 'rejected' ? 'Rejected' :
-                                                complaint.status === 'refunded' ? 'Refunded' : complaint.status}
+                            {STATUS_LABELS[complaint.status] || complaint.status}
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -439,7 +465,13 @@ const ComplaintsPage = () => {
 
       {/* New Complaint Modal */}
       {openNewComplaint && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" onClick={() => { setOpenNewComplaint(false); resetForm(); }}>
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" 
+          role="button"
+          tabIndex={0}
+          onClick={() => { setOpenNewComplaint(false); resetForm(); }}
+          onKeyUp={(e) => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { setOpenNewComplaint(false); resetForm(); } }}
+        >
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100">
               <div>
@@ -507,9 +539,9 @@ const ComplaintsPage = () => {
                   <label className="block text-xs font-semibold text-secondary mb-1.5">Select Booking *</label>
                   <select name="bookingId" value={formData.bookingId} onChange={handleInputChange} className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20">
                     <option value="">Select a booking</option>
-                    {bookings.filter(b => b.status === 'completed' || b.status === 'cancelled').map(b => (
+                    {bookings.flatMap(b => (b.status === 'completed' || b.status === 'cancelled') ? [
                       <option key={b._id} value={b._id}>{b.services?.[0]?.service?.title || 'Service'} - {formatDate(b.date)}</option>
-                    ))}
+                    ] : [])}
                   </select>
                   {formErrors.bookingId && <p className="text-xs text-red-500 mt-1">{formErrors.bookingId}</p>}
                 </div>
@@ -564,7 +596,13 @@ const ComplaintsPage = () => {
 
       {/* Complaint Detail Modal */}
       {openComplaintDetail && selectedComplaint && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" onClick={() => setOpenComplaintDetail(false)}>
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" 
+          role="button"
+          tabIndex={0}
+          onClick={() => setOpenComplaintDetail(false)}
+          onKeyUp={(e) => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { setOpenComplaintDetail(false); } }}
+        >
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
               <div>
@@ -585,17 +623,7 @@ const ComplaintsPage = () => {
                     <p className="text-[10px] text-gray-400 mt-1">Submitted {formatDateTime(selectedComplaint.createdAt)}</p>
                   </div>
                   <span className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${getStatusStyle(selectedComplaint.status).bg} ${getStatusStyle(selectedComplaint.status).text} border ${getStatusStyle(selectedComplaint.status).border}`}>
-                    {selectedComplaint.status === 'Solved' ? '✓ Issue Resolved' :
-                      selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
-                        selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
-                          selectedComplaint.status === 'Closed' ? 'Closed' :
-                            selectedComplaint.status === 'submitted' ? 'Submitted' :
-                              selectedComplaint.status === 'under_review' ? 'Under Review' :
-                                selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
-                                  selectedComplaint.status === 'admin_review' ? 'Admin Review' :
-                                    selectedComplaint.status === 'resolved' ? 'Resolved' :
-                                      selectedComplaint.status === 'rejected' ? 'Rejected' :
-                                        selectedComplaint.status === 'refunded' ? 'Refunded' : '○ Open'}
+                    {STATUS_DETAIL_LABELS[selectedComplaint.status] || '○ Open'}
                   </span>
                 </div>
               </div>
@@ -829,7 +857,13 @@ const ComplaintsPage = () => {
       )}
       {/* Image Preview Gallery Modal */}
       {previewImage && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[99999]" onClick={() => setPreviewImage(null)}>
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[99999]" 
+          role="button"
+          tabIndex={0}
+          onClick={() => setPreviewImage(null)}
+          onKeyUp={(e) => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { setPreviewImage(null); } }}
+        >
           <button className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full transition-all">
             <X className="w-6 h-6" />
           </button>
@@ -841,7 +875,7 @@ const ComplaintsPage = () => {
         roomType={chatRoomInfo?.roomType || 'complaint_admin'}
         complaintId={chatRoomInfo?.complaintId}
         customerId={user?._id}
-        role="customer"
+        userRole="customer"
         isOpen={!!chatRoomInfo}
         onClose={() => setChatRoomInfo(null)}
       />

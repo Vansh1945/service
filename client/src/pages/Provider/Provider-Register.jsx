@@ -104,6 +104,141 @@ const FileField = ({ label, fieldName, accept, placeholder, icon: Icon, value, o
 const STEP_LABELS = ['Email', 'Details', 'Login', 'Profile'];
 const STEP_ICONS = [Mail, User, Lock, Briefcase];
 
+// Hoisted Benefits sidebar Component
+const BenefitsSection = ({ systemSettings }) => (
+  <div className="space-y-6">
+    <div className="text-center flex flex-col items-center">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
+        <Sparkles className="w-3.5 h-3.5 text-primary" />
+        <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
+      </div>
+      <h1 className="text-4xl font-bold text-secondary leading-tight">
+        Become a{' '}
+        <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>{' '}
+        Provider
+      </h1>
+      <p className="mt-3 text-sm text-secondary/60 leading-relaxed">
+        Join our network of verified electrical professionals and start earning more today.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3">
+      {[
+        { icon: DollarSign, title: 'Earn More', desc: 'Set your own rates', color: 'primary' },
+        { icon: Shield, title: 'Get Verified', desc: 'Build trust fast', color: 'accent' },
+        { icon: Zap, title: 'Fast Payments', desc: 'Instant transfers', color: 'primary' },
+        { icon: Calendar, title: 'Flexible Hours', desc: 'Work your way', color: 'accent' },
+      ].map(({ icon: Icon, title, desc, color }) => (
+        <div
+          key={title}
+          className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
+            ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
+            : 'border-accent/20 bg-accent/5 hover:border-accent/30'
+            }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+              }`}
+          >
+            <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
+          </div>
+          <p className="text-sm font-bold text-secondary">{title}</p>
+          <p className="text-xs text-secondary/50 mt-0.5">{desc}</p>
+        </div>
+      ))}
+    </div>
+
+    <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-secondary mb-4 flex items-center gap-2">
+        <Award className="w-4 h-4 text-primary" /> How It Works
+      </h3>
+      <div className="space-y-3">
+        {[
+          { label: 'Register your profile', color: 'primary' },
+          { label: 'Get verified by our team', color: 'accent' },
+          { label: 'Start receiving bookings', color: 'primary' },
+        ].map(({ label, color }, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div
+              className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${color === 'primary' ? 'bg-primary/10' : 'bg-accent/10'
+                }`}
+            >
+              <span className={`text-xs font-bold ${color === 'primary' ? 'text-primary' : 'text-accent'}`}>
+                {i + 1}
+              </span>
+            </div>
+            <span className="text-sm text-secondary/80">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="bg-background border border-gray-200 rounded-xl p-5">
+      <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+        <Users className="w-4 h-4 text-accent" /> Why Providers Trust {systemSettings.companyName || "Raj Electrical Services"}
+      </h3>
+      <div className="space-y-2.5">
+        {[
+          'Secure payments with instant bank transfer',
+          '24/7 customer and provider support',
+          'Pre-screened customers with verified needs',
+        ].map((text) => (
+          <div key={text} className="flex items-start gap-2">
+            <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+            <span className="text-xs text-secondary/70">{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Hoisted Progress indicator Component
+const ProgressIndicator = ({ step }) => (
+  <div className="mb-8">
+    <div className="flex items-center">
+      {[1, 2, 3, 4].map((s, idx) => {
+        const StepIcon = STEP_ICONS[idx];
+        const done = s < step;
+        const active = s === step;
+        return (
+          <div key={s} className="flex-1 last:flex-none flex items-center">
+            <div className="flex flex-col items-center gap-1.5 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
+                  ? 'bg-primary text-background'
+                  : active
+                    ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
+                    : 'bg-gray-100 text-gray-400'
+                  }`}
+              >
+                {done ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : (
+                  <StepIcon className="w-4 h-4" />
+                )}
+              </div>
+              <span
+                className={`text-[10px] font-semibold whitespace-nowrap ${active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
+                  }`}
+              >
+                {STEP_LABELS[idx]}
+              </span>
+            </div>
+            {s < 4 && (
+              <div className="flex-1 h-0.5 mx-2 rounded-full bg-gray-100 overflow-hidden mb-4">
+                <div
+                  className={`h-full bg-accent transition-all duration-500 ${done ? 'w-full' : 'w-0'}`}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+);
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 const ProviderRegistration = () => {
@@ -942,140 +1077,7 @@ const ProviderRegistration = () => {
     }
   };
 
-  // ── Benefits sidebar ──────────────────────────────────────────────────────
-  const BenefitsSection = () => (
-    <div className="space-y-6">
-      <div className="text-center flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
-        </div>
-        <h1 className="text-4xl font-bold text-secondary leading-tight">
-          Become a{' '}
-          <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>{' '}
-          Provider
-        </h1>
-        <p className="mt-3 text-sm text-secondary/60 leading-relaxed">
-          Join our network of verified electrical professionals and start earning more today.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { icon: DollarSign, title: 'Earn More', desc: 'Set your own rates', color: 'primary' },
-          { icon: Shield, title: 'Get Verified', desc: 'Build trust fast', color: 'accent' },
-          { icon: Zap, title: 'Fast Payments', desc: 'Instant transfers', color: 'primary' },
-          { icon: Calendar, title: 'Flexible Hours', desc: 'Work your way', color: 'accent' },
-        ].map(({ icon: Icon, title, desc, color }) => (
-          <div
-            key={title}
-            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
-              ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
-              : 'border-accent/20 bg-accent/5 hover:border-accent/30'
-              }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
-                }`}
-            >
-              <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
-            </div>
-            <p className="text-sm font-bold text-secondary">{title}</p>
-            <p className="text-xs text-secondary/50 mt-0.5">{desc}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
-        <h3 className="text-sm font-bold text-secondary mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-primary" /> How It Works
-        </h3>
-        <div className="space-y-3">
-          {[
-            { label: 'Register your profile', color: 'primary' },
-            { label: 'Get verified by our team', color: 'accent' },
-            { label: 'Start receiving bookings', color: 'primary' },
-          ].map(({ label, color }, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${color === 'primary' ? 'bg-primary/10' : 'bg-accent/10'
-                  }`}
-              >
-                <span className={`text-xs font-bold ${color === 'primary' ? 'text-primary' : 'text-accent'}`}>
-                  {i + 1}
-                </span>
-              </div>
-              <span className="text-sm text-secondary/80">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-background border border-gray-200 rounded-xl p-5">
-        <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Users className="w-4 h-4 text-accent" /> Why Providers Trust {systemSettings.companyName || "Raj Electrical Services"}
-        </h3>
-        <div className="space-y-2.5">
-          {[
-            'Secure payments with instant bank transfer',
-            '24/7 customer and provider support',
-            'Pre-screened customers with verified needs',
-          ].map((text) => (
-            <div key={text} className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <span className="text-xs text-secondary/70">{text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Progress indicator ────────────────────────────────────────────────────
-  const ProgressIndicator = () => (
-    <div className="mb-8">
-      <div className="flex items-center">
-        {[1, 2, 3, 4].map((s, idx) => {
-          const StepIcon = STEP_ICONS[idx];
-          const done = s < step;
-          const active = s === step;
-          return (
-            <div key={s} className="flex-1 last:flex-none flex items-center">
-              <div className="flex flex-col items-center gap-1.5 min-w-0">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
-                    ? 'bg-primary text-background'
-                    : active
-                      ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
-                      : 'bg-gray-100 text-gray-400'
-                    }`}
-                >
-                  {done ? (
-                    <CheckCircle className="w-4 h-4" />
-                  ) : (
-                    <StepIcon className="w-4 h-4" />
-                  )}
-                </div>
-                <span
-                  className={`text-[10px] font-semibold whitespace-nowrap ${active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
-                    }`}
-                >
-                  {STEP_LABELS[idx]}
-                </span>
-              </div>
-              {s < 4 && (
-                <div className="flex-1 h-0.5 mx-2 rounded-full bg-gray-100 overflow-hidden mb-4">
-                  <div
-                    className={`h-full bg-accent transition-all duration-500 ${done ? 'w-full' : 'w-0'}`}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  // BenefitsSection and ProgressIndicator are hoisted to module scope
 
   // ── Submit button labels ──
   const submitLabel = {
@@ -1153,13 +1155,13 @@ const ProviderRegistration = () => {
 
           {/* Left: Full benefits — desktop only */}
           <div className="hidden lg:block lg:flex-1">
-            <BenefitsSection />
+            <BenefitsSection systemSettings={systemSettings} />
           </div>
 
           {/* Right: Form card */}
           <div className="w-full lg:flex-1 mt-6 lg:mt-8">
             <div className="bg-background rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
-              <ProgressIndicator />
+              <ProgressIndicator step={step} />
 
               <form
                 onSubmit={

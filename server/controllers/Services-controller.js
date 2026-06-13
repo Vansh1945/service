@@ -647,6 +647,11 @@ const bulkImportServices = async (req, res) => {
 
         // Get all categories for matching
         const allCategories = await Category.find({ isActive: true });
+        const categoryMap = new Map();
+        allCategories.forEach(c => {
+            categoryMap.set(c.name.toLowerCase(), c);
+            categoryMap.set(c._id.toString(), c);
+        });
 
         // Iterate through rows (start from row 2 to skip headers)
         for (let i = 2; i <= worksheet.rowCount; i++) {
@@ -659,8 +664,8 @@ const bulkImportServices = async (req, res) => {
                 const description = row.getCell(3).value?.toString().trim();
                 const basePrice = parseFloat(row.getCell(4).value);
                 const duration = parseFloat(row.getCell(5).value);
-                const specialNotes = row.getCell(6).value?.toString().split(',').map(s => s.trim()).filter(Boolean) || [];
-                const materialsUsed = row.getCell(7).value?.toString().split(',').map(s => s.trim()).filter(Boolean) || [];
+                const specialNotes = row.getCell(6).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
+                const materialsUsed = row.getCell(7).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
 
                 // Basic validation
                 if (!title || !categoryName || isNaN(basePrice) || isNaN(duration)) {
@@ -668,10 +673,7 @@ const bulkImportServices = async (req, res) => {
                 }
 
                 // Match category
-                const categoryDoc = allCategories.find(c => 
-                    c.name.toLowerCase() === categoryName.toLowerCase() || 
-                    c._id.toString() === categoryName
-                );
+                const categoryDoc = categoryMap.get(categoryName.toLowerCase()) || categoryMap.get(categoryName);
 
                 if (!categoryDoc) {
                     throw new Error(`Category "${categoryName}" not found in system`);

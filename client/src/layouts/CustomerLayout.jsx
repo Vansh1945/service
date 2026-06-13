@@ -52,11 +52,11 @@ const CustomerLayout = () => {
         <div className="min-h-screen bg-background lg:pb-0">
             {/* Header */}
             <header className="fixed top-0 left-0 right-0 z-50 bg-background shadow-sm border-b border-gray-100">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="w-full px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16 md:h-18 lg:h-20">
                         {/* Logo Section */}
                         <div className="flex flex-1 items-center space-x-2 min-w-0 pr-2">
-                            <Link to="/customer/services" className="flex items-center space-x-2 transition-transform duration-200 hover:scale-105 min-w-0 w-full">
+                            <Link to="/customer/services" className="flex items-center space-x-2 min-w-0">
                                 {logo ? (
                                     <img
                                         src={logo}

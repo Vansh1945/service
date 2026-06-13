@@ -2188,16 +2188,16 @@ const getProviderBookingById = async (req, res) => {
       });
     }
 
-    const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId,
-      booking.zoneId,
-      'standard',
-      booking.services && booking.services[0]?.service
-    );
-
-    // Fetch earning and transaction details
-    const earning = await ProviderEarning.findOne({ booking: id }).lean();
-    const transactions = await Transaction.find({ booking: id }).sort({ createdAt: -1 }).lean();
+    const [commissionRule, earning, transactions] = await Promise.all([
+      CommissionRule.getCommissionForProvider(
+        providerId,
+        booking.zoneId,
+        'standard',
+        booking.services && booking.services[0]?.service
+      ),
+      ProviderEarning.findOne({ booking: id }).lean(),
+      Transaction.find({ booking: id }).sort({ createdAt: -1 }).lean()
+    ]);
 
     const baseForCommission = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
     const { commission, netAmount } = CommissionRule.calculateCommission(
@@ -2388,14 +2388,15 @@ const getBookingsByStatus = async (req, res) => {
         cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
       }
 
-      const zoneRelation = await getZoneRelation(cleanBooking.zoneId, provider.currentZone);
-
-      const bookingCommissionRule = await CommissionRule.getCommissionForProvider(
-        providerId,
-        cleanBooking.zoneId,
-        'standard',
-        cleanBooking.services && cleanBooking.services[0]?.service
-      );
+      const [zoneRelation, bookingCommissionRule] = await Promise.all([
+        getZoneRelation(cleanBooking.zoneId, provider.currentZone),
+        CommissionRule.getCommissionForProvider(
+          providerId,
+          cleanBooking.zoneId,
+          'standard',
+          cleanBooking.services && cleanBooking.services[0]?.service
+        )
+      ]);
 
       const baseForCommission = Math.max(0, cleanBooking.subtotal - (cleanBooking.totalDiscount || 0));
       const { commission, netAmount } = CommissionRule.calculateCommission(

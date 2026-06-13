@@ -205,14 +205,16 @@ const markAllRead = async (req, res) => {
                 }
             }
 
-            for (const bId of broadcastIdsToUpdate) {
-                const countReadForThisBroadcast = unreadNotifications.filter(n => n.broadcast_id && n.broadcast_id.toString() === bId).length;
-                await Notification.updateOne(
-                    { _id: bId },
-                    { $inc: { readCount: countReadForThisBroadcast } }
-                );
-                emitStatsUpdate(bId);
-            }
+            await Promise.all(
+                Array.from(broadcastIdsToUpdate).map(async (bId) => {
+                    const countReadForThisBroadcast = unreadNotifications.filter(n => n.broadcast_id && n.broadcast_id.toString() === bId).length;
+                    await Notification.updateOne(
+                        { _id: bId },
+                        { $inc: { readCount: countReadForThisBroadcast } }
+                    );
+                    emitStatsUpdate(bId);
+                })
+            );
         }
 
         return res.status(200).json({ success: true, message: 'All notifications marked as read' });
@@ -551,70 +553,71 @@ const getAdminNotifications = async (req, res) => {
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        const total = await Notification.countDocuments(query);
-
-        const notifications = await Notification.aggregate([
-            { $match: query },
-            { $sort: { createdAt: -1 } },
-            { $skip: skip },
-            { $limit: parseInt(limit) },
-            {
-                $lookup: {
-                    from: 'notifications',
-                    localField: '_id',
-                    foreignField: 'broadcast_id',
-                    as: 'children'
-                }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    title: 1,
-                    message: 1,
-                    type: 1,
-                    audience: 1,
-                    url: 1,
-                    status: 1,
-                    sentAt: 1,
-                    scheduledFor: 1,
-                    isScheduled: 1,
-                    targetCity: 1,
-                    targetZones: 1,
-                    targetProviderCategory: 1,
-                    minBookings: 1,
-                    isDeletedByAdmin: 1,
-                    createdAt: 1,
-                    updatedAt: 1,
-                    totalSent: { $size: '$children' },
-                    deliveredCount: {
-                        $size: {
-                            $filter: {
-                                input: '$children',
-                                as: 'c',
-                                cond: { $eq: ['$$c.status', 'delivered'] }
+        const [total, notifications] = await Promise.all([
+            Notification.countDocuments(query),
+            Notification.aggregate([
+                { $match: query },
+                { $sort: { createdAt: -1 } },
+                { $skip: skip },
+                { $limit: parseInt(limit) },
+                {
+                    $lookup: {
+                        from: 'notifications',
+                        localField: '_id',
+                        foreignField: 'broadcast_id',
+                        as: 'children'
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        title: 1,
+                        message: 1,
+                        type: 1,
+                        audience: 1,
+                        url: 1,
+                        status: 1,
+                        sentAt: 1,
+                        scheduledFor: 1,
+                        isScheduled: 1,
+                        targetCity: 1,
+                        targetZones: 1,
+                        targetProviderCategory: 1,
+                        minBookings: 1,
+                        isDeletedByAdmin: 1,
+                        createdAt: 1,
+                        updatedAt: 1,
+                        totalSent: { $size: '$children' },
+                        deliveredCount: {
+                            $size: {
+                                $filter: {
+                                    input: '$children',
+                                    as: 'c',
+                                    cond: { $eq: ['$$c.status', 'delivered'] }
+                                }
                             }
-                        }
-                    },
-                    readCount: {
-                        $size: {
-                            $filter: {
-                                input: '$children',
-                                as: 'c',
-                                cond: { $eq: ['$$c.isRead', true] }
+                        },
+                        readCount: {
+                            $size: {
+                                $filter: {
+                                    input: '$children',
+                                    as: 'c',
+                                    cond: { $eq: ['$$c.isRead', true] }
+                                }
                             }
-                        }
-                    },
-                    clickedCount: {
-                        $size: {
-                            $filter: {
-                                input: '$children',
-                                as: 'c',
-                                cond: { $ne: [{ $ifNull: ['$$c.clicked_at', null] }, null] }
+                        },
+                        clickedCount: {
+                            $size: {
+                                $filter: {
+                                    input: '$children',
+                                    as: 'c',
+                                    cond: { $ne: [{ $ifNull: ['$$c.clicked_at', null] }, null] }
+                                }
                             }
                         }
                     }
                 }
-            }
+            ])
         ]);
 
         await Notification.populate(notifications, {

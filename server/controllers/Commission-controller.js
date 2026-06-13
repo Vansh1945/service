@@ -49,14 +49,15 @@ exports.listCommissionRules = async (req, res) => {
       }
     }
 
-    const rules = await CommissionRule.find(query)
-      .populate('createdBy updatedBy', 'name email')
-      .populate('specificProvider', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
-
-    const count = await CommissionRule.countDocuments(query);
+    const [rules, count] = await Promise.all([
+      CommissionRule.find(query)
+        .populate('createdBy updatedBy', 'name email')
+        .populate('specificProvider', 'name email')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit)),
+      CommissionRule.countDocuments(query)
+    ]);
 
     res.status(200).json({
       success: true,

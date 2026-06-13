@@ -450,6 +450,30 @@ const getCompletionPin = (b) => {
     return b.completionPin || b.completionOtp || (b.statusHistory && b.statusHistory.find(h => h.note?.includes('COMPLETION_PIN'))?.note.match(/COMPLETION_PIN:(\d+)/)?.[1]) || 'N/A';
 };
 
+const InfoRow = ({ label, children, className = '' }) => (
+    <div className={`flex items-start justify-between gap-2 py-1 ${className}`}>
+        <span className="text-xs text-gray-500 shrink-0 w-28">{label}</span>
+        <span className="text-xs font-semibold text-secondary text-right">{children}</span>
+    </div>
+);
+
+const Card = ({ title, icon, children, className = '' }) => (
+    <div className={`bg-gray-50 border border-gray-100 rounded-lg p-3 ${className}`}>
+        {title && (
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                {icon}{title}
+            </p>
+        )}
+        {children}
+    </div>
+);
+
+const PinBadge = ({ verified }) => (
+    <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold border ${verified ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+        {verified ? 'Verified' : 'Pending'}
+    </span>
+);
+
 const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, actionLoading }) => {
     const [reasonType, setReasonType] = useState('Customer Requested');
     const [reasonText, setReasonText] = useState('');
@@ -564,7 +588,7 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
 const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
     const navigate = useNavigate();
-    const location = useLocation();
+    const loc = useLocation();
     const [searchParams] = useSearchParams();
     const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
     const [bookings, setBookings] = useState([]);
@@ -704,14 +728,14 @@ const AdminBookingsView = () => {
 
     // Update filters when URL search param changes (for in-page navigation)
     useEffect(() => {
-        const params = new URLSearchParams(location.search);
+        const params = new URLSearchParams(loc.search);
         const searchParam = params.get('search');
 
         // Only update if the search filter actually changed to avoid infinite loops
         if (searchParam !== undefined && searchParam !== searchQuery) {
             setSearchQuery(searchParam || '');
         }
-    }, [location.search, searchQuery]);
+    }, [loc.search, searchQuery]);
 
     // Fetch all providers for assignment — useCallback keeps reference stable
     const fetchProviders = useCallback(async () => {
@@ -1219,27 +1243,6 @@ const AdminBookingsView = () => {
                 const pay = selectedBooking.payment || {};
                 const prov = selectedBooking.provider;
                 const refundAmountVal = bk.cancellationProgress?.refundAmount || bk.refundAmount || 0;
-                const InfoRow = ({ label, children, className = '' }) => (
-                    <div className={`flex items-start justify-between gap-2 py-1 ${className}`}>
-                        <span className="text-xs text-gray-500 shrink-0 w-28">{label}</span>
-                        <span className="text-xs font-semibold text-secondary text-right">{children}</span>
-                    </div>
-                );
-                const Card = ({ title, icon, children, className = '' }) => (
-                    <div className={`bg-gray-50 border border-gray-100 rounded-lg p-3 ${className}`}>
-                        {title && (
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                {icon}{title}
-                            </p>
-                        )}
-                        {children}
-                    </div>
-                );
-                const PinBadge = ({ verified }) => (
-                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold border ${verified ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
-                        {verified ? 'Verified' : 'Pending'}
-                    </span>
-                );
                 return (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
                         <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-up">

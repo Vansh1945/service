@@ -56,7 +56,19 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
   const [routeCoords, setRouteCoords] = useState([]);
   const [eta, setEta] = useState('');
   const [distance, setDistance] = useState('');
-  const [loadingRoute, setLoadingRoute] = useState(true);
+  const [loadingRoute, setLoadingRoute] = useState(() => typeof navigator !== 'undefined' && !!navigator.geolocation);
+
+  const [prevBookingId, setPrevBookingId] = useState(booking?._id);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (booking?._id !== prevBookingId || isOpen !== prevIsOpen) {
+    setPrevBookingId(booking?._id);
+    setPrevIsOpen(isOpen);
+    setProviderLoc(null);
+    setRouteCoords([]);
+    setEta('');
+    setDistance('');
+    setLoadingRoute(isOpen && booking && typeof navigator !== 'undefined' && !!navigator.geolocation);
+  }
 
   const resolveTargetCoords = useCallback((b) => {
     if (!b) return null;
@@ -83,7 +95,6 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
   useEffect(() => {
     if (!isOpen || !booking) return;
 
-    setLoadingRoute(true);
     let watchId = null;
 
     let lastUpdatedTime = 0;
@@ -138,8 +149,6 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
         (err) => console.error('GPS Watch Error:', err),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-    } else {
-      setLoadingRoute(false);
     }
 
     return () => {
@@ -280,11 +289,18 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
     }
   };
 
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setImages([]);
       setPin('');
       setLocation(null);
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen) {
       captureLocation();
     }
   }, [isOpen]);
@@ -486,6 +502,21 @@ const getNavigationUrl = (booking) => {
   );
   return `https://www.google.com/maps/dir/?api=1&destination=${addressStr}&travelmode=driving`;
 };
+
+// ── Stat card ────────────────────────────────────────────────────────────
+const StatCard = ({ label, value, icon: Icon, iconColor = 'text-primary', iconBg = 'bg-primary/10' }) => (
+  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
+        <p className="text-lg font-bold text-secondary">{value}</p>
+      </div>
+      <div className={`${iconBg} p-2.5 rounded-xl`}>
+        <Icon className={`w-5 h-5 ${iconColor}`} />
+      </div>
+    </div>
+  </div>
+);
 
 // ── Main Component ───────────────────────────────────────────────────────────
 const ProviderBooking = () => {
@@ -855,21 +886,6 @@ const ProviderBooking = () => {
   const totalPages = Math.ceil(currentBookings.length / bookingsPerPage);
   const paginatedBookings = currentBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage);
   const paginate = (n) => setCurrentPage(n);
-
-  // ── Stat card ────────────────────────────────────────────────────────────
-  const StatCard = ({ label, value, icon: Icon, iconColor = 'text-primary', iconBg = 'bg-primary/10' }) => (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
-          <p className="text-lg font-bold text-secondary">{value}</p>
-        </div>
-        <div className={`${iconBg} p-2.5 rounded-xl`}>
-          <Icon className={`w-5 h-5 ${iconColor}`} />
-        </div>
-      </div>
-    </div>
-  );
 
   // ── Booking card ─────────────────────────────────────────────────────────
   const renderBookingCard = (booking) => {
@@ -2023,7 +2039,7 @@ const ProviderBooking = () => {
         bookingId={chatRoomType === 'provider_customer' ? chatBookingId : null}
         roomType={chatRoomType}
         providerId={chatRoomType === 'provider_admin' ? user?._id : null}
-        role="provider"
+        userRole="provider"
         isOpen={!!chatBookingId}
         onClose={() => { setChatBookingId(null); setChatRoomType('provider_customer'); }}
       />

@@ -44,6 +44,114 @@ const Section = ({ title, icon: Icon, accent = false, tooltip, children }) => (
 const STEP_LABELS = ['Email', 'Verify', 'Reset'];
 const STEP_ICONS = [Mail, Shield, Lock];
 
+// ── Progress indicator ────────────────────────────────────────────────────
+const ProgressIndicator = ({ step }) => (
+  <div className="mb-8">
+    <div className="flex items-center">
+      {[1, 2, 3].map((s, idx) => {
+        const StepIcon = STEP_ICONS[idx];
+        const done = s < step;
+        const active = s === step;
+        return (
+          <div key={s} className="flex-1 last:flex-none flex items-center">
+            <div className="flex flex-col items-center gap-1.5 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
+                  ? 'bg-primary text-background'
+                  : active
+                    ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
+                    : 'bg-gray-100 text-gray-400'
+                  }`}
+              >
+                {done ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : (
+                  <StepIcon className="w-4 h-4" />
+                )}
+              </div>
+              <span
+                className={`text-[10px] font-semibold whitespace-nowrap ${active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
+                  }`}
+              >
+                {STEP_LABELS[idx]}
+              </span>
+            </div>
+            {s < 3 && (
+              <div className="flex-1 h-0.5 mx-2 rounded-full bg-gray-100 overflow-hidden mb-4">
+                <div
+                  className={`h-full bg-accent transition-all duration-500 ${done ? 'w-full' : 'w-0'}`}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+);
+
+// ── Benefits sidebar ──────────────────────────────────────────────────────
+const BenefitsSection = ({ systemSettings = {} }) => (
+  <div className="space-y-6">
+    <div className="text-center flex flex-col items-center">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
+        <Shield className="w-3.5 h-3.5 text-primary" />
+        <span className="text-xs font-bold text-primary">Secure Account Recovery</span>
+      </div>
+      <h1 className="text-4xl font-bold text-secondary leading-tight">
+        Recover <span className="text-primary">Your Account</span>
+      </h1>
+      <p className="mt-3 text-sm text-secondary/60 leading-relaxed max-w-sm mx-auto">
+        Quickly reset your password and regain access to your account with our secure OTP verification.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3">
+      {[
+        { icon: Zap, title: 'Super Fast', desc: 'Secure OTP reset', color: 'primary' },
+        { icon: Shield, title: 'Safe & Secure', desc: 'Encrypted recovery', color: 'accent' },
+        { icon: Lock, title: 'Stay Protected', desc: 'High security', color: 'primary' },
+        { icon: HeadphonesIcon, title: 'Need Help?', desc: '24/7 Support', color: 'accent' },
+      ].map(({ icon: Icon, title, desc, color }) => (
+        <div
+          key={title}
+          className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
+            ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
+            : 'border-accent/20 bg-accent/5 hover:border-accent/30'
+            }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+              }`}
+          >
+            <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
+          </div>
+          <p className="text-sm font-bold text-secondary">{title}</p>
+          <p className="text-xs text-secondary/50 mt-0.5">{desc}</p>
+        </div>
+      ))}
+    </div>
+
+    <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+        <Award className="w-4 h-4 text-primary" /> Why {systemSettings.companyName || "Raj Electrical Services"}?
+      </h3>
+      <div className="space-y-2.5">
+        {[
+          'Two-factor authentication for recovery',
+          'Instant email notifications',
+          'Advanced encryption standards',
+        ].map((text) => (
+          <div key={text} className="flex items-start gap-2">
+            <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+            <span className="text-xs text-secondary/70">{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const { systemSettings = {} } = useAuth();
@@ -152,114 +260,6 @@ const ForgotPassword = () => {
     }
     return () => clearInterval(interval);
   }, [isTimerActive, timer]);
-
-  // ── Progress indicator ────────────────────────────────────────────────────
-  const ProgressIndicator = () => (
-    <div className="mb-8">
-      <div className="flex items-center">
-        {[1, 2, 3].map((s, idx) => {
-          const StepIcon = STEP_ICONS[idx];
-          const done = s < step;
-          const active = s === step;
-          return (
-            <div key={s} className="flex-1 last:flex-none flex items-center">
-              <div className="flex flex-col items-center gap-1.5 min-w-0">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
-                    ? 'bg-primary text-background'
-                    : active
-                      ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
-                      : 'bg-gray-100 text-gray-400'
-                    }`}
-                >
-                  {done ? (
-                    <CheckCircle className="w-4 h-4" />
-                  ) : (
-                    <StepIcon className="w-4 h-4" />
-                  )}
-                </div>
-                <span
-                  className={`text-[10px] font-semibold whitespace-nowrap ${active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
-                    }`}
-                >
-                  {STEP_LABELS[idx]}
-                </span>
-              </div>
-              {s < 3 && (
-                <div className="flex-1 h-0.5 mx-2 rounded-full bg-gray-100 overflow-hidden mb-4">
-                  <div
-                    className={`h-full bg-accent transition-all duration-500 ${done ? 'w-full' : 'w-0'}`}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  // ── Benefits sidebar ──────────────────────────────────────────────────────
-  const BenefitsSection = () => (
-    <div className="space-y-6">
-      <div className="text-center flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
-          <Shield className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-bold text-primary">Secure Account Recovery</span>
-        </div>
-        <h1 className="text-4xl font-bold text-secondary leading-tight">
-          Recover <span className="text-primary">Your Account</span>
-        </h1>
-        <p className="mt-3 text-sm text-secondary/60 leading-relaxed max-w-sm mx-auto">
-          Quickly reset your password and regain access to your account with our secure OTP verification.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { icon: Zap, title: 'Super Fast', desc: 'Secure OTP reset', color: 'primary' },
-          { icon: Shield, title: 'Safe & Secure', desc: 'Encrypted recovery', color: 'accent' },
-          { icon: Lock, title: 'Stay Protected', desc: 'High security', color: 'primary' },
-          { icon: HeadphonesIcon, title: 'Need Help?', desc: '24/7 Support', color: 'accent' },
-        ].map(({ icon: Icon, title, desc, color }) => (
-          <div
-            key={title}
-            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
-              ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
-              : 'border-accent/20 bg-accent/5 hover:border-accent/30'
-              }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
-                }`}
-            >
-              <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
-            </div>
-            <p className="text-sm font-bold text-secondary">{title}</p>
-            <p className="text-xs text-secondary/50 mt-0.5">{desc}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
-        <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Award className="w-4 h-4 text-primary" /> Why {systemSettings.companyName || "Raj Electrical Services"}?
-        </h3>
-        <div className="space-y-2.5">
-          {[
-            'Two-factor authentication for recovery',
-            'Instant email notifications',
-            'Advanced encryption standards',
-          ].map((text) => (
-            <div key={text} className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <span className="text-xs text-secondary/70">{text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 
   const renderStepContent = () => {
     switch (step) {
@@ -384,13 +384,13 @@ const ForgotPassword = () => {
         <div className="lg:flex lg:flex-row lg:gap-14 lg:items-center">
           {/* Left: Benefits */}
           <div className="hidden lg:block lg:flex-1">
-            <BenefitsSection />
+            <BenefitsSection systemSettings={systemSettings} />
           </div>
 
           {/* Right: Card */}
           <div className="w-full lg:flex-1 mt-6 lg:mt-12">
             <div className="bg-background rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
-              <ProgressIndicator />
+              <ProgressIndicator step={step} />
 
               <div className="mt-8">
                 {renderStepContent()}

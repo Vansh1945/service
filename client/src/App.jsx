@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense, lazy } from "react";
+import React, { useEffect, useState, useRef, Suspense, lazy } from "react";
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { FiRefreshCw } from "react-icons/fi";
 import "./index.css";
@@ -97,9 +97,12 @@ installDateTimeFormatOverrides();
 const updateFavicon = (favicon) => {
   if (!favicon) return;
 
-  const faviconLink = document.querySelector("link[rel='icon']");
-  if (faviconLink) {
-    faviconLink.href = favicon;
+  const links = document.querySelectorAll("link[rel*='icon']");
+  if (links.length > 0) {
+    links.forEach(link => {
+      link.removeAttribute("type");
+      link.href = favicon;
+    });
     return;
   }
 
@@ -188,9 +191,10 @@ const generateManifestUrl = (role, data) => {
 };
 
 const App = () => {
-  const location = useLocation();
+  const loc = useLocation();
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
   const [updateNotes, setUpdateNotes] = useState('');
+  const reloadTimerRef = useRef(null);
 
   const triggerCacheClearAndPrompt = async (data) => {
     console.log('[PWA Update] Triggering asset clear and upgrade flow...');
@@ -231,7 +235,7 @@ const App = () => {
       setUpdateNotes(data?.body || data?.releaseNotes || 'New update installed. Reload now.');
       setShowUpdatePrompt(true);
     } else {
-      setTimeout(() => {
+      reloadTimerRef.current = setTimeout(() => {
         window.location.reload();
       }, 1000);
     }
@@ -243,6 +247,14 @@ const App = () => {
     };
     window.addEventListener('appUpdateReceived', handleUpdateReceived);
     return () => window.removeEventListener('appUpdateReceived', handleUpdateReceived);
+  }, []);
+
+  // Cleanup reload timer on unmount to prevent memory leaks
+  useEffect(() => {
+    const timer = reloadTimerRef.current;
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const {
@@ -258,13 +270,16 @@ const App = () => {
     activeBranding
   } = useAuth();
 
-  const [showSplash, setShowSplash] = useState(false);
+  const [showSplash, setShowSplash] = useState(() => {
+    const isStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone);
+    return !!(isStandalone && !sessionStorage.getItem('splash_shown'));
+  });
   const [splashFade, setSplashFade] = useState(false);
 
   // Check if current route is a protected/dashboard route (Optimized: memoized)
   const isDashboardRoute = React.useMemo(() =>
-    /^\/(admin|customer|provider)/.test(location.pathname),
-    [location.pathname]
+    /^\/(admin|customer|provider)/.test(loc.pathname),
+    [loc.pathname]
   );
 
   useEffect(() => {
@@ -275,9 +290,7 @@ const App = () => {
 
   // Session-based Splash Screen check (PWA only, 2-3 seconds duration)
   useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    if (isStandalone && !sessionStorage.getItem('splash_shown')) {
-      setShowSplash(true);
+    if (showSplash) {
       const fadeTimeout = setTimeout(() => {
         setSplashFade(true);
       }, 2500);
@@ -290,24 +303,24 @@ const App = () => {
         clearTimeout(removeTimeout);
       };
     }
-  }, []);
+  }, [showSplash]);
 
   // Fetch dynamic branding settings and apply dynamically based on current route context
   useEffect(() => {
     // Detect standalone display mode and persist install role if missing
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     if (isStandalone && !localStorage.getItem("installRole")) {
-      const detectedRole = location.pathname.startsWith("/provider") ? "provider" : "customer";
+      const detectedRole = loc.pathname.startsWith("/provider") ? "provider" : "customer";
       localStorage.setItem("installRole", detectedRole);
       localStorage.setItem("installMode", "standalone");
     }
 
     let currentRole = null;
-    if (location.pathname.startsWith("/admin")) {
+    if (loc.pathname.startsWith("/admin")) {
       currentRole = "admin";
-    } else if (location.pathname.startsWith("/provider")) {
+    } else if (loc.pathname.startsWith("/provider")) {
       currentRole = "provider";
-    } else if (location.pathname.startsWith("/customer")) {
+    } else if (loc.pathname.startsWith("/customer")) {
       currentRole = "customer";
     } else if (isAuthenticated && userRole) {
       currentRole = userRole;
@@ -319,8 +332,8 @@ const App = () => {
     }
 
     const manifestUrl = generateManifestUrl(currentRole, activeBranding);
-    // Favicon sequence: globalSettings.favicon -> globalSettings.logo -> fallback -> favicon.ico
-    const resolvedFavicon = globalSettings?.favicon || globalSettings?.logo || "/icon-192.png";
+    // Favicon sequence: globalSettings.favicon -> activeBranding.favicon -> activeBranding.icon -> activeBranding.logo -> globalSettings.logo -> fallback -> favicon.ico
+    const resolvedFavicon = globalSettings?.favicon || activeBranding?.favicon || activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || "/icon-192.png";
 
     const settings = {
       companyName: activeBranding?.browserTitle || activeBranding?.appName || globalSettings?.companyName || "Raj Electrical Service",
@@ -333,16 +346,17 @@ const App = () => {
     };
 
     applyDocumentSettings(settings);
-  }, [globalSettings, activeBranding, location.pathname, isAuthenticated, userRole]);
+  }, [globalSettings, activeBranding, loc.pathname, isAuthenticated, userRole]);
 
   // PWA version update check
   useEffect(() => {
+    let timer;
     let currentRole = null;
-    if (location.pathname.startsWith("/admin")) {
+    if (loc.pathname.startsWith("/admin")) {
       currentRole = "admin";
-    } else if (location.pathname.startsWith("/provider")) {
+    } else if (loc.pathname.startsWith("/provider")) {
       currentRole = "provider";
-    } else if (location.pathname.startsWith("/customer")) {
+    } else if (loc.pathname.startsWith("/customer")) {
       currentRole = "customer";
     } else if (isAuthenticated && userRole) {
       currentRole = userRole;
@@ -375,19 +389,23 @@ const App = () => {
           });
         }
 
-        setTimeout(() => {
+        timer = setTimeout(() => {
           window.location.reload();
         }, 800);
+        reloadTimerRef.current = timer;
       }
     }
-  }, [activeBranding, location.pathname, isAuthenticated, userRole]);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeBranding, loc.pathname, isAuthenticated, userRole]);
 
   const navigate_fn = useNavigate();
 
   // 🔄 AUTO-REDIRECT: If logged-in, don't show Home/Login page
   useEffect(() => {
     // Only redirect if they land on public "/" route
-    if (isAuthenticated && location.pathname === "/") {
+    if (isAuthenticated && loc.pathname === "/") {
       if (userRole === 'admin' || user?.isAdmin) {
         navigate_fn('/admin/dashboard', { replace: true });
       } else if (userRole === 'provider') {
@@ -396,7 +414,7 @@ const App = () => {
         navigate_fn('/customer/services', { replace: true });
       }
     }
-  }, [isAuthenticated, userRole, user, location.pathname, navigate_fn]);
+  }, [isAuthenticated, userRole, user, loc.pathname, navigate_fn]);
 
   // 🔔 Handle Cold Start Deep Linking & PWA Update Redirects
   useEffect(() => {
@@ -446,10 +464,10 @@ const App = () => {
 
   // 🔄 Reset deep link state on manual navigation
   useEffect(() => {
-    if (!location.state?.fromNotification) {
+    if (!loc.state?.fromNotification) {
       resetDeepLink?.();
     }
-  }, [location.pathname, location.state, resetDeepLink]);
+  }, [loc.pathname, loc.state, resetDeepLink]);
 
   return (
     <Suspense fallback={<LoadingSpinner />}>

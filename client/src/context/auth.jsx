@@ -61,7 +61,7 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
-    const location = useLocation();
+    const loc = useLocation();
     const API = import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api");
     const API_URL_IMAGE = import.meta.env.VITE_BACKEND_URL ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') : window.location.origin;
 
@@ -89,21 +89,21 @@ export const AuthProvider = ({ children }) => {
         }
     });
 
-    // Detect layout branding role reactively from location.pathname
+    // Detect layout branding role reactively from loc.pathname
     const currentBrandingRole = useMemo(() => {
         let currentRole = localStorage.getItem("installRole");
-        if (location.pathname.startsWith("/admin")) {
+        if (loc.pathname.startsWith("/admin")) {
             currentRole = "admin";
-        } else if (location.pathname.startsWith("/provider")) {
+        } else if (loc.pathname.startsWith("/provider")) {
             currentRole = "provider";
-        } else if (location.pathname.startsWith("/customer")) {
+        } else if (loc.pathname.startsWith("/customer")) {
             currentRole = "customer";
         }
         if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
             currentRole = "customer";
         }
         return currentRole;
-    }, [location.pathname]);
+    }, [loc.pathname]);
 
     // Unified setting and branding fetcher
     const fetchSystemAndBranding = useCallback(async (targetRole) => {

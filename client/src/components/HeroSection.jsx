@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
 import { useAuth } from "../context/auth";
@@ -21,6 +20,7 @@ const HeroSection = ({ noMargin = false }) => {
     title: "Power Your Home & Business with Reliable Electrical Services",
     subtitle:
       "Expert wiring, repair, and maintenance for homes & industries across North India.",
+    isDefault: true,
   };
 
   useEffect(() => {
@@ -69,62 +69,79 @@ const HeroSection = ({ noMargin = false }) => {
   }, [API]);
 
   if (loading) {
-    return <LoadingSpinner />
+    return <LoadingSpinner />;
   }
 
   return (
-    <section className={`w-full overflow-hidden px-3 md:px-6 py-4 md:py-6 ${noMargin ? '' : 'mt-16 md:mt-18 lg:mt-20'}`}>
-      <Swiper
-        modules={[Autoplay, Pagination]}
-        autoplay={{ delay: 4000, disableOnInteraction: false }}
-        loop={banners.length > 1}
-        spaceBetween={16}
-        pagination={{ clickable: true, dynamicBullets: true }}
-        breakpoints={{
-          320: { slidesPerView: 1.2 },
-          768: { slidesPerView: 2 },
-          1024: { slidesPerView: 3 },
-        }}
-        className="w-full h-[200px] md:h-[240px] pb-8" // Added pb-8 for pagination dots
-      >
-        {banners.map((banner, index) => {
-          const hasText = banner?.title || banner?.subtitle;
+    <section className={`w-full overflow-hidden px-4 md:px-8 pt-4 pb-2 md:pt-6 md:pb-3 relative ${noMargin ? '' : 'mt-16 md:mt-18 lg:mt-20'}`}>
+      <div className="relative w-full group">
+        <Swiper
+          modules={[Autoplay, Pagination]}
+          autoplay={{ delay: 4000, disableOnInteraction: false }}
+          loop={banners.length > 1}
+          spaceBetween={20}
+          pagination={{ clickable: true }}
+          breakpoints={{
+            320: { slidesPerView: 1.1 },
+            640: { slidesPerView: 1.5 },
+            768: { slidesPerView: 2 },
+            1024: { slidesPerView: 3 },
+          }}
+          className="w-full pb-6"
+        >
+          {banners.map((banner, index) => {
+            const isDefault = banner.isDefault;
 
-          return (
-            <SwiperSlide key={index} className="h-full">
-              <div className="relative w-full h-[180px] md:h-[220px] rounded-xl overflow-hidden shadow-md cursor-pointer group">
-
-                {/* Main image */}
-                <div className="relative w-full h-full">
+            return (
+              <SwiperSlide key={banner._id ? `${banner._id}-${index}` : `${banner.image}-${index}`}>
+                <div className="relative w-full h-[140px] sm:h-[180px] md:h-[220px] rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                  {/* Main image */}
                   <img
                     src={banner.image}
                     alt={banner.title || "banner"}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover"
                   />
-                  {/* Subtle dark gradient overlay at the bottom for text readability */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                </div>
 
-                {/* Text Overlay - Bottom Left */}
-                {hasText && (
-                  <div className="absolute bottom-0 left-0 w-full p-4 z-30">
-                    {banner.title && (
-                      <h3 className="text-base md:text-lg font-bold text-white font-poppins line-clamp-1">
-                        {banner.title}
-                      </h3>
-                    )}
-                    {banner.subtitle && (
-                      <p className="text-xs md:text-sm text-gray-300 font-poppins line-clamp-2 mt-1">
-                        {banner.subtitle}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </SwiperSlide>
-          );
-        })}
-      </Swiper>
+                  {/* Render text overlay ONLY for default banner if backend didn't supply custom designed graphics */}
+                  {isDefault && (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent"></div>
+                      <div className="absolute bottom-0 left-0 w-full p-4 z-10">
+                        {banner.title && (
+                          <h3 className="text-sm sm:text-base md:text-lg font-bold text-white font-poppins line-clamp-1">
+                            {banner.title}
+                          </h3>
+                        )}
+                        {banner.subtitle && (
+                          <p className="text-xxs sm:text-xs md:text-sm text-gray-300 font-poppins line-clamp-2 mt-1">
+                            {banner.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </SwiperSlide>
+            );
+          })}
+        </Swiper>
+      </div>
+      
+      {/* Custom Styles to Override Swiper Bullets color to match the design (e.g. brownish active dot) */}
+      <style>{`
+        .swiper-pagination-bullet {
+          background: #d1d5db !important;
+          opacity: 1 !important;
+          width: 8px !important;
+          height: 8px !important;
+          transition: all 0.3s ease;
+        }
+        .swiper-pagination-bullet-active {
+          background: #78350f !important; /* warm brown matching brand */
+          width: 24px !important;
+          border-radius: 4px !important;
+        }
+      `}</style>
     </section>
   );
 };

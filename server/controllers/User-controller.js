@@ -165,22 +165,21 @@ const register = async (req, res) => {
     }
 
     // Check if user already exists (including cross-user-type email check)
-    const userExists = await User.findOne({
-      $or: [
-        { email: email.trim().toLowerCase() },
-        { phone: phone.trim().replace(/\s+/g, '') }
-      ]
-    });
-
-    // Check if email is already registered with provider or admin
-    const emailExistsInProvider = await Provider.findOne({
-      email: { $regex: new RegExp(`^${email.trim().toLowerCase()}$`, 'i') },
-      isDeleted: false
-    });
-
-    const emailExistsInAdmin = await Admin.findOne({
-      email: email.trim().toLowerCase()
-    });
+    const [userExists, emailExistsInProvider, emailExistsInAdmin] = await Promise.all([
+      User.findOne({
+        $or: [
+          { email: email.trim().toLowerCase() },
+          { phone: phone.trim().replace(/\s+/g, '') }
+        ]
+      }),
+      Provider.findOne({
+        email: { $regex: new RegExp(`^${email.trim().toLowerCase()}$`, 'i') },
+        isDeleted: false
+      }),
+      Admin.findOne({
+        email: email.trim().toLowerCase()
+      })
+    ]);
 
     if (userExists || emailExistsInProvider || emailExistsInAdmin) {
       const errors = {};

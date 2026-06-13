@@ -9,7 +9,7 @@ import {
 import { formatRelativeTime } from '../../utils/format';
 import CDNImage from '../CDNImage';
 
-const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_customer', complaintId, customerId, providerId }) => {
+const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_customer', complaintId, customerId, providerId }) => {
   const { user, showToast } = useAuth();
   const { socket } = useSocket();
 
@@ -52,7 +52,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
         setMessages([]);
         setError('');
 
-        const isCustomerRole = role === 'customer';
+        const isCustomerRole = userRole === 'customer';
         const bookingUrl = bookingId && (isCustomerRole
           ? `/booking/${bookingId}`
           : `/booking/provider-booking/${bookingId}`);
@@ -99,7 +99,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
     };
 
     fetchRoomAndBooking();
-  }, [isOpen, bookingId, role, roomType, complaintId, customerId, providerId]);
+  }, [isOpen, bookingId, userRole, roomType, complaintId, customerId, providerId]);
 
   // 2. Real-time Socket Event Handlers
   useEffect(() => {
@@ -160,7 +160,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
       socket.off('chat:seen', handleSeenReceipt);
       socket.off('provider-status-changed', handleStatusChange);
     };
-  }, [isOpen, socket, room, user, role]);
+  }, [isOpen, socket, room, user, userRole]);
 
   // 3. Auto Scroll latest message
   useEffect(() => {
@@ -262,7 +262,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
   if (!isOpen) return null;
 
   // Resolve Header Details
-  const isCustomer = role === 'customer';
+  const isCustomer = userRole === 'customer';
   const otherParty = isCustomer ? room?.providerId : room?.customerId;
   const isPC = room?.roomType === 'provider_customer' || (!room?.roomType && room?.bookingId);
 
@@ -431,7 +431,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
                 )
               ) : (
                 messages.map((msg, index) => {
-                  const isMe = msg.senderRole === role;
+                  const isMe = msg.senderRole === userRole;
                   const isSystem = msg.messageType === 'system';
 
                   if (isSystem) {

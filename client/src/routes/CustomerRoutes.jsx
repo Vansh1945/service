@@ -5,6 +5,7 @@ import LoadingSpinner from "../components/ui-skeletons/Loader";
 
 const CustomerLayout = lazy(() => import("../layouts/CustomerLayout"));
 const ServiceListingPage = lazy(() => import("../pages/Customer/Services"));
+const ServiceListingNew = lazy(() => import("../pages/Customer/ServiceListing"));
 const ServiceDetailPage = lazy(() => import("../pages/Customer/Servicedetail"));
 const BookService = lazy(() => import("../pages/Customer/Book-Service"));
 const UserProfile = lazy(() => import("../pages/Customer/Profile"));
@@ -23,6 +24,7 @@ const CustomerRoutes = () => {
                         <Route index element={<ServiceListingPage />} />
                         <Route path="profile" element={<UserProfile />} />
                         <Route path="services" element={<ServiceListingPage />} />
+                        <Route path="services-list" element={<ServiceListingNew />} />
                         <Route path="services/:id" element={<ServiceDetailPage />} />
                         <Route path="book-service/:serviceId" element={<BookService />} />
                         <Route path="bookings" element={<CustomerBookingsPage />} />

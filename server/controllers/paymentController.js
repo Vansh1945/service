@@ -2060,6 +2060,9 @@ const generateProviderEarningsReport = async (req, res) => {
       }
     });
 
+    const COMPLETED_STATUSES = new Set(['completed', 'transferred', 'approved']);
+    const PENDING_STATUSES = new Set(['requested', 'processing', 'under_review']);
+
     for (const provider of providers) {
       const stats = earningStatsMap[provider._id.toString()] || {
         totalBookings: 0,
@@ -2083,11 +2086,11 @@ const generateProviderEarningsReport = async (req, res) => {
       const wStats = withdrawalStatsMap[provider._id.toString()] || [];
 
       const completedWithdrawal = wStats
-        .filter(s => ['completed', 'transferred', 'approved'].includes(s.status))
+        .filter(s => COMPLETED_STATUSES.has(s.status))
         .reduce((sum, s) => sum + s.totalAmount, 0);
 
       const pendingWithdrawal = wStats
-        .filter(s => ['requested', 'processing', 'under_review'].includes(s.status))
+        .filter(s => PENDING_STATUSES.has(s.status))
         .reduce((sum, s) => sum + s.totalAmount, 0);
 
       // Pending Balance (Withdrawable) = Total Net in period - (All Withdrawals in period)
@@ -2856,12 +2859,14 @@ const releaseHeldEarnings = async () => {
 
       for (const earning of heldEarnings) {
         // Check if dispute is raised on the booking
-        if (earning.booking) {
-          if (earning.booking.disputeRaised || earning.booking.disputeStatus === 'pending' || earning.booking.disputeStatus === 'under_review') {
-            console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${earning.booking._id}`);
+        const booking = earning.booking;
+        if (booking) {
+          const bookingId = booking._id;
+          if (booking.disputeRaised || booking.disputeStatus === 'pending' || booking.disputeStatus === 'under_review') {
+            console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${bookingId}`);
             continue;
           }
-          if (earning.booking.paymentStatus === 'refunded' || earning.booking.adminRefundDecision === 'approved') {
+          if (booking.paymentStatus === 'refunded' || booking.adminRefundDecision === 'approved') {
             console.log(`Cancelling earning ${earning._id} - Booking refunded/approved for refund`);
             if (currentSession) {
               await ProviderEarning.findOneAndUpdate(

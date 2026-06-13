@@ -112,7 +112,7 @@ const defaultZones = [];
 
 const ZoneManagement = () => {
   const { showToast } = useAuth();
-  const location = useLocation();
+  const loc = useLocation();
   const [zones, setZones] = useState([]);
 
   const [providers, setProviders] = useState([]);
@@ -302,12 +302,12 @@ const ZoneManagement = () => {
   }, [showToast]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(loc.search);
     const analyticsZone = params.get('analyticsZone');
     if (analyticsZone) {
       handleOpenAnalytics(analyticsZone);
     }
-  }, [location.search, handleOpenAnalytics]);
+  }, [loc.search, handleOpenAnalytics]);
 
   // Compute spatial statistics inside a zone polygon dynamically
   const getZoneStats = useCallback((coordinates) => {

@@ -569,23 +569,24 @@ const getAllFeedbacks = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
 
-    const feedbacks = await Feedback.find()
-      .populate('customer', 'name email')
-      .populate({
-        path: 'providerFeedback.provider',
-        select: 'name email'
-      })
-      .populate({
-        path: 'serviceFeedback.service',
-        select: 'title category'
-      })
-      .populate('booking', 'date bookingId')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
-
-    const total = await Feedback.countDocuments();
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find()
+        .populate('customer', 'name email')
+        .populate({
+          path: 'providerFeedback.provider',
+          select: 'name email'
+        })
+        .populate({
+          path: 'serviceFeedback.service',
+          select: 'title category'
+        })
+        .populate('booking', 'date bookingId')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Feedback.countDocuments()
+    ]);
 
     return res.status(200).json({
       success: true,
