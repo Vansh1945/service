@@ -12,7 +12,6 @@ import ServiceEmptyState from './components/ServiceEmptyState';
 import ServiceCardSkeleton from '../../components/ui-skeletons/ServiceCardSkeleton';
 import { getDynamicCategoryIcon } from './components/categoryIconHelper';
 import ServiceFilterPanel from './components/ServiceFilterPanel';
-import SearchBar from './components/SearchBar';
 
 const ServiceListing = () => {
   const navigate = useNavigate();
@@ -281,15 +280,8 @@ const ServiceListing = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/30 font-roboto pb-20 lg:pb-0">
-      {/* Search Bar - Fixed below Navbar */}
-      <div className="fixed top-16 md:top-[4.5rem] lg:top-20 left-0 right-0 z-40 bg-white border-b border-gray-150 shadow-sm">
-        <div className="max-w-[98%] mx-auto px-2 md:px-4 py-2">
-          <SearchBar value={searchTerm} onChange={handleSearch} />
-        </div>
-      </div>
-
-      {/* Main content - offset for fixed navbar + fixed searchbar */}
-      <div className="max-w-[98%] mx-auto px-2 md:px-4 pt-16 md:pt-[4.5rem] py-2">
+      {/* Main content */}
+      <div className="max-w-[98%] mx-auto px-2 md:px-4 pt-4 py-2">
 
         {/* 1. Breadcrumb Row */}
         <nav className="flex items-center gap-2 text-xs text-gray-400 font-medium mb-3.5">

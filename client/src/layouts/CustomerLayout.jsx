@@ -8,6 +8,7 @@ import {
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
+import SearchBar from '../pages/Customer/components/Customer-SearchBar';
 
 import * as SystemService from '../services/SystemService';
 import * as CustomerService from '../services/CustomerService';
@@ -75,6 +76,11 @@ const CustomerLayout = () => {
                                     </span>
                                 </div>
                             </Link>
+                        </div>
+
+                        {/* Search Bar - Desktop/Tablet */}
+                        <div className="hidden md:block flex-1 max-w-md mx-6">
+                            <SearchBar />
                         </div>
 
                         {/* Right Section */}
@@ -154,6 +160,10 @@ const CustomerLayout = () => {
 
             {/* Main Content */}
             <main className="min-h-[calc(100vh-80px)] pt-16 md:pt-18 lg:pt-20">
+                {/* Mobile Search Bar */}
+                <div className="block md:hidden sticky top-16 z-40 px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
+                    <SearchBar />
+                </div>
                 <div className="w-full py-4 lg:py-6">
                     <Outlet />
                 </div>

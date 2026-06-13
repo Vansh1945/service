@@ -17,7 +17,6 @@ import ServiceCard from './components/ServiceCard';
 import ServiceEmptyState from './components/ServiceEmptyState';
 import { getDynamicCategoryIcon } from './components/categoryIconHelper';
 import ServiceFilterPanel from './components/ServiceFilterPanel';
-import SearchBar from './components/SearchBar';
 
 const ServiceListingPage = () => {
   const navigate = useNavigate();
@@ -253,14 +252,7 @@ const ServiceListingPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/30 pb-4 md:pb-0">
-      {/* Search Bar (Below Navbar) */}
-      <div className="bg-white border-b border-gray-150 py-3 px-4 shadow-sm -mt-4 lg:-mt-6 mb-4">
-        <div className="max-w-[98%] mx-auto">
-          <SearchBar value={searchTerm} onChange={handleSearch} />
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-gray-50/30 pb-4 md:pb-0 pt-4">
       {/* Slider Banner Section */}
       <HeroSection noMargin />
 
