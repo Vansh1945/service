@@ -362,7 +362,7 @@ const ProviderLayout = () => {
                 </header>
 
                 {/* Main content */}
-                <main className="flex-1 overflow-auto bg-gray-50 pb-28 pb-safe lg:pb-0">
+                <main className="flex-1 overflow-auto bg-gray-50 pb-safe-nav lg:pb-0">
                     <div className="p-4 lg:p-6 xl:p-8">
                         <Outlet />
                     </div>
@@ -370,7 +370,7 @@ const ProviderLayout = () => {
             </div>
 
             {/* Sticky bottom navigation for mobile */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] px-4 pt-2.5 pb-2.5 pb-safe flex justify-around items-center">
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] px-4 pt-2.5 pb-safe-nav-bar flex justify-around items-center">
                 {/* Home/Dashboard */}
                 <Link
                     to="/provider/dashboard"

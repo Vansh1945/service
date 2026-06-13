@@ -54,19 +54,41 @@ export const calculateNetAmount = (booking) => {
     return booking.providerEarnings.toFixed(2);
   }
   const systemSettings = readCachedSystemSettings();
-  const fallbackSplits = systemSettings?.surgeSplitSettings || {
-    visiting: 60,
-    rain: 70,
-    traffic: 70,
-    night: 70,
-    demand: 50
+  
+  const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
+    let bSplits = bookingSplits;
+    if (typeof bSplits === 'string') {
+      try { bSplits = JSON.parse(bSplits); } catch (_) { bSplits = null; }
+    }
+    if (bSplits && typeof bSplits === 'object' && bSplits[key] !== undefined && bSplits[key] !== null) {
+      const val = parseFloat(bSplits[key]);
+      if (!isNaN(val)) return val;
+    }
+    
+    let sSplits = systemSplits;
+    if (typeof sSplits === 'string') {
+      try { sSplits = JSON.parse(sSplits); } catch (_) { sSplits = null; }
+    }
+    if (sSplits && typeof sSplits === 'object' && sSplits[key] !== undefined && sSplits[key] !== null) {
+      const val = parseFloat(sSplits[key]);
+      if (!isNaN(val)) return val;
+    }
+    
+    return defaultVal;
   };
+
+  const splitVisiting = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'visiting', 60);
+  const splitRain = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'rain', 70);
+  const splitTraffic = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'traffic', 70);
+  const splitNight = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'night', 70);
+  const splitDemand = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'demand', 50);
+
   const subtotal = parseFloat(calculateSubtotal(booking)) || 0;
-  const visiting = booking.visitingCharge ? parseFloat((booking.visitingCharge * ((booking.surgeSplitSettings?.visiting || fallbackSplits.visiting) / 100)).toFixed(2)) : 0;
-  const rain = booking.rainCharge ? parseFloat((booking.rainCharge * ((booking.surgeSplitSettings?.rain || fallbackSplits.rain) / 100)).toFixed(2)) : 0;
-  const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * ((booking.surgeSplitSettings?.traffic || fallbackSplits.traffic) / 100)).toFixed(2)) : 0;
-  const night = booking.nightCharge ? parseFloat((booking.nightCharge * ((booking.surgeSplitSettings?.night || fallbackSplits.night) / 100)).toFixed(2)) : 0;
-  const demand = booking.demandSurge ? parseFloat((booking.demandSurge * ((booking.surgeSplitSettings?.demand || fallbackSplits.demand) / 100)).toFixed(2)) : 0;
+  const visiting = booking.visitingCharge ? parseFloat((booking.visitingCharge * (splitVisiting / 100)).toFixed(2)) : 0;
+  const rain = booking.rainCharge ? parseFloat((booking.rainCharge * (splitRain / 100)).toFixed(2)) : 0;
+  const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * (splitTraffic / 100)).toFixed(2)) : 0;
+  const night = booking.nightCharge ? parseFloat((booking.nightCharge * (splitNight / 100)).toFixed(2)) : 0;
+  const demand = booking.demandSurge ? parseFloat((booking.demandSurge * (splitDemand / 100)).toFixed(2)) : 0;
   const commission = booking.commission?.amount || booking.commissionAmount || 0;
   return (subtotal + visiting + rain + traffic + night + demand - commission).toFixed(2);
 };

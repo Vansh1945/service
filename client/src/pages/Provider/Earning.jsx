@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import {
   Filter, Loader2, X, Info, TrendingDown, Eye, Banknote, Building,
@@ -15,28 +16,15 @@ import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 // ── Utility Helpers ──────────────────────────────────────────────────────────
 
 
+import StatsCard from '../../components/ui/StatsCard';
+
 // ── Shared UI Components ─────────────────────────────────────────────────────
 
-const StatCard = ({ title, value, icon: Icon, subtext, borderColor = 'border-primary', iconBg = 'bg-primary/10', iconColor = 'text-primary' }) => (
-  <div className={`bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 ${borderColor} hover:shadow-md transition-shadow min-w-0`}>
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-      <div className={`p-2 ${iconBg} rounded-xl w-fit shrink-0`}>
-        <Icon className={`w-5 h-5 ${iconColor}`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight truncate">{title}</p>
-        <p className="text-base sm:text-xl font-bold text-secondary truncate mt-0.5">{value}</p>
-        {subtext && <p className="text-[10px] text-secondary/40 truncate leading-none mt-0.5">{subtext}</p>}
-      </div>
-    </div>
-  </div>
-);
-
-const Badge = ({ status }) => {
+const Badge = ({ status, className = "" }) => {
   const cfg = getStatusConfig(status);
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${cfg.color}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${cfg.color} ${className}`}>
       <Icon className="w-3.5 h-3.5" />
       {cfg.label}
     </span>
@@ -76,7 +64,7 @@ const ProviderEarningsDashboard = () => {
   const [withdrawalReport, setWithdrawalReport] = useState([]);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
-  const [expandedCards, setExpandedCards] = useState({ weekly: true, monthly: true });
+  const [expandedCards, setExpandedCards] = useState({ weekly: false, monthly: false });
   const [withdrawalForm, setWithdrawalForm] = useState({ amount: '' });
   const [downloading, setDownloading] = useState({ earnings: false, withdrawals: false });
   const [providerBankDetails, setProviderBankDetails] = useState(null);
@@ -90,12 +78,9 @@ const ProviderEarningsDashboard = () => {
   const [weeklyData, setWeeklyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
-  const [showOTPModal, setShowOTPModal] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpDelivery, setOtpDelivery] = useState(null);
-  const [otpTimer, setOtpTimer] = useState(0);
-  const [cooldownTime, setCooldownTime] = useState(null);
   const [surchargeOpenId, setSurchargeOpenId] = useState(null);
+
+
 
   useEffect(() => {
     const handleDocumentClick = () => {
@@ -272,7 +257,7 @@ const ProviderEarningsDashboard = () => {
           const text = await err.response.data.text();
           const errorJson = JSON.parse(text);
           errMsg = errorJson.message || errorJson.error || errMsg;
-        } catch (_) {}
+        } catch (_) { }
       } else if (err.response?.data?.error) {
         errMsg = err.response.data.error;
       } else if (err.response?.data?.message) {
@@ -287,22 +272,21 @@ const ProviderEarningsDashboard = () => {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchSummary(), fetchWeeklyMonthlyData(), fetchEarningsReport(), fetchWithdrawalReport(), fetchHeldEarnings()]);
+      await Promise.all([
+        fetchSummary(),
+        fetchWeeklyMonthlyData(),
+        fetchEarningsReport(),
+        fetchWithdrawalReport(),
+        fetchHeldEarnings(),
+        fetchProviderProfile()
+      ]);
     } catch (err) { console.error('Refresh all error:', err); } finally { setLoading(false); }
-  }, [fetchSummary, fetchWeeklyMonthlyData, fetchEarningsReport, fetchWithdrawalReport, fetchHeldEarnings]);
+  }, [fetchSummary, fetchWeeklyMonthlyData, fetchEarningsReport, fetchWithdrawalReport, fetchHeldEarnings, fetchProviderProfile]);
 
   const getTrend = (current, previous) => ({
     trend: previous === 0 ? 'neutral' : current > previous ? 'up' : current < previous ? 'down' : 'neutral',
     percentage: previous === 0 ? 0 : Math.abs(((current - previous) / previous) * 100).toFixed(1)
   });
-
-  useEffect(() => {
-    let timer;
-    if (otpTimer > 0 && showOTPModal) {
-      timer = setInterval(() => setOtpTimer(t => t - 1), 1000);
-    }
-    return () => clearInterval(timer);
-  }, [otpTimer, showOTPModal]);
 
   useEffect(() => { refreshAll(); }, [timeFilter, dateFilter, refreshAll]);
   useEffect(() => {
@@ -313,7 +297,13 @@ const ProviderEarningsDashboard = () => {
   if (loading && !summary.totalEarnings && !earningsReport.length) {
     return (
       <div className="min-h-screen p-6 max-w-7xl mx-auto">
-        <TableSkeleton rows={8} cols={6} />
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden p-4">
+          <table className="w-full text-left">
+            <tbody>
+              <TableSkeleton rows={8} cols={6} />
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -344,14 +334,13 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
-          <StatCard title="Gross Billed" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext="Total paid by customers" borderColor="border-primary" iconBg="bg-primary/10" iconColor="text-primary" />
-          <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" borderColor="border-emerald-500" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-          <StatCard title="Withdrawable Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw (Net)" borderColor="border-accent" iconBg="bg-accent/10" iconColor="text-accent" />
-          <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} borderColor="border-indigo-500" iconBg="bg-indigo-50" iconColor="text-indigo-600" />
-          <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" borderColor="border-orange-400" iconBg="bg-orange-50" iconColor="text-orange-500" />
-          <StatCard title="Held Payouts" value={formatCurrency(summary.heldAmount)} icon={Lock} subtext="Under review" borderColor="border-purple-400" iconBg="bg-purple-50" iconColor="text-purple-500" />
-          <StatCard title="Disputes" value={summary.disputeCount} icon={ShieldAlert} subtext="Active disputes" borderColor="border-red-400" iconBg="bg-red-50" iconColor="text-red-500" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-4">
+          <StatsCard title="Gross Billed" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext="Total paid by customers" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+          <StatsCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+          <StatsCard title="Withdrawable Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw (Net)" iconBg="bg-orange-50" iconColor="text-orange-500" />
+          <StatsCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} iconBg="bg-blue-50" iconColor="text-blue-500" />
+          <StatsCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" iconBg="bg-amber-50" iconColor="text-amber-500" />
+          <StatsCard title="Held Payouts" value={formatCurrency(summary.heldAmount)} icon={Lock} subtext="Under review" iconBg="bg-purple-50" iconColor="text-purple-500" />
         </div>
 
         {/* Charts Section */}
@@ -373,10 +362,12 @@ const ProviderEarningsDashboard = () => {
             {expandedCards.weekly && (
               <div className="grid grid-cols-2 gap-3">
                 {weeklyData.slice(0, 4).map((w) => (
-                  <div key={w.week} className="bg-gray-50 p-3 rounded-lg animate-fadeIn">
-                    <p className="text-xs font-medium text-secondary/50 uppercase">{w.week}</p>
-                    <p className="text-lg font-bold text-secondary">{formatCurrency(w.earnings)}</p>
-                    <p className="text-[10px] text-secondary/40">{w.count} bookings</p>
+                  <div key={w.week} className="bg-gray-50 p-3 rounded-lg animate-fadeIn flex flex-col justify-between min-w-0">
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 mb-0.5 uppercase tracking-wide truncate">{w.week}</p>
+                      <p className="text-sm sm:text-base md:text-lg font-bold text-slate-800 leading-normal whitespace-nowrap">{formatCurrency(w.earnings)}</p>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">{w.count} bookings</p>
                   </div>
                 ))}
               </div>
@@ -402,13 +393,13 @@ const ProviderEarningsDashboard = () => {
                 {monthlyData.slice(0, 6).map((m, i) => {
                   const trend = i > 0 ? getTrend(m.earnings, monthlyData[i - 1].earnings) : { trend: 'neutral' };
                   return (
-                    <div key={m.month} className="bg-gray-50 p-2 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium text-secondary/50 uppercase">{m.month}</span>
-                        {trend.trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500" />}
-                        {trend.trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500" />}
+                    <div key={m.month} className="bg-gray-50 p-2.5 rounded-lg flex flex-col justify-between min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide truncate">{m.month}</span>
+                        {trend.trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500 shrink-0" />}
+                        {trend.trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500 shrink-0" />}
                       </div>
-                      <p className="text-sm font-bold text-secondary">{formatCurrency(m.earnings)}</p>
+                      <p className="text-sm sm:text-base font-bold text-slate-800 leading-normal whitespace-nowrap">{formatCurrency(m.earnings)}</p>
                     </div>
                   );
                 })}
@@ -418,24 +409,24 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Withdrawal Quick Action */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl text-primary">
-                <Wallet className="w-6 h-6" />
+        <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-primary/10 rounded-xl text-primary shrink-0">
+                <Wallet className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-secondary/50">Available for withdrawal</p>
-                <p className="text-3xl font-bold text-secondary mt-1">{formatCurrency(summary.availableBalance)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-medium text-slate-500 mb-0.5 truncate">Available for withdrawal</p>
+                <p className="text-sm sm:text-base md:text-lg font-bold text-slate-800 leading-normal whitespace-nowrap">{formatCurrency(summary.availableBalance)}</p>
               </div>
             </div>
             <button
               onClick={() => { fetchProviderProfile(); setShowWithdrawalModal(true); }}
               disabled={summary.availableBalance < (summary.minWithdrawalLimit ?? 500)}
-              className="w-full sm:w-auto px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="shrink-0 px-3 sm:px-6 py-2 sm:py-3 bg-accent text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 shadow-sm"
             >
-              <DollarSign className="w-4 h-4" />
-              Request Payout
+              <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Request Payout</span>
             </button>
           </div>
           {summary.availableBalance < (summary.minWithdrawalLimit ?? 500) && (
@@ -684,7 +675,7 @@ const ProviderEarningsDashboard = () => {
                                 )}
                               </td>
                               <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
-                                +{formatCurrency(e.netAmount)}
+                                {formatCurrency(e.netAmount)}
                               </td>
                               <td className="px-6 py-4">
                                 <Badge status={e.payoutStatus || e.status} />
@@ -934,7 +925,7 @@ const ProviderEarningsDashboard = () => {
                             <td className="px-6 py-4 text-center text-sm text-secondary/50">
                               {formatDate(r.createdAt)}
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 capitalize">
                               <Badge status={r.status} />
                             </td>
                             <td className="px-6 py-4 text-right">
@@ -1000,52 +991,61 @@ const ProviderEarningsDashboard = () => {
 
             {/* Reports Tab */}
             {activeTab === 'reports' && (
-              <div className="p-6">
-                <div className="flex flex-wrap items-center gap-4 mb-4 bg-gray-50 p-4 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-primary" />
-                    <p className="text-xs font-medium text-secondary/40 uppercase">Select Period:</p>
+              <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-6">
+                {/* Responsive Date Period Filter */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/70 p-4 rounded-xl border border-slate-100">
+                  <div className="flex flex-col xs:flex-row xs:items-center gap-3 w-full sm:w-auto">
+                    <div className="flex items-center gap-2 text-slate-500 shrink-0">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-semibold uppercase tracking-wider">Select Period:</span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full xs:w-auto">
+                      <input
+                        type="date"
+                        value={dateFilter.startDate}
+                        onChange={e => setDateFilter(p => ({ ...p, startDate: e.target.value }))}
+                        className="w-full xs:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 text-slate-700 shadow-sm"
+                      />
+                      <span className="text-slate-300 font-bold shrink-0">→</span>
+                      <input
+                        type="date"
+                        value={dateFilter.endDate}
+                        onChange={e => setDateFilter(p => ({ ...p, endDate: e.target.value }))}
+                        className="w-full xs:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 text-slate-700 shadow-sm"
+                      />
+                    </div>
                   </div>
-                  <input
-                    type="date"
-                    value={dateFilter.startDate}
-                    onChange={e => setDateFilter(p => ({ ...p, startDate: e.target.value }))}
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <span className="text-gray-300">→</span>
-                  <input
-                    type="date"
-                    value={dateFilter.endDate}
-                    onChange={e => setDateFilter(p => ({ ...p, endDate: e.target.value }))}
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
                   <button
                     onClick={() => setDateFilter({ startDate: '', endDate: '' })}
-                    className="text-xs font-medium text-primary hover:text-primary/80 ml-auto"
+                    className="text-xs font-bold text-teal-650 hover:text-teal-750 transition-colors self-end sm:self-center shrink-0 border border-teal-100 px-3.5 py-2 rounded-lg bg-teal-50/50 hover:bg-teal-50"
                   >
                     Clear Filters
                   </button>
                 </div>
 
-                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3.5 mb-6 flex items-start gap-2 max-w-3xl mx-auto">
+                {/* Info Note */}
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3.5 flex items-start gap-2">
                   <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
                   <span>
                     <strong>Note:</strong> To download reports, select a date range. The selected range must be between <strong>7 days</strong> and <strong>2 months</strong>.
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+                {/* Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {/* Earnings Report Card */}
-                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-                    <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit">
-                      <FileText className="w-6 h-6" />
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-100 flex flex-col justify-between">
+                    <div>
+                      <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit shadow-sm border border-gray-100/50">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-semibold text-secondary mb-1">Earnings Report</h4>
+                      <p className="text-xs text-secondary/40 mb-5">Full spreadsheet of services, revenue, and commission fees.</p>
                     </div>
-                    <h4 className="text-sm font-semibold text-secondary mb-1">Earnings Report</h4>
-                    <p className="text-xs text-secondary/40 mb-5">Full spreadsheet of services, revenue, and commission fees.</p>
                     <button
                       onClick={() => downloadReport('earnings')}
                       disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
-                      className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
                     >
                       <Download className="w-4 h-4" />
                       {downloading.earnings ? 'Generating...' : 'Download Excel'}
@@ -1053,16 +1053,18 @@ const ProviderEarningsDashboard = () => {
                   </div>
 
                   {/* Withdrawals Report Card */}
-                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-                    <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit">
-                      <Receipt className="w-6 h-6" />
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-100 flex flex-col justify-between">
+                    <div>
+                      <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit shadow-sm border border-gray-100/50">
+                        <Receipt className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-semibold text-secondary mb-1">Withdrawal Report</h4>
+                      <p className="text-xs text-secondary/40 mb-5">Detailed history of bank transfers and clearance statuses.</p>
                     </div>
-                    <h4 className="text-sm font-semibold text-secondary mb-1">Withdrawal Report</h4>
-                    <p className="text-xs text-secondary/40 mb-5">Detailed history of bank transfers and clearance statuses.</p>
                     <button
                       onClick={() => downloadReport('withdrawals')}
                       disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
-                      className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
                     >
                       <Download className="w-4 h-4" />
                       {downloading.withdrawals ? 'Generating...' : 'Download Report'}
@@ -1105,11 +1107,17 @@ const ProviderEarningsDashboard = () => {
               </div>
 
               {providerBankDetails && (
-                <div className="p-4 bg-gray-50 rounded-lg space-y-3">
-                  <p className="text-xs font-medium text-secondary/40 uppercase">Destination Account</p>
+                <Link
+                  to="/provider/profile"
+                  className="block p-4 bg-gray-50 hover:bg-gray-100/70 border border-gray-200 hover:border-teal-200 rounded-xl space-y-3 transition-all cursor-pointer group"
+                >
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs font-semibold text-secondary/40 uppercase tracking-wider">Destination Account</p>
+                    <span className="text-[10px] text-primary group-hover:underline font-bold">Edit Details →</span>
+                  </div>
                   <div className="grid grid-cols-1 gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-lg text-primary shadow-sm border border-gray-100">
+                      <div className="p-2 bg-white rounded-lg text-primary shadow-sm border border-gray-100 group-hover:bg-primary/5">
                         <Building className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
@@ -1137,29 +1145,29 @@ const ProviderEarningsDashboard = () => {
                   {/* Verification Status Banner */}
                   <div className="pt-2 border-t border-gray-200">
                     {providerBankDetails.verified ? (
-                      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-100 text-green-700 rounded-lg text-xs font-medium">
+                      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-100 text-green-700 rounded-lg text-xs font-medium animate-fadeIn">
                         <CheckCircle className="w-4 h-4 shrink-0 text-green-600" />
                         <span>Bank details verified and active.</span>
                       </div>
                     ) : providerBankDetails.verificationStatus === 'rejected' ? (
-                      <div className="flex flex-col gap-1 p-2 bg-red-50 border border-red-100 text-red-700 rounded-lg text-xs font-medium">
+                      <div className="flex flex-col gap-1 p-2 bg-red-50 border border-red-100 text-red-700 rounded-lg text-xs font-medium animate-fadeIn">
                         <div className="flex items-center gap-1.5 font-bold">
                           <XCircle className="w-4 h-4 shrink-0 text-red-600" />
                           <span>Bank Details Rejected</span>
                         </div>
-                        <p className="text-[10px] text-red-600/80">Please update bank details in profile to resubmit.</p>
+                        <p className="text-[10px] text-red-650/80">Please update bank details in profile to resubmit.</p>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-1 p-2 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-xs font-medium">
+                      <div className="flex flex-col gap-1 p-2 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-xs font-medium animate-fadeIn">
                         <div className="flex items-center gap-1.5 font-bold">
                           <Clock className="w-4 h-4 shrink-0 text-amber-600" />
                           <span>Pending Verification</span>
                         </div>
-                        <p className="text-[10px] text-amber-600/80">Withdrawals are locked until details are approved.</p>
+                        <p className="text-[10px] text-amber-650/80">Withdrawals are locked until details are approved.</p>
                       </div>
                     )}
                   </div>
-                </div>
+                </Link>
               )}
 
               <button
@@ -1177,75 +1185,92 @@ const ProviderEarningsDashboard = () => {
       {/* Withdrawal Details Modal */}
       {selectedWithdrawal && (
         <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-scale-up">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] overflow-y-auto animate-scale-up border border-gray-100">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-lg font-semibold text-secondary">Payout Details</h3>
-                <p className="text-xs text-secondary/40 font-mono">Ref: {selectedWithdrawal.transactionReference || 'N/A'}</p>
+                <h3 className="text-lg font-bold text-secondary">Payout Details</h3>
+                <p className="text-xs text-secondary/40 font-mono mt-0.5">Ref: {selectedWithdrawal.transactionReference || 'N/A'}</p>
               </div>
-              <button onClick={() => setSelectedWithdrawal(null)} className="p-1 hover:bg-gray-100 rounded-lg text-secondary/40">
+              <button onClick={() => setSelectedWithdrawal(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-secondary/40 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-6 space-y-5">
-              <div className="flex items-center justify-between bg-primary/5 p-4 rounded-lg border border-primary/10">
+              <div className="flex items-center justify-between bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/50">
                 <div>
-                  <p className="text-xs font-medium text-primary/60 uppercase">Net Disbursed</p>
-                  <p className="text-2xl font-bold text-primary">{formatCurrency(selectedWithdrawal.netAmount || selectedWithdrawal.amount)}</p>
+                  <p className="text-[10px] font-bold text-emerald-700/75 uppercase tracking-wider">Net Disbursed</p>
+                  <p className="text-2xl font-black text-emerald-600 mt-0.5">{formatCurrency(selectedWithdrawal.netAmount || selectedWithdrawal.amount)}</p>
                 </div>
-                <Badge status={selectedWithdrawal.status} />
+                <Badge className="capitalize" status={selectedWithdrawal.status} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100/50">
                 <div>
-                  <p className="text-xs text-secondary/40 uppercase mb-1">Status</p>
-                  <p className="text-sm font-medium text-secondary capitalize">{selectedWithdrawal.status?.replace('_', ' ')}</p>
+                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Status</p>
+                  <p className="text-sm font-semibold text-secondary capitalize">{selectedWithdrawal.status?.replace('_', ' ')}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-secondary/40 uppercase mb-1">Requested Amount</p>
-                  <p className="text-sm font-medium text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
+                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Requested Amount</p>
+                  <p className="text-sm font-semibold text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-secondary/40 uppercase mb-1">Request Date</p>
-                  <p className="text-sm font-medium text-secondary">{formatDate(selectedWithdrawal.createdAt)}</p>
+                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Request Date</p>
+                  <p className="text-sm font-semibold text-secondary">{formatDate(selectedWithdrawal.createdAt)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-secondary/40 uppercase mb-1">Transfer Info</p>
-                  <p className="text-sm font-medium text-secondary">
+                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Transfer Info</p>
+                  <p className="text-sm font-semibold text-secondary">
                     {selectedWithdrawal.transferDate ? `${formatDate(selectedWithdrawal.transferDate)}` : 'Pending'}
                   </p>
                 </div>
               </div>
 
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs font-medium text-secondary/40 uppercase mb-2">Bank Destination</p>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-lg text-primary">
-                    <Building className="w-4 h-4" />
+              <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-2.5">Bank Destination</p>
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-white rounded-lg text-primary border border-slate-100 shadow-sm mt-0.5">
+                    <Building className="w-5 h-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-secondary">{providerBankDetails?.bankName || 'Your Bank'}</p>
-                    <p className="text-xs text-secondary/40">A/C: {providerBankDetails?.accountNo || 'N/A'}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-secondary truncate">
+                      {selectedWithdrawal.paymentDetails?.bankName || providerBankDetails?.bankName || 'Your Bank'}
+                    </p>
+                    <p className="text-xs text-secondary/60 font-semibold mt-0.5">
+                      A/C: {selectedWithdrawal.paymentDetails?.accountNumber || providerBankDetails?.accountNo || 'N/A'}
+                    </p>
+                    {(selectedWithdrawal.paymentDetails?.ifscCode || providerBankDetails?.ifscCode || providerBankDetails?.ifsc) && (
+                      <p className="text-[10px] text-secondary/40 font-mono mt-0.5 uppercase">
+                        IFSC: {selectedWithdrawal.paymentDetails?.ifscCode || providerBankDetails?.ifscCode || providerBankDetails?.ifsc}
+                      </p>
+                    )}
+                    {(selectedWithdrawal.paymentDetails?.accountName || providerBankDetails?.accountName || providerBankDetails?.accountHolderName) && (
+                      <p className="text-[10px] text-secondary/40 font-medium mt-0.5">
+                        Holder: {selectedWithdrawal.paymentDetails?.accountName || providerBankDetails?.accountName || providerBankDetails?.accountHolderName}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
 
               {(selectedWithdrawal.adminRemark || selectedWithdrawal.paymentDetails) && (
-                <div className="p-4 bg-amber-50 rounded-lg">
-                  <p className="text-xs font-medium text-amber-600 uppercase mb-2">Notes from Admin</p>
-                  {selectedWithdrawal.adminRemark && <p className="text-sm text-amber-700">{selectedWithdrawal.adminRemark}</p>}
+                <div className="p-4 bg-amber-50/70 border border-amber-100/70 rounded-xl">
+                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2">Notes from Admin/System</p>
+                  {selectedWithdrawal.adminRemark && <p className="text-sm font-medium text-amber-900">{selectedWithdrawal.adminRemark}</p>}
                   {selectedWithdrawal.paymentDetails && (
-                    <div className="text-xs text-amber-600 mt-2">
+                    <div className="text-xs text-amber-850 mt-2 space-y-1">
                       {typeof selectedWithdrawal.paymentDetails === 'object' ? (
-                        Object.entries(selectedWithdrawal.paymentDetails).map(([k, v]) => (
-                          <div key={k} className="flex justify-between py-0.5">
-                            <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
-                            <span>{v?.toString()}</span>
-                          </div>
-                        ))
+                        Object.entries(selectedWithdrawal.paymentDetails).map(([k, v]) => {
+                          if (!v) return null;
+                          return (
+                            <div key={k} className="flex justify-between py-0.5 border-b border-amber-100/30 last:border-0">
+                              <span className="capitalize text-amber-700 font-medium">{k.replace(/([A-Z])/g, ' $1')}:</span>
+                              <span className="font-semibold text-amber-900">{v?.toString()}</span>
+                            </div>
+                          );
+                        })
                       ) : (
-                        <p>{selectedWithdrawal.paymentDetails}</p>
+                        <p className="text-amber-800">{selectedWithdrawal.paymentDetails}</p>
                       )}
                     </div>
                   )}
@@ -1253,10 +1278,10 @@ const ProviderEarningsDashboard = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100">
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
               <button
                 onClick={() => setSelectedWithdrawal(null)}
-                className="w-full py-3 bg-gray-100 text-secondary/60 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                className="w-full py-3 bg-white border border-gray-250 text-secondary/70 rounded-xl font-bold hover:bg-gray-50 transition-colors shadow-sm text-sm"
               >
                 Close
               </button>

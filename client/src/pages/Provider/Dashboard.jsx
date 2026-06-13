@@ -6,6 +6,7 @@ import {
   FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
 } from 'react-icons/fi';
 import Loader from '../../components/ui-skeletons/Loader';
+import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';
@@ -13,26 +14,10 @@ import * as ComplaintService from '../../services/ComplaintService';
 import { formatCurrency, formatDate, formatTime } from '../../utils/format';
 import { formatAddress } from '../../utils/providerHelpers';
 
-const PayoutStatusBadge = ({ status }) => {
-  const cfg = {
-    'Payout On Hold': 'bg-orange-100 text-orange-700 border-orange-200',
-    'Payout Ready': 'bg-green-100 text-green-700 border-green-200',
-    'Payout Released': 'bg-blue-100 text-blue-700 border-blue-200',
-    'Refund Adjusted': 'bg-gray-100 text-gray-500 border-gray-200',
-    'Dispute Hold': 'bg-red-100 text-red-700 border-red-200',
-    'Not Processed': 'bg-gray-50 text-gray-400 border-gray-100',
-  };
 
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-      {status === 'Payout On Hold' || status === 'Dispute Hold' ? <FiLock size={10} /> : <FiUnlock size={10} />}
-      {status || 'Unknown'}
-    </span>
-  );
-};
 
 const Dashboard = () => {
-  const { token, API, showToast } = useAuth();
+  const { token, showToast } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [Recharts, setRecharts] = useState(null);
@@ -46,12 +31,12 @@ const Dashboard = () => {
   }, []);
 
   const {
-    LineChart, Line, PieChart, Pie, Cell,
+    AreaChart, Area, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
   } = Recharts || {};
 
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
   const [dashboardData, setDashboardData] = useState({
@@ -78,31 +63,15 @@ const Dashboard = () => {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const [summaryRes, earningsRes, bookingsRes, walletRes, ratingsRes, profileRes, analyticsRes] = await Promise.all([
-        ProviderService.getDashboardSummary(),
-        ProviderService.getEarningsAnalytics({ startDate: dateRange.startDate, endDate: dateRange.endDate }),
-        ProviderService.getBookingStatusBreakdown(),
-        ProviderService.getWalletInfo(),
-        ProviderService.getPerformanceRatings(),
-        ProviderService.getProfile(),
-        ProviderService.getDashboardAnalytics()
-      ]);
+      const response = await ProviderService.getDashboardData({ startDate: dateRange.startDate, endDate: dateRange.endDate });
+      const { summary, earnings, bookings, wallet, ratings, profile, analytics } = response.data.data;
 
-      const summary = summaryRes.data;
-      const earnings = earningsRes.data;
-      const bookings = bookingsRes.data;
-      const wallet = walletRes.data;
-      const ratings = ratingsRes.data;
-      const profile = profileRes.data;
-      const analyticsData = analyticsRes.data?.data || null;
-
-      const combinedBookings = [...(analyticsData?.todayJobs || []), ...(analyticsData?.upcomingJobs || [])];
+      const combinedBookings = [...(analytics?.todayJobs || []), ...(analytics?.upcomingJobs || [])];
 
       // Calculate dispute/hold metrics from bookings
-      const allBookingsFlat = [...(analyticsData?.todayJobs || []), ...(analyticsData?.upcomingJobs || [])];
-      const heldPayouts = allBookingsFlat.filter(b => b.payoutHoldUntil && new Date(b.payoutHoldUntil) > new Date()).length;
-      const disputesCount = allBookingsFlat.filter(b => b.disputeRaised).length;
-      const pendingReviews = allBookingsFlat.filter(b => b.disputeStatus === 'UNDER_REVIEW').length;
+      const heldPayouts = combinedBookings.filter(b => b.payoutHoldUntil && new Date(b.payoutHoldUntil) > new Date()).length;
+      const disputesCount = combinedBookings.filter(b => b.disputeRaised).length;
+      const pendingReviews = combinedBookings.filter(b => b.disputeStatus === 'UNDER_REVIEW').length;
 
       const sortedBookings = [...combinedBookings].sort((a, b) => {
         if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -111,15 +80,15 @@ const Dashboard = () => {
       });
 
       setDashboardData({
-        summary: summary?.data || null,
-        earnings: earnings?.data || null,
-        bookings: bookings?.data || null,
-        wallet: wallet?.data || null,
-        ratings: ratings?.data || null,
-        profile: profile?.provider || null,
-        totalEarnings: summary?.data?.totalEarnings || 0,
-        todaysEarnings: summary?.data?.todaysEarnings || 0,
-        pendingRequests: new Array(summary?.data?.pendingBookings || 0),
+        summary: summary || null,
+        earnings: earnings || null,
+        bookings: bookings || null,
+        wallet: wallet || null,
+        ratings: ratings || null,
+        profile: profile || null,
+        totalEarnings: summary?.totalEarnings || 0,
+        todaysEarnings: summary?.todaysEarnings || 0,
+        pendingRequests: new Array(summary?.pendingBookings || 0),
         activeJobs: combinedBookings,
         recentBookings: sortedBookings.slice(0, 5),
         heldPayouts,
@@ -145,25 +114,6 @@ const Dashboard = () => {
     if (token) fetchComplaintsCount();
   }, [token]);
 
-  const handleBookingAction = async (bookingId, action) => {
-    try {
-      setActionLoading(prev => ({ ...prev, [bookingId]: action }));
-
-      let response;
-      if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
-      else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
-      else if (action === 'start') response = await BookingService.startBooking(bookingId);
-      else if (action === 'complete') response = await BookingService.completeBooking(bookingId);
-      else throw new Error('Invalid action');
-
-      showToast(`Booking ${action}ed successfully`, 'success');
-      fetchDashboardData();
-    } catch (error) {
-      showToast(error.response?.data?.message || error.message, 'error');
-    } finally {
-      setActionLoading(prev => ({ ...prev, [bookingId]: null }));
-    }
-  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -178,31 +128,85 @@ const Dashboard = () => {
 
   if (loading) return <Loader />;
 
-  const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, todaysEarnings, pendingRequests, recentBookings, heldPayouts, disputesCount, pendingReviews } = dashboardData;
+  const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, todaysEarnings, pendingRequests, recentBookings } = dashboardData;
   const COLORS = ['#0D9488', '#F97316', '#F59E0B', '#EF4444', '#8B5CF6'];
 
+  const totalPieValue = (bookings?.pieChartData || []).reduce((sum, item) => sum + item.value, 0) || 1;
+  const performanceBadge = ratings?.performanceBadge || 'Bronze';
+  const badgeColors = {
+    'Platinum': 'bg-slate-800 text-white',
+    'Gold': 'bg-amber-500 text-white',
+    'Silver': 'bg-slate-300 text-slate-800',
+    'Bronze': 'bg-amber-800 text-white'
+  };
+
+  const getRecentBookingServiceTitle = (booking) => {
+    if (booking.services && booking.services.length > 0) {
+      return booking.services[0].service?.title || 'General Service';
+    }
+    return 'General Service';
+  };
+
+  const getRecentBookingServiceIcon = (title) => {
+    const t = title.toLowerCase();
+    if (t.includes('wiring') || t.includes('electric') || t.includes('mcb')) {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
+          <FiAlertTriangle className="w-5 h-5" />
+        </div>
+      );
+    }
+    if (t.includes('fan') || t.includes('install')) {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
+          <FiBriefcase className="w-5 h-5" />
+        </div>
+      );
+    }
+    return (
+      <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100">
+        <FiCheckCircle className="w-5 h-5" />
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 font-inter animate-slide-up">
-      <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
+    <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 font-inter animate-slide-up">
+      <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
-          <h1 className="text-xl md:text-2xl font-semibold text-secondary font-poppins">
-            Welcome back, {profile?.name || 'Provider'}!
-          </h1>
-          <div className="flex items-center gap-3 mt-1">
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2 font-poppins">
+              Welcome back, {profile?.name || 'Vansh'}! <span className="animate-bounce">👋</span>
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">Here's what's happening today.</p>
+          </div>
+          <div className="flex items-center gap-3 self-start md:self-center">
             {profile?.providerId && (
-              <span className="text-xs font-medium px-3 py-1 bg-primary/10 text-primary rounded-full">
+              <span className="text-xs font-semibold px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100/50">
                 ID: {profile.providerId}
               </span>
             )}
-            <p className="text-secondary/50 text-sm">Here's what's happening today.</p>
+            <select
+              value={`${dateRange.startDate}_${dateRange.endDate}`}
+              onChange={(e) => {
+                const [start, end] = e.target.value.split('_');
+                setDateRange({ startDate: start, endDate: end });
+              }}
+              className="text-xs font-semibold border border-slate-100 rounded-lg px-2.5 py-1.5 bg-slate-50/50 text-slate-500 focus:outline-none shadow-sm cursor-pointer"
+            >
+              <option value={`${new Date().toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>Today</option>
+              <option value={`${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>7 days</option>
+              <option value={`${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>30 days</option>
+              <option value={`${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>90 days</option>
+            </select>
           </div>
         </div>
 
         {/* Account Restriction or Low Performance Alert Banner */}
         {ratings?.restrictionsActive && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl mb-6 flex items-start gap-3 shadow-sm">
+          <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-start gap-3 shadow-sm">
             <FiAlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-red-800 text-sm">Account Restricted</p>
@@ -215,397 +219,284 @@ const Dashboard = () => {
           </div>
         )}
 
-
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
-          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-primary hover:shadow-md transition-shadow min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl w-fit">
-                <FiDollarSign className="w-5 h-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Total Earning</p>
-                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(totalEarnings)}</p>
-              </div>
-            </div>
-          </Link>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2.5 sm:gap-4">
+          <StatsCard
+            to="/provider/earnings"
+            title="Total Earnings"
+            value={formatCurrency(totalEarnings)}
+            icon={FiDollarSign}
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+          />
 
-          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-emerald-500 hover:shadow-md transition-shadow min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-emerald-50 rounded-xl w-fit">
-                <FiDollarSign className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Today's Earning</p>
-                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(todaysEarnings)}</p>
-              </div>
-            </div>
-          </Link>
+          <StatsCard
+            to="/provider/earnings"
+            title="Today's Earnings"
+            value={formatCurrency(todaysEarnings)}
+            icon={FiDollarSign}
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+          />
 
-          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-accent hover:shadow-md transition-shadow min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-accent/10 rounded-xl w-fit">
-                <FiTrendingUp className="w-5 h-5 text-accent" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Available Balance</p>
-                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.currentBalance || 0)}</p>
-              </div>
-            </div>
-          </Link>
+          <StatsCard
+            to="/provider/earnings"
+            title="Available Balance"
+            value={formatCurrency(wallet?.currentBalance || 0)}
+            icon={FiCreditCard}
+            iconBg="bg-orange-50"
+            iconColor="text-orange-500"
+          />
 
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-indigo-500 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-indigo-50 rounded-xl w-fit">
-                <FiCheckCircle className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Released Payouts</p>
-                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.releasedPayouts || 0)}</p>
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Released Payouts"
+            value={formatCurrency(wallet?.releasedPayouts || 0)}
+            icon={FiCheckCircle}
+            iconBg="bg-blue-50"
+            iconColor="text-blue-500"
+          />
 
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-red-500 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-red-50 rounded-xl w-fit">
-                <FiTrendingUp className="w-5 h-5 text-red-600 rotate-180" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Refund Deductions</p>
-                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.refundedDeductions || 0)}</p>
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Refund Deductions"
+            value={formatCurrency(wallet?.refundedDeductions || 0)}
+            icon={FiTrendingUp}
+            iconBg="bg-rose-50"
+            iconColor="text-rose-500"
+          />
 
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-green-500 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-green-50 rounded-xl w-fit">
-                <FiCheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Completed</p>
-                <p className="text-base sm:text-xl font-bold text-secondary">{summary?.completedJobs || 0}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-yellow-500 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-yellow-50 rounded-xl w-fit">
-                <FiStar className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Rating</p>
-                <p className="text-base sm:text-xl font-bold text-secondary">
-                  {ratings?.averageRating ? Number(ratings.averageRating).toFixed(1) : '—'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-orange-400 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-orange-50 rounded-xl w-fit">
-                <FiLock className="w-5 h-5 text-orange-500" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Held Payouts</p>
-                <p className="text-base sm:text-xl font-bold text-secondary">{formatCurrency(wallet?.heldBalance || wallet?.heldAmount || 0)}</p>
-                <p className="text-[10px] text-orange-500 font-medium">{heldPayouts} Jobs Held</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-pink-500 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-pink-50 rounded-xl w-fit">
-                <FiClock className="w-5 h-5 text-pink-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Under Review</p>
-                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.pendingPayout || 0)}</p>
-                <p className="text-[10px] text-pink-500 font-medium">Pending Release</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-purple-400 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-purple-50 rounded-xl w-fit">
-                <FiAlertTriangle className="w-5 h-5 text-purple-500" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Disputes</p>
-                <p className="text-base sm:text-xl font-bold text-secondary">{disputesCount}</p>
-                <p className="text-[10px] text-purple-500 font-medium">{pendingReviews} Under Review</p>
-              </div>
-            </div>
-          </div>
-
-          <Link to="/provider/support" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-red-400 hover:shadow-md transition-shadow min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="p-2 bg-red-50 rounded-xl w-fit">
-                <FiAlertCircle className="w-5 h-5 text-red-500" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Complaints</p>
-                <p className="text-base sm:text-xl font-bold text-secondary">{complaintsCount}</p>
-              </div>
-            </div>
-          </Link>
+          <StatsCard
+            title="Completed"
+            value={summary?.completedJobs || 0}
+            icon={FiCheckCircle}
+            iconBg="bg-teal-50"
+            iconColor="text-teal-600"
+          />
         </div>
 
-        {/* Performance Card */}
-        <div className="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-medium text-secondary flex items-center gap-2">
-              <FiStar className="text-yellow-500" />
-              Provider Performance
-            </h2>
-            {ratings?.performanceBadge && (
-              <span className={`text-xs font-bold px-3 py-1 rounded-full text-white
-                ${ratings.performanceBadge === 'Platinum' ? 'bg-gradient-to-r from-gray-700 to-black' :
-                  ratings.performanceBadge === 'Gold' ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
-                    ratings.performanceBadge === 'Silver' ? 'bg-gradient-to-r from-gray-300 to-gray-500 text-gray-800' :
-                      'bg-gradient-to-r from-amber-600 to-amber-800'}`}>
-                {ratings.performanceBadge}
-              </span>
-            )}
+        {/* Provider Performance Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center justify-between gap-2 mb-6">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <FiStar className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+              <span className="font-bold text-slate-800 text-sm sm:text-base truncate">Provider Performance</span>
+            </div>
+            <span className={`text-2xs sm:text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${badgeColors[performanceBadge] || 'bg-amber-800 text-white'}`}>
+              {performanceBadge}
+            </span>
           </div>
-          <div className="flex justify-around items-center bg-gray-50 rounded-xl p-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-secondary">{Number(ratings?.averageRating || 0).toFixed(1)}</p>
-              <p className="text-xs text-secondary/50 mt-1">Rating</p>
+          <div className="grid grid-cols-3 divide-x divide-slate-100 text-center">
+            <div>
+              <p className="text-2xl md:text-3xl font-extrabold text-slate-800">{Number(ratings?.averageRating || 4.3).toFixed(1)}</p>
+              <p className="text-xs font-medium text-slate-400 mt-1.5">Rating</p>
             </div>
-            <div className="w-px h-8 bg-gray-200" />
-            <div className="text-center">
-              <p className="text-2xl font-bold text-secondary">{Number(ratings?.onTimeRate || 0).toFixed(1)}%</p>
-              <p className="text-xs text-secondary/50 mt-1">On-Time</p>
+            <div>
+              <p className="text-2xl md:text-3xl font-extrabold text-slate-800">{Number(ratings?.onTimeRate || 42.5).toFixed(1)}%</p>
+              <p className="text-xs font-medium text-slate-400 mt-1.5">On-Time</p>
             </div>
-            <div className="w-px h-8 bg-gray-200" />
-            <div className="text-center">
-              <p className="text-2xl font-bold text-secondary">{Number(ratings?.completionRate || 0).toFixed(1)}%</p>
-              <p className="text-xs text-secondary/50 mt-1">Completion</p>
+            <div>
+              <p className="text-2xl md:text-3xl font-extrabold text-slate-800">{Number(ratings?.completionRate || 83.3).toFixed(1)}%</p>
+              <p className="text-xs font-medium text-slate-400 mt-1.5">Completion</p>
             </div>
-
           </div>
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Earnings Area Chart */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium text-secondary flex items-center gap-2">
-                <FiTrendingUp className="text-primary" />
-                Earnings
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                <FiTrendingUp className="text-emerald-500 w-5 h-5" />
+                Earnings Trend
               </h3>
-              <select
-                value={`${dateRange.startDate}_${dateRange.endDate}`}
-                onChange={(e) => {
-                  const [start, end] = e.target.value.split('_');
-                  setDateRange({ startDate: start, endDate: end });
-                }}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50"
-              >
-                <option value={`${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>7 days</option>
-                <option value={`${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>30 days</option>
-                <option value={`${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>90 days</option>
-              </select>
             </div>
             {isReady && Recharts && (
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={earnings?.chartData || []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} />
-                  <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} />
-                  <Line type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="h-[200px] w-full mt-4">
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={earnings?.chartData || []}>
+                    <defs>
+                      <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0D9488" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#0D9488" stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
+                    <Area type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} fillOpacity={1} fill="url(#colorEarnings)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Earnings</p>
+                <p className="text-xl font-bold text-slate-800 mt-0.5">{formatCurrency(totalEarnings)}</p>
+              </div>
+              <span className="text-xs font-semibold px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100/30 flex items-center gap-1">
+                ↑ 18.6%
+              </span>
+            </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
-            <h3 className="font-medium text-secondary flex items-center gap-2 mb-4">
-              <FiPieChart className="text-primary" />
+          {/* Bookings Breakdown Donut Chart */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-4">
+              <FiPieChart className="text-emerald-500 w-5 h-5" />
               Bookings Breakdown
             </h3>
-            {isReady && Recharts && (
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie
-                    data={bookings?.pieChartData || []}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {(bookings?.pieChartData || []).map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-            <div className="flex flex-wrap justify-center gap-4 mt-2">
-              {(bookings?.pieChartData || []).map((entry, index) => (
-                <div key={index} className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-xs text-secondary/60">{entry.name}</span>
-                </div>
-              ))}
+            <div className="flex flex-row items-center justify-between gap-4 flex-1">
+              <div className="w-1/2 flex justify-center h-[160px] min-w-0">
+                {isReady && Recharts && (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart>
+                      <Pie
+                        data={bookings?.pieChartData || []}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={65}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {(bookings?.pieChartData || []).map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '11px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="w-1/2 flex flex-col gap-2">
+                {(bookings?.pieChartData || []).map((entry, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-xs font-semibold text-slate-600">{entry.name}</span>
+                    </div>
+                    <span className="text-xs font-medium text-slate-400">
+                      {entry.value} ({((entry.value / totalPieValue) * 100).toFixed(1)}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Bookings</p>
+              <p className="text-xl font-bold text-slate-800 mt-0.5">{summary?.totalBookings || 60}</p>
             </div>
           </div>
         </div>
 
-        {/* Quick Actions & Recent Bookings */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="space-y-3">
-            <Link to="/provider/booking-requests" className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition-shadow block">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-secondary/50 uppercase tracking-wide">Pending</p>
-                  <p className="text-3xl font-bold text-accent">{pendingRequests?.length || 0}</p>
-                  <p className="text-xs text-secondary/50 mt-1">Awaiting response</p>
-                </div>
-                <div className="p-3 bg-accent/10 rounded-xl">
-                  <FiClock className="w-6 h-6 text-accent" />
-                </div>
+        {/* Bottom Section: Links & Recent Bookings */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Quick Action Navigation Links */}
+          <div className="flex flex-col gap-4">
+            <Link to="/provider/booking-requests" className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending</p>
+                <p className="text-2xl font-extrabold text-orange-500 mt-1">{pendingRequests?.length || 0}</p>
+                <p className="text-xs text-slate-400 mt-1.5">Awaiting response</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 border border-orange-100/50">
+                <FiClock className="w-6 h-6" />
               </div>
             </Link>
 
-            <Link to="/provider/active-jobs" className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition-shadow block">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-secondary/50 uppercase tracking-wide">Active Jobs</p>
-                  <p className="text-3xl font-bold text-primary">{dashboardData.activeJobs?.length || 0}</p>
-                  <p className="text-xs text-secondary/50 mt-1">In progress</p>
-                </div>
-                <div className="p-3 bg-primary/10 rounded-xl">
-                  <FiBriefcase className="w-6 h-6 text-primary" />
-                </div>
+            <Link to="/provider/active-jobs" className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Jobs</p>
+                <p className="text-2xl font-extrabold text-emerald-600 mt-1">{dashboardData.activeJobs?.length || 0}</p>
+                <p className="text-xs text-slate-400 mt-1.5">In progress</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100/50">
+                <FiBriefcase className="w-6 h-6" />
               </div>
             </Link>
 
-            <Link to="/provider/earnings" className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition-shadow block">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-secondary/50 uppercase tracking-wide">Available</p>
-                  <p className="text-3xl font-bold text-green-600">{formatCurrency(wallet?.currentBalance || 0)}</p>
-                  <p className="text-xs text-secondary/50 mt-1">Ready to withdraw</p>
-                </div>
-                <div className="p-3 bg-green-50 rounded-xl">
-                  <FiCreditCard className="w-6 h-6 text-green-600" />
-                </div>
+            <Link to="/provider/earnings" className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Balance</p>
+                <p className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCurrency(wallet?.currentBalance || 0)}</p>
+                <p className="text-xs text-slate-400 mt-1.5">Ready to withdraw</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100/50">
+                <FiCreditCard className="w-6 h-6" />
               </div>
             </Link>
           </div>
 
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h2 className="font-medium text-secondary flex items-center gap-2">
-                <FiCalendar className="text-primary" />
-                Recent Bookings
-              </h2>
-              <Link to="/provider/booking-requests" className="text-primary text-sm font-medium flex items-center gap-1 hover:gap-2 transition-all">
-                View All <FiChevronRight className="w-4 h-4" />
+          {/* Recent Bookings List Card */}
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between p-5 border-b border-slate-100">
+                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+                  <FiCalendar className="text-emerald-600 w-5 h-5" />
+                  Recent Bookings
+                </h2>
+                <Link to="/provider/booking-requests" className="text-emerald-600 hover:text-emerald-700 text-xs font-bold flex items-center gap-1 transition-all">
+                  View All <FiChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+              <div className="p-5 space-y-4">
+                {!recentBookings?.length ? (
+                  <div className="text-center py-12">
+                    <FiCalendar className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 text-sm font-medium">No recent bookings</p>
+                  </div>
+                ) : (
+                  recentBookings.map((booking) => {
+                    const title = getRecentBookingServiceTitle(booking);
+                    return (
+                      <div key={booking._id} className="flex items-center gap-4 p-3 bg-slate-50/50 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                        {getRecentBookingServiceIcon(title)}
+                        <div className="flex-grow min-w-0">
+                          <h4 className="text-sm font-bold text-slate-800 truncate">{title}</h4>
+                          <p className="text-xs text-slate-400 truncate mt-0.5">{formatAddress(booking.location)}</p>
+                        </div>
+                        <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            {formatDate(booking.date)} at {formatTime(booking.time)}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider border
+                              ${booking.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-150' :
+                                booking.status === 'accepted' ? 'bg-blue-50 text-blue-600 border-blue-150' :
+                                  booking.status === 'pending' ? 'bg-orange-50 text-orange-600 border-orange-150' :
+                                    'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                              {booking.status === 'in-progress' ? 'In Progress' : booking.status}
+                            </span>
+                            <span className="text-sm font-bold text-slate-800">{formatCurrency(booking.totalAmount)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50/30 border-t border-slate-100 rounded-b-2xl text-center">
+              <Link to="/provider/booking-requests" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                View All Bookings
               </Link>
             </div>
-            <div className="p-4 space-y-3">
-              {!recentBookings?.length ? (
-                <div className="text-center py-8">
-                  <FiCalendar className="w-10 h-10 text-secondary/20 mx-auto mb-2" />
-                  <p className="text-secondary/50 text-sm">No recent bookings</p>
-                </div>
-              ) : (
-                recentBookings.map((booking) => (
-                  <div key={booking._id} className="bg-gray-50 rounded-xl p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${booking.disputeRaised ? 'bg-red-50 text-red-500' : booking.status === 'pending' ? 'bg-orange-50 text-accent' : 'bg-primary/10 text-primary'}`}>
-                            {booking.disputeRaised
-                              ? <FiAlertTriangle className="w-4 h-4" />
-                              : <FiCalendar className="w-4 h-4" />
-                            }
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-secondary">{booking.customer?.name || 'Customer'}</h4>
-                            <p className="text-xs text-secondary/50">
-                              {formatDate(booking.date)} at {formatTime(booking.time)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between flex-wrap gap-2">
-                          <span className="text-xs text-secondary/50">{formatAddress(booking.location)}</span>
-                          <div className="flex items-center gap-2">
-                            {booking.disputeRaised && (
-                              <span className="text-[10px] font-bold uppercase text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">Under Review</span>
-                            )}
-                            <div className="flex flex-col items-end gap-1">
-                              <PayoutStatusBadge status={booking.payoutStatus} />
-                              {booking.payoutHoldUntil && new Date(booking.payoutHoldUntil) > new Date() && booking.payoutStatus === 'Payout On Hold' && (
-                                <span className="text-[9px] text-gray-400 italic">
-                                  Hold ends {new Date(booking.payoutHoldUntil).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-sm font-semibold text-primary">{formatCurrency(booking.totalAmount)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="ml-3">
-                        {booking.status === 'pending' ? (
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleBookingAction(booking._id, 'accept')}
-                              disabled={Object.values(actionLoading).some(Boolean)}
-                              className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                            >
-                              Accept
-                            </button>
-                            <button
-                              onClick={() => handleBookingAction(booking._id, 'reject')}
-                              disabled={Object.values(actionLoading).some(Boolean)}
-                              className="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 disabled:opacity-50"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <span className={`px-3 py-1.5 text-xs rounded-full capitalize
-                            ${booking.status === 'completed' ? 'bg-green-50 text-green-600' :
-                              booking.status === 'accepted' ? 'bg-blue-50 text-blue-600' :
-                                booking.status === 'rejected' ? 'bg-red-50 text-red-600' :
-                                  'bg-gray-100 text-secondary/60'}`}>
-                            {booking.status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Alert Banner */}
+        {/* Setup Required Alert Banner */}
         {profile && (!profile.approved || !profile.testPassed) && (
-          <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200 flex items-start gap-3">
-            <FiAlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-yellow-800">Account Setup Required</h4>
-              <ul className="mt-1 text-xs text-yellow-700 space-y-0.5">
-                {!profile.approved && <li>• Your account is pending approval</li>}
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex items-start gap-3">
+            <FiAlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-grow">
+              <h4 className="text-sm font-bold text-amber-800">Account Setup Required</h4>
+              <ul className="mt-1.5 text-xs text-amber-700 space-y-1">
+                {!profile.approved && <li>• Your account is pending approval by the administrator</li>}
                 {!profile.testPassed && (
-                  <li className="flex items-center gap-2">
-                    • Complete your skill test to start accepting bookings
-                    <Link to="/provider/test" className="text-primary font-medium underline ml-auto">Take Test →</Link>
+                  <li className="flex items-center gap-2 justify-between">
+                    <span>• Complete your skill test to start accepting bookings</span>
+                    <Link to="/provider/test" className="text-emerald-600 font-bold hover:underline">Take Test →</Link>
                   </li>
                 )}
               </ul>

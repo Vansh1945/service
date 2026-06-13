@@ -37,26 +37,6 @@ export const permanentDeleteAccount = (id) => {
     return axiosInstance.delete(`/provider/${id}/permanent`);
 };
 
-export const getDashboardSummary = () => {
-    return axiosInstance.get("/provider/dashboard/summary");
-};
-
-export const getEarningsAnalytics = (params) => {
-    return axiosInstance.get("/provider/dashboard/earnings", { params });
-};
-
-export const getBookingStatusBreakdown = () => {
-    return axiosInstance.get("/provider/dashboard/bookings");
-};
-
-export const getDashboardAnalytics = () => {
-    return axiosInstance.get("/provider/dashboard/analytics");
-};
-
-export const getWalletInfo = () => {
-    return axiosInstance.get("/provider/dashboard/wallet");
-};
-
-export const getPerformanceRatings = () => {
-    return axiosInstance.get("/provider/dashboard/ratings");
+export const getDashboardData = (params) => {
+    return axiosInstance.get("/provider/dashboard", { params });
 };

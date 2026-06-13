@@ -62,11 +62,6 @@ router.delete('/profile', providerAuthMiddleware, requireProvider, providerContr
 router.delete('/:id/permanent', adminAuthMiddleware, requireAdmin, providerController.permanentDeleteAccount);
 
 // Dashboard Routes
-router.get('/dashboard/summary', providerAuthMiddleware, requireProvider, providerController.getDashboardSummary);
-router.get('/dashboard/earnings', providerAuthMiddleware, requireProvider, providerController.getEarningsAnalytics);
-router.get('/dashboard/bookings', providerAuthMiddleware, requireProvider, providerController.getBookingStatusBreakdown);
-router.get('/dashboard/analytics', providerAuthMiddleware, requireProvider, providerController.getDashboardAnalytics);
-router.get('/dashboard/wallet', providerAuthMiddleware, requireProvider, providerController.getWalletInfo);
-router.get('/dashboard/ratings', providerAuthMiddleware, requireProvider, providerController.getPerformanceRatings);
+router.get('/dashboard', providerAuthMiddleware, requireProvider, providerController.getDashboardData);
 
 module.exports = router;

@@ -518,6 +518,28 @@ const StatCard = ({ label, value, icon: Icon, iconColor = 'text-primary', iconBg
   </div>
 );
 
+const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
+  let bSplits = bookingSplits;
+  if (typeof bSplits === 'string') {
+    try { bSplits = JSON.parse(bSplits); } catch (_) { bSplits = null; }
+  }
+  if (bSplits && typeof bSplits === 'object' && bSplits[key] !== undefined && bSplits[key] !== null) {
+    const val = parseFloat(bSplits[key]);
+    if (!isNaN(val)) return val;
+  }
+  
+  let sSplits = systemSplits;
+  if (typeof sSplits === 'string') {
+    try { sSplits = JSON.parse(sSplits); } catch (_) { sSplits = null; }
+  }
+  if (sSplits && typeof sSplits === 'object' && sSplits[key] !== undefined && sSplits[key] !== null) {
+    const val = parseFloat(sSplits[key]);
+    if (!isNaN(val)) return val;
+  }
+  
+  return defaultVal;
+};
+
 // ── Main Component ───────────────────────────────────────────────────────────
 const ProviderBooking = () => {
   const navigate = useNavigate();
@@ -1566,11 +1588,11 @@ const ProviderBooking = () => {
                         { label: 'Service Amount', value: calculateServiceSubtotal(selectedBooking), type: 'default' },
                         ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: calculateTotalDiscount(selectedBooking), type: 'discount', prefix: '-' }] : []),
                         { label: 'Subtotal', value: calculateSubtotal(selectedBooking), type: 'bold-secondary' },
-                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || fallbackSplits.visiting) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || fallbackSplits.rain) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || fallbackSplits.traffic) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || fallbackSplits.night) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || fallbackSplits.demand) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: parseFloat((selectedBooking.visitingCharge * (getSplit(selectedBooking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'visiting', 60) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: parseFloat((selectedBooking.rainCharge * (getSplit(selectedBooking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'rain', 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: parseFloat((selectedBooking.trafficCharge * (getSplit(selectedBooking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'traffic', 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: parseFloat((selectedBooking.nightCharge * (getSplit(selectedBooking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'night', 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: parseFloat((selectedBooking.demandSurge * (getSplit(selectedBooking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'demand', 50) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
                         { label: 'Platform Commission (Base)', value: selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0, type: 'negative', prefix: '-' },
                       ].map(({ label, value, type, prefix }) => (
                         <div key={label} className="flex justify-between text-sm animate-fadeIn">

@@ -145,13 +145,13 @@ const otpLimiter = rateLimit({
   message: { success: false, message: 'Too many OTP requests. Try again in 10 minutes.' }
 });
 
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests. Please try again later.' }
-});
+// const globalLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 300,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { success: false, message: 'Too many requests. Please try again later.' }
+// });
 
 // Apply rate limiters directly to auth endpoints
 app.use("/api/auth/login", loginLimiter);
@@ -161,7 +161,7 @@ app.use("/api/auth/resend-otp", otpLimiter);
 app.use("/api/auth/verify-otp", otpLimiter);
 
 // Apply global rate limiter to all api endpoints
-app.use("/api", globalLimiter);
+// app.use("/api", globalLimiter);
 
 // Route imports
 const adminRoutes = require("./routes/Admin-Routes");
