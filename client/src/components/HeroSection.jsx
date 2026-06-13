@@ -137,7 +137,7 @@ const HeroSection = ({ noMargin = false }) => {
           transition: all 0.3s ease;
         }
         .swiper-pagination-bullet-active {
-          background: #78350f !important; /* warm brown matching brand */
+          background: #FF5E00 !important; /* warm brown matching brand */
           width: 24px !important;
           border-radius: 4px !important;
         }
