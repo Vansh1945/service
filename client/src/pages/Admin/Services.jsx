@@ -170,8 +170,8 @@ const AdminServices = () => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -185,8 +185,12 @@ const AdminServices = () => {
   const [itemsPerPage] = useState(10);
   const { categories, loading: categoriesLoading } = useCategory();
 
+  // Modal active tabs
+  const [formActiveTab, setFormActiveTab] = useState('basic');
+  const [viewActiveTab, setViewActiveTab] = useState('overview');
+
   // Form states
-  const [createForm, setCreateForm] = useState({
+  const [formState, setFormState] = useState({
     title: '',
     category: '',
     description: '',
@@ -195,6 +199,7 @@ const AdminServices = () => {
     specialNotes: [],
     materialsUsed: [],
     images: [],
+    existingImages: [],
     serviceType: 'standard',
     warranty: { duration: '', unit: 'days' },
     tags: [],
@@ -204,28 +209,19 @@ const AdminServices = () => {
     prerequisites: [],
     discountPrice: ''
   });
-  const [editForm, setEditForm] = useState({});
   const [bulkFile, setBulkFile] = useState(null);
-  const [imagePreviews, setImagePreviews] = useState([]);
-  const [editImagePreviews, setEditImagePreviews] = useState([]);
+  const [formImagePreviews, setFormImagePreviews] = useState([]);
   const [newSpecialNote, setNewSpecialNote] = useState('');
   const [newMaterial, setNewMaterial] = useState('');
-  const [editNewSpecialNote, setEditNewSpecialNote] = useState('');
-  const [editNewMaterial, setEditNewMaterial] = useState('');
 
   // Dynamic input helper states
   const [newTag, setNewTag] = useState('');
   const [newPrerequisite, setNewPrerequisite] = useState('');
   const [faqQuestion, setFaqQuestion] = useState('');
   const [faqAnswer, setFaqAnswer] = useState('');
-  const [editNewTag, setEditNewTag] = useState('');
-  const [editNewPrerequisite, setEditNewPrerequisite] = useState('');
-  const [editFaqQuestion, setEditFaqQuestion] = useState('');
-  const [editFaqAnswer, setEditFaqAnswer] = useState('');
 
   // Refs
   const fileInputRef = useRef(null);
-  const editFileInputRef = useRef(null);
   const bulkFileInputRef = useRef(null);
 
   // Fetch all services
@@ -284,12 +280,12 @@ const AdminServices = () => {
   }, [services]);
 
 
-  // Handle create form changes
-  const handleCreateFormChange = (e) => {
+  // Handle form field changes
+  const handleFormChange = (e) => {
     const { name, value, files } = e.target;
     if (name === 'images' && files && files.length > 0) {
       const newImages = Array.from(files);
-      setCreateForm(prev => ({ ...prev, images: [...prev.images, ...newImages] }));
+      setFormState(prev => ({ ...prev, images: [...prev.images, ...newImages] }));
 
       // Create previews for new images
       const newPreviews = [];
@@ -298,254 +294,59 @@ const AdminServices = () => {
         reader.onload = (e) => {
           newPreviews.push(e.target.result);
           if (newPreviews.length === newImages.length) {
-            setImagePreviews(prev => [...prev, ...newPreviews]);
+            setFormImagePreviews(prev => [...prev, ...newPreviews]);
           }
         };
         reader.readAsDataURL(file);
       });
     } else {
-      setCreateForm(prev => ({ ...prev, [name]: value }));
+      setFormState(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  // Handle edit form changes
-  const handleEditFormChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'images' && files && files.length > 0) {
-      const newImages = Array.from(files);
-      setEditForm(prev => ({ ...prev, images: [...(prev.images || []), ...newImages] }));
-
-      // Create previews for new images
-      const newPreviews = [];
-      newImages.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          newPreviews.push(e.target.result);
-          if (newPreviews.length === newImages.length) {
-            setEditImagePreviews(prev => [...prev, ...newPreviews]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-    } else {
-      setEditForm(prev => ({ ...prev, [name]: value }));
-    }
+  // Generic list updaters to reduce code size
+  const addToField = (fieldName, value, setter) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setFormState(prev => {
+      const list = prev[fieldName] || [];
+      if (list.includes(trimmed)) return prev;
+      return { ...prev, [fieldName]: [...list, trimmed] };
+    });
+    setter('');
   };
 
-  // Add special note to create form
-  const addSpecialNote = () => {
-    if (newSpecialNote.trim()) {
-      setCreateForm(prev => ({
-        ...prev,
-        specialNotes: [...prev.specialNotes, newSpecialNote.trim()]
-      }));
-      setNewSpecialNote('');
-    }
-  };
-
-  // Remove special note from create form
-  const removeSpecialNote = (index) => {
-    setCreateForm(prev => ({
+  const removeFromField = (fieldName, index) => {
+    setFormState(prev => ({
       ...prev,
-      specialNotes: prev.specialNotes.filter((_, i) => i !== index)
+      [fieldName]: (prev[fieldName] || []).filter((_, i) => i !== index)
     }));
   };
 
-  // Add material to create form
-  const addMaterial = () => {
-    const trimmedMaterial = newMaterial.trim();
-    if (trimmedMaterial && !createForm.materialsUsed.includes(trimmedMaterial)) {
-      setCreateForm(prev => ({
+  const addFaqToForm = (question, answer, qSetter, aSetter) => {
+    const q = question.trim();
+    const a = answer.trim();
+    if (q && a) {
+      setFormState(prev => ({
         ...prev,
-        materialsUsed: [...prev.materialsUsed, trimmedMaterial]
+        faqs: [...(prev.faqs || []), { question: q, answer: a }]
       }));
-    }
-    setNewMaterial('');
-  };
-
-  // Remove material from create form
-  const removeMaterial = (index) => {
-    setCreateForm(prev => ({
-      ...prev,
-      materialsUsed: prev.materialsUsed.filter((_, i) => i !== index)
-    }));
-  };
-
-  // Add special note to edit form
-  const addEditSpecialNote = () => {
-    if (editNewSpecialNote.trim()) {
-      setEditForm(prev => ({
-        ...prev,
-        specialNotes: [...prev.specialNotes, editNewSpecialNote.trim()]
-      }));
-      setEditNewSpecialNote('');
+      qSetter('');
+      aSetter('');
     }
   };
 
-  // Remove special note from edit form
-  const removeEditSpecialNote = (index) => {
-    setEditForm(prev => ({
-      ...prev,
-      specialNotes: prev.specialNotes.filter((_, i) => i !== index)
-    }));
-  };
-
-  // Add material to edit form
-  const addEditMaterial = () => {
-    const trimmedMaterial = editNewMaterial.trim();
-    if (trimmedMaterial && !editForm.materialsUsed.includes(trimmedMaterial)) {
-      setEditForm(prev => ({
-        ...prev,
-        materialsUsed: [...prev.materialsUsed, trimmedMaterial]
-      }));
-    }
-    setEditNewMaterial('');
-  };
-
-  // Remove material from edit form
-  const removeEditMaterial = (index) => {
-    setEditForm(prev => ({
-      ...prev,
-      materialsUsed: prev.materialsUsed.filter((_, i) => i !== index)
-    }));
-  };
-
-  // Tag Handlers (Create Form)
-  const addTag = () => {
-    const trimmed = newTag.trim();
-    if (trimmed && !createForm.tags.includes(trimmed)) {
-      setCreateForm(prev => ({ ...prev, tags: [...prev.tags, trimmed] }));
-    }
-    setNewTag('');
-  };
-  const removeTag = (index) => {
-    setCreateForm(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
-  };
-
-  // Tag Handlers (Edit Form)
-  const addEditTag = () => {
-    const trimmed = editNewTag.trim();
-    if (trimmed && !editForm.tags.includes(trimmed)) {
-      setEditForm(prev => ({ ...prev, tags: [...prev.tags, trimmed] }));
-    }
-    setEditNewTag('');
-  };
-  const removeEditTag = (index) => {
-    setEditForm(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
-  };
-
-  // Prerequisite Handlers (Create Form)
-  const addPrerequisite = () => {
-    const trimmed = newPrerequisite.trim();
-    if (trimmed && !createForm.prerequisites.includes(trimmed)) {
-      setCreateForm(prev => ({ ...prev, prerequisites: [...prev.prerequisites, trimmed] }));
-    }
-    setNewPrerequisite('');
-  };
-  const removePrerequisite = (index) => {
-    setCreateForm(prev => ({ ...prev, prerequisites: prev.prerequisites.filter((_, i) => i !== index) }));
-  };
-
-  // Prerequisite Handlers (Edit Form)
-  const addEditPrerequisite = () => {
-    const trimmed = editNewPrerequisite.trim();
-    if (trimmed && !editForm.prerequisites.includes(trimmed)) {
-      setEditForm(prev => ({ ...prev, prerequisites: [...prev.prerequisites, trimmed] }));
-    }
-    setEditNewPrerequisite('');
-  };
-  const removeEditPrerequisite = (index) => {
-    setEditForm(prev => ({ ...prev, prerequisites: prev.prerequisites.filter((_, i) => i !== index) }));
-  };
-
-  // FAQ Handlers (Create Form)
-  const addFaq = () => {
-    if (faqQuestion.trim() && faqAnswer.trim()) {
-      setCreateForm(prev => ({
-        ...prev,
-        faqs: [...prev.faqs, { question: faqQuestion.trim(), answer: faqAnswer.trim() }]
-      }));
-      setFaqQuestion('');
-      setFaqAnswer('');
-    }
-  };
-  const removeFaq = (index) => {
-    setCreateForm(prev => ({ ...prev, faqs: prev.faqs.filter((_, i) => i !== index) }));
-  };
-
-  // FAQ Handlers (Edit Form)
-  const addEditFaq = () => {
-    if (editFaqQuestion.trim() && editFaqAnswer.trim()) {
-      setEditForm(prev => ({
-        ...prev,
-        faqs: [...prev.faqs, { question: editFaqQuestion.trim(), answer: editFaqAnswer.trim() }]
-      }));
-      setEditFaqQuestion('');
-      setEditFaqAnswer('');
-    }
-  };
-  const removeEditFaq = (index) => {
-    setEditForm(prev => ({ ...prev, faqs: prev.faqs.filter((_, i) => i !== index) }));
-  };
-
-  // Create new service
-  const handleCreateService = async (e) => {
+  // Submit Handler for Create or Edit
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (createForm.discountPrice && Number(createForm.discountPrice) > Number(createForm.basePrice)) {
+      if (formState.discountPrice && Number(formState.discountPrice) > Number(formState.basePrice)) {
         toast.error('Discount price cannot be greater than base price');
         return;
       }
 
       const formData = new FormData();
-      formData.append('title', createForm.title);
-      formData.append('category', createForm.category);
-      formData.append('description', createForm.description);
-      formData.append('basePrice', createForm.basePrice);
-      formData.append('duration', createForm.duration);
-      formData.append('specialNotes', JSON.stringify(createForm.specialNotes));
-      formData.append('materialsUsed', JSON.stringify(createForm.materialsUsed));
-      formData.append('serviceType', createForm.serviceType);
-      formData.append('warranty', JSON.stringify(createForm.warranty));
-      formData.append('tags', JSON.stringify(createForm.tags));
-      formData.append('faqs', JSON.stringify(createForm.faqs));
-      formData.append('shortDescription', createForm.shortDescription);
-      formData.append('isFeatured', createForm.isFeatured);
-      formData.append('prerequisites', JSON.stringify(createForm.prerequisites));
-      if (createForm.discountPrice) {
-        formData.append('discountPrice', createForm.discountPrice);
-      }
-
-      // Append all images
-      createForm.images.forEach(image => {
-        formData.append('image', image);
-      });
-
-      const response = await ServiceService.createService(formData);
-      const data = response.data;
-
-      setServices(prev => [data.data, ...prev]);
-      toast.success('Service created successfully!');
-      resetCreateForm();
-      setShowCreateModal(false);
-    } catch (error) {
-      if (error.message === 'silent_cancel') return;
-      console.error('Create service error:', error);
-      toast.error(error.message || 'Failed to create service');
-    }
-  };
-
-  // Update service
-  const handleUpdateService = async (e) => {
-    e.preventDefault();
-    try {
-      if (editForm.discountPrice && Number(editForm.discountPrice) > Number(editForm.basePrice)) {
-        toast.error('Discount price cannot be greater than base price');
-        return;
-      }
-
-      const formData = new FormData();
-      Object.keys(editForm).forEach(key => {
+      Object.keys(formState).forEach(key => {
         if (
           key !== 'images' &&
           key !== 'existingImages' &&
@@ -555,57 +356,50 @@ const AdminServices = () => {
           key !== 'tags' &&
           key !== 'faqs' &&
           key !== 'prerequisites' &&
-          editForm[key] !== undefined
+          formState[key] !== undefined &&
+          formState[key] !== null
         ) {
-          formData.append(key, editForm[key]);
+          formData.append(key, formState[key]);
         }
       });
 
-      if (editForm.specialNotes) {
-        formData.append('specialNotes', JSON.stringify(editForm.specialNotes));
-      }
+      formData.append('specialNotes', JSON.stringify(formState.specialNotes || []));
+      formData.append('materialsUsed', JSON.stringify(formState.materialsUsed || []));
+      formData.append('warranty', JSON.stringify(formState.warranty || { duration: '', unit: 'days' }));
+      formData.append('tags', JSON.stringify(formState.tags || []));
+      formData.append('faqs', JSON.stringify(formState.faqs || []));
+      formData.append('prerequisites', JSON.stringify(formState.prerequisites || []));
 
-      if (editForm.materialsUsed) {
-        formData.append('materialsUsed', JSON.stringify(editForm.materialsUsed));
-      }
-
-      if (editForm.warranty) {
-        formData.append('warranty', JSON.stringify(editForm.warranty));
-      }
-
-      if (editForm.tags) {
-        formData.append('tags', JSON.stringify(editForm.tags));
-      }
-
-      if (editForm.faqs) {
-        formData.append('faqs', JSON.stringify(editForm.faqs));
-      }
-
-      if (editForm.prerequisites) {
-        formData.append('prerequisites', JSON.stringify(editForm.prerequisites));
-      }
-
-      if (editForm.existingImages) {
-        formData.append('existingImages', JSON.stringify(editForm.existingImages));
+      if (isEditMode) {
+        formData.append('existingImages', JSON.stringify(formState.existingImages || []));
       }
 
       // Append new images
-      if (editForm.images) {
-        editForm.images.forEach(image => {
+      if (formState.images) {
+        formState.images.forEach(image => {
           formData.append('image', image);
         });
       }
 
-      const response = await ServiceService.updateService(selectedService._id, formData);
-      const data = response.data;
+      let response;
+      if (isEditMode) {
+        response = await ServiceService.updateService(selectedService._id, formData);
+        const data = response.data;
+        setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
+        toast.success('Service updated successfully!');
+      } else {
+        response = await ServiceService.createService(formData);
+        const data = response.data;
+        setServices(prev => [data.data, ...prev]);
+        toast.success('Service created successfully!');
+      }
 
-      setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
-      toast.success('Service updated successfully!');
-      setShowEditModal(false);
+      resetFormState();
+      setShowFormModal(false);
     } catch (error) {
       if (error.message === 'silent_cancel') return;
-      console.error('Update service error:', error);
-      toast.error(error.message || 'Failed to update service');
+      console.error('Submit service form error:', error);
+      toast.error(error.message || 'Failed to submit service form');
     }
   };
 
@@ -749,9 +543,9 @@ const AdminServices = () => {
     }
   };
 
-  // Reset create form
-  const resetCreateForm = () => {
-    setCreateForm({
+  // Reset form state
+  const resetFormState = () => {
+    setFormState({
       title: '',
       category: '',
       description: '',
@@ -760,6 +554,7 @@ const AdminServices = () => {
       specialNotes: [],
       materialsUsed: [],
       images: [],
+      existingImages: [],
       serviceType: 'standard',
       warranty: { duration: '', unit: 'days' },
       tags: [],
@@ -769,7 +564,9 @@ const AdminServices = () => {
       prerequisites: [],
       discountPrice: ''
     });
-    setImagePreviews([]);
+    setFormImagePreviews([]);
+    setNewSpecialNote('');
+    setNewMaterial('');
     setNewTag('');
     setNewPrerequisite('');
     setFaqQuestion('');
@@ -777,66 +574,74 @@ const AdminServices = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    setFormActiveTab('basic');
+  };
+
+  // Handle Add Service click (open create mode)
+  const handleAddServiceClick = () => {
+    setIsEditMode(false);
+    setSelectedService(null);
+    resetFormState();
+    setShowFormModal(true);
   };
 
   // Handle edit click
   const handleEditClick = useCallback((service) => {
     setSelectedService(service);
-    setEditForm({
-      title: service.title,
-      category: service.category?._id || service.category?.value || service.category,
-      description: service.description,
-      basePrice: service.basePrice,
-      duration: service.duration,
-      specialNotes: service.specialNotes || [],
-      materialsUsed: service.materialsUsed || [],
+    setIsEditMode(true);
+    setFormState({
+      title: service.title || '',
+      category: service.category?._id || service.category?.value || service.category || '',
+      description: service.description || '',
+      basePrice: service.basePrice || '',
+      duration: service.duration || '',
+      specialNotes: parseArrayField(service.specialNotes),
+      materialsUsed: parseArrayField(service.materialsUsed),
       existingImages: service.images || [],
       images: [],
       serviceType: service.serviceType || 'standard',
-      warranty: service.warranty || { duration: '', unit: 'days' },
-      tags: service.tags || [],
+      warranty: {
+        duration: service.warranty?.duration || '',
+        unit: service.warranty?.unit || 'days'
+      },
+      tags: parseArrayField(service.tags),
       faqs: service.faqs || [],
       shortDescription: service.shortDescription || '',
-      isFeatured: service.isFeatured || false,
-      prerequisites: service.prerequisites || [],
+      isFeatured: !!service.isFeatured,
+      prerequisites: parseArrayField(service.prerequisites),
       discountPrice: service.discountPrice || ''
     });
-    setEditImagePreviews([]);
-    setEditNewTag('');
-    setEditNewPrerequisite('');
-    setEditFaqQuestion('');
-    setEditFaqAnswer('');
-    setShowEditModal(true);
+    setFormImagePreviews([]);
+    setNewSpecialNote('');
+    setNewMaterial('');
+    setNewTag('');
+    setNewPrerequisite('');
+    setFaqQuestion('');
+    setFaqAnswer('');
+    setFormActiveTab('basic');
+    setShowFormModal(true);
   }, []);
 
   // Handle view click
   const handleViewClick = useCallback((service) => {
     setSelectedService(service);
+    setViewActiveTab('overview');
     setShowViewModal(true);
   }, []);
 
-  // Remove image from create form
-  const removeCreateImage = (index) => {
-    setCreateForm(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }));
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Remove image from edit form
-  const removeEditImage = (index, isExisting = false) => {
+  // Remove image from formState (newly added or existing)
+  const removeFormImage = (index, isExisting = false) => {
     if (isExisting) {
-      setEditForm(prev => ({
+      setFormState(prev => ({
         ...prev,
-        existingImages: prev.existingImages.filter((_, i) => i !== index)
+        existingImages: (prev.existingImages || []).filter((_, i) => i !== index)
       }));
     } else {
-      setEditForm(prev => ({
+      setFormState(prev => ({
         ...prev,
-        images: prev.images.filter((_, i) => i !== index)
+        images: (prev.images || []).filter((_, i) => i !== index)
       }));
-      setEditImagePreviews(prev => prev.filter((_, i) => i !== index));
+      setFormImagePreviews(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -902,7 +707,7 @@ const AdminServices = () => {
               Disable Discounts
             </button>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={handleAddServiceClick}
               className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
             >
               <Plus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
@@ -1065,897 +870,571 @@ const AdminServices = () => {
           )}
         </div>
 
-        {/* Create Service Modal */}
-        {showCreateModal && (
+        {/* Service Form Modal (Unified Create/Edit) */}
+        {showFormModal && (
           <Modal
-            isOpen={showCreateModal}
+            isOpen={showFormModal}
             onClose={() => {
-              setShowCreateModal(false);
-              resetCreateForm();
+              setShowFormModal(false);
+              resetFormState();
             }}
-            title="Create New Service"
+            title={isEditMode ? "Edit Service" : "Create New Service"}
             size="xlarge"
           >
-            <form onSubmit={handleCreateService} className="space-y-4 md:space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Service Title *
-                  </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={createForm.title}
-                    onChange={handleCreateFormChange}
-                    required
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter service title"
-                  />
-                </div>
-                <CategorySelect
-                  value={createForm.category}
-                  onChange={(value) => setCreateForm(prev => ({ ...prev, category: value }))}
-                  label="Category"
-                  required
-                  categories={categories}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                  Description *
-                </label>
-                <textarea
-                  name="description"
-                  value={createForm.description}
-                  onChange={handleCreateFormChange}
-                  required
-                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-40"
-                  placeholder="Enter service description"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Base Price (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    name="basePrice"
-                    value={createForm.basePrice}
-                    onChange={handleCreateFormChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter base price"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Duration (hours) *
-                  </label>
-                  <input
-                    type="number"
-                    name="duration"
-                    value={createForm.duration}
-                    onChange={handleCreateFormChange}
-                    required
-                    min="0.25"
-                    max="500"
-                    step="0.25"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter duration in hours"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                  Short Description (Max 150 chars)
-                </label>
-                <textarea
-                  name="shortDescription"
-                  value={createForm.shortDescription}
-                  onChange={handleCreateFormChange}
-                  maxLength={150}
-                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-20"
-                  placeholder="Enter a short description for cards (max 150 characters)"
-                />
-                <div className="text-right text-xs text-gray-500 mt-1">
-                  {createForm.shortDescription.length}/150
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Discount Price (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="discountPrice"
-                    value={createForm.discountPrice}
-                    onChange={handleCreateFormChange}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Discount price (if any)"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Service Type
-                  </label>
-                  <select
-                    name="serviceType"
-                    value={createForm.serviceType}
-                    onChange={handleCreateFormChange}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            <div className="flex border-b border-gray-200 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none">
+              {[
+                { id: 'basic', label: 'Basic Info', icon: FileText },
+                { id: 'pricing', label: 'Pricing & Type', icon: DollarSign },
+                { id: 'additional', label: 'Logistics & Add-ons', icon: Settings },
+                { id: 'faq_media', label: 'FAQs & Images', icon: ImageIcon },
+              ].map((tab) => {
+                const TabIcon = tab.icon;
+                const isActive = formActiveTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setFormActiveTab(tab.id)}
+                    className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${
+                      isActive
+                        ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                   >
-                    <option value="standard">Standard</option>
-                    <option value="premium">Premium</option>
-                    <option value="emergency">Emergency</option>
-                  </select>
-                </div>
-                <div className="flex items-center">
-                  <label className="flex items-center space-x-3 cursor-pointer mt-6">
-                    <input
-                      type="checkbox"
-                      name="isFeatured"
-                      checked={createForm.isFeatured}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, isFeatured: e.target.checked }))}
-                      className="form-checkbox h-5 w-5 text-primary border-gray-300 rounded focus:ring-primary"
-                    />
-                    <span className="text-sm font-medium text-secondary">Feature on Homepage</span>
-                  </label>
-                </div>
-              </div>
+                    <TabIcon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Warranty Duration
-                  </label>
-                  <input
-                    type="number"
-                    value={createForm.warranty.duration}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, warranty: { ...prev.warranty, duration: e.target.value } }))}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="e.g. 30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Warranty Unit
-                  </label>
-                  <select
-                    value={createForm.warranty.unit}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, warranty: { ...prev.warranty, unit: e.target.value } }))}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="days">Days</option>
-                    <option value="months">Months</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Search Tags
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add a search tag (e.g. best-seller)"
-                    />
-                    <button
-                      type="button"
-                      onClick={addTag}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {createForm.tags.map((tag, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        #{tag}
-                        <button
-                          type="button"
-                          onClick={() => removeTag(index)}
-                          className="ml-1 text-blue-600 hover:text-blue-800"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Prerequisites
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={newPrerequisite}
-                      onChange={(e) => setNewPrerequisite(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="e.g. Accessible power supply"
-                    />
-                    <button
-                      type="button"
-                      onClick={addPrerequisite}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {createForm.prerequisites.map((item, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {item}
-                        <button
-                          type="button"
-                          onClick={() => removePrerequisite(index)}
-                          className="ml-1 text-purple-600 hover:text-purple-800"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Service FAQs
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={faqQuestion}
-                    onChange={(e) => setFaqQuestion(e.target.value)}
-                    placeholder="Enter FAQ Question"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={faqAnswer}
-                      onChange={(e) => setFaqAnswer(e.target.value)}
-                      placeholder="Enter FAQ Answer"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={addFaq}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {createForm.faqs.map((faq, index) => (
-                    <div key={index} className="flex items-start justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
-                      <div className="flex-1 min-w-0 pr-2">
-                        <p className="font-semibold text-secondary truncate">Q: {faq.question}</p>
-                        <p className="text-gray-600 mt-1">A: {faq.answer}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFaq(index)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+            <form onSubmit={handleFormSubmit} className="space-y-4 md:space-y-6">
+              {/* Tab 1: Basic Info */}
+              {formActiveTab === 'basic' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Service Title *
+                      </label>
+                      <input
+                        type="text"
+                        name="title"
+                        value={formState.title}
+                        onChange={handleFormChange}
+                        required
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+                        placeholder="e.g. Deep Home Cleaning"
+                      />
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Special Notes
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={newSpecialNote}
-                      onChange={(e) => setNewSpecialNote(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add a special note"
+                    <CategorySelect
+                      value={formState.category}
+                      onChange={(value) => setFormState(prev => ({ ...prev, category: value }))}
+                      label="Category"
+                      required
+                      categories={categories}
                     />
-                    <button
-                      type="button"
-                      onClick={addSpecialNote}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {createForm.specialNotes.map((note, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                        {note}
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                      Short Description * (Max 150 chars)
+                    </label>
+                    <textarea
+                      name="shortDescription"
+                      value={formState.shortDescription}
+                      onChange={handleFormChange}
+                      required
+                      maxLength={150}
+                      className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 h-20"
+                      placeholder="Summarize the service in a brief sentence for list cards..."
+                    />
+                    <div className="text-right text-xs text-gray-400 mt-1">
+                      {formState.shortDescription.length}/150
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                      Full Description *
+                    </label>
+                    <textarea
+                      name="description"
+                      value={formState.description}
+                      onChange={handleFormChange}
+                      required
+                      className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 h-32"
+                      placeholder="Describe the service details, what is included, etc..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Pricing & Type */}
+              {formActiveTab === 'pricing' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Base Price (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        name="basePrice"
+                        value={formState.basePrice}
+                        onChange={handleFormChange}
+                        required
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
+                        placeholder="e.g. 999"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Discount Price (₹)
+                      </label>
+                      <input
+                        type="number"
+                        name="discountPrice"
+                        value={formState.discountPrice}
+                        onChange={handleFormChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
+                        placeholder="Discounted price (optional)"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Duration (hours) *
+                      </label>
+                      <input
+                        type="number"
+                        name="duration"
+                        value={formState.duration}
+                        onChange={handleFormChange}
+                        required
+                        min="0.25"
+                        max="500"
+                        step="0.25"
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
+                        placeholder="Enter duration in hours"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Service Type
+                      </label>
+                      <select
+                        name="serviceType"
+                        value={formState.serviceType}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-200"
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="premium">Premium</option>
+                        <option value="emergency">Emergency</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-start">
+                    <label className="flex items-center space-x-3 cursor-pointer mt-2 p-2 bg-gray-50 border border-gray-200 rounded-lg w-full md:w-auto hover:bg-gray-150 transition-colors duration-250">
+                      <input
+                        type="checkbox"
+                        name="isFeatured"
+                        checked={formState.isFeatured}
+                        onChange={(e) => setFormState(prev => ({ ...prev, isFeatured: e.target.checked }))}
+                        className="form-checkbox h-5 w-5 text-primary border-gray-300 rounded focus:ring-primary"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-secondary block">Feature on Homepage</span>
+                        <span className="text-xs text-gray-500">Highlight this service on the customer home screen</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Logistics & Add-ons */}
+              {formActiveTab === 'additional' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Warranty Duration
+                      </label>
+                      <input
+                        type="number"
+                        value={formState.warranty.duration}
+                        onChange={(e) => setFormState(prev => ({ ...prev, warranty: { ...prev.warranty, duration: e.target.value } }))}
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                        placeholder="e.g. 30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Warranty Unit
+                      </label>
+                      <select
+                        value={formState.warranty.unit}
+                        onChange={(e) => setFormState(prev => ({ ...prev, warranty: { ...prev.warranty, unit: e.target.value } }))}
+                        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                      >
+                        <option value="days">Days</option>
+                        <option value="months">Months</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Search Tags
+                      </label>
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={newTag}
+                          onChange={(e) => setNewTag(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Add a search tag (e.g. best-seller)"
+                        />
                         <button
                           type="button"
-                          onClick={() => removeSpecialNote(index)}
-                          className="ml-1 text-teal-600 hover:text-teal-800"
+                          onClick={() => addToField('tags', newTag, setNewTag)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
                         >
-                          <X className="w-3 h-3" />
+                          Add
                         </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
+                        {formState.tags.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No tags added yet.</span>
+                        )}
+                        {formState.tags.map((tag, index) => (
+                          <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-150">
+                            #{tag}
+                            <button
+                              type="button"
+                              onClick={() => removeFromField('tags', index)}
+                              className="ml-1 text-blue-600 hover:text-blue-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Materials Used
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={newMaterial}
-                      onChange={(e) => setNewMaterial(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add a material"
-                    />
-                    <button
-                      type="button"
-                      onClick={addMaterial}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {createForm.materialsUsed.map((material, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                        {material}
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Prerequisites
+                      </label>
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={newPrerequisite}
+                          onChange={(e) => setNewPrerequisite(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="e.g. Accessible power supply"
+                        />
                         <button
                           type="button"
-                          onClick={() => removeMaterial(index)}
-                          className="ml-1 text-orange-600 hover:text-orange-800"
+                          onClick={() => addToField('prerequisites', newPrerequisite, setNewPrerequisite)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-855 transition-colors duration-200"
                         >
-                          <X className="w-3 h-3" />
+                          Add
                         </button>
-                      </span>
-                    ))}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
+                        {formState.prerequisites.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No prerequisites added yet.</span>
+                        )}
+                        {formState.prerequisites.map((item, index) => (
+                          <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-800 border border-purple-150">
+                            {item}
+                            <button
+                              type="button"
+                              onClick={() => removeFromField('prerequisites', index)}
+                              className="ml-1 text-purple-600 hover:text-purple-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Special Notes
+                      </label>
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={newSpecialNote}
+                          onChange={(e) => setNewSpecialNote(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Add a special note"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addToField('specialNotes', newSpecialNote, setNewSpecialNote)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
+                        {formState.specialNotes.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No special notes added yet.</span>
+                        )}
+                        {formState.specialNotes.map((note, index) => (
+                          <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-800 border border-teal-150">
+                            {note}
+                            <button
+                              type="button"
+                              onClick={() => removeFromField('specialNotes', index)}
+                              className="ml-1 text-teal-600 hover:text-teal-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Materials Used
+                      </label>
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={newMaterial}
+                          onChange={(e) => setNewMaterial(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Add a material"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addToField('materialsUsed', newMaterial, setNewMaterial)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
+                        {formState.materialsUsed.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No materials listed yet.</span>
+                        )}
+                        {formState.materialsUsed.map((material, index) => (
+                          <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-800 border border-orange-150">
+                            {material}
+                            <button
+                              type="button"
+                              onClick={() => removeFromField('materialsUsed', index)}
+                              className="ml-1 text-orange-600 hover:text-orange-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                  Service Images (Multiple)
-                </label>
-                <div className="flex items-center space-x-4">
-                  <input
-                    type="file"
-                    name="images"
-                    ref={fileInputRef}
-                    onChange={handleCreateFormChange}
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                  />
+              {/* Tab 4: FAQs & Media */}
+              {formActiveTab === 'faq_media' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <label className="block text-sm font-medium text-secondary mb-2">
+                      Service FAQs
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                      <input
+                        type="text"
+                        value={faqQuestion}
+                        onChange={(e) => setFaqQuestion(e.target.value)}
+                        placeholder="Enter FAQ Question"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white text-sm"
+                      />
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={faqAnswer}
+                          onChange={(e) => setFaqAnswer(e.target.value)}
+                          placeholder="Enter FAQ Answer"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addFaqToForm(faqQuestion, faqAnswer, setFaqQuestion, setFaqAnswer)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200 text-sm"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {formState.faqs.length === 0 && (
+                        <p className="text-xs text-gray-500 italic p-1">No FAQs added yet.</p>
+                      )}
+                      {formState.faqs.map((faq, index) => (
+                        <div key={index} className="flex items-start justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm shadow-sm">
+                          <div className="flex-1 min-w-0 pr-2">
+                            <p className="font-semibold text-secondary">Q: {faq.question}</p>
+                            <p className="text-gray-650 mt-1">A: {faq.answer}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFromField('faqs', index)}
+                            className="text-red-500 hover:text-red-750 p-1 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                      Service Images (Multiple)
+                    </label>
+                    <input
+                      type="file"
+                      name="images"
+                      ref={fileInputRef}
+                      onChange={handleFormChange}
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                    />
+                    
+                    <div 
+                      className="border-2 border-dashed border-gray-300 hover:border-primary rounded-xl p-6 transition-all duration-300 flex flex-col items-center justify-center cursor-pointer bg-gray-50 hover:bg-teal-50 group mb-3"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="w-10 h-10 text-gray-400 group-hover:text-primary mb-2 transition-colors duration-300" />
+                      <span className="text-sm font-medium text-secondary group-hover:text-primary transition-colors duration-300">Click to upload service images</span>
+                      <span className="text-xs text-gray-400 mt-1">Supports PNG, JPG, JPEG (Multiple files)</span>
+                    </div>
+
+                    {/* Show existing images in edit mode */}
+                    {isEditMode && formState.existingImages && formState.existingImages.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-sm font-medium text-gray-600 mb-2">Existing Images:</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {formState.existingImages.map((image, index) => (
+                            <div key={`existing-${index}`} className="relative group rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                              <img
+                                src={image}
+                                alt={`Existing ${index + 1}`}
+                                className="h-20 w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeFormImage(index, true)}
+                                className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-750 text-white rounded-full p-1 shadow-md hover:scale-110 transition-all duration-200"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* New Upload Previews */}
+                    {formImagePreviews.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-sm font-medium text-gray-650 mb-2">Selected New Images Preview:</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {formImagePreviews.map((preview, index) => (
+                            <div key={`new-${index}`} className="relative group rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                              <img
+                                src={preview}
+                                alt={`Preview ${index + 1}`}
+                                className="h-20 w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeFormImage(index, false)}
+                                className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-750 text-white rounded-full p-1 shadow-md hover:scale-110 transition-all duration-200"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation and Actions */}
+              <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                <div>
+                  {formActiveTab !== 'basic' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tabs = ['basic', 'pricing', 'additional', 'faq_media'];
+                        const idx = tabs.indexOf(formActiveTab);
+                        setFormActiveTab(tabs[idx - 1]);
+                      }}
+                      className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Previous
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex space-x-3">
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    onClick={() => {
+                      setShowFormModal(false);
+                      resetFormState();
+                    }}
+                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                   >
-                    <ImageIcon className="w-4 h-4 md:w-5 md:h-5 mr-2 text-gray-400" />
-                    Choose Images
+                    Cancel
                   </button>
-                </div>
-                {imagePreviews.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-600 mb-2">Selected Images:</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {imagePreviews.map((preview, index) => (
-                        <div key={index} className="relative">
-                          <img
-                            src={preview}
-                            alt={`Preview ${index + 1}`}
-                            className="h-20 w-full object-cover rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeCreateImage(index)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    resetCreateForm();
-                  }}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Create Service
-                </button>
-              </div>
-            </form>
-          </Modal>
-        )}
-
-        {/* Edit Service Modal */}
-        {showEditModal && selectedService && (
-          <Modal
-            isOpen={showEditModal}
-            onClose={() => setShowEditModal(false)}
-            title="Edit Service"
-            size="xlarge"
-          >
-            <form onSubmit={handleUpdateService} className="space-y-4 md:space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Service Title *
-                  </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={editForm.title}
-                    onChange={handleEditFormChange}
-                    required
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter service title"
-                  />
-                </div>
-                <CategorySelect
-                  value={editForm.category}
-                  onChange={(value) => setEditForm(prev => ({ ...prev, category: value }))}
-                  label="Category"
-                  required
-                  categories={categories}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                  Description *
-                </label>
-                <textarea
-                  name="description"
-                  value={editForm.description}
-                  onChange={handleEditFormChange}
-                  required
-                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-40"
-                  placeholder="Enter service description"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Special Notes
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={editNewSpecialNote}
-                      onChange={(e) => setEditNewSpecialNote(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add a special note"
-                    />
+                  {formActiveTab !== 'faq_media' ? (
                     <button
                       type="button"
-                      onClick={addEditSpecialNote}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                      onClick={() => {
+                        const tabs = ['basic', 'pricing', 'additional', 'faq_media'];
+                        const idx = tabs.indexOf(formActiveTab);
+                        setFormActiveTab(tabs[idx + 1]);
+                      }}
+                      className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
                     >
-                      Add
+                      Next
                     </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editForm.specialNotes && editForm.specialNotes.map((note, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                        {note}
-                        <button
-                          type="button"
-                          onClick={() => removeEditSpecialNote(index)}
-                          className="ml-1 text-teal-600 hover:text-teal-800"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Materials Used
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={editNewMaterial}
-                      onChange={(e) => setEditNewMaterial(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add a material"
-                    />
+                  ) : (
                     <button
-                      type="button"
-                      onClick={addEditMaterial}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
+                      type="submit"
+                      className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200 flex items-center"
                     >
-                      Add
+                      <Save className="w-4 h-4 mr-2" />
+                      {isEditMode ? "Update Service" : "Create Service"}
                     </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editForm.materialsUsed && editForm.materialsUsed.map((material, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                        {material}
-                        <button
-                          type="button"
-                          onClick={() => removeEditMaterial(index)}
-                          className="ml-1 text-orange-600 hover:text-orange-800"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                  )}
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Base Price (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    name="basePrice"
-                    value={editForm.basePrice}
-                    onChange={handleEditFormChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter base price"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Duration (hours) *
-                  </label>
-                  <input
-                    type="number"
-                    name="duration"
-                    value={editForm.duration}
-                    onChange={handleEditFormChange}
-                    required
-                    min="0.25"
-                    max="500"
-                    step="0.25"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Enter duration in hours"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                  Short Description (Max 150 chars)
-                </label>
-                <textarea
-                  name="shortDescription"
-                  value={editForm.shortDescription || ''}
-                  onChange={handleEditFormChange}
-                  maxLength={150}
-                  className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary h-20"
-                  placeholder="Enter a short description for cards (max 150 characters)"
-                />
-                <div className="text-right text-xs text-gray-500 mt-1">
-                  {(editForm.shortDescription || '').length}/150
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Discount Price (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="discountPrice"
-                    value={editForm.discountPrice || ''}
-                    onChange={handleEditFormChange}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Discount price (if any)"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Service Type
-                  </label>
-                  <select
-                    name="serviceType"
-                    value={editForm.serviceType || 'standard'}
-                    onChange={handleEditFormChange}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="standard">Standard</option>
-                    <option value="premium">Premium</option>
-                    <option value="emergency">Emergency</option>
-                  </select>
-                </div>
-                <div className="flex items-center">
-                  <label className="flex items-center space-x-3 cursor-pointer mt-6">
-                    <input
-                      type="checkbox"
-                      name="isFeatured"
-                      checked={editForm.isFeatured || false}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, isFeatured: e.target.checked }))}
-                      className="form-checkbox h-5 w-5 text-primary border-gray-300 rounded focus:ring-primary"
-                    />
-                    <span className="text-sm font-medium text-secondary">Feature on Homepage</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Warranty Duration
-                  </label>
-                  <input
-                    type="number"
-                    value={editForm.warranty?.duration || ''}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, warranty: { ...prev.warranty, duration: e.target.value } }))}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="e.g. 30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Warranty Unit
-                  </label>
-                  <select
-                    value={editForm.warranty?.unit || 'days'}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, warranty: { ...prev.warranty, unit: e.target.value } }))}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="days">Days</option>
-                    <option value="months">Months</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Search Tags
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={editNewTag}
-                      onChange={(e) => setEditNewTag(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Add a search tag (e.g. best-seller)"
-                    />
-                    <button
-                      type="button"
-                      onClick={addEditTag}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editForm.tags && editForm.tags.map((tag, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        #{tag}
-                        <button
-                          type="button"
-                          onClick={() => removeEditTag(index)}
-                          className="ml-1 text-blue-600 hover:text-blue-800"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Prerequisites
-                  </label>
-                  <div className="flex space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={editNewPrerequisite}
-                      onChange={(e) => setEditNewPrerequisite(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="e.g. Accessible power supply"
-                    />
-                    <button
-                      type="button"
-                      onClick={addEditPrerequisite}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editForm.prerequisites && editForm.prerequisites.map((item, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        {item}
-                        <button
-                          type="button"
-                          onClick={() => removeEditPrerequisite(index)}
-                          className="ml-1 text-purple-600 hover:text-purple-800"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Service FAQs
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={editFaqQuestion}
-                    onChange={(e) => setEditFaqQuestion(e.target.value)}
-                    placeholder="Enter FAQ Question"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={editFaqAnswer}
-                      onChange={(e) => setEditFaqAnswer(e.target.value)}
-                      placeholder="Enter FAQ Answer"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={addEditFaq}
-                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-teal-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {editForm.faqs && editForm.faqs.map((faq, index) => (
-                    <div key={index} className="flex items-start justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
-                      <div className="flex-1 min-w-0 pr-2">
-                        <p className="font-semibold text-secondary truncate">Q: {faq.question}</p>
-                        <p className="text-gray-600 mt-1">A: {faq.answer}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeEditFaq(index)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                  Service Images
-                </label>
-                <div className="flex items-center space-x-4">
-                  <input
-                    type="file"
-                    name="images"
-                    ref={editFileInputRef}
-                    onChange={handleEditFormChange}
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => editFileInputRef.current?.click()}
-                    className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <ImageIcon className="w-4 h-4 md:w-5 md:h-5 mr-2 text-gray-400" />
-                    Add More Images
-                  </button>
-                </div>
-                {(editForm.existingImages && editForm.existingImages.length > 0) || editImagePreviews.length > 0 ? (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-600 mb-2">Current Images:</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {editForm.existingImages?.map((image, index) => (
-                        <div key={`existing-${index}`} className="relative">
-                          <img
-                            src={image}
-                            alt={`Existing ${index + 1}`}
-                            className="h-20 w-full object-cover rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeEditImage(index, true)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                      {editImagePreviews.map((preview, index) => (
-                        <div key={`new-${index}`} className="relative">
-                          <img
-                            src={preview}
-                            alt={`New ${index + 1}`}
-                            className="h-20 w-full object-cover rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeEditImage(index, false)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Update Service
-                </button>
               </div>
             </form>
           </Modal>
@@ -1970,12 +1449,12 @@ const AdminServices = () => {
             size="large"
           >
             <div className="space-y-6">
-              {/* Header Section */}
-              <div className="flex flex-col md:flex-row items-start gap-6">
+              {/* Header Hero Section */}
+              <div className="flex flex-col md:flex-row items-center md:items-start gap-6 bg-gradient-to-r from-teal-50/50 to-blue-50/30 p-5 rounded-2xl border border-gray-100 shadow-sm animate-fadeIn">
                 {selectedService.images && selectedService.images.length > 0 ? (
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 relative overflow-hidden rounded-xl shadow-md group border border-white">
                     <img
-                      className="h-28 w-28 md:h-36 md:w-36 rounded-xl object-cover shadow-md"
+                      className="h-28 w-28 md:h-36 md:w-36 rounded-xl object-cover transition-transform duration-500 group-hover:scale-110"
                       src={selectedService.images[0]}
                       alt={selectedService.title}
                       onError={(e) => {
@@ -1984,233 +1463,288 @@ const AdminServices = () => {
                     />
                   </div>
                 ) : (
-                  <div className="h-28 w-28 md:h-36 md:w-36 rounded-xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center shadow-md">
-                    <ImageIcon className="w-12 h-12 md:w-16 md:h-16 text-teal-300" />
+                  <div className="h-28 w-28 md:h-36 md:w-36 rounded-xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center shadow-md border border-white">
+                    <ImageIcon className="w-12 h-12 md:w-16 md:h-16 text-teal-300 animate-pulseSlow" />
                   </div>
                 )}
-                <div className="flex-1">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
-                    <h3 className="text-2xl md:text-3xl font-bold text-secondary">{selectedService.title}</h3>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedService.isActive
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                <div className="flex-1 text-center md:text-left w-full">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+                    <h3 className="text-2xl md:text-3xl font-extrabold text-secondary tracking-tight">{selectedService.title}</h3>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-sm w-fit mx-auto md:mx-0 ${selectedService.isActive
+                      ? 'bg-green-150 text-green-800 border border-green-200'
+                      : 'bg-red-150 text-red-800 border border-red-200'
                       }`}>
                       {selectedService.isActive ? (
                         <>
-                          <CheckCircle className="w-4 h-4 mr-1" />
+                          <CheckCircle className="w-3.5 h-3.5 mr-1 text-green-600" />
                           Active
                         </>
                       ) : (
                         <>
-                          <XCircle className="w-4 h-4 mr-1" />
+                          <XCircle className="w-3.5 h-3.5 mr-1 text-red-650" />
                           Inactive
                         </>
                       )}
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
+                  <div className="flex flex-wrap justify-center md:justify-start gap-1.5 mb-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-150">
                       {typeof selectedService.category === 'object' ? (selectedService.category.name || selectedService.category.label) : selectedService.category}
                     </span>
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-150">
                       <Clock className="w-3 h-3 mr-1" />
                       {formatDuration(selectedService.duration)}
                     </span>
                     {selectedService.serviceType && (
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${selectedService.serviceType === 'emergency' ? 'bg-red-100 text-red-800' :
-                          selectedService.serviceType === 'premium' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${selectedService.serviceType === 'emergency' ? 'bg-red-50 text-red-700 border-red-150' :
+                          selectedService.serviceType === 'premium' ? 'bg-purple-50 text-purple-700 border-purple-150' : 'bg-gray-50 text-gray-700 border-gray-150'
                         }`}>
                         {selectedService.serviceType.toUpperCase()}
                       </span>
                     )}
                     {selectedService.isFeatured && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                        ⭐ Featured
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-150">
+                        ★ Featured
                       </span>
                     )}
                     {selectedService.warranty?.duration && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-150">
                         🛡️ {selectedService.warranty.duration} {selectedService.warranty.unit} Warranty
                       </span>
                     )}
                   </div>
 
-                  {selectedService.tags && selectedService.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {selectedService.tags.map((tag, i) => (
-                        <span key={i} className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
                   {selectedService.shortDescription && (
-                    <p className="text-sm italic text-gray-500 mb-2">
+                    <p className="text-sm italic text-gray-500 mb-2 border-l-2 border-gray-200 pl-3 py-1">
                       "{selectedService.shortDescription}"
                     </p>
                   )}
-                  <p className="text-gray-600 bg-gray-50 p-4 rounded-lg border border-gray-100">
-                    {selectedService.description}
-                  </p>
                 </div>
               </div>
 
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-4 rounded-xl border border-teal-100 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <DollarSign className="w-5 h-5 text-teal-600 mr-2" />
-                    <span className="text-sm font-medium text-teal-700">Base Price</span>
+              {/* Tabs Section */}
+              <div className="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap scrollbar-none">
+                {[
+                  { id: 'overview', label: 'Overview', icon: FileText },
+                  { id: 'logistics', label: 'Logistics & Add-ons', icon: Settings },
+                  { id: 'gallery_faq', label: 'Gallery & FAQs', icon: ImageIcon },
+                ].map((tab) => {
+                  const TabIcon = tab.icon;
+                  const isActive = viewActiveTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setViewActiveTab(tab.id)}
+                      className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${
+                        isActive
+                          ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <TabIcon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab Content 1: Overview */}
+              {viewActiveTab === 'overview' && (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Primary Stats Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-teal-50 to-teal-100/50 p-4 rounded-xl border border-teal-100 shadow-sm transition-all duration-300 hover:shadow">
+                      <div className="flex items-center mb-1">
+                        <DollarSign className="w-4 h-4 text-teal-600 mr-1.5" />
+                        <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">Base Price</span>
+                      </div>
+                      <p className="text-xl md:text-2xl font-black text-teal-900 leading-none">
+                        {selectedService.discountPrice ? (
+                          <div className="flex flex-col">
+                            <span className="text-green-600 font-extrabold">{formatCurrency(selectedService.discountPrice)}</span>
+                            <span className="text-xs line-through text-gray-450 font-normal mt-1">{formatCurrency(selectedService.basePrice)}</span>
+                          </div>
+                        ) : (
+                          formatCurrency(selectedService.basePrice)
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 p-4 rounded-xl border border-blue-100 shadow-sm transition-all duration-300 hover:shadow">
+                      <div className="flex items-center mb-1">
+                        <Clock className="w-4 h-4 text-blue-600 mr-1.5" />
+                        <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Duration</span>
+                      </div>
+                      <p className="text-xl md:text-2xl font-black text-blue-900 leading-none">
+                        {formatDuration(selectedService.duration)}
+                      </p>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 p-4 rounded-xl border border-amber-100 shadow-sm transition-all duration-300 hover:shadow">
+                      <div className="flex items-center mb-1">
+                        <Star className="w-4 h-4 text-amber-600 mr-1.5" />
+                        <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Rating</span>
+                      </div>
+                      <div className="flex items-baseline">
+                        <p className="text-xl md:text-2xl font-black text-amber-950 leading-none mr-1.5">
+                          {selectedService.averageRating || 0}
+                        </p>
+                        <span className="text-xs text-amber-700 font-medium">({selectedService.ratingCount || 0} reviews)</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 p-4 rounded-xl border border-purple-100 shadow-sm transition-all duration-300 hover:shadow">
+                      <div className="flex items-center mb-1">
+                        <Users className="w-4 h-4 text-purple-600 mr-1.5" />
+                        <span className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Popularity</span>
+                      </div>
+                      <p className="text-xl md:text-2xl font-black text-purple-900 leading-none">
+                        {selectedService.ratingCount || 0}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold text-teal-900">
-                    {selectedService.discountPrice ? (
-                      <>
-                        <span className="text-green-600 mr-2">{formatCurrency(selectedService.discountPrice)}</span>
-                        <span className="text-sm line-through text-gray-400 font-normal">{formatCurrency(selectedService.basePrice)}</span>
-                      </>
+
+                  {/* Description Card */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-secondary mb-2 uppercase tracking-wider">Full Description</h4>
+                    <p className="text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-150 leading-relaxed whitespace-pre-line text-sm">
+                      {selectedService.description}
+                    </p>
+                  </div>
+
+                  {selectedService.tags && selectedService.tags.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-secondary mb-2 uppercase tracking-wider">Keywords & Tags</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedService.tags.map((tag, i) => (
+                          <span key={i} className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-150 px-2.5 py-0.5 rounded-full">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab Content 2: Logistics & Add-ons */}
+              {viewActiveTab === 'logistics' && (
+                <div className="space-y-5 animate-fadeIn">
+                  {/* Special Notes Section */}
+                  {selectedService.specialNotes && parseArrayField(selectedService.specialNotes).length > 0 ? (
+                    <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100">
+                      <h4 className="text-sm font-bold text-teal-800 mb-2 flex items-center">
+                        <AlertCircle className="w-4 h-4 mr-1.5 text-teal-650" />
+                        Special Service Notes
+                      </h4>
+                      <ul className="space-y-2 text-sm text-teal-905">
+                        {parseArrayField(selectedService.specialNotes).map((note, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="w-1.5 h-1.5 bg-teal-500 rounded-full mt-1.5 mr-2.5 flex-shrink-0"></span>
+                            <span>{note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 italic">No special notes for this service.</div>
+                  )}
+
+                  {/* Materials Used Section */}
+                  {selectedService.materialsUsed && parseArrayField(selectedService.materialsUsed).length > 0 && (
+                    <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                      <h4 className="text-sm font-bold text-orange-800 mb-2.5 flex items-center">
+                        <Package className="w-4 h-4 mr-1.5 text-orange-600" />
+                        Required Materials
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {parseArrayField(selectedService.materialsUsed).map((material, index) => (
+                          <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white text-orange-850 border border-orange-200 shadow-sm">
+                            {material}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prerequisites Section */}
+                  {selectedService.prerequisites && parseArrayField(selectedService.prerequisites).length > 0 && (
+                    <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100">
+                      <h4 className="text-sm font-bold text-purple-800 mb-2 flex items-center">
+                        <CheckCircle className="w-4 h-4 mr-1.5 text-purple-650" />
+                        Prerequisites & Preparation Needed
+                      </h4>
+                      <ul className="space-y-2 text-sm text-purple-905">
+                        {parseArrayField(selectedService.prerequisites).map((item, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-1.5 mr-2.5 flex-shrink-0"></span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab Content 3: Gallery & FAQs */}
+              {viewActiveTab === 'gallery_faq' && (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Images Section */}
+                  {selectedService.images && selectedService.images.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-secondary mb-3 uppercase tracking-wider flex items-center">
+                        <ImageIcon className="w-4 h-4 mr-1.5 text-primary" />
+                        Service Photo Gallery
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {selectedService.images.map((img, index) => (
+                          <div key={index} className="relative group rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-gray-100">
+                            <img
+                              src={img}
+                              alt={`Service image ${index + 1}`}
+                              className="h-24 w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              onError={(e) => {
+                                e.target.src = '/default-service-placeholder.jpg';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                              <Eye className="w-5 h-5 text-white" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FAQs Section */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-secondary mb-3 uppercase tracking-wider flex items-center">
+                      <FileText className="w-4 h-4 mr-1.5 text-primary" />
+                      Frequently Asked Questions
+                    </h4>
+                    {selectedService.faqs && selectedService.faqs.length > 0 ? (
+                      <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                        {selectedService.faqs.map((faq, index) => (
+                          <details 
+                            key={index}
+                            className="group border border-gray-200 rounded-xl p-3 bg-white hover:bg-gray-50/55 transition-all duration-300"
+                          >
+                            <summary className="font-semibold text-secondary text-sm flex items-center justify-between cursor-pointer list-none select-none">
+                              <span>{faq.question}</span>
+                              <span className="transition-transform duration-300 group-open:rotate-180 text-gray-400 text-xs">▼</span>
+                            </summary>
+                            <p className="text-gray-600 mt-2 pl-4 border-l-2 border-primary/40 leading-relaxed text-sm animate-fadeIn">
+                              {faq.answer}
+                            </p>
+                          </details>
+                        ))}
+                      </div>
                     ) : (
-                      formatCurrency(selectedService.basePrice)
+                      <div className="text-xs text-gray-400 italic">No FAQs available for this service.</div>
                     )}
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-100 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Clock className="w-5 h-5 text-blue-600 mr-2" />
-                    <span className="text-sm font-medium text-blue-700">Duration</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900">
-                    {formatDuration(selectedService.duration)}
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-100 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Star className="w-5 h-5 text-amber-600 mr-2" />
-                    <span className="text-sm font-medium text-amber-700">Rating</span>
-                  </div>
-                  <p className="text-2xl font-bold text-amber-900">
-                    {selectedService.averageRating || 0}/5
-                  </p>
-                  <p className="text-xs text-amber-700 mt-1">
-                    ({selectedService.ratingCount || 0} reviews)
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-100 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Users className="w-5 h-5 text-purple-600 mr-2" />
-                    <span className="text-sm font-medium text-purple-700">Popularity</span>
-                  </div>
-                  <p className="text-2xl font-bold text-purple-900">
-                    {selectedService.ratingCount || 0}
-                  </p>
-                  <p className="text-xs text-purple-700 mt-1">
-                    Total ratings
-                  </p>
-                </div>
-              </div>
-
-              {/* Images Section */}
-              {selectedService.images && selectedService.images.length > 0 && (
-                <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
-                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-                    <ImageIcon className="w-5 h-5 mr-2 text-teal-600" />
-                    Service Images
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {selectedService.images.map((img, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={img}
-                          alt={`Service image ${index + 1}`}
-                          className="h-28 w-full object-cover rounded-lg shadow-md transition-transform duration-300 group-hover:scale-105"
-                          onError={(e) => {
-                            e.target.src = '/default-service-placeholder.jpg';
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all duration-300 flex items-center justify-center">
-                          <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Special Notes Section */}
-              {selectedService.specialNotes && parseArrayField(selectedService.specialNotes).length > 0 && (
-                <div className="bg-teal-50 p-5 rounded-xl border border-teal-100">
-                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-                    <AlertCircle className="w-5 h-5 mr-2 text-teal-600" />
-                    Special Notes
-                  </h4>
-                  <ul className="space-y-3">
-                    {parseArrayField(selectedService.specialNotes).map((note, index) => (
-                      <li key={index} className="flex items-start">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
-                        </div>
-                        <p className="ml-3 text-gray-700">{note}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Materials Used Section */}
-              {selectedService.materialsUsed && parseArrayField(selectedService.materialsUsed).length > 0 && (
-                <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
-                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-                    <Package className="w-5 h-5 mr-2 text-orange-600" />
-                    Materials Used
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {parseArrayField(selectedService.materialsUsed).map((material, index) => (
-                      <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-orange-800 border border-orange-200 shadow-sm">
-                        {material}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Prerequisites Section */}
-              {selectedService.prerequisites && parseArrayField(selectedService.prerequisites).length > 0 && (
-                <div className="bg-purple-50 p-5 rounded-xl border border-purple-100">
-                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-                    <CheckCircle className="w-5 h-5 mr-2 text-purple-600" />
-                    Prerequisites (What to prepare)
-                  </h4>
-                  <ul className="space-y-3">
-                    {parseArrayField(selectedService.prerequisites).map((item, index) => (
-                      <li key={index} className="flex items-start">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        </div>
-                        <p className="ml-3 text-gray-700">{item}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* FAQs Section */}
-              {selectedService.faqs && selectedService.faqs.length > 0 && (
-                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
-                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-                    <FileText className="w-5 h-5 mr-2 text-primary" />
-                    Frequently Asked Questions
-                  </h4>
-                  <div className="space-y-4">
-                    {selectedService.faqs.map((faq, index) => (
-                      <div key={index} className="bg-white p-4 rounded-lg border border-gray-150 shadow-sm">
-                        <p className="font-semibold text-secondary">Q: {faq.question}</p>
-                        <p className="text-gray-600 mt-2">A: {faq.answer}</p>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}

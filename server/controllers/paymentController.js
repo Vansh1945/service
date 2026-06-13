@@ -996,6 +996,19 @@ const downloadEarningsReport = async (req, res) => {
       },
       { $unwind: { path: "$paymentInfo", preserveNullAndEmptyArrays: true } },
       {
+        $lookup: {
+          from: "systemconfigs",
+          pipeline: [
+            { $limit: 1 },
+            { $project: { surgeSplitSettings: 1 } }
+          ],
+          as: "systemSettings"
+        }
+      },
+      {
+        $unwind: { path: "$systemSettings", preserveNullAndEmptyArrays: true }
+      },
+      {
         $addFields: {
           paymentMethod: "$bookingInfo.paymentMethod",
           bookingId: "$bookingInfo.bookingId",
@@ -1036,6 +1049,17 @@ const downloadEarningsReport = async (req, res) => {
                       "$status"
                     ]
                   }
+                ]
+              }
+            ]
+          },
+          surgeSplitSettings: {
+            $ifNull: [
+              "$bookingInfo.surgeSplitSettings",
+              {
+                $ifNull: [
+                  "$systemSettings.surgeSplitSettings",
+                  { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 }
                 ]
               }
             ]
@@ -1083,9 +1107,10 @@ const downloadEarningsReport = async (req, res) => {
           demandSurge: "$bookingInfo.demandSurge",
           customCharges: "$bookingInfo.customCharges",
           platformFee: "$bookingInfo.platformFee",
-          surgeSplitSettings: "$bookingInfo.surgeSplitSettings",
+          surgeSplitSettings: 1,
           subtotal: "$bookingInfo.subtotal",
-          totalDiscount: "$bookingInfo.totalDiscount"
+          totalDiscount: "$bookingInfo.totalDiscount",
+          price: "$bookingInfo.subtotal"
         },
       },
     ]);

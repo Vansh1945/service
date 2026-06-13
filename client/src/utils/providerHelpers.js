@@ -2,6 +2,7 @@ import {
   CheckCircle, Clock, XCircle, AlertCircle, ShieldAlert, Lock,
   Timer, CheckCheck, Activity, Check, X
 } from 'lucide-react';
+import { readCachedSystemSettings } from './systemSettingsCache';
 
 /**
  * Checks if chat is visible for a booking.
@@ -52,12 +53,20 @@ export const calculateNetAmount = (booking) => {
   if (booking.status === 'completed' && typeof booking.providerEarnings === 'number' && booking.providerEarnings > 0) {
     return booking.providerEarnings.toFixed(2);
   }
+  const systemSettings = readCachedSystemSettings();
+  const fallbackSplits = systemSettings?.surgeSplitSettings || {
+    visiting: 60,
+    rain: 70,
+    traffic: 70,
+    night: 70,
+    demand: 50
+  };
   const subtotal = parseFloat(calculateSubtotal(booking)) || 0;
-  const visiting = booking.visitingCharge ? parseFloat((booking.visitingCharge * ((booking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2)) : 0;
-  const rain = booking.rainCharge ? parseFloat((booking.rainCharge * ((booking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2)) : 0;
-  const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * ((booking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2)) : 0;
-  const night = booking.nightCharge ? parseFloat((booking.nightCharge * ((booking.surgeSplitSettings?.night || 70) / 100)).toFixed(2)) : 0;
-  const demand = booking.demandSurge ? parseFloat((booking.demandSurge * ((booking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2)) : 0;
+  const visiting = booking.visitingCharge ? parseFloat((booking.visitingCharge * ((booking.surgeSplitSettings?.visiting || fallbackSplits.visiting) / 100)).toFixed(2)) : 0;
+  const rain = booking.rainCharge ? parseFloat((booking.rainCharge * ((booking.surgeSplitSettings?.rain || fallbackSplits.rain) / 100)).toFixed(2)) : 0;
+  const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * ((booking.surgeSplitSettings?.traffic || fallbackSplits.traffic) / 100)).toFixed(2)) : 0;
+  const night = booking.nightCharge ? parseFloat((booking.nightCharge * ((booking.surgeSplitSettings?.night || fallbackSplits.night) / 100)).toFixed(2)) : 0;
+  const demand = booking.demandSurge ? parseFloat((booking.demandSurge * ((booking.surgeSplitSettings?.demand || fallbackSplits.demand) / 100)).toFixed(2)) : 0;
   const commission = booking.commission?.amount || booking.commissionAmount || 0;
   return (subtotal + visiting + rain + traffic + night + demand - commission).toFixed(2);
 };

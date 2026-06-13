@@ -78,6 +78,7 @@ const updateServiceSchema = z.object({
   specialNotes: z.string().optional(),
   materialsUsed: z.string().optional(),
   existingImages: z.string().optional(),
+  isActive: z.union([z.string(), z.boolean()]).transform(val => String(val) === 'true').optional(),
   serviceType: z.enum(['standard', 'premium', 'emergency']).optional(),
   warranty: z.union([z.string(), z.object({
     duration: z.union([z.string(), z.number()]).transform(Number),

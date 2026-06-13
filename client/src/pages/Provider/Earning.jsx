@@ -46,7 +46,15 @@ const Badge = ({ status }) => {
 // ── Main Dashboard Component ─────────────────────────────────────────────────
 
 const ProviderEarningsDashboard = () => {
-  const { showToast } = useAuth();
+  const { showToast, systemSettings } = useAuth();
+
+  const fallbackSplits = systemSettings?.surgeSplitSettings || {
+    visiting: 60,
+    rain: 70,
+    traffic: 70,
+    night: 70,
+    demand: 50
+  };
 
   const tabs = [
     { id: 'dashboard', label: 'Overview', icon: BarChart3 },
@@ -257,7 +265,23 @@ const ProviderEarningsDashboard = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       showToast('Report downloaded!', 'success');
-    } catch (err) { showToast('Download failed', 'error'); } finally { setDownloading(prev => ({ ...prev, [type]: false })); }
+    } catch (err) {
+      let errMsg = 'Download failed';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const errorJson = JSON.parse(text);
+          errMsg = errorJson.message || errorJson.error || errMsg;
+        } catch (_) {}
+      } else if (err.response?.data?.error) {
+        errMsg = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errMsg = err.response.data.message;
+      }
+      showToast(errMsg, 'error');
+    } finally {
+      setDownloading(prev => ({ ...prev, [type]: false }));
+    }
   };
 
   const refreshAll = useCallback(async () => {
@@ -568,11 +592,8 @@ const ProviderEarningsDashboard = () => {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
-                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Customer</th>
-                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Provider</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
-                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
-                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Price</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Service Price</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Other Income</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
@@ -582,92 +603,98 @@ const ProviderEarningsDashboard = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
-                        earningsReport.filter(e => e.isWithdrawable).map((e, i) => (
-                          <tr key={i} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
-                              {e.bookingId || `#${e.booking?.slice(-8)}`}
-                            </td>
-                            <td className="px-6 py-4 text-xs text-secondary/60">{e.customerName || '—'}</td>
-                            <td className="px-6 py-4 text-xs text-secondary/60">{e.providerName || '—'}</td>
-                            <td className="px-6 py-4 text-center text-sm text-secondary/50">
-                              {formatDate(e.createdAt)}
-                            </td>
-                            <td className="px-6 py-4 text-right text-sm text-secondary/40 line-through">
-                              {formatCurrency(e.grossAmount)}
-                            </td>
-                            <td className="px-6 py-4 text-right text-sm font-medium text-primary">
-                              {formatCurrency(e.price)}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
-                              <p className="text-[10px] text-secondary/30">Fee {e.commissionRate}%</p>
-                            </td>
-                            <td className="px-6 py-4 text-right relative group">
-                              {(() => {
-                                const splits = e.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
-                                const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
-                                const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
-                                const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
-                                const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
-                                const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
-                                const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
+                        earningsReport.filter(e => e.isWithdrawable).map((e, i) => {
+                          let parsedSplits = e.surgeSplitSettings;
+                          if (typeof parsedSplits === 'string') {
+                            try {
+                              parsedSplits = JSON.parse(parsedSplits);
+                            } catch (err) {
+                              parsedSplits = null;
+                            }
+                          }
+                          const splits = {
+                            visiting: parsedSplits?.visiting ?? fallbackSplits.visiting,
+                            rain: parsedSplits?.rain ?? fallbackSplits.rain,
+                            traffic: parsedSplits?.traffic ?? fallbackSplits.traffic,
+                            night: parsedSplits?.night ?? fallbackSplits.night,
+                            demand: parsedSplits?.demand ?? fallbackSplits.demand
+                          };
+                          const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
+                          const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
+                          const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
+                          const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
+                          const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
+                          const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
+                          const servicePriceWithSurge = (e.price || 0) + otherIncome;
 
-                                return (
-                                  <>
-                                    <span
-                                      onClick={(evt) => {
-                                        evt.stopPropagation();
-                                        setSurchargeOpenId(surchargeOpenId === e._id ? null : e._id);
-                                      }}
-                                      className="text-sm font-medium text-emerald-600 border-b border-dashed border-emerald-450 cursor-pointer flex items-center justify-end gap-1 select-none"
-                                    >
-                                      {formatCurrency(otherIncome)}
-                                      <Info className="w-3.5 h-3.5 text-emerald-600/70" />
-                                    </span>
-                                    {surchargeOpenId === e._id && (
-                                      <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
-                                        <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
-                                        <div className="flex justify-between py-0.5">
-                                          <span>Rain Share</span>
-                                          <span>{formatCurrency(rainShare)}</span>
-                                        </div>
-                                        <div className="flex justify-between py-0.5">
-                                          <span>Traffic Share</span>
-                                          <span>{formatCurrency(trafficShare)}</span>
-                                        </div>
-                                        <div className="flex justify-between py-0.5">
-                                          <span>Night Share</span>
-                                          <span>{formatCurrency(nightShare)}</span>
-                                        </div>
-                                        <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                          <span>Vis. Share</span>
-                                          <span>{formatCurrency(visitingShare)}</span>
-                                        </div>
-                                        <div className="flex justify-between py-0.5 font-bold">
-                                          <span>Demand Share</span>
-                                          <span>{formatCurrency(demandShare)}</span>
-                                        </div>
-                                        <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                          <span>Total Surcharge</span>
-                                          <span>{formatCurrency(otherIncome)}</span>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
-                              +{formatCurrency(e.netAmount)}
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge status={e.payoutStatus || e.status} />
-                            </td>
-                            <td className="px-6 py-4 text-xs font-medium capitalize text-secondary/60">
-                              {e.paymentMethod || '—'}
-                            </td>
-                          </tr>
-                        ))
+                          return (
+                            <tr key={i} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
+                                {e.bookingId || `#${e.booking?.slice(-8)}`}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm text-secondary/50">
+                                {formatDate(e.createdAt)}
+                              </td>
+                              <td className="px-6 py-4 text-right text-sm font-medium text-primary">
+                                {formatCurrency(servicePriceWithSurge)}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
+                                <p className="text-[10px] text-secondary/30">Fee {e.commissionRate}%</p>
+                              </td>
+                              <td className="px-6 py-4 text-right relative group">
+                                <span
+                                  onClick={(evt) => {
+                                    evt.stopPropagation();
+                                    setSurchargeOpenId(surchargeOpenId === e._id ? null : e._id);
+                                  }}
+                                  className="text-sm font-medium text-emerald-600 border-b border-dashed border-emerald-450 cursor-pointer flex items-center justify-end gap-1 select-none"
+                                >
+                                  {formatCurrency(otherIncome)}
+                                  <Info className="w-3.5 h-3.5 text-emerald-600/70" />
+                                </span>
+                                {surchargeOpenId === e._id && (
+                                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
+                                    <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
+                                    <div className="flex justify-between py-0.5">
+                                      <span>Rain Charge</span>
+                                      <span>{formatCurrency(rainShare)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-0.5">
+                                      <span>Traffic Charge</span>
+                                      <span>{formatCurrency(trafficShare)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-0.5">
+                                      <span>Night Charge</span>
+                                      <span>{formatCurrency(nightShare)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                      <span>Vis. Charge</span>
+                                      <span>{formatCurrency(visitingShare)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-0.5 font-bold">
+                                      <span>Demand Charge</span>
+                                      <span>{formatCurrency(demandShare)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                      <span>Total Surcharge</span>
+                                      <span>{formatCurrency(otherIncome)}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
+                                +{formatCurrency(e.netAmount)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge status={e.payoutStatus || e.status} />
+                              </td>
+                              <td className="px-6 py-4 text-xs font-medium capitalize text-secondary/60">
+                                {e.paymentMethod || '—'}
+                              </td>
+                            </tr>
+                          );
+                        })
                       ) : (
                         <tr>
                           <td colSpan="8" className="py-16 text-center text-secondary/30">
@@ -683,13 +710,28 @@ const ProviderEarningsDashboard = () => {
                 <div className="md:hidden space-y-4 p-4">
                   {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
                     earningsReport.filter(e => e.isWithdrawable).map((e, i) => {
-                      const splits = e.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+                      let parsedSplits = e.surgeSplitSettings;
+                      if (typeof parsedSplits === 'string') {
+                        try {
+                          parsedSplits = JSON.parse(parsedSplits);
+                        } catch (err) {
+                          parsedSplits = null;
+                        }
+                      }
+                      const splits = {
+                        visiting: parsedSplits?.visiting ?? fallbackSplits.visiting,
+                        rain: parsedSplits?.rain ?? fallbackSplits.rain,
+                        traffic: parsedSplits?.traffic ?? fallbackSplits.traffic,
+                        night: parsedSplits?.night ?? fallbackSplits.night,
+                        demand: parsedSplits?.demand ?? fallbackSplits.demand
+                      };
                       const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
                       const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
                       const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
                       const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
                       const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
                       const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
+                      const servicePriceWithSurge = (e.price || 0) + otherIncome;
 
                       return (
                         <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
@@ -704,16 +746,13 @@ const ProviderEarningsDashboard = () => {
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs border-t border-gray-50 pt-2">
                             <div>
-                              <p className="text-secondary/40">Gross Amt</p>
-                              <p className="font-semibold text-secondary/40 line-through">{formatCurrency(e.grossAmount)}</p>
+                              <p className="text-secondary/40">Service Price</p>
+                              <p className="font-semibold text-primary">{formatCurrency(servicePriceWithSurge)}</p>
                             </div>
                             <div>
                               <p className="text-secondary/40">Commission</p>
-                               <p className="font-semibold text-red-500">-{formatCurrency(e.commissionAmount)} ({e.commissionRate}%)</p>
-                               <div className="px-6 py-4 text-right text-sm font-medium text-primary">
-                                 {formatCurrency(e.price)}
-                               </div>
-                             </div>
+                              <p className="font-semibold text-red-500">-{formatCurrency(e.commissionAmount)} ({e.commissionRate}%)</p>
+                            </div>
                             <div className="relative">
                               <p className="text-secondary/40 flex items-center gap-1 select-none">
                                 Other
@@ -736,24 +775,28 @@ const ProviderEarningsDashboard = () => {
                                 <div className="absolute left-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
                                   <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
                                   <div className="flex justify-between py-0.5">
-                                    <span>Rain Share</span>
+                                    <span>Rain Charge</span>
                                     <span>{formatCurrency(rainShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5">
-                                    <span>Traffic Share</span>
+                                    <span>Traffic Charge</span>
                                     <span>{formatCurrency(trafficShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5">
-                                    <span>Night Share</span>
+                                    <span>Night Charge</span>
                                     <span>{formatCurrency(nightShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                    <span>Vis. Share</span>
+                                    <span>Vis. Charge</span>
                                     <span>{formatCurrency(visitingShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5 font-bold">
-                                    <span>Demand Share</span>
+                                    <span>Demand Charge</span>
                                     <span>{formatCurrency(demandShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                    <span>Total Surcharge</span>
+                                    <span>{formatCurrency(otherIncome)}</span>
                                   </div>
                                 </div>
                               )}
@@ -958,7 +1001,7 @@ const ProviderEarningsDashboard = () => {
             {/* Reports Tab */}
             {activeTab === 'reports' && (
               <div className="p-6">
-                <div className="flex flex-wrap items-center gap-4 mb-8 bg-gray-50 p-4 rounded-xl">
+                <div className="flex flex-wrap items-center gap-4 mb-4 bg-gray-50 p-4 rounded-xl">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-primary" />
                     <p className="text-xs font-medium text-secondary/40 uppercase">Select Period:</p>
@@ -984,6 +1027,13 @@ const ProviderEarningsDashboard = () => {
                   </button>
                 </div>
 
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3.5 mb-6 flex items-start gap-2 max-w-3xl mx-auto">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                  <span>
+                    <strong>Note:</strong> To download reports, select a date range. The selected range must be between <strong>7 days</strong> and <strong>2 months</strong>.
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
                   {/* Earnings Report Card */}
                   <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
@@ -994,7 +1044,7 @@ const ProviderEarningsDashboard = () => {
                     <p className="text-xs text-secondary/40 mb-5">Full spreadsheet of services, revenue, and commission fees.</p>
                     <button
                       onClick={() => downloadReport('earnings')}
-                      disabled={!dateFilter.startDate || downloading.earnings}
+                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
                       className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
@@ -1011,7 +1061,7 @@ const ProviderEarningsDashboard = () => {
                     <p className="text-xs text-secondary/40 mb-5">Detailed history of bank transfers and clearance statuses.</p>
                     <button
                       onClick={() => downloadReport('withdrawals')}
-                      disabled={!dateFilter.startDate || downloading.withdrawals}
+                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
                       className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />

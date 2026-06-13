@@ -97,23 +97,25 @@ const updateService = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
-        let finalImages = [];
-        if (updates.existingImages) {
-            try {
-                finalImages = JSON.parse(updates.existingImages);
-            } catch (e) {
-                finalImages = Array.isArray(updates.existingImages) ? updates.existingImages : [updates.existingImages];
+        if (updates.existingImages !== undefined || (req.files && req.files.length > 0)) {
+            let finalImages = [];
+            if (updates.existingImages) {
+                try {
+                    finalImages = JSON.parse(updates.existingImages);
+                } catch (e) {
+                    finalImages = Array.isArray(updates.existingImages) ? updates.existingImages : [updates.existingImages];
+                }
             }
-        }
 
-        if (req.files && req.files.length > 0) {
-            const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
-            const uploadResults = await Promise.all(uploadPromises);
-            const newImageUrls = uploadResults.map(result => result.secure_url);
-            finalImages = [...finalImages, ...newImageUrls];
-        }
+            if (req.files && req.files.length > 0) {
+                const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
+                const uploadResults = await Promise.all(uploadPromises);
+                const newImageUrls = uploadResults.map(result => result.secure_url);
+                finalImages = [...finalImages, ...newImageUrls];
+            }
 
-        updates.images = finalImages;
+            updates.images = finalImages;
+        }
         delete updates.existingImages;
 
         // Handle array fields

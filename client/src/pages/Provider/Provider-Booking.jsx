@@ -521,7 +521,15 @@ const StatCard = ({ label, value, icon: Icon, iconColor = 'text-primary', iconBg
 // ── Main Component ───────────────────────────────────────────────────────────
 const ProviderBooking = () => {
   const navigate = useNavigate();
-  const { API, user, token, logout, showToast } = useAuth();
+  const { API, user, token, logout, showToast, systemSettings } = useAuth();
+
+  const fallbackSplits = systemSettings?.surgeSplitSettings || {
+    visiting: 60,
+    rain: 70,
+    traffic: 70,
+    night: 70,
+    demand: 50
+  };
   const [searchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
 
@@ -1558,11 +1566,11 @@ const ProviderBooking = () => {
                         { label: 'Service Amount', value: calculateServiceSubtotal(selectedBooking), type: 'default' },
                         ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: calculateTotalDiscount(selectedBooking), type: 'discount', prefix: '-' }] : []),
                         { label: 'Subtotal', value: calculateSubtotal(selectedBooking), type: 'bold-secondary' },
-                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || 70) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
-                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || fallbackSplits.visiting) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || fallbackSplits.rain) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || fallbackSplits.traffic) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || fallbackSplits.night) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
+                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || fallbackSplits.demand) / 100)).toFixed(2)), type: 'positive', prefix: '+' }] : []),
                         { label: 'Platform Commission (Base)', value: selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0, type: 'negative', prefix: '-' },
                       ].map(({ label, value, type, prefix }) => (
                         <div key={label} className="flex justify-between text-sm animate-fadeIn">
