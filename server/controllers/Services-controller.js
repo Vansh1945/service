@@ -8,6 +8,19 @@ const path = require('path');
 const cloudinary = require('../services/cloudinary');
 const { Category } = require('../models/SystemSetting');
 
+const parseArrayInput = (value, fallback = []) => {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (Array.isArray(value)) return value.flatMap(item => parseArrayInput(item, [])).filter(Boolean);
+    if (typeof value === 'string') {
+        try {
+            return parseArrayInput(JSON.parse(value), fallback);
+        } catch (e) {
+            return value.split(',').map(item => item.trim()).filter(Boolean);
+        }
+    }
+    return [String(value)];
+};
+
 /**
  * ADMIN CONTROLLERS
  */
@@ -15,7 +28,26 @@ const { Category } = require('../models/SystemSetting');
 // Create a new service (Admin only)
 const createService = async (req, res) => {
     try {
-        const { title, category, description, basePrice, duration, specialNotes, materialsUsed, serviceType, warranty, tags, faqs, shortDescription, isFeatured, prerequisites, discountPrice } = req.body;
+        const {
+            title,
+            category,
+            description,
+            basePrice,
+            duration,
+            specialNotes,
+            serviceIncludes,
+            serviceExcludes,
+            serviceGuarantees,
+            materialsUsed,
+            serviceType,
+            warranty,
+            tags,
+            faqs,
+            shortDescription,
+            isFeatured,
+            prerequisites,
+            discountPrice
+        } = req.body;
 
         // Handle category conversion from string to ObjectId
         let categoryId = category;
@@ -55,22 +87,27 @@ const createService = async (req, res) => {
             }
         }
 
+        const resolvedServiceIncludes = parseArrayInput(serviceIncludes, parseArrayInput(specialNotes, []));
+
         const service = await Service.createService(req.adminID, {
             title,
             category: categoryId,
             description,
             basePrice,
             duration,
-            specialNotes: specialNotes ? JSON.parse(specialNotes) : [],
-            materialsUsed: materialsUsed ? JSON.parse(materialsUsed) : [],
+            specialNotes: parseArrayInput(specialNotes, resolvedServiceIncludes),
+            serviceIncludes: resolvedServiceIncludes,
+            serviceExcludes: parseArrayInput(serviceExcludes, []),
+            serviceGuarantees: parseArrayInput(serviceGuarantees, []),
+            materialsUsed: parseArrayInput(materialsUsed, []),
             images: imageUrls,
             serviceType,
             warranty: warranty ? (typeof warranty === 'string' ? JSON.parse(warranty) : warranty) : undefined,
-            tags: tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [],
+            tags: parseArrayInput(tags, []),
             faqs: faqs ? (typeof faqs === 'string' ? JSON.parse(faqs) : faqs) : [],
             shortDescription,
             isFeatured: isFeatured === true || isFeatured === 'true',
-            prerequisites: prerequisites ? (typeof prerequisites === 'string' ? JSON.parse(prerequisites) : prerequisites) : [],
+            prerequisites: parseArrayInput(prerequisites, []),
             discountPrice: (discountPrice !== undefined && discountPrice !== null && discountPrice !== '') ? Number(discountPrice) : undefined
         });
 
@@ -119,28 +156,26 @@ const updateService = async (req, res) => {
         delete updates.existingImages;
 
         // Handle array fields
-        if (updates.specialNotes && typeof updates.specialNotes === 'string') {
-            updates.specialNotes = JSON.parse(updates.specialNotes);
+        ['specialNotes', 'serviceIncludes', 'serviceExcludes', 'serviceGuarantees', 'materialsUsed', 'tags', 'prerequisites'].forEach(field => {
+            if (updates[field] !== undefined) {
+                updates[field] = parseArrayInput(updates[field], []);
+            }
+        });
+
+        if (updates.serviceIncludes !== undefined && updates.specialNotes === undefined) {
+            updates.specialNotes = updates.serviceIncludes;
         }
 
-        if (updates.materialsUsed && typeof updates.materialsUsed === 'string') {
-            updates.materialsUsed = JSON.parse(updates.materialsUsed);
+        if (updates.specialNotes !== undefined && updates.serviceIncludes === undefined) {
+            updates.serviceIncludes = updates.specialNotes;
         }
 
         if (updates.warranty && typeof updates.warranty === 'string') {
             updates.warranty = JSON.parse(updates.warranty);
         }
 
-        if (updates.tags && typeof updates.tags === 'string') {
-            updates.tags = JSON.parse(updates.tags);
-        }
-
         if (updates.faqs && typeof updates.faqs === 'string') {
             updates.faqs = JSON.parse(updates.faqs);
-        }
-
-        if (updates.prerequisites && typeof updates.prerequisites === 'string') {
-            updates.prerequisites = JSON.parse(updates.prerequisites);
         }
 
         if (updates.isFeatured !== undefined) {
@@ -369,7 +404,7 @@ const getServicesForProvider = async (req, res) => {
         }
 
         const services = await Service.find(query)
-            .select('title category description images basePrice duration feedback averageRating serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
+            .select('title category description images basePrice duration feedback averageRating serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
@@ -400,7 +435,7 @@ const getServiceDetailsForProvider = async (req, res) => {
         const { id } = req.params;
 
         const service = await Service.findById(id)
-            .select('title category description images basePrice duration durationFormatted feedback averageRating serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
+            .select('title category description images basePrice duration durationFormatted feedback averageRating serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed')
             .populate('feedback.customer', 'name')
             .lean();
 
@@ -446,7 +481,7 @@ const getActiveServices = async (req, res) => {
 
         // First get the services without virtuals to avoid issues
         const services = await Service.find(query)
-            .select('title category description images basePrice duration feedback averageRating ratingCount serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
+            .select('title category description images basePrice duration feedback averageRating ratingCount serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
@@ -510,7 +545,7 @@ const getPublicServiceById = async (req, res) => {
 
         // First get the service with basic info
         const service = await Service.findById(id)
-            .select('title category description images basePrice duration isActive averageRating ratingCount specialNotes materialsUsed serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice')
+            .select('title category description images basePrice duration isActive averageRating ratingCount specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice')
             .populate('category', 'name')
             .lean();
 
@@ -666,8 +701,11 @@ const bulkImportServices = async (req, res) => {
                 const description = row.getCell(3).value?.toString().trim();
                 const basePrice = parseFloat(row.getCell(4).value);
                 const duration = parseFloat(row.getCell(5).value);
-                const specialNotes = row.getCell(6).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
-                const materialsUsed = row.getCell(7).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
+                const serviceIncludes = row.getCell(6).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
+                const serviceExcludes = row.getCell(7).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
+                const serviceGuarantees = row.getCell(8).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
+                const prerequisites = row.getCell(9).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
+                const materialsUsed = row.getCell(10).value?.toString().split(',').flatMap(s => { const t = s.trim(); return t ? [t] : []; }) || [];
 
                 // Basic validation
                 if (!title || !categoryName || isNaN(basePrice) || isNaN(duration)) {
@@ -687,7 +725,11 @@ const bulkImportServices = async (req, res) => {
                     description: description || 'No description provided',
                     basePrice,
                     duration,
-                    specialNotes,
+                    specialNotes: serviceIncludes,
+                    serviceIncludes,
+                    serviceExcludes,
+                    serviceGuarantees,
+                    prerequisites,
                     materialsUsed,
                     createdBy: req.adminID,
                     isActive: true
@@ -741,7 +783,10 @@ const downloadServiceTemplate = async (req, res) => {
             { header: 'Description*', key: 'description', width: 50 },
             { header: 'Base Price (INR)*', key: 'basePrice', width: 15 },
             { header: 'Duration (Hours)*', key: 'duration', width: 15 },
-            { header: 'Special Notes (Comma Separated)', key: 'specialNotes', width: 30 },
+            { header: 'Service Includes (Comma Separated)', key: 'serviceIncludes', width: 35 },
+            { header: 'Service Excludes (Comma Separated)', key: 'serviceExcludes', width: 35 },
+            { header: 'Service Guarantees (Comma Separated)', key: 'serviceGuarantees', width: 35 },
+            { header: 'Prerequisites (Comma Separated)', key: 'prerequisites', width: 35 },
             { header: 'Materials Used (Comma Separated)', key: 'materialsUsed', width: 30 }
         ];
 
@@ -762,7 +807,10 @@ const downloadServiceTemplate = async (req, res) => {
             description: 'Provide a detailed description of the service here.',
             basePrice: 500,
             duration: 1.5,
-            specialNotes: 'Note 1, Note 2',
+            serviceIncludes: 'Inspection, Basic fitting',
+            serviceExcludes: 'Spare parts cost, Civil work',
+            serviceGuarantees: 'On-time arrival, 30-day workmanship support',
+            prerequisites: 'Accessible power supply, Clear work area',
             materialsUsed: 'Wire, Tape'
         });
 
@@ -790,7 +838,7 @@ const downloadServiceTemplate = async (req, res) => {
         infoSheet.addRow({ inst: `2. Category Name MUST be selected from the dropdown in Column B.` });
         infoSheet.addRow({ inst: '3. Duration should be in decimal hours (e.g., 1.5 for 1 hour 30 mins).' });
         infoSheet.addRow({ inst: '4. Base Price should be a number without currency symbols.' });
-        infoSheet.addRow({ inst: '5. Special Notes and Materials Used should be comma-separated.' });
+        infoSheet.addRow({ inst: '5. Service Includes, Service Excludes, Service Guarantees, Prerequisites, and Materials Used should be comma-separated.' });
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=service_import_template.xlsx');
@@ -821,7 +869,10 @@ const exportServicesToExcel = async (req, res) => {
             { header: 'Images', key: 'images', width: 50 },
             { header: 'Base Price', key: 'basePrice', width: 15 },
             { header: 'Duration (hours)', key: 'duration', width: 15 },
-            { header: 'Special Notes', key: 'specialNotes', width: 30 },
+            { header: 'Service Includes', key: 'serviceIncludes', width: 35 },
+            { header: 'Service Excludes', key: 'serviceExcludes', width: 35 },
+            { header: 'Service Guarantees', key: 'serviceGuarantees', width: 35 },
+            { header: 'Prerequisites', key: 'prerequisites', width: 35 },
             { header: 'Materials Used', key: 'materialsUsed', width: 30 },
             { header: 'Status', key: 'status', width: 15 },
             { header: 'Average Rating', key: 'averageRating', width: 15 },
@@ -839,7 +890,10 @@ const exportServicesToExcel = async (req, res) => {
                 images: service.images.join(', '), // Multiple images as comma-separated
                 basePrice: service.basePrice,
                 duration: service.duration,
-                specialNotes: service.specialNotes ? service.specialNotes.join(', ') : '',
+                serviceIncludes: (service.serviceIncludes || service.specialNotes || []).join(', '),
+                serviceExcludes: service.serviceExcludes ? service.serviceExcludes.join(', ') : '',
+                serviceGuarantees: service.serviceGuarantees ? service.serviceGuarantees.join(', ') : '',
+                prerequisites: service.prerequisites ? service.prerequisites.join(', ') : '',
                 materialsUsed: service.materialsUsed ? service.materialsUsed.join(', ') : '',
                 status: service.isActive ? 'Active' : 'Inactive',
                 averageRating: service.averageRating,

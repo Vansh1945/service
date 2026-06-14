@@ -37,8 +37,21 @@ const serviceSchema = new Schema({
   specialNotes: {
     type: [String]
   },
+  serviceIncludes: {
+    type: [String],
+    default: []
+  },
+  serviceExcludes: {
+    type: [String],
+    default: []
+  },
+  serviceGuarantees: {
+    type: [String],
+    default: []
+  },
   materialsUsed: {
-    type: [String]
+    type: [String],
+    default: []
   },
   isActive: {
     type: Boolean,
@@ -223,7 +236,7 @@ serviceSchema.statics.updateBasePrice = async function (adminId, serviceId, newP
 // Query active services by category
 serviceSchema.statics.findActiveByCategory = function (category) {
   return this.find({ category, isActive: true })
-    .select('title category description images basePrice duration averageRating ratingCount serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed');
+    .select('title category description images basePrice duration averageRating ratingCount serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed');
 };
 
 // Query services with feedback stats

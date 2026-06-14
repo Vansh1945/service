@@ -154,7 +154,9 @@ const ServiceListingPage = () => {
           (searchLower === 'wire' && service.description?.toLowerCase().includes('wiring')) ||
           (searchLower === 'wiring' && service.description?.toLowerCase().includes('wire'));
 
-        return titleMatch || descMatch || catMatch || wireMatch;
+        const tagsMatch = service.tags?.some(tag => tag?.toLowerCase().includes(searchLower));
+
+        return titleMatch || descMatch || catMatch || wireMatch || tagsMatch;
       });
     }
 

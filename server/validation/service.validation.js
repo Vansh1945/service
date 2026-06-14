@@ -1,5 +1,12 @@
 const { z } = require('zod');
 
+const stringArrayField = z.union([z.string(), z.array(z.string())]).optional().transform(val => {
+  if (typeof val === 'string') {
+    try { return JSON.parse(val); } catch (e) { return [val]; }
+  }
+  return val;
+});
+
 const createServiceSchema = z.object({
   title: z.string().min(1, "Service title is required"),
   category: z.string().min(1, "Category is required"),
@@ -15,7 +22,10 @@ const createServiceSchema = z.object({
     return num;
   }),
   specialNotes: z.string().optional(),
-  materialsUsed: z.string().optional(),
+  serviceIncludes: stringArrayField,
+  serviceExcludes: stringArrayField,
+  serviceGuarantees: stringArrayField,
+  materialsUsed: stringArrayField,
   serviceType: z.enum(['standard', 'premium', 'emergency']).optional(),
   warranty: z.union([z.string(), z.object({
     duration: z.union([z.string(), z.number()]).transform(Number),
@@ -30,12 +40,7 @@ const createServiceSchema = z.object({
     }
     return parsed;
   }),
-  tags: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
-    if (typeof val === 'string') {
-      try { return JSON.parse(val); } catch (e) { return [val]; }
-    }
-    return val;
-  }),
+  tags: stringArrayField,
   faqs: z.union([z.string(), z.array(z.object({
     question: z.string(),
     answer: z.string()
@@ -47,12 +52,7 @@ const createServiceSchema = z.object({
   }),
   shortDescription: z.string().max(150).optional(),
   isFeatured: z.union([z.string(), z.boolean()]).transform(val => String(val) === 'true').optional(),
-  prerequisites: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
-    if (typeof val === 'string') {
-      try { return JSON.parse(val); } catch (e) { return [val]; }
-    }
-    return val;
-  }),
+  prerequisites: stringArrayField,
   discountPrice: z.union([z.string(), z.number()]).transform((val) => {
     if (val === undefined || val === null || val === '') return undefined;
     const num = Number(val);
@@ -76,7 +76,10 @@ const updateServiceSchema = z.object({
     return num;
   }).optional(),
   specialNotes: z.string().optional(),
-  materialsUsed: z.string().optional(),
+  serviceIncludes: stringArrayField,
+  serviceExcludes: stringArrayField,
+  serviceGuarantees: stringArrayField,
+  materialsUsed: stringArrayField,
   existingImages: z.string().optional(),
   isActive: z.union([z.string(), z.boolean()]).transform(val => String(val) === 'true').optional(),
   serviceType: z.enum(['standard', 'premium', 'emergency']).optional(),
@@ -93,12 +96,7 @@ const updateServiceSchema = z.object({
     }
     return parsed;
   }),
-  tags: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
-    if (typeof val === 'string') {
-      try { return JSON.parse(val); } catch (e) { return [val]; }
-    }
-    return val;
-  }),
+  tags: stringArrayField,
   faqs: z.union([z.string(), z.array(z.object({
     question: z.string(),
     answer: z.string()
@@ -110,12 +108,7 @@ const updateServiceSchema = z.object({
   }),
   shortDescription: z.string().max(150).optional(),
   isFeatured: z.union([z.string(), z.boolean()]).transform(val => String(val) === 'true').optional(),
-  prerequisites: z.union([z.string(), z.array(z.string())]).optional().transform(val => {
-    if (typeof val === 'string') {
-      try { return JSON.parse(val); } catch (e) { return [val]; }
-    }
-    return val;
-  }),
+  prerequisites: stringArrayField,
   discountPrice: z.union([z.string(), z.number()]).transform((val) => {
     if (val === undefined || val === null || val === '') return undefined;
     const num = Number(val);

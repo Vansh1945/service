@@ -68,6 +68,11 @@ const parseArrayField = (field) => {
   return [String(field)];
 };
 
+const getServiceIncludes = (service) => {
+  const includes = parseArrayField(service?.serviceIncludes);
+  return includes.length > 0 ? includes : parseArrayField(service?.specialNotes);
+};
+
 // Extracted ServiceRow for performance
 const ServiceRow = React.memo(({ service, onViewClick, onEditClick, onToggleStatus }) => {
   return (
@@ -197,7 +202,9 @@ const AdminServices = () => {
     description: '',
     basePrice: '',
     duration: '',
-    specialNotes: [],
+    serviceIncludes: [],
+    serviceExcludes: [],
+    serviceGuarantees: [],
     materialsUsed: [],
     images: [],
     existingImages: [],
@@ -212,7 +219,9 @@ const AdminServices = () => {
   });
   const [bulkFile, setBulkFile] = useState(null);
   const [formImagePreviews, setFormImagePreviews] = useState([]);
-  const [newSpecialNote, setNewSpecialNote] = useState('');
+  const [newServiceInclude, setNewServiceInclude] = useState('');
+  const [newServiceExclude, setNewServiceExclude] = useState('');
+  const [newServiceGuarantee, setNewServiceGuarantee] = useState('');
   const [newMaterial, setNewMaterial] = useState('');
 
   // Dynamic input helper states
@@ -351,7 +360,9 @@ const AdminServices = () => {
         if (
           key !== 'images' &&
           key !== 'existingImages' &&
-          key !== 'specialNotes' &&
+          key !== 'serviceIncludes' &&
+          key !== 'serviceExcludes' &&
+          key !== 'serviceGuarantees' &&
           key !== 'materialsUsed' &&
           key !== 'warranty' &&
           key !== 'tags' &&
@@ -364,7 +375,10 @@ const AdminServices = () => {
         }
       });
 
-      formData.append('specialNotes', JSON.stringify(formState.specialNotes || []));
+      formData.append('serviceIncludes', JSON.stringify(formState.serviceIncludes || []));
+      formData.append('serviceExcludes', JSON.stringify(formState.serviceExcludes || []));
+      formData.append('serviceGuarantees', JSON.stringify(formState.serviceGuarantees || []));
+      formData.append('specialNotes', JSON.stringify(formState.serviceIncludes || []));
       formData.append('materialsUsed', JSON.stringify(formState.materialsUsed || []));
       formData.append('warranty', JSON.stringify(formState.warranty || { duration: '', unit: 'days' }));
       formData.append('tags', JSON.stringify(formState.tags || []));
@@ -552,7 +566,9 @@ const AdminServices = () => {
       description: '',
       basePrice: '',
       duration: '',
-      specialNotes: [],
+      serviceIncludes: [],
+      serviceExcludes: [],
+      serviceGuarantees: [],
       materialsUsed: [],
       images: [],
       existingImages: [],
@@ -566,7 +582,9 @@ const AdminServices = () => {
       discountPrice: ''
     });
     setFormImagePreviews([]);
-    setNewSpecialNote('');
+    setNewServiceInclude('');
+    setNewServiceExclude('');
+    setNewServiceGuarantee('');
     setNewMaterial('');
     setNewTag('');
     setNewPrerequisite('');
@@ -596,7 +614,9 @@ const AdminServices = () => {
       description: service.description || '',
       basePrice: service.basePrice || '',
       duration: service.duration || '',
-      specialNotes: parseArrayField(service.specialNotes),
+      serviceIncludes: getServiceIncludes(service),
+      serviceExcludes: parseArrayField(service.serviceExcludes),
+      serviceGuarantees: parseArrayField(service.serviceGuarantees),
       materialsUsed: parseArrayField(service.materialsUsed),
       existingImages: service.images || [],
       images: [],
@@ -613,7 +633,9 @@ const AdminServices = () => {
       discountPrice: service.discountPrice || ''
     });
     setFormImagePreviews([]);
-    setNewSpecialNote('');
+    setNewServiceInclude('');
+    setNewServiceExclude('');
+    setNewServiceGuarantee('');
     setNewMaterial('');
     setNewTag('');
     setNewPrerequisite('');
@@ -875,11 +897,10 @@ const AdminServices = () => {
                     key={tab.id}
                     type="button"
                     onClick={() => setFormActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${
-                      isActive
+                    className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${isActive
                         ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     <TabIcon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
                     <span>{tab.label}</span>
@@ -1154,34 +1175,34 @@ const AdminServices = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <div>
                       <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                        Special Notes
+                        Service Includes
                       </label>
                       <div className="flex space-x-2 mb-2">
                         <input
                           type="text"
-                          value={newSpecialNote}
-                          onChange={(e) => setNewSpecialNote(e.target.value)}
+                          value={newServiceInclude}
+                          onChange={(e) => setNewServiceInclude(e.target.value)}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                          placeholder="Add a special note"
+                          placeholder="Add an included item"
                         />
                         <button
                           type="button"
-                          onClick={() => addToField('specialNotes', newSpecialNote, setNewSpecialNote)}
+                          onClick={() => addToField('serviceIncludes', newServiceInclude, setNewServiceInclude)}
                           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
                         >
                           Add
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
-                        {formState.specialNotes.length === 0 && (
-                          <span className="text-xs text-gray-400 p-1">No special notes added yet.</span>
+                        {formState.serviceIncludes.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No included items added yet.</span>
                         )}
-                        {formState.specialNotes.map((note, index) => (
+                        {formState.serviceIncludes.map((note, index) => (
                           <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-800 border border-teal-150">
                             {note}
                             <button
                               type="button"
-                              onClick={() => removeFromField('specialNotes', index)}
+                              onClick={() => removeFromField('serviceIncludes', index)}
                               className="ml-1 text-teal-600 hover:text-teal-800"
                             >
                               <X className="w-3 h-3" />
@@ -1222,6 +1243,86 @@ const AdminServices = () => {
                               type="button"
                               onClick={() => removeFromField('materialsUsed', index)}
                               className="ml-1 text-orange-600 hover:text-orange-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Service Excludes
+                      </label>
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={newServiceExclude}
+                          onChange={(e) => setNewServiceExclude(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Add an excluded item"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addToField('serviceExcludes', newServiceExclude, setNewServiceExclude)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
+                        {formState.serviceExcludes.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No excluded items added yet.</span>
+                        )}
+                        {formState.serviceExcludes.map((item, index) => (
+                          <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-800 border border-red-150">
+                            {item}
+                            <button
+                              type="button"
+                              onClick={() => removeFromField('serviceExcludes', index)}
+                              className="ml-1 text-red-600 hover:text-red-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+                        Service Guarantees
+                      </label>
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={newServiceGuarantee}
+                          onChange={(e) => setNewServiceGuarantee(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Add a guarantee"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addToField('serviceGuarantees', newServiceGuarantee, setNewServiceGuarantee)}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-850 transition-colors duration-200"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
+                        {formState.serviceGuarantees.length === 0 && (
+                          <span className="text-xs text-gray-400 p-1">No guarantees added yet.</span>
+                        )}
+                        {formState.serviceGuarantees.map((item, index) => (
+                          <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-150">
+                            {item}
+                            <button
+                              type="button"
+                              onClick={() => removeFromField('serviceGuarantees', index)}
+                              className="ml-1 text-emerald-600 hover:text-emerald-800"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -1300,8 +1401,8 @@ const AdminServices = () => {
                       multiple
                       className="hidden"
                     />
-                    
-                    <div 
+
+                    <div
                       className="border-2 border-dashed border-gray-300 hover:border-primary rounded-xl p-6 transition-all duration-300 flex flex-col items-center justify-center cursor-pointer bg-gray-50 hover:bg-teal-50 group mb-3"
                       onClick={() => fileInputRef.current?.click()}
                     >
@@ -1478,7 +1579,7 @@ const AdminServices = () => {
                     </span>
                     {selectedService.serviceType && (
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${selectedService.serviceType === 'emergency' ? 'bg-red-50 text-red-700 border-red-150' :
-                          selectedService.serviceType === 'premium' ? 'bg-purple-50 text-purple-700 border-purple-150' : 'bg-gray-50 text-gray-700 border-gray-150'
+                        selectedService.serviceType === 'premium' ? 'bg-purple-50 text-purple-700 border-purple-150' : 'bg-gray-50 text-gray-700 border-gray-150'
                         }`}>
                         {selectedService.serviceType.toUpperCase()}
                       </span>
@@ -1517,11 +1618,10 @@ const AdminServices = () => {
                       key={tab.id}
                       type="button"
                       onClick={() => setViewActiveTab(tab.id)}
-                      className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${
-                        isActive
+                      className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${isActive
                           ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       <TabIcon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
                       <span>{tab.label}</span>
@@ -1612,15 +1712,15 @@ const AdminServices = () => {
               {/* Tab Content 2: Logistics & Add-ons */}
               {viewActiveTab === 'logistics' && (
                 <div className="space-y-5 animate-fadeIn">
-                  {/* Special Notes Section */}
-                  {selectedService.specialNotes && parseArrayField(selectedService.specialNotes).length > 0 ? (
+                  {/* Service Includes Section */}
+                  {getServiceIncludes(selectedService).length > 0 ? (
                     <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100">
                       <h4 className="text-sm font-bold text-teal-800 mb-2 flex items-center">
                         <AlertCircle className="w-4 h-4 mr-1.5 text-teal-650" />
-                        Special Service Notes
+                        Service Includes
                       </h4>
                       <ul className="space-y-2 text-sm text-teal-905">
-                        {parseArrayField(selectedService.specialNotes).map((note, index) => (
+                        {getServiceIncludes(selectedService).map((note, index) => (
                           <li key={index} className="flex items-start">
                             <span className="w-1.5 h-1.5 bg-teal-500 rounded-full mt-1.5 mr-2.5 flex-shrink-0"></span>
                             <span>{note}</span>
@@ -1629,7 +1729,41 @@ const AdminServices = () => {
                       </ul>
                     </div>
                   ) : (
-                    <div className="text-xs text-gray-400 italic">No special notes for this service.</div>
+                    <div className="text-xs text-gray-400 italic">No service includes added yet.</div>
+                  )}
+
+                  {selectedService.serviceExcludes && parseArrayField(selectedService.serviceExcludes).length > 0 && (
+                    <div className="bg-red-50/50 p-4 rounded-xl border border-red-100">
+                      <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center">
+                        <XCircle className="w-4 h-4 mr-1.5 text-red-600" />
+                        Service Excludes
+                      </h4>
+                      <ul className="space-y-2 text-sm text-red-900">
+                        {parseArrayField(selectedService.serviceExcludes).map((item, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 mr-2.5 flex-shrink-0"></span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {selectedService.serviceGuarantees && parseArrayField(selectedService.serviceGuarantees).length > 0 && (
+                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                      <h4 className="text-sm font-bold text-emerald-800 mb-2 flex items-center">
+                        <CheckCircle className="w-4 h-4 mr-1.5 text-emerald-650" />
+                        Service Guarantees
+                      </h4>
+                      <ul className="space-y-2 text-sm text-emerald-900">
+                        {parseArrayField(selectedService.serviceGuarantees).map((item, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 mr-2.5 flex-shrink-0"></span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
 
                   {/* Materials Used Section */}
@@ -1708,7 +1842,7 @@ const AdminServices = () => {
                     {selectedService.faqs && selectedService.faqs.length > 0 ? (
                       <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                         {selectedService.faqs.map((faq, index) => (
-                          <details 
+                          <details
                             key={index}
                             className="group border border-gray-200 rounded-xl p-3 bg-white hover:bg-gray-50/55 transition-all duration-300"
                           >
@@ -1808,7 +1942,10 @@ const AdminServices = () => {
                   <li><strong>Description*</strong>: Max 500 characters</li>
                   <li><strong>Base Price*</strong>: Numeric value</li>
                   <li><strong>Duration*</strong>: Decimal hours (e.g., 1.5)</li>
-                  <li><strong>Special Notes</strong>: Comma separated values</li>
+                  <li><strong>Service Includes</strong>: Comma separated values</li>
+                  <li><strong>Service Excludes</strong>: Comma separated values</li>
+                  <li><strong>Service Guarantees</strong>: Comma separated values</li>
+                  <li><strong>Prerequisites</strong>: Comma separated values</li>
                   <li><strong>Materials</strong>: Comma separated values</li>
                 </ul>
               </div>

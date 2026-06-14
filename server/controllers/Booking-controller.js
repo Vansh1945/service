@@ -2178,7 +2178,7 @@ const getProviderBookingById = async (req, res) => {
       ]
     })
       .populate('customer', 'name email phone createdAt')
-      .populate('services.service', 'title description duration price basePrice images serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes materialsUsed')
+      .populate('services.service', 'title description duration price basePrice images serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed')
       .lean();
 
     if (!booking) {
