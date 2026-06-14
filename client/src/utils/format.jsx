@@ -3,6 +3,9 @@
  * All formatting should be done through these functions to ensure consistency.
  */
 import { getCachedTimeFormat, readCachedSystemSettings } from './systemSettingsCache';
+import { latLngToS2CellId } from './s2Helper';
+
+
 
 const FALLBACK = "--";
 
