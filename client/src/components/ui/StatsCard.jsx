@@ -11,7 +11,8 @@ const StatsCard = ({
   iconBg = 'bg-primary/10',
   iconColor = 'text-primary',
   to,
-  className = ''
+  className = '',
+  ...props
 }) => {
   const CardWrapper = to ? Link : 'div';
   const wrapperProps = to ? { to } : {};
@@ -19,7 +20,8 @@ const StatsCard = ({
   return (
     <CardWrapper
       {...wrapperProps}
-      className={`bg-white rounded-2xl border border-slate-105 p-3 sm:p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 flex items-center gap-3 sm:gap-4 min-w-0 ${to ? 'cursor-pointer' : ''} ${className}`}
+      {...props}
+      className={`bg-white rounded-2xl border border-slate-105 p-3 sm:p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 flex items-center gap-3 sm:gap-4 min-w-0 ${to || props.onClick ? 'cursor-pointer' : ''} ${className}`}
     >
       {Icon && (
         <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full shrink-0 flex items-center justify-center ${iconBg} ${iconColor}`}>

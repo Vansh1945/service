@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import Processing from '../../components/ui-skeletons/Processing';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
+import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import * as PaymentService from '../../services/PaymentService';
 import { ToastContainer, toast } from 'react-toastify';
@@ -118,23 +121,9 @@ const AdminPayout = () => {
 
   const totalPages = Math.ceil(total / limit);
 
-  const statCards = [
-    { label: 'Total Requests', value: total, icon: BarChart3, bg: 'bg-primary bg-opacity-10', color: 'text-primary' },
-    { label: 'Pending', value: withdrawals.filter(w => w.status === 'requested').length, icon: Clock, bg: 'bg-yellow-100', color: 'text-yellow-600' },
-    { label: 'Completed', value: withdrawals.filter(w => w.status === 'completed').length, icon: CheckCircle, bg: 'bg-green-100', color: 'text-green-600' },
-    { label: 'This Page', value: withdrawals.length, icon: FileText, bg: 'bg-blue-100', color: 'text-blue-600' },
-  ];
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-center">
-          <div className=" rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mx-auto mb-3" />
-          <p className="text-gray-500 text-sm font-poppins">Loading withdrawal requests…</p>
-        </div>
-      </div>
-    );
-  }
+
+
 
   return (
     <div className="min-h-screen p-4 md:p-8">
@@ -160,19 +149,34 @@ const AdminPayout = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-            {statCards.map(({ label, value, icon: Icon, bg, color }) => (
-              <div key={label} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">{label}</p>
-                    <p className="text-2xl font-bold text-secondary mt-1">{value}</p>
-                  </div>
-                  <div className={`${bg} p-2 rounded-lg`}>
-                    <Icon className={color} size={20} />
-                  </div>
-                </div>
-              </div>
-            ))}
+            <StatsCard
+              title="Total Requests"
+              value={total}
+              icon={BarChart3}
+              iconBg="bg-primary bg-opacity-10"
+              iconColor="text-primary"
+            />
+            <StatsCard
+              title="Pending"
+              value={withdrawals.filter(w => w.status === 'requested').length}
+              icon={Clock}
+              iconBg="bg-yellow-500 bg-opacity-10"
+              iconColor="text-yellow-600"
+            />
+            <StatsCard
+              title="Completed"
+              value={withdrawals.filter(w => w.status === 'completed').length}
+              icon={CheckCircle}
+              iconBg="bg-green-500 bg-opacity-10"
+              iconColor="text-green-600"
+            />
+            <StatsCard
+              title="This Page"
+              value={withdrawals.length}
+              icon={FileText}
+              iconBg="bg-blue-500 bg-opacity-10"
+              iconColor="text-blue-600"
+            />
           </div>
         </div>
 
@@ -207,17 +211,12 @@ const AdminPayout = () => {
               placeholderText="End Date"
               className="px-3 py-2 w-full bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
             />
-            <div className="relative">
-              <input type="text"
-                className="w-full px-3 py-2 pl-8 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                placeholder="Search provider…"
-                value={filters.providerSearch}
-                onChange={e => handleFilterChange('providerSearch', e.target.value)}
-              />
-              <svg className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
+            <AdminSearchBar
+              placeholder="Search provider…"
+              value={filters.providerSearch}
+              onChange={e => handleFilterChange('providerSearch', e.target.value)}
+              onClear={() => handleFilterChange('providerSearch', '')}
+            />
             <select
               className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-secondary"
               value={filters.sortBy}
@@ -249,7 +248,9 @@ const AdminPayout = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">
-                {withdrawals.length === 0 ? (
+                {loading ? (
+                  <TableSkeleton rows={8} cols={5} />
+                ) : withdrawals.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-6 py-12 text-center">
                       <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-3" />

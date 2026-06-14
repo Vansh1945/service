@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
-import { FiTerminal, FiRefreshCw, FiCopy, FiDownload, FiSearch } from 'react-icons/fi';
+import { FiTerminal, FiRefreshCw, FiCopy, FiDownload, FiSearch, FiActivity, FiAlertTriangle, FiClock } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
+import StatsCard from '../../components/ui/StatsCard';
 
 // LevelBadge component to show INFO, WARNING, ERROR beautifully
 const LevelBadge = ({ level }) => {
@@ -299,45 +301,41 @@ const SystemLogs = () => {
 
         {/* Dynamic Summary SaaS Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Requests</p>
-              <h3 className="text-2xl font-black text-secondary mt-1">{totalRequests}</h3>
-            </div>
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 font-bold">
-              📊
-            </div>
-          </div>
+          <StatsCard
+            title="Total Requests"
+            value={totalRequests}
+            icon={FiActivity}
+            iconBg="bg-blue-50"
+            iconColor="text-blue-500"
+            className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
+          />
 
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Errors</p>
-              <h3 className="text-2xl font-black text-rose-600 mt-1">{errorCount}</h3>
-            </div>
-            <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 font-bold">
-              🚨
-            </div>
-          </div>
+          <StatsCard
+            title="Errors"
+            value={errorCount}
+            icon={FiAlertTriangle}
+            iconBg="bg-rose-50"
+            iconColor="text-rose-600"
+            className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
+          />
 
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Warnings</p>
-              <h3 className="text-2xl font-black text-amber-500 mt-1">{warningCount}</h3>
-            </div>
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 font-bold">
-              ⚠️
-            </div>
-          </div>
+          <StatsCard
+            title="Warnings"
+            value={warningCount}
+            icon={FiAlertTriangle}
+            iconBg="bg-amber-50"
+            iconColor="text-amber-500"
+            className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
+          />
 
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Avg Response Time</p>
-              <h3 className="text-2xl font-black text-emerald-600 mt-1">{avgResponseTime}</h3>
-            </div>
-            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500 font-bold">
-              ⏱️
-            </div>
-          </div>
+          <StatsCard
+            title="Avg Response Time"
+            value={avgResponseTime}
+            icon={FiClock}
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+            className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
+          />
         </div>
 
         {/* Filters Panel */}
@@ -370,16 +368,13 @@ const SystemLogs = () => {
             </select>
 
             {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search logs..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-gray-200 outline-none"
-              />
-            </div>
+            <AdminSearchBar
+              placeholder="Search logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onClear={() => setSearchTerm('')}
+              className="w-full sm:w-64 font-semibold text-xs text-secondary"
+            />
           </div>
         </div>
 

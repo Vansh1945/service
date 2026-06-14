@@ -2,14 +2,16 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
+import StatsCard from '../../components/ui/StatsCard';
 import * as BookingService from '../../services/BookingService';
 import * as ZoneService from '../../services/ZoneService';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Users, Zap, Trash2, Edit, X,
-  Plus, RefreshCw, AlertTriangle, Search, Layers,
+  Plus, RefreshCw, AlertTriangle, Layers,
   Compass, Eye, ShieldCheck, Activity, Award, ChevronDown, ChevronUp,
   Ticket, Briefcase, BarChart3
 } from 'lucide-react';
@@ -922,39 +924,46 @@ const ZoneManagement = () => {
       </div>
 
       {/* Analytics Counter Header */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4 shrink-0">
-        <div className="bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Total Zones</span>
-            <Layers className="w-4 h-4 text-primary animate-pulse" />
-          </div>
-          <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.totalZones}</h3>
-          <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Configured Areas</p>
-        </div>
-        <div className="bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Active Zones</span>
-            <Compass className="w-4 h-4 text-teal-500 -slow" />
-          </div>
-          <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.activeZones}</h3>
-          <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Enforcing Dispatch</p>
-        </div>
-        <div className="bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Total Providers</span>
-            <Users className="w-4 h-4 text-blue-500" />
-          </div>
-          <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.totalProviders}</h3>
-          <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Active Providers</p>
-        </div>
-        <div className="bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Zone Coverage %</span>
-            <Activity className="w-4 h-4 text-purple-500" />
-          </div>
-          <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.coverage}%</h3>
-          <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Operational Density</p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">
+        <StatsCard
+          title="Total Zones"
+          value={stats.totalZones}
+          icon={Layers}
+          iconBg="bg-primary/10"
+          iconColor="text-primary"
+          subtext="Configured Areas"
+          className="border border-gray-250 hover:border-primary/40 shadow-sm"
+        />
+
+        <StatsCard
+          title="Active Zones"
+          value={stats.activeZones}
+          icon={Compass}
+          iconBg="bg-teal-50"
+          iconColor="text-teal-500"
+          subtext="Enforcing Dispatch"
+          className="border border-gray-250 hover:border-primary/40 shadow-sm"
+        />
+
+        <StatsCard
+          title="Total Providers"
+          value={stats.totalProviders}
+          icon={Users}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-500"
+          subtext="Active Providers"
+          className="border border-gray-250 hover:border-primary/40 shadow-sm"
+        />
+
+        <StatsCard
+          title="Zone Coverage %"
+          value={`${stats.coverage}%`}
+          icon={Activity}
+          iconBg="bg-purple-50"
+          iconColor="text-purple-500"
+          subtext="Operational Density"
+          className="border border-gray-250 hover:border-primary/40 shadow-sm"
+        />
       </div>
 
       {/* Main Panel Content Area */}
@@ -1188,16 +1197,12 @@ const ZoneManagement = () => {
                   </button>
                 </div>
 
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search zones..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] outline-none focus:ring-1 focus:ring-primary text-gray-900 font-sans font-semibold"
-                  />
-                </div>
+                <AdminSearchBar
+                  placeholder="Search zones..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onClear={() => setSearchQuery('')}
+                />
                 <div className="grid grid-cols-2 gap-1.5 text-[8.5px] font-bold">
                   <select
                     value={filterCity}
@@ -2038,16 +2043,13 @@ const HierarchicalZoneSelector = ({
 
       {isOpen && (
         <div className="absolute left-0 right-0 z-[1000] mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
-          <div className="relative mb-2 shrink-0">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by state, city, or micro zone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-[10px] border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
-            />
-          </div>
+          <AdminSearchBar
+            placeholder="Search by state, city, or micro zone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onClear={() => setSearchQuery('')}
+            className="mb-2 shrink-0"
+          />
 
           <div className="overflow-y-auto flex-1 space-y-1 pr-1">
             {filteredTree.length === 0 ? (

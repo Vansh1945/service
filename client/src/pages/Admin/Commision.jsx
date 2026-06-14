@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
 import useDebounce from '../../hooks/useDebounce';
 import { useConfirm } from '../../context/ConfirmContext';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Users,
   Settings,
   Plus,
-  Search,
   Edit,
   Trash2,
   CheckCircle,
@@ -24,6 +24,7 @@ import Pagination from '../../components/Pagination';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
+import StatsCard from '../../components/ui/StatsCard';
 
 const AdminCommissionPage = () => {
   const { API, token, showToast } = useAuth();
@@ -642,41 +643,27 @@ const AdminCommissionPage = () => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-green-100">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Active Rules</p>
-                  <p className="text-lg font-bold text-secondary">{stats.activeRules}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-blue-100">
-                  <Users className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Total Providers</p>
-                  <p className="text-lg font-bold text-secondary">{stats.totalProviders}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-amber-100">
-                  <Percent className="w-5 h-5 text-amber-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Avg Commission Rate</p>
-                  <p className="text-lg font-bold text-secondary">{stats.avgCommissionRate}%</p>
-                </div>
-              </div>
-            </div>
+            <StatsCard
+              title="Active Rules"
+              value={stats.activeRules}
+              icon={CheckCircle}
+              iconBg="bg-green-100"
+              iconColor="text-green-600"
+            />
+            <StatsCard
+              title="Total Providers"
+              value={stats.totalProviders}
+              icon={Users}
+              iconBg="bg-blue-100"
+              iconColor="text-blue-600"
+            />
+            <StatsCard
+              title="Avg Commission Rate"
+              value={`${stats.avgCommissionRate}%`}
+              icon={Percent}
+              iconBg="bg-amber-100"
+              iconColor="text-amber-600"
+            />
           </div>
         </div>
 
@@ -690,18 +677,12 @@ const AdminCommissionPage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-secondary mb-2">Search</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Search rules..."
-                    value={filters.search}
-                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
-                  />
-                </div>
+                <AdminSearchBar
+                  placeholder="Search rules..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  onClear={() => setFilters({ ...filters, search: '' })}
+                />
               </div>
 
               <div>

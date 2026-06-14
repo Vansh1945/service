@@ -4,11 +4,13 @@ import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import * as BookingService from '../../services/BookingService';
 import {
-  Search, RefreshCw, Eye, CheckCircle, AlertCircle,
+  RefreshCw, Eye, CheckCircle, AlertCircle,
   User, Briefcase, Clock, X, Filter, Calendar, Inbox,
   DollarSign, XCircle, Lock, Unlock, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
+import StatsCard from '../../components/ui/StatsCard';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
 import PriceDisplay from '../../components/PriceDisplay';
@@ -859,60 +861,44 @@ const RefundPage = () => {
 
         {/* Stats Section with dynamic card deck */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up">
-          {/* Card 1: Total Refunds */}
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-emerald-500 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-550">Processed Refunds</p>
-              <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
-                {statsSummary.processedRefunds}
-              </p>
-            </div>
-            <div className="p-2 md:p-3 bg-emerald-50 rounded-full">
-              <DollarSign className="w-6 h-6 text-emerald-600" />
-            </div>
-          </div>
+          <StatsCard
+            title="Processed Refunds"
+            value={statsSummary.processedRefunds}
+            icon={DollarSign}
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+            className="border-l-4 border-emerald-500 shadow-md p-4 md:p-6"
+          />
 
-          {/* Card 2: Held Payouts */}
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-yellow-500 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-550">Active Escrow Holds</p>
-              <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
-                {statsSummary.escrowHolds}
-              </p>
-            </div>
-            <div className="p-2 md:p-3 bg-yellow-50 rounded-full">
-              <Lock className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
+          <StatsCard
+            title="Active Escrow Holds"
+            value={statsSummary.escrowHolds}
+            icon={Lock}
+            iconBg="bg-yellow-50"
+            iconColor="text-yellow-600"
+            className="border-l-4 border-yellow-500 shadow-md p-4 md:p-6"
+          />
 
-          {/* Card 3: Dispute Cases */}
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-555">Active Claims & Disputes</p>
-              <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
-                {statsSummary.activeDisputes}
-              </p>
-            </div>
-            <div className="p-2 md:p-3 bg-red-50 rounded-full">
-              <AlertCircle className="w-6 h-6 text-red-655" />
-            </div>
-          </div>
+          <StatsCard
+            title="Active Claims & Disputes"
+            value={statsSummary.activeDisputes}
+            icon={AlertCircle}
+            iconBg="bg-red-50"
+            iconColor="text-red-655"
+            className="border-l-4 border-red-500 shadow-md p-4 md:p-6"
+          />
         </div>
 
         {/* Console Filter deck */}
         <div className="bg-white p-4 rounded-xl shadow-md border border-gray-100 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
 
-          {/* Search Bar */}
-          <div className="relative flex-1 max-w-xl">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search by Booking ID, Customer or Provider..."
-              value={searchTerm}
-              onChange={e => handleSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white transition-all text-xs font-semibold text-gray-705"
-            />
-          </div>
+          <AdminSearchBar
+            placeholder="Search by Booking ID, Customer or Provider..."
+            value={searchTerm}
+            onChange={e => handleSearchChange(e.target.value)}
+            onClear={() => handleSearchChange('')}
+            className="flex-1 max-w-xl"
+          />
 
           {/* Filter Deck Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">

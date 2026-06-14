@@ -16,6 +16,11 @@ import ChatModal from '../../components/chat/ChatModal';
 import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
 
+import {
+  COMPLAINT_STATUS_CONFIG,
+  getComplaintStatusStyle
+} from '../../components/ui/StatusConfig';
+
 const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
 
 const ProviderSupportPage = () => {
@@ -217,22 +222,8 @@ const ProviderSupportPage = () => {
   };
 
 
-  const STATUS_CONFIG = {
-    'Open': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
-    'In-Progress': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-    'Solved': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
-    'Reopened': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-    'Closed': { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
-    submitted: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
-    under_review: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
-    provider_responded: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
-    admin_review: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
-    resolved: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-    rejected: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
-    refunded: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500' },
-  };
-
-  const getStatusStyle = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Open'];
+  const STATUS_CONFIG = COMPLAINT_STATUS_CONFIG;
+  const getStatusStyle = getComplaintStatusStyle;
 
   const FAQS = [
     { q: "How to accept booking?", a: "Go to Booking Requests and click Accept." },

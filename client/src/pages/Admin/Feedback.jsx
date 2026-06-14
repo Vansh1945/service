@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import * as FeedbackService from '../../services/FeedbackService';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
-  Search, Star, User, MessageSquare, Eye, X,
+  Star, User, MessageSquare, Eye, X,
   ChevronLeft, ChevronRight, Calendar, BarChart3,
   CheckCircle, Slash
 } from 'lucide-react';
@@ -130,12 +132,7 @@ const AdminFeedback = () => {
     return 'text-red-700 bg-red-50 border-red-200';
   };
 
-  const statCards = [
-    { label: 'Total Feedback', value: stats.total, icon: MessageSquare, bg: 'bg-primary bg-opacity-10', color: 'text-primary' },
-    { label: 'Avg Rating', value: `${stats.averageRating}/5`, icon: Star, bg: 'bg-yellow-100', color: 'text-yellow-600' },
-    { label: 'Provider Reviews', value: stats.providerFeedback, icon: User, bg: 'bg-green-100', color: 'text-green-600' },
-    { label: 'Service Reviews', value: stats.serviceFeedback, icon: BarChart3, bg: 'bg-purple-100', color: 'text-purple-600' },
-  ];
+
 
   return (
     <div className="min-h-screen p-4 md:p-8">
@@ -151,19 +148,34 @@ const AdminFeedback = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-            {statCards.map(({ label, value, icon: Icon, bg, color }) => (
-              <div key={label} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">{label}</p>
-                    <p className="text-2xl font-bold text-secondary mt-1">{value}</p>
-                  </div>
-                  <div className={`${bg} p-2 rounded-lg`}>
-                    <Icon className={color} size={20} />
-                  </div>
-                </div>
-              </div>
-            ))}
+            <StatsCard
+              title="Total Feedback"
+              value={stats.total}
+              icon={MessageSquare}
+              iconBg="bg-primary bg-opacity-10"
+              iconColor="text-primary"
+            />
+            <StatsCard
+              title="Avg Rating"
+              value={`${stats.averageRating}/5`}
+              icon={Star}
+              iconBg="bg-yellow-500 bg-opacity-10"
+              iconColor="text-yellow-600"
+            />
+            <StatsCard
+              title="Provider Reviews"
+              value={stats.providerFeedback}
+              icon={User}
+              iconBg="bg-green-500 bg-opacity-10"
+              iconColor="text-green-600"
+            />
+            <StatsCard
+              title="Service Reviews"
+              value={stats.serviceFeedback}
+              icon={BarChart3}
+              iconBg="bg-purple-500 bg-opacity-10"
+              iconColor="text-purple-600"
+            />
           </div>
         </div>
 
@@ -175,16 +187,12 @@ const AdminFeedback = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search feedback..."
-                value={filters.search}
-                onChange={e => handleFilterChange('search', e.target.value)}
-                className="pl-9 w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-              />
-            </div>
+            <AdminSearchBar
+              placeholder="Search feedback..."
+              value={filters.search}
+              onChange={e => handleFilterChange('search', e.target.value)}
+              onClear={() => handleFilterChange('search', '')}
+            />
             {/* Rating */}
             <select
               value={filters.rating}

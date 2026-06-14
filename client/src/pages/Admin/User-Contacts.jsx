@@ -5,8 +5,8 @@ import Pagination from '../../components/Pagination';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import { formatDate, formatDateTime } from '../../utils/format';
 import StatsCard from '../../components/ui/StatsCard';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
-  Search,
   MessageSquare,
   Eye,
   Reply,
@@ -395,16 +395,12 @@ const UserContacts = () => {
 
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name, email, or subject..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
+              <AdminSearchBar
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                placeholder="Search by name, email, or subject..."
+                onClear={() => handleFilterChange('search', '')}
+              />
             </div>
             <div className="flex flex-wrap gap-2">
               {statusOptions.map(option => {

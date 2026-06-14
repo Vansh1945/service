@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Plus,
   Edit,
   Trash2,
   Eye,
-  Search,
   Filter,
   Upload,
   Download,
@@ -38,6 +38,7 @@ import * as SystemService from '../../services/SystemService';
 import useCategory from '../../hooks/useCategory';
 import { formatCurrency, formatDuration } from '../../utils/format';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
+import StatsCard from '../../components/ui/StatsCard';
 
 
 
@@ -716,71 +717,50 @@ const AdminServices = () => {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Services</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.total}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-teal-100 rounded-full">
-                <Package className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Total Services"
+            value={stats.total}
+            icon={Package}
+            iconBg="bg-teal-100"
+            iconColor="text-primary"
+          />
 
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active Services</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.active}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-green-100 rounded-full">
-                <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Active Services"
+            value={stats.active}
+            icon={CheckCircle}
+            iconBg="bg-green-100"
+            iconColor="text-green-600"
+          />
 
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Inactive Services</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.inactive}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-red-100 rounded-full">
-                <XCircle className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Inactive Services"
+            value={stats.inactive}
+            icon={XCircle}
+            iconBg="bg-red-100"
+            iconColor="text-red-600"
+          />
 
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-yellow-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Services with Ratings</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.ratedServices}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-yellow-100 rounded-full">
-                <Star className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Services with Ratings"
+            value={stats.ratedServices}
+            icon={Star}
+            iconBg="bg-yellow-100"
+            iconColor="text-yellow-600"
+          />
         </div>
 
         {/* Filters and Search */}
         <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
           <div className="flex flex-col md:flex-row gap-3 md:gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-                <input
-                  type="text"
-                  placeholder="Search services..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
+              <AdminSearchBar
+                placeholder="Search services..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClear={() => setSearchTerm('')}
+              />
             </div>
             <div className="flex items-center gap-2 md:gap-3">
               <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />

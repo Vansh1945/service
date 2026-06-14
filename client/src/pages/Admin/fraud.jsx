@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   FiShield, FiRefreshCw, FiAlertTriangle, FiSmartphone,
   FiMapPin, FiXCircle, FiMessageSquare, FiUserX,
   FiAlertCircle, FiChevronRight, FiUser, FiCheckCircle,
-  FiInfo, FiSearch, FiActivity, FiClock, FiFileText
+  FiInfo, FiActivity, FiClock, FiFileText
 } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
+import StatsCard from '../../components/ui/StatsCard';
 // Risk Badge Component
 const RiskBadge = ({ risk }) => {
   const getStyles = (riskLevel) => {
@@ -275,45 +277,41 @@ const AdminFraud = () => {
 
         {/* Stats Section */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up">
-          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 border border-amber-100">
-              <FiUserX size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Suspicious Linked Accounts</p>
-              <p className="text-2xl font-black text-slate-800">{stats.suspiciousAccounts}</p>
-            </div>
-          </div>
+          <StatsCard
+            title="Suspicious Linked Accounts"
+            value={stats.suspiciousAccounts}
+            icon={FiUserX}
+            iconBg="bg-amber-50"
+            iconColor="text-amber-600"
+            className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+          />
 
-          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 border border-rose-100">
-              <FiAlertTriangle size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total System Alerts</p>
-              <p className="text-2xl font-black text-slate-800">{stats.totalAlerts}</p>
-            </div>
-          </div>
+          <StatsCard
+            title="Total System Alerts"
+            value={stats.totalAlerts}
+            icon={FiAlertTriangle}
+            iconBg="bg-rose-50"
+            iconColor="text-rose-600"
+            className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+          />
 
-          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100">
-              <FiAlertCircle size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">High Risk Providers</p>
-              <p className="text-2xl font-black text-slate-800">{stats.highRiskProviders}</p>
-            </div>
-          </div>
+          <StatsCard
+            title="High Risk Providers"
+            value={stats.highRiskProviders}
+            icon={FiAlertCircle}
+            iconBg="bg-indigo-50"
+            iconColor="text-indigo-600"
+            className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+          />
 
-          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-            <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 border border-orange-100">
-              <FiUser size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">High Risk Customers</p>
-              <p className="text-2xl font-black text-slate-800">{stats.highRiskCustomers}</p>
-            </div>
-          </div>
+          <StatsCard
+            title="High Risk Customers"
+            value={stats.highRiskCustomers}
+            icon={FiUser}
+            iconBg="bg-orange-50"
+            iconColor="text-orange-600"
+            className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+          />
         </div>
 
         {/* Filters and Controls */}
@@ -341,14 +339,12 @@ const AdminFraud = () => {
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="relative flex-1 sm:flex-initial">
-              <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
+            <div className="flex-1 sm:flex-initial">
+              <AdminSearchBar
                 placeholder="Search database..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all w-full"
+                onClear={() => setSearchQuery('')}
               />
             </div>
 

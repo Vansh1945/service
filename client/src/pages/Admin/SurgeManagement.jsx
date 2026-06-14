@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Plus,
   Edit,
   Trash2,
-  Search,
   Filter,
   CheckCircle,
   Clock,
@@ -35,6 +35,7 @@ import { getAllZones } from '../../services/ZoneService';
 import * as SystemService from '../../services/SystemService';
 import { formatCurrency } from '../../utils/format';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
+import StatsCard from '../../components/ui/StatsCard';
 
 // Charge type config — maps UI labels to backend enum values
 const CHARGE_TYPES = [
@@ -473,50 +474,34 @@ const SurgeManagement = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Rules</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">{stats.total}</p>
-              </div>
-              <div className="p-3 bg-teal-50 rounded-full">
-                <TrendingUp className="w-6 h-6 text-primary" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Active Rules</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">{stats.active}</p>
-              </div>
-              <div className="p-3 bg-green-50 rounded-full">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Global Scopes</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">{stats.global}</p>
-              </div>
-              <div className="p-3 bg-blue-50 rounded-full">
-                <Globe className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-amber-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Zone-Specific</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">{stats.zoneSpecific}</p>
-              </div>
-              <div className="p-3 bg-amber-50 rounded-full">
-                <MapPin className="w-6 h-6 text-amber-600" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Total Rules"
+            value={stats.total}
+            icon={TrendingUp}
+            iconBg="bg-teal-50"
+            iconColor="text-primary"
+          />
+          <StatsCard
+            title="Active Rules"
+            value={stats.active}
+            icon={CheckCircle}
+            iconBg="bg-green-50"
+            iconColor="text-green-600"
+          />
+          <StatsCard
+            title="Global Scopes"
+            value={stats.global}
+            icon={Globe}
+            iconBg="bg-blue-50"
+            iconColor="text-blue-600"
+          />
+          <StatsCard
+            title="Zone-Specific"
+            value={stats.zoneSpecific}
+            icon={MapPin}
+            iconBg="bg-amber-50"
+            iconColor="text-amber-600"
+          />
         </div>
 
         {/* Tabs */}
@@ -559,16 +544,12 @@ const SurgeManagement = () => {
         <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search surge rules..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                />
-              </div>
+              <AdminSearchBar
+                placeholder="Search surge rules..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClear={() => setSearchTerm('')}
+              />
             </div>
             <div className="flex items-center gap-3">
               <Filter className="text-gray-400 w-5 h-5 shrink-0" />

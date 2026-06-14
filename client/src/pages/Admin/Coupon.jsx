@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Plus,
   Edit,
   Trash2,
   Eye,
-  Search,
   Filter,
   CheckCircle,
   XCircle,
@@ -29,6 +29,7 @@ import { formatCurrency, formatDate } from '../../utils/format';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
+import StatsCard from '../../components/ui/StatsCard';
 
 const AdminCoupons = () => {
   const { API, token } = useAuth();
@@ -560,65 +561,41 @@ const AdminCoupons = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Coupons</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.total}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-teal-100 rounded-full">
-                <Gift className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active Coupons</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.active}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-green-100 rounded-full">
-                <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Expired Coupons</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.expired}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-red-100 rounded-full">
-                <XCircle className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Global Coupons</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.global}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-blue-100 rounded-full">
-                <Globe className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">First Booking</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.firstBooking}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-purple-100 rounded-full">
-                <Users className="w-5 h-5 md:w-6 md:h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Total Coupons"
+            value={stats.total}
+            icon={Gift}
+            iconBg="bg-teal-100"
+            iconColor="text-primary"
+          />
+          <StatsCard
+            title="Active Coupons"
+            value={stats.active}
+            icon={CheckCircle}
+            iconBg="bg-green-100"
+            iconColor="text-green-600"
+          />
+          <StatsCard
+            title="Expired Coupons"
+            value={stats.expired}
+            icon={XCircle}
+            iconBg="bg-red-100"
+            iconColor="text-red-650"
+          />
+          <StatsCard
+            title="Global Coupons"
+            value={stats.global}
+            icon={Globe}
+            iconBg="bg-blue-100"
+            iconColor="text-blue-600"
+          />
+          <StatsCard
+            title="First Booking"
+            value={stats.firstBooking}
+            icon={Users}
+            iconBg="bg-purple-100"
+            iconColor="text-purple-600"
+          />
         </div>
 
         {/* Reusable Premium Filter Bar */}
@@ -628,16 +605,12 @@ const AdminCoupons = () => {
         <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
           <div className="flex flex-col md:flex-row gap-3 md:gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-                <input
-                  type="text"
-                  placeholder="Search coupons by code..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
+              <AdminSearchBar
+                placeholder="Search coupons by code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClear={() => setSearchTerm('')}
+              />
             </div>
             <div className="flex items-center gap-2 md:gap-3">
               <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />

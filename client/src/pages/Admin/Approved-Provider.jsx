@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Pagination from '../../components/Pagination';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import Modal from '../../components/ui/Modal';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
-  Search,
   Filter,
   Eye,
   CheckCircle,
@@ -28,6 +28,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import { formatDate } from '../../utils/format';
+import StatsCard from '../../components/ui/StatsCard';
 
 // ─── Pure helpers at module scope ───────────────────────────────────────────
 
@@ -232,81 +233,53 @@ const AdminProviders = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Providers</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.total}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-teal-100 rounded-full">
-                <Users className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Approved</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.approved}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-green-100 rounded-full">
-                <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-yellow-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Pending</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.pending}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-yellow-100 rounded-full">
-                <Clock className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Rejected</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.rejected}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-red-100 rounded-full">
-                <UserX className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active</p>
-                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.active}</p>
-              </div>
-              <div className="p-2 md:p-3 bg-blue-100 rounded-full">
-                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Total Providers"
+            value={stats.total}
+            icon={Users}
+            iconBg="bg-primary/10"
+            iconColor="text-primary"
+          />
+          <StatsCard
+            title="Approved"
+            value={stats.approved}
+            icon={UserCheck}
+            iconBg="bg-green-100"
+            iconColor="text-green-600"
+          />
+          <StatsCard
+            title="Pending"
+            value={stats.pending}
+            icon={Clock}
+            iconBg="bg-yellow-100"
+            iconColor="text-yellow-600"
+          />
+          <StatsCard
+            title="Rejected"
+            value={stats.rejected}
+            icon={UserX}
+            iconBg="bg-red-100"
+            iconColor="text-red-600"
+          />
+          <StatsCard
+            title="Active"
+            value={stats.active}
+            icon={TrendingUp}
+            iconBg="bg-blue-100"
+            iconColor="text-blue-600"
+          />
         </div>
 
         {/* Filters and Search */}
         <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
           <div className="flex flex-col md:flex-row gap-3 md:gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-                <input
-                  type="text"
-                  placeholder="Search providers by name, email or phone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
+              <AdminSearchBar
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search providers by name, email or phone..."
+                onClear={() => setSearchTerm('')}
+              />
             </div>
             <div className="flex items-center gap-2 md:gap-3">
               <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />

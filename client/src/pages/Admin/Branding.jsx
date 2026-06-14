@@ -7,6 +7,7 @@ import {
 import { toast } from 'react-toastify';
 import * as SystemService from '../../services/SystemService';
 import { useConfirm } from '../../context/ConfirmContext';
+import StatsCard from '../../components/ui/StatsCard';
 
 const Branding = () => {
   const confirm = useConfirm();
@@ -342,60 +343,47 @@ const Branding = () => {
       </div>
 
       {/* Installed Devices Overview - All 3 apps at a glance */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { role: 'customer', label: 'Customer App', icon: '👥', color: 'teal' },
-          { role: 'provider', label: 'Provider App', icon: '🔧', color: 'emerald' },
-          { role: 'admin', label: 'Admin Panel', icon: '🛡️', color: 'indigo' }
+          { role: 'customer', label: 'Customer App', icon: FiSmartphone, color: 'teal' },
+          { role: 'provider', label: 'Provider App', icon: FiSmartphone, color: 'emerald' },
+          { role: 'admin', label: 'Admin Panel', icon: FiMonitor, color: 'indigo' }
         ].map(({ role, label, icon, color }) => {
           const isActive = activeTab === role;
           const count = formData[role]?.installedUsersCount || 0;
           const colorMap = {
             teal: {
-              border: isActive ? 'border-teal-400' : 'border-gray-100',
-              bg: isActive ? 'bg-gradient-to-br from-teal-50 to-teal-100/60' : 'bg-white',
-              badge: 'bg-teal-100 text-teal-700',
-              num: 'text-teal-600',
-              dot: 'bg-teal-500'
+              border: isActive ? 'border-2 border-teal-400 bg-gradient-to-br from-teal-50 to-teal-100/60' : 'border border-slate-105 bg-white',
+              iconBg: 'bg-teal-50',
+              iconColor: 'text-teal-600',
+              subtext: 'Installed Customer App'
             },
             emerald: {
-              border: isActive ? 'border-emerald-400' : 'border-gray-100',
-              bg: isActive ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/60' : 'bg-white',
-              badge: 'bg-emerald-100 text-emerald-700',
-              num: 'text-emerald-600',
-              dot: 'bg-emerald-500'
+              border: isActive ? 'border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-emerald-100/60' : 'border border-slate-105 bg-white',
+              iconBg: 'bg-emerald-50',
+              iconColor: 'text-emerald-600',
+              subtext: 'Installed Provider App'
             },
             indigo: {
-              border: isActive ? 'border-indigo-400' : 'border-gray-100',
-              bg: isActive ? 'bg-gradient-to-br from-indigo-50 to-indigo-100/60' : 'bg-white',
-              badge: 'bg-indigo-100 text-indigo-700',
-              num: 'text-indigo-600',
-              dot: 'bg-indigo-500'
+              border: isActive ? 'border-2 border-indigo-400 bg-gradient-to-br from-indigo-50 to-indigo-100/60' : 'border border-slate-105 bg-white',
+              iconBg: 'bg-indigo-50',
+              iconColor: 'text-indigo-600',
+              subtext: 'Installed Admin Panel'
             }
           };
           const c = colorMap[color];
           return (
-            <button
+            <StatsCard
               key={role}
+              title={label}
+              value={`${count} devices`}
+              icon={icon}
+              iconBg={c.iconBg}
+              iconColor={c.iconColor}
+              subtext={c.subtext}
               onClick={() => setActiveTab(role)}
-              className={`relative flex flex-col gap-2 p-4 rounded-2xl border-2 shadow-sm transition-all duration-200 hover:shadow-md text-left ${c.border} ${c.bg} ${isActive ? 'scale-[1.02] shadow-md' : 'hover:scale-[1.01]'}`}
-            >
-              {isActive && (
-                <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full ${c.dot} animate-pulse`} />
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-base">{icon}</span>
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
-              </div>
-              <div className="flex items-end gap-1.5">
-                <span className={`text-2xl font-black ${c.num}`}>{count}</span>
-                <span className="text-[10px] text-gray-400 font-semibold pb-0.5">devices</span>
-              </div>
-              <span className={`self-start text-[9px] font-bold px-2 py-0.5 rounded-full ${c.badge}`}>
-                <FiSmartphone className="inline w-2.5 h-2.5 mr-0.5 -mt-px" />
-                Installed
-              </span>
-            </button>
+              className={`${c.border} transition-all duration-200 shadow-sm hover:shadow-md ${isActive ? 'scale-[1.02] shadow-md' : 'hover:scale-[1.01]'}`}
+            />
           );
         })}
       </div>

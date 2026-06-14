@@ -43,17 +43,8 @@ const isChatVisible = (b) => {
   return true;
 };
 
-const STATUS_CONFIG = {
-  pending: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
-  accepted: { color: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-500', icon: CheckCircle, label: 'Confirmed' },
-  in_progress: { color: 'bg-violet-50 text-violet-700 border-violet-200', bar: 'bg-violet-500', icon: Activity, label: 'In Progress' },
-  'in-progress': { color: 'bg-violet-50 text-violet-700 border-violet-200', bar: 'bg-violet-500', icon: Activity, label: 'In Progress' },
-  completed: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-500', icon: CheckCircle, label: 'Completed' },
-  cancelled: { color: 'bg-red-50 text-red-600 border-red-200', bar: 'bg-red-400', icon: XCircle, label: 'Cancelled' },
-  payment_pending: { color: 'bg-orange-50 text-orange-700 border-orange-200', bar: 'bg-orange-400', icon: CreditCard, label: 'Payment Due' },
-};
-
-const getStatusCfg = (status) => STATUS_CONFIG[status] || { color: 'bg-gray-100 text-gray-600 border-gray-200', bar: 'bg-gray-400', icon: AlertCircle, label: status || 'Unknown' };
+import { getBookingStatusCfg } from '../../components/ui/StatusConfig';
+const getStatusCfg = getBookingStatusCfg;
 
 
 const needsPayment = (b) => {

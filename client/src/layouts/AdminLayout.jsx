@@ -23,31 +23,93 @@ const AdminLayout = () => {
   const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
   const appName = activeBranding?.appName || 'Admin Panel';
 
-  const menuItems = [
-    { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
-    { name: 'Approved Providers', path: '/admin/approve-providers', icon: <FiCheckCircle className="w-5 h-5" /> },
-    { name: 'Pending Providers', path: '/admin/providers', icon: <FiUsers className="w-5 h-5" /> },
-    { name: 'All Customers', path: '/admin/customers', icon: <FiUser className="w-5 h-5" /> },
-    { name: 'Bookings', path: '/admin/bookings', icon: <FiCalendar className="w-5 h-5" /> },
-    { name: 'Transactions', path: '/admin/transactions', icon: <FiActivity className="w-5 h-5" /> },
-    { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
-    { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
-    { name: 'Surge Surcharges', path: '/admin/surge', icon: <FiAlertCircle className="w-5 h-5" /> },
-    { name: 'Test', path: '/admin/add-questions', icon: <FiHelpCircle className="w-5 h-5" /> },
-    { name: 'Add Services', path: '/admin/add-services', icon: <FiLayers className="w-5 h-5" /> },
-    { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
-    { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageSquare className="w-5 h-5" /> },
-    { name: 'User Contacts', path: '/admin/user-contacts', icon: <FiPhoneCall className="w-5 h-5" /> },
-    { name: 'Send Notifications', path: '/admin/notifications', icon: <FiBell className="w-5 h-5" /> },
-    { name: 'Earning Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
-    { name: 'Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
-    { name: 'Category & Banner', path: '/admin/category-banner', icon: <FiLayout className="w-5 h-5" /> },
-    { name: 'Refunds', path: '/admin/refunds', icon: <FiDollarSign className="w-5 h-5" /> },
-    { name: 'Fraud Detection', path: '/admin/fraud', icon: <FiShield className="w-5 h-5" /> },
-    { name: 'System Logs', path: '/admin/system-logs', icon: <FiTerminal className="w-5 h-5" /> },
-    { name: 'Live Map Dashboard', path: '/admin/live-map', icon: <FiMapPin className="w-5 h-5" /> },
-    { name: 'Zone Management', path: '/admin/zone-management', icon: <FiLayers className="w-5 h-5" /> },
-    { name: 'Chat Monitor', path: '/admin/chat-monitor', icon: <FiMessageSquare className="w-5 h-5" /> },
+  const [collapsedGroups, setCollapsedGroups] = useState({
+    dashboard: false,
+    users: false,
+    bookings: false,
+    financials: false,
+    support: false,
+    system: false,
+    setup: false,
+  });
+
+  const toggleGroup = (groupId) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
+  };
+
+  const menuGroups = [
+    {
+      id: 'dashboard',
+      title: 'Dashboard & Analytics',
+      items: [
+        { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
+        { name: 'Live Map Dashboard', path: '/admin/live-map', icon: <FiMapPin className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'users',
+      title: 'User Management',
+      items: [
+        { name: 'Approved Providers', path: '/admin/approve-providers', icon: <FiCheckCircle className="w-5 h-5" /> },
+        { name: 'Pending Providers', path: '/admin/providers', icon: <FiUsers className="w-5 h-5" /> },
+        { name: 'All Customers', path: '/admin/customers', icon: <FiUser className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'bookings',
+      title: 'Bookings & Zones',
+      items: [
+        { name: 'Bookings', path: '/admin/bookings', icon: <FiCalendar className="w-5 h-5" /> },
+        { name: 'Add Services', path: '/admin/add-services', icon: <FiLayers className="w-5 h-5" /> },
+        { name: 'Category & Banner', path: '/admin/category-banner', icon: <FiLayout className="w-5 h-5" /> },
+        { name: 'Zone Management', path: '/admin/zone-management', icon: <FiLayers className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'financials',
+      title: 'Financials & Offers',
+      items: [
+        { name: 'Transactions', path: '/admin/transactions', icon: <FiActivity className="w-5 h-5" /> },
+        { name: 'Earning Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
+        { name: 'Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
+        { name: 'Refunds', path: '/admin/refunds', icon: <FiDollarSign className="w-5 h-5" /> },
+        { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
+        { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
+        { name: 'Surge Surcharges', path: '/admin/surge', icon: <FiAlertCircle className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'support',
+      title: 'Support & Interaction',
+      items: [
+        { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
+        { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageSquare className="w-5 h-5" /> },
+        { name: 'User Contacts', path: '/admin/user-contacts', icon: <FiPhoneCall className="w-5 h-5" /> },
+        { name: 'Chat Monitor', path: '/admin/chat-monitor', icon: <FiMessageSquare className="w-5 h-5" /> },
+        { name: 'Send Notifications', path: '/admin/notifications', icon: <FiBell className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'system',
+      title: 'System & Security',
+      items: [
+        { name: 'Fraud Detection', path: '/admin/fraud', icon: <FiShield className="w-5 h-5" /> },
+        { name: 'System Logs', path: '/admin/system-logs', icon: <FiTerminal className="w-5 h-5" /> },
+        { name: 'Provider Test', path: '/admin/add-questions', icon: <FiHelpCircle className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'setup',
+      title: 'Configuration',
+      items: [
+        { name: 'Settings', path: '/admin/settings', icon: <FiSettings className="w-5 h-5" /> },
+        { name: 'Branding Management', path: '/admin/branding', icon: <FiLayout className="w-5 h-5" /> },
+        { name: 'Email Templates', path: '/admin/email-templates', icon: <FiMail className="w-5 h-5" /> },
+      ]
+    }
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';
@@ -107,50 +169,46 @@ const AdminLayout = () => {
           </div>
 
           {/* Mobile navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            {menuItems.map((item) => {
-              const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
+          <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto">
+            {menuGroups.map((group) => {
+              const isCollapsed = collapsedGroups[group.id];
               return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${isActive
-                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                    : 'text-secondary hover:bg-primary/10 hover:text-primary'
-                    }`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <span className="mr-3">{item.icon}</span>
-                  {item.name}
-                </Link>
+                <div key={group.id} className="space-y-1">
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    className="flex items-center justify-between w-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-secondary transition-colors"
+                  >
+                    <span>{group.title}</span>
+                    <FiChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isCollapsed ? '-rotate-90' : ''
+                      }`}
+                    />
+                  </button>
+                  {!isCollapsed && (
+                    <div className="space-y-1 pl-1">
+                      {group.items.map((item) => {
+                        const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
+                        return (
+                          <Link
+                            key={item.name}
+                            to={item.path}
+                            className={`flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 ${isActive
+                              ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                              : 'text-secondary hover:bg-primary/10 hover:text-primary'
+                              }`}
+                            onClick={() => setSidebarOpen(false)}
+                          >
+                            <span className="mr-3">{item.icon}</span>
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
-
-            <hr className="my-2 border-gray-100" />
-            <Link
-              to="/admin/settings"
-              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${location.pathname === '/admin/settings' ? 'bg-primary text-white shadow-lg' : 'text-secondary hover:bg-primary/10 hover:text-primary'}`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <FiSettings className="w-5 h-5 mr-3" />
-              Settings
-            </Link>
-            <Link
-              to="/admin/branding"
-              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${location.pathname === '/admin/branding' ? 'bg-primary text-white shadow-lg' : 'text-secondary hover:bg-primary/10 hover:text-primary'}`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <FiLayout className="w-5 h-5 mr-3" />
-              Branding Management
-            </Link>
-            <Link
-              to="/admin/email-templates"
-              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${location.pathname === '/admin/email-templates' ? 'bg-primary text-white shadow-lg' : 'text-secondary hover:bg-primary/10 hover:text-primary'}`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <FiMail className="w-5 h-5 mr-3" />
-              Email Templates
-            </Link>
           </nav>
         </div>
       </div>
@@ -180,49 +238,46 @@ const AdminLayout = () => {
           </div>
 
           {/* Desktop navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            {menuItems.map((item) => {
-              const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
+          <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto">
+            {menuGroups.map((group) => {
+              const isCollapsed = collapsedGroups[group.id];
               return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group ${isActive
-                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                    : 'text-secondary hover:bg-primary/10 hover:text-primary'
-                    }`}
-                >
-                  <span className="mr-3">{item.icon}</span>
-                  {item.name}
-                </Link>
+                <div key={group.id} className="space-y-1">
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    className="flex items-center justify-between w-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-secondary transition-colors"
+                  >
+                    <span>{group.title}</span>
+                    <FiChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isCollapsed ? '-rotate-90' : ''
+                      }`}
+                    />
+                  </button>
+                  {!isCollapsed && (
+                    <div className="space-y-1 pl-1">
+                      {group.items.map((item) => {
+                        const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
+                        return (
+                          <Link
+                            key={item.name}
+                            to={item.path}
+                            className={`flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 group ${isActive
+                              ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                              : 'text-secondary hover:bg-primary/10 hover:text-primary'
+                              }`}
+                          >
+                            <span className="mr-3">{item.icon}</span>
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </nav>
-
-          {/* Desktop sidebar footer */}
-          <div className="px-4 py-4 border-t border-gray-200 space-y-1">
-            <Link
-              to="/admin/settings"
-              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
-            >
-              <FiSettings className="w-5 h-5 mr-3" />
-              Settings
-            </Link>
-            <Link
-              to="/admin/branding"
-              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
-            >
-              <FiLayout className="w-5 h-5 mr-3" />
-              Branding Management
-            </Link>
-            <Link
-              to="/admin/email-templates"
-              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
-            >
-              <FiMail className="w-5 h-5 mr-3" />
-              Email Templates
-            </Link>
-          </div>
         </div>
       </div>
 
@@ -243,7 +298,7 @@ const AdminLayout = () => {
 
               {/* Page title on mobile */}
               <h1 className="ml-3 text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter lg:hidden">
-                {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
+                {menuGroups.flatMap(g => g.items).find(item => item.path === location.pathname)?.name || 'Dashboard'}
               </h1>
             </div>
 

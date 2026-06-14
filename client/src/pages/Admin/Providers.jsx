@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Users,
-  Search,
   Eye,
   CheckCircle,
   XCircle,
@@ -46,6 +46,7 @@ import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import { formatDate } from '../../utils/format';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
+import StatsCard from '../../components/ui/StatsCard';
 
 const AdminProvidersPage = () => {
   const { token, API, showToast } = useAuth();
@@ -471,40 +472,58 @@ const AdminProvidersPage = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[
-            { label: 'Total Providers', value: stats.totalProviders, icon: Users, color: 'primary', border: 'primary' },
-            { label: 'Pending Approval', value: stats.pendingApproval, icon: ClockIcon, color: 'yellow', border: 'yellow' },
-            { label: 'Today Registered', value: stats.todayRegistered, icon: UserPlus, color: 'blue', border: 'blue' },
-            { label: 'Today Approved', value: stats.todayApproved, icon: UserCheck, color: 'green', border: 'green' },
-          ].map(({ label, value, icon: Icon, color, border }) => (
-            <div key={label} className={`bg-white rounded-xl shadow-lg p-6 border-l-4 border-${border}-500 hover:shadow-xl transition-shadow duration-300`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{label}</p>
-                  <p className="text-3xl font-bold text-secondary">{value}</p>
-                </div>
-                <div className={`p-3 bg-${color}-100 rounded-full`}>
-                  <Icon className={`w-6 h-6 text-${color}-600`} />
-                </div>
-              </div>
-            </div>
-          ))}
+          <StatsCard
+            title="Total Providers"
+            value={stats.totalProviders}
+            icon={Users}
+            iconBg="bg-primary/10"
+            iconColor="text-primary"
+          />
+          <StatsCard
+            title="Pending Approval"
+            value={stats.pendingApproval}
+            icon={ClockIcon}
+            iconBg="bg-yellow-50"
+            iconColor="text-yellow-600"
+          />
+          <StatsCard
+            title="Today Registered"
+            value={stats.todayRegistered}
+            icon={UserPlus}
+            iconBg="bg-blue-50"
+            iconColor="text-blue-600"
+          />
+          <StatsCard
+            title="Today Approved"
+            value={stats.todayApproved}
+            icon={UserCheck}
+            iconBg="bg-green-50"
+            iconColor="text-green-600"
+          />
         </div>
 
         {/* Additional Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          {[
-            { label: 'With Resume', value: stats.withResume, color: 'primary' },
-            { label: 'Bank Details', value: stats.withBankDetails, color: 'green' },
-            { label: 'Profile Complete', value: stats.profileComplete, color: 'blue' },
-            { label: 'Test Passed', value: stats.testPassed, color: 'indigo' },
-            { label: 'Avg Days Pending', value: stats.avgDaysPending, color: 'purple' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 text-center hover:shadow-xl transition-shadow duration-300">
-              <p className="text-sm text-gray-600 mb-1">{label}</p>
-              <p className={`text-2xl font-bold text-${color}-600`}>{value}</p>
-            </div>
-          ))}
+          <StatsCard
+            title="With Resume"
+            value={<span className="text-primary">{stats.withResume}</span>}
+          />
+          <StatsCard
+            title="Bank Details"
+            value={<span className="text-green-600">{stats.withBankDetails}</span>}
+          />
+          <StatsCard
+            title="Profile Complete"
+            value={<span className="text-blue-600">{stats.profileComplete}</span>}
+          />
+          <StatsCard
+            title="Test Passed"
+            value={<span className="text-indigo-600">{stats.testPassed}</span>}
+          />
+          <StatsCard
+            title="Avg Days Pending"
+            value={<span className="text-purple-600">{stats.avgDaysPending}</span>}
+          />
         </div>
 
         {/* Tabs */}
@@ -541,18 +560,13 @@ const AdminProvidersPage = () => {
         <AdminFilterBar onApply={fetchProviders} />
 
         {/* Search Bar */}
-        <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-6 hover:shadow-xl transition-shadow duration-300">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by name, email, phone, services, area, bank details..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
-            />
-          </div>
-        </div>
+        <AdminSearchBar
+          placeholder="Search by name, email, phone, services, area, bank details..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onClear={() => setSearchTerm('')}
+          className="mb-6"
+        />
 
         {/* Filters and Sorting */}
         <FilterSection

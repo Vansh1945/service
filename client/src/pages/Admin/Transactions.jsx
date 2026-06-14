@@ -4,12 +4,12 @@ import { useAuth } from '../../context/auth';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import * as TransactionService from '../../services/TransactionService';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
 import {
-    Search,
     Filter,
     Eye,
     CreditCard,
@@ -270,17 +270,12 @@ const AdminTransactions = () => {
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-end">
                 <div className="flex-1 w-full">
                     <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Search Booking / Txn ID</label>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            name="bookingId"
-                            placeholder="Enter Booking ID..."
-                            value={filters.bookingId}
-                            onChange={handleFilterChange}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                    </div>
+                    <AdminSearchBar
+                      placeholder="Enter Booking ID..."
+                      value={filters.bookingId}
+                      onChange={e => handleFilterChange({ target: { name: 'bookingId', value: e.target.value } })}
+                      onClear={() => handleFilterChange({ target: { name: 'bookingId', value: '' } })}
+                    />
                 </div>
                 <div className="w-full md:w-64">
                     <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Payment Status</label>

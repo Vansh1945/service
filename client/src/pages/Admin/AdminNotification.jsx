@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useAuth } from '../../context/auth';
+import StatsCard from '../../components/ui/StatsCard';
 import { useSocket } from '../../socket/SocketContext';
 import * as NotificationService from '../../services/NotificationService';
 import {
@@ -13,7 +14,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import * as SystemService from '../../services/SystemService';
 import * as ZoneService from '../../services/ZoneService';
-import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import AdminSearchBar from '../../components/AdminSearchBar';
 
 // ─── Audience Options ────────────────────────────────────────────────────────
 const AUDIENCE_OPTIONS = [
@@ -558,87 +560,53 @@ const AdminNotification = () => {
 
             {/* ── Dashboard Stats ── */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-                {/* Total Active Devices */}
-                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Active Devices</span>
-                    {loadingStats ? (
-                        <FiLoader className=" text-primary mt-2" size={16} />
-                    ) : (
-                        <div className="mt-2 flex items-baseline gap-2">
+                <StatsCard
+                    title="Total Active Devices"
+                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : (
+                        <div className="flex items-baseline gap-2 mt-2">
                             <span className="text-2xl font-black text-gray-900">{stats.totalActiveDevices}</span>
                             <span className="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">Online</span>
                         </div>
                     )}
-                </div>
+                />
 
-                {/* Customer Devices */}
-                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Customer Devices</span>
-                    {loadingStats ? (
-                        <FiLoader className=" text-primary mt-2" size={16} />
-                    ) : (
-                        <div className="mt-2">
-                            <span className="text-2xl font-black text-primary">{stats.customerDevices}</span>
-                        </div>
-                    )}
-                </div>
+                <StatsCard
+                    title="Customer Devices"
+                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : stats.customerDevices}
+                />
 
-                {/* Provider Devices */}
-                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Provider Devices</span>
-                    {loadingStats ? (
-                        <FiLoader className=" text-primary mt-2" size={16} />
-                    ) : (
-                        <div className="mt-2">
-                            <span className="text-2xl font-black text-teal-600">{stats.providerDevices}</span>
-                        </div>
-                    )}
-                </div>
+                <StatsCard
+                    title="Provider Devices"
+                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : stats.providerDevices}
+                />
 
-                {/* Admin Devices */}
-                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Admin Devices</span>
-                    {loadingStats ? (
-                        <FiLoader className=" text-primary mt-2" size={16} />
-                    ) : (
-                        <div className="mt-2">
-                            <span className="text-2xl font-black text-purple-600">{stats.adminDevices}</span>
-                        </div>
-                    )}
-                </div>
+                <StatsCard
+                    title="Admin Devices"
+                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : stats.adminDevices}
+                />
 
-                {/* Cleanup Count */}
-                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cleanup Count</span>
-                        <span className="text-[10px] text-red-500 font-extrabold bg-red-50 px-1 py-0.5 rounded">AUTO</span>
-                    </div>
-                    {loadingStats ? (
-                        <FiLoader className=" text-primary mt-2" size={16} />
-                    ) : (
-                        <div className="mt-2 flex items-baseline gap-1">
+                <StatsCard
+                    title="Cleanup Count"
+                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : (
+                        <div className="flex items-baseline gap-1 mt-2">
                             <span className="text-2xl font-black text-red-600">{stats.invalidTokenCleanupCount}</span>
                             <span className="text-[9px] text-gray-400 font-semibold">tokens</span>
                         </div>
                     )}
-                </div>
+                    subtext={<span className="text-[10px] text-red-500 font-extrabold bg-red-50 px-1 py-0.5 rounded">AUTO</span>}
+                />
 
-                {/* Last Delivery Success */}
-                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Last Delivery</span>
-                        <button onClick={fetchStats} className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-primary" title="Refresh Stats">
+                <StatsCard
+                    title="Last Delivery"
+                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : (
+                        <span className="text-sm font-black text-gray-800 break-all">{stats.lastNotificationDeliverySuccess}</span>
+                    )}
+                    subtext={
+                        <button onClick={fetchStats} className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-primary mt-2" title="Refresh Stats">
                             <FiRefreshCw size={12} />
                         </button>
-                    </div>
-                    {loadingStats ? (
-                        <FiLoader className=" text-primary mt-2" size={16} />
-                    ) : (
-                        <div className="mt-2">
-                            <span className="text-sm font-black text-gray-800 break-all">{stats.lastNotificationDeliverySuccess}</span>
-                        </div>
-                    )}
-                </div>
+                    }
+                />
             </div>
 
             {/* ── Main Layout ── */}
@@ -1479,16 +1447,13 @@ const HierarchicalZoneSelector = ({
 
             {isOpen && (
                 <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
-                    <div className="relative mb-2 shrink-0">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search by state, city, or micro zone..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
-                        />
-                    </div>
+                    <AdminSearchBar
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by state, city, or micro zone..."
+                        onClear={() => setSearchQuery('')}
+                        className="mb-2 shrink-0"
+                    />
 
                     <div className="overflow-y-auto flex-1 space-y-1 pr-1">
                         {filteredTree.length === 0 ? (

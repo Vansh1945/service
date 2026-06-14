@@ -5,12 +5,13 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
   FiUser, FiMail, FiLock, FiX, FiPlus, FiShield, FiUsers,
-  FiSearch, FiChevronLeft, FiChevronRight, FiCalendar,
+  FiChevronLeft, FiChevronRight, FiCalendar,
   FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2, FiLoader, FiBell, FiAlertCircle
 } from 'react-icons/fi';
 import * as AdminService from '../../services/AdminService';
 import * as NotificationService from '../../services/NotificationService';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import Processing from '../../components/ui-skeletons/Processing';
 import { formatDate } from '../../utils/format';
 
@@ -285,16 +286,16 @@ const AdminProfile = () => {
       <div className="bg-gray-50 rounded-lg p-4 sm:p-6 mt-4">
         {/* Search and Stats */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div className="relative mb-4 sm:mb-0 flex-1 max-w-md">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search admins by name or email..."
-              value={searchTerm}
-              onChange={handleSearch}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
+          <AdminSearchBar
+            placeholder="Search admins by name or email..."
+            value={searchTerm}
+            onChange={handleSearch}
+            onClear={() => {
+              setSearchTerm('');
+              setCurrentPage(1);
+            }}
+            className="flex-1 max-w-md mb-4 sm:mb-0"
+          />
           <div className="text-sm text-secondary whitespace-nowrap">
             Total Admins: <span className="font-semibold">{adminStats.total}</span>
           </div>

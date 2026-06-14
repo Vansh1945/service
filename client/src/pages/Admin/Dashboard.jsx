@@ -14,6 +14,7 @@ import * as AdminService from '../../services/AdminService';
 import { formatDate, formatCurrency } from '../../utils/format';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
+import StatsCard from '../../components/ui/StatsCard';
 
 // Pure helpers at module scope — created once, never re-allocated
 
@@ -248,65 +249,60 @@ const AdminDashboard = () => {
         </div>
       </div>      {/* Core Non-Financial Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-fade-in">
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Bookings</span>
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <FiCalendar className="text-blue-600" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <h4 className="text-2xl font-bold text-gray-900">{analytics?.bookingStats?.total || 0}</h4>
-            <span className="text-xs text-gray-400">Total vs {analytics?.bookingStats?.completed || 0} Done</span>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">Filter: {filters.period}</p>
-        </div>
+        <StatsCard
+          title="Total Bookings"
+          value={analytics?.bookingStats?.total || 0}
+          icon={FiCalendar}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-600"
+          subtext={`Total vs ${analytics?.bookingStats?.completed || 0} Done. Filter: ${filters.period}`}
+        />
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Booking Status Breakdown</span>
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <FiPieChart className="text-purple-600" />
+        <StatsCard
+          title="Booking Status Breakdown"
+          icon={FiPieChart}
+          iconBg="bg-purple-50"
+          iconColor="text-purple-600"
+          value={
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <div>
+                <p className="text-[10px] text-gray-450 uppercase font-bold">Completed</p>
+                <p className="text-xs font-bold text-gray-800">{analytics?.bookingStats?.completed || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-450 uppercase font-bold text-red-500">Cancelled</p>
+                <p className="text-xs font-bold text-red-600">{analytics?.bookingStats?.cancelled || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-450 uppercase font-bold text-blue-500">In-Progress</p>
+                <p className="text-xs font-bold text-blue-600">{analytics?.bookingStats?.inProgress || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-450 uppercase font-bold text-gray-500">Pending</p>
+                <p className="text-xs font-bold text-gray-700">{analytics?.bookingStats?.pending || 0}</p>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">Completed</p>
-              <p className="text-sm font-bold text-gray-900">{analytics?.bookingStats?.completed || 0}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">Cancelled</p>
-              <p className="text-sm font-bold text-red-600">{analytics?.bookingStats?.cancelled || 0}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">In-Progress</p>
-              <p className="text-sm font-bold text-blue-600">{analytics?.bookingStats?.inProgress || 0}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">Pending</p>
-              <p className="text-sm font-bold text-gray-500">{analytics?.bookingStats?.pending || 0}</p>
-            </div>
-          </div>
-        </div>
+          }
+        />
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Customer Growth</span>
-            <div className="p-2 bg-orange-50 rounded-lg">
-              <FiUsers className="text-orange-600" />
+        <StatsCard
+          title="Customer Growth"
+          value={`+${analytics?.customerStats?.new || 0}`}
+          icon={FiUsers}
+          iconBg="bg-orange-50"
+          iconColor="text-orange-600"
+          subtext={
+            <div>
+              <p className="text-[10px] text-slate-400 mt-0.5 break-words leading-tight">of {analytics?.customerStats?.total || 0} total</p>
+              <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2">
+                <div
+                  className="bg-orange-500 h-1.5 rounded-full"
+                  style={{ width: `${(analytics?.customerStats?.new / (analytics?.customerStats?.total || 1)) * 100}%` }}
+                ></div>
+              </div>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <h4 className="text-2xl font-bold text-gray-900">+{analytics?.customerStats?.new || 0}</h4>
-            <span className="text-xs text-gray-400">of {analytics?.customerStats?.total || 0} total</span>
-          </div>
-          <div className="w-full bg-gray-100 h-1.5 rounded-full mt-3">
-            <div
-              className="bg-orange-500 h-1.5 rounded-full"
-              style={{ width: `${(analytics?.customerStats?.new / (analytics?.customerStats?.total || 1)) * 100}%` }}
-            ></div>
-          </div>
-        </div>
+          }
+        />
       </div>
 
       {/* FINANCIAL INTELLIGENCE DASHBOARD (6 High-Fidelity dedicated StatCards) */}
@@ -315,88 +311,64 @@ const AdminDashboard = () => {
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6 animate-fade-in">
         {/* Gross Billed */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Billed</span>
-            <div className="p-1.5 bg-blue-50 rounded-lg">
-              <FiDollarSign className="text-blue-600 w-4 h-4" />
-            </div>
-          </div>
-          <h4 className="text-lg font-bold text-gray-900 mt-2 truncate">
-            {formatCurrency(analytics?.revenueStats?.grossRevenue || analytics?.revenueStats?.totalRevenue || 0)}
-          </h4>
-          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Total customer billing</p>
-        </div>
+        <StatsCard
+          title="Gross Billed"
+          value={formatCurrency(analytics?.revenueStats?.grossRevenue || analytics?.revenueStats?.totalRevenue || 0)}
+          icon={FiDollarSign}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-600"
+          subtext="Total customer billing"
+        />
 
         {/* Net Revenue */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Revenue</span>
-            <div className="p-1.5 bg-green-50 rounded-lg">
-              <FiTrendingUp className="text-green-600 w-4 h-4" />
-            </div>
-          </div>
-          <h4 className="text-lg font-bold text-green-600 mt-2 truncate">
-            {formatCurrency(analytics?.revenueStats?.netRevenue || analytics?.revenueStats?.totalRevenue || 0)}
-          </h4>
-          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Excluding surcharges</p>
-        </div>
+        <StatsCard
+          title="Net Revenue"
+          value={<span className="text-green-600">{formatCurrency(analytics?.revenueStats?.netRevenue || analytics?.revenueStats?.totalRevenue || 0)}</span>}
+          icon={FiTrendingUp}
+          iconBg="bg-green-50"
+          iconColor="text-green-600"
+          subtext="Excluding surcharges"
+        />
 
-        {/* Commission Revenue */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commission</span>
-            <div className="p-1.5 bg-teal-50 rounded-lg">
-              <FiPieChart className="text-teal-600 w-4 h-4" />
-            </div>
-          </div>
-          <h4 className="text-lg font-bold text-primary mt-2 truncate">
-            {formatCurrency(analytics?.revenueStats?.netEarnings || analytics?.revenueStats?.platformCommission || 0)}
-          </h4>
-          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Base commission earned</p>
-        </div>
+        {/* Commission */}
+        <StatsCard
+          title="Commission"
+          value={<span className="text-primary">{formatCurrency(analytics?.revenueStats?.netEarnings || analytics?.revenueStats?.platformCommission || 0)}</span>}
+          icon={FiPieChart}
+          iconBg="bg-teal-50"
+          iconColor="text-teal-600"
+          subtext="Base commission earned"
+        />
 
         {/* Surge Revenue */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Surge Revenue</span>
-            <div className="p-1.5 bg-orange-50 rounded-lg">
-              <FiTrendingUp className="text-orange-600 w-4 h-4" />
-            </div>
-          </div>
-          <h4 className="text-lg font-bold text-orange-655 mt-2 truncate">
-            {formatCurrency(analytics?.revenueStats?.surgeRevenue || 0)}
-          </h4>
-          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Platform surge share</p>
-        </div>
+        <StatsCard
+          title="Surge Revenue"
+          value={<span className="text-orange-655">{formatCurrency(analytics?.revenueStats?.surgeRevenue || 0)}</span>}
+          icon={FiTrendingUp}
+          iconBg="bg-orange-50"
+          iconColor="text-orange-600"
+          subtext="Platform surge share"
+        />
 
         {/* Platform Fee */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Platform Fee</span>
-            <div className="p-1.5 bg-indigo-50 rounded-lg">
-              <FiActivity className="text-indigo-600 w-4 h-4" />
-            </div>
-          </div>
-          <h4 className="text-lg font-bold text-indigo-650 mt-2 truncate">
-            {formatCurrency(analytics?.revenueStats?.platformFeeRevenue || 0)}
-          </h4>
-          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Company retained fees</p>
-        </div>
+        <StatsCard
+          title="Platform Fee"
+          value={<span className="text-indigo-650">{formatCurrency(analytics?.revenueStats?.platformFeeRevenue || 0)}</span>}
+          icon={FiActivity}
+          iconBg="bg-indigo-50"
+          iconColor="text-indigo-600"
+          subtext="Company retained fees"
+        />
 
         {/* Admin Earnings */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Admin Earnings</span>
-            <div className="p-1.5 bg-teal-50 rounded-lg">
-              <FiDollarSign className="text-teal-650 w-4 h-4" />
-            </div>
-          </div>
-          <h4 className="text-lg font-black text-teal-600 mt-2 truncate">
-            {formatCurrency((analytics?.revenueStats?.netEarnings || 0) + (analytics?.revenueStats?.surgeSplits?.companySurgeShare || 0) || analytics?.totalAdminEarnings || 0)}
-          </h4>
-          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Commission + splits</p>
-        </div>
+        <StatsCard
+          title="Admin Earnings"
+          value={<span className="text-teal-600 font-black">{formatCurrency((analytics?.revenueStats?.netEarnings || 0) + (analytics?.revenueStats?.surgeSplits?.companySurgeShare || 0) || analytics?.totalAdminEarnings || 0)}</span>}
+          icon={FiDollarSign}
+          iconBg="bg-teal-50"
+          iconColor="text-teal-650"
+          subtext="Commission + splits"
+        />
       </div>
 
       {/* REBOOK & RETENTION INTELLIGENCE */}

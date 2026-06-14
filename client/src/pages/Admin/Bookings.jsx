@@ -89,10 +89,11 @@ import DeleteConfirmModal from '../../components/modals/DeleteConfirmModal';
 import RescheduleModal from '../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
+import StatsCard from '../../components/ui/StatsCard';
 import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
-    Search,
     Calendar,
     User,
     Clock,
@@ -1030,53 +1031,34 @@ const AdminBookingsView = () => {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Total Bookings</p>
-                            <p className="text-2xl font-bold text-secondary">{stats.total}</p>
-                        </div>
-                        <div className="p-2 bg-teal-50 rounded-full">
-                            <BarChart2 className="w-6 h-6 text-primary" />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Pending</p>
-                            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-                        </div>
-                        <div className="p-2 bg-yellow-50 rounded-full">
-                            <AlertCircle className="w-6 h-6 text-yellow-600" />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Completed</p>
-                            <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-                        </div>
-                        <div className="p-2 bg-green-50 rounded-full">
-                            <CheckCircle className="w-6 h-6 text-green-600" />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Revenue</p>
-                            <p className="text-2xl font-bold text-primary"><PriceDisplay amount={stats.revenue} type="text-only" /></p>
-                        </div>
-                        <div className="p-2 bg-teal-50 rounded-full">
-                            <DollarSign className="w-6 h-6 text-primary" />
-                        </div>
-                    </div>
-                </div>
+                <StatsCard
+                    title="Total Bookings"
+                    value={stats.total}
+                    icon={BarChart2}
+                    iconBg="bg-teal-50"
+                    iconColor="text-primary"
+                />
+                <StatsCard
+                    title="Pending"
+                    value={<span className="text-yellow-600">{stats.pending}</span>}
+                    icon={AlertCircle}
+                    iconBg="bg-yellow-50"
+                    iconColor="text-yellow-600"
+                />
+                <StatsCard
+                    title="Completed"
+                    value={<span className="text-green-600">{stats.completed}</span>}
+                    icon={CheckCircle}
+                    iconBg="bg-green-50"
+                    iconColor="text-green-600"
+                />
+                <StatsCard
+                    title="Revenue"
+                    value={<span className="text-primary"><PriceDisplay amount={stats.revenue} type="text-only" /></span>}
+                    icon={DollarSign}
+                    iconBg="bg-teal-50"
+                    iconColor="text-primary"
+                />
             </div>
 
             {/* Reusable Premium Filter Bar */}
@@ -1100,16 +1082,12 @@ const AdminBookingsView = () => {
                     {/* Search */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Search bookings..."
-                                value={searchQuery}
-                                onChange={(e) => handleFilterChange('search', e.target.value)}
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                            />
-                        </div>
+                        <AdminSearchBar
+                            placeholder="Search bookings..."
+                            value={searchQuery}
+                            onChange={(e) => handleFilterChange('search', e.target.value)}
+                            onClear={() => handleFilterChange('search', '')}
+                        />
                     </div>
 
                     {/* Status Filter */}
@@ -1786,13 +1764,12 @@ const AdminBookingsView = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Select Provider
                                     </label>
-                                    <input
-                                        type="text"
+                                    <AdminSearchBar
                                         list="providerOptions"
                                         value={providerSearch}
                                         onChange={(e) => setProviderSearch(e.target.value)}
                                         placeholder="Search providers..."
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                        onClear={() => setProviderSearch('')}
                                     />
                                     <datalist id="providerOptions">
                                         {getFilteredProviders(selectedBooking)

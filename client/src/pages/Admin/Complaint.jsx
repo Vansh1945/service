@@ -2,10 +2,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { useSearchParams } from 'react-router-dom';
+import StatsCard from '../../components/ui/StatsCard';
 import * as ComplaintService from '../../services/ComplaintService';
 import * as AdminService from '../../services/AdminService';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
-  FiSearch, FiRefreshCw, FiEye, FiCheckCircle, FiAlertTriangle,
+  FiRefreshCw, FiEye, FiCheckCircle, FiAlertTriangle,
   FiUsers, FiUser, FiTool, FiClock, FiBarChart2, FiX,
   FiMail, FiPhone, FiMessageSquare,
   FiFilter, FiInbox
@@ -80,21 +82,7 @@ const SkeletonRow = () => (
 
 
 
-// ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ label, value, icon: Icon, gradient, iconBg, delay = 0 }) => (
-  <div
-    className="bg-white rounded-2xl shadow-md p-5 flex items-center gap-4 hover:scale-105 hover:shadow-lg transition-all duration-300 cursor-default animate-fade-in border border-gray-100"
-    style={{ animationDelay: `${delay}ms` }}
-  >
-    <div className={`${iconBg} w-12 h-12 rounded-xl flex items-center justify-center shrink-0`}>
-      <Icon className={gradient} size={22} />
-    </div>
-    <div>
-      <p className="text-3xl font-bold text-secondary font-poppins">{value ?? '—'}</p>
-      <p className="text-xs text-gray-400 font-medium mt-0.5">{label}</p>
-    </div>
-  </div>
-);
+
 
 // ── Complaint Details Modal ────────────────────────────────────
 // ── Complaint Details Modal ────────────────────────────────────
@@ -1046,12 +1034,7 @@ const ComplaintsPage = () => {
   const providerCount = complaints.filter(c => c.userType === 'provider').length;
   const pendingCount = complaints.filter(c => c.status === 'Open' || c.status === 'Reopened').length;
 
-  const statCards = [
-    { label: 'Total Complaints', value: pagination.total, icon: FiBarChart2, gradient: 'text-primary', iconBg: 'bg-primary/10', delay: 0 },
-    { label: 'Customer Complaints', value: customerCount, icon: FiUser, gradient: 'text-blue-600', iconBg: 'bg-blue-100', delay: 80 },
-    { label: 'Provider Complaints', value: providerCount, icon: FiTool, gradient: 'text-purple-600', iconBg: 'bg-purple-100', delay: 160 },
-    { label: 'Pending', value: pendingCount, icon: FiClock, gradient: 'text-amber-600', iconBg: 'bg-amber-100', delay: 240 },
-  ];
+
 
   return (
     <div className="min-h-screen bg-background font-inter flex flex-col">
@@ -1072,7 +1055,34 @@ const ComplaintsPage = () => {
 
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {statCards.map(card => <StatCard key={card.label} {...card} />)}
+          <StatsCard
+            title="Total Complaints"
+            value={pagination.total}
+            icon={FiBarChart2}
+            iconBg="bg-primary bg-opacity-10"
+            iconColor="text-primary"
+          />
+          <StatsCard
+            title="Customer Complaints"
+            value={customerCount}
+            icon={FiUser}
+            iconBg="bg-blue-500 bg-opacity-10"
+            iconColor="text-blue-600"
+          />
+          <StatsCard
+            title="Provider Complaints"
+            value={providerCount}
+            icon={FiTool}
+            iconBg="bg-purple-500 bg-opacity-10"
+            iconColor="text-purple-600"
+          />
+          <StatsCard
+            title="Pending"
+            value={pendingCount}
+            icon={FiClock}
+            iconBg="bg-amber-500 bg-opacity-10"
+            iconColor="text-amber-600"
+          />
         </div>
 
         {/* ── Filters ── */}
@@ -1088,14 +1098,12 @@ const ComplaintsPage = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Search – spans full width */}
-            <div className="relative sm:col-span-2 lg:col-span-3">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-              <input
-                type="text"
+            <div className="sm:col-span-2 lg:col-span-3">
+              <AdminSearchBar
                 placeholder="Search by title, user..."
                 value={filters.search}
                 onChange={e => handleFilterChange('search', e.target.value)}
-                className="pl-9 w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white text-sm outline-none transition-all"
+                onClear={() => handleFilterChange('search', '')}
               />
             </div>
 

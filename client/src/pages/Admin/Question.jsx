@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Pagination from '../../components/Pagination';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import Loader from '../../components/ui-skeletons/Loader';
+import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import { useConfirm } from '../../context/ConfirmContext';
 import * as QuestionService from '../../services/QuestionService';
@@ -12,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   FileText, PlusCircle, Trash2, Edit2, Download, Upload, X, Check,
-  Search, Filter, BarChart3, Eye, CheckSquare, Square,
+  Filter, BarChart3, Eye, CheckSquare, Square,
   TrendingUp, Users, Activity, AlertCircle, Loader2,
   ChevronDown, ChevronUp, Star, BookOpen, Zap
 } from 'lucide-react';
@@ -425,60 +427,40 @@ const AdminQuestions = () => {
         {showStats && (
           <div className="mb-6">
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              {/* Total Questions */}
-              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Total Questions</p>
-                    <p className="text-2xl font-bold text-secondary mt-1">{statistics.total}</p>
-                  </div>
-                  <div className="bg-primary bg-opacity-10 p-2 rounded-lg">
-                    <BookOpen className="text-primary" size={20} />
-                  </div>
-                </div>
-              </div>
+              <StatsCard
+                title="Total Questions"
+                value={statistics.total}
+                icon={BookOpen}
+                iconBg="bg-primary bg-opacity-10"
+                iconColor="text-primary"
+              />
 
-              {/* Active Questions */}
-              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Active Questions</p>
-                    <p className="text-2xl font-bold text-secondary mt-1">{statistics.active}</p>
-                    <p className="text-gray-500 text-xs mt-1">{statistics.activePercentage}% of total</p>
-                  </div>
-                  <div className="bg-green-500 bg-opacity-10 p-2 rounded-lg">
-                    <Check className="text-green-500" size={20} />
-                  </div>
-                </div>
-              </div>
+              <StatsCard
+                title="Active Questions"
+                value={statistics.active}
+                subtext={`${statistics.activePercentage}% of total`}
+                icon={Check}
+                iconBg="bg-green-500 bg-opacity-10"
+                iconColor="text-green-500"
+              />
 
-              {/* Inactive Questions */}
-              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Inactive Questions</p>
-                    <p className="text-2xl font-bold text-secondary mt-1">{statistics.inactive}</p>
-                    <p className="text-gray-500 text-xs mt-1">{100 - statistics.activePercentage}% of total</p>
-                  </div>
-                  <div className="bg-red-500 bg-opacity-10 p-2 rounded-lg">
-                    <X className="text-red-500" size={20} />
-                  </div>
-                </div>
-              </div>
+              <StatsCard
+                title="Inactive Questions"
+                value={statistics.inactive}
+                subtext={`${100 - statistics.activePercentage}% of total`}
+                icon={X}
+                iconBg="bg-red-500 bg-opacity-10"
+                iconColor="text-red-500"
+              />
 
-              {/* Categories */}
-              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Categories</p>
-                    <p className="text-2xl font-bold text-secondary mt-1">{Object.keys(statistics.byCategory).length}</p>
-                    <p className="text-gray-500 text-xs mt-1">Different categories</p>
-                  </div>
-                  <div className="bg-purple-500 bg-opacity-10 p-2 rounded-lg">
-                    <TrendingUp className="text-purple-500" size={20} />
-                  </div>
-                </div>
-              </div>
+              <StatsCard
+                title="Categories"
+                value={Object.keys(statistics.byCategory).length}
+                subtext="Different categories"
+                icon={TrendingUp}
+                iconBg="bg-purple-500 bg-opacity-10"
+                iconColor="text-purple-500"
+              />
             </div>
 
             {/* Category Breakdown */}
@@ -759,11 +741,10 @@ const AdminQuestions = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-secondary mb-1 text-sm font-medium">Search</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  <AdminSearchBar
                     value={filters.search}
                     onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                    onClear={() => setFilters({ ...filters, search: '' })}
                     placeholder="Search questions..."
                   />
                 </div>

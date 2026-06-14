@@ -18,51 +18,16 @@ import Processing from '../../components/ui-skeletons/Processing';
 import ChatModal from '../../components/chat/ChatModal';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
+import {
+  COMPLAINT_STATUS_CONFIG,
+  getComplaintStatusStyle,
+  COMPLAINT_STATUS_LABELS,
+  COMPLAINT_STATUS_DETAIL_LABELS
+} from '../../components/ui/StatusConfig';
 
-const STATUS_CONFIG = {
-  'Open': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
-  'In-Progress': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-  'Solved': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
-  'Reopened': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-  'Closed': { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
-  submitted: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
-  under_review: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
-  provider_responded: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
-  admin_review: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
-  resolved: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
-  refunded: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500' },
-};
-
-const STATUS_LABELS = {
-  'Open': 'Open',
-  'In-Progress': 'In Review',
-  'Solved': 'Resolved',
-  'Reopened': 'Reopened',
-  'Closed': 'Closed',
-  'submitted': 'Submitted',
-  'under_review': 'Under Review',
-  'provider_responded': 'Provider Responded',
-  'admin_review': 'Admin Review',
-  'resolved': 'Resolved',
-  'rejected': 'Rejected',
-  'refunded': 'Refunded',
-};
-
-const STATUS_DETAIL_LABELS = {
-  'Open': '○ Open',
-  'In-Progress': '⏳ Being Reviewed',
-  'Solved': '✓ Issue Resolved',
-  'Reopened': '↩ Reopened',
-  'Closed': 'Closed',
-  'submitted': 'Submitted',
-  'under_review': 'Under Review',
-  'provider_responded': 'Provider Responded',
-  'admin_review': 'Admin Review',
-  'resolved': 'Resolved',
-  'rejected': 'Rejected',
-  'refunded': 'Refunded',
-};
+const STATUS_CONFIG = COMPLAINT_STATUS_CONFIG;
+const STATUS_LABELS = COMPLAINT_STATUS_LABELS;
+const STATUS_DETAIL_LABELS = COMPLAINT_STATUS_DETAIL_LABELS;
 
 const ComplaintsPage = () => {
   const { token, user, logoutUser, isAuthenticated, API, API_URL_IMAGE } = useAuth();
@@ -258,7 +223,7 @@ const ComplaintsPage = () => {
 
 
 
-  const getStatusStyle = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Open'];
+  const getStatusStyle = getComplaintStatusStyle;
 
   const isFormDisabled =
     ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) ||

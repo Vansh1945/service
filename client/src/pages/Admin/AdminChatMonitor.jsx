@@ -6,10 +6,13 @@ import {
   MessageSquare, AlertCircle, ShieldAlert, Award,
   Check, Play, User, Phone, ArrowLeft, Send, Loader,
   TrendingUp, Activity, Inbox, Eye, Megaphone, CheckCircle, X,
-  Search, Filter
+  Filter
 } from 'lucide-react';
 import { formatRelativeTime } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import StatsCard from '../../components/ui/StatsCard';
+import AdminSearchBar from '../../components/AdminSearchBar';
+import { getQuickReplies } from '../../components/chat/quickReplies';
 
 const AdminChatMonitor = () => {
   const { user, showToast } = useAuth();
@@ -204,24 +207,24 @@ const AdminChatMonitor = () => {
   };
 
   // 6. Admin Message Send
-  const handleAdminSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedRoom?._id) return;
-
-    try {
-      const text = newMessage;
-      setNewMessage('');
-
-      await axiosInstance.post('/chat/send', {
-        roomId: selectedRoom._id,
-        messageType: 'text',
-        content: text
-      });
-
-    } catch (err) {
-      console.error('Error sending administrative message:', err);
-    }
-  };
+  const handleAdminSendMessage = async (e, textToSend) => {
+    if (e) e.preventDefault();
+    const text = (textToSend || newMessage).trim();
+    if (!text || !selectedRoom?._id) return;
+ 
+     try {
+      if (!textToSend) setNewMessage('');
+ 
+       await axiosInstance.post('/chat/send', {
+         roomId: selectedRoom._id,
+         messageType: 'text',
+         content: text
+       });
+ 
+     } catch (err) {
+       console.error('Error sending administrative message:', err);
+     }
+   };
 
   // 7. Warn Provider Mock Action
   const handleWarnProvider = () => {
@@ -358,25 +361,35 @@ const AdminChatMonitor = () => {
 
       {/* 1. TOP ANALYTICS TILES */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Active Chats', value: activeChats, icon: MessageSquare, color: 'text-primary bg-primary/10 border-primary/20' },
-          { label: 'Unresolved Complaints', value: complaintsCount, icon: ShieldAlert, color: 'text-red-600 bg-red-50 border-red-200' },
-          { label: 'Admin Unread', value: totalUnread, icon: Inbox, color: totalUnread > 0 ? 'text-amber-600 bg-amber-50 border-amber-200 animate-pulse' : 'text-gray-500 bg-gray-50 border-gray-200' },
-          { label: 'Interventions Injected', value: interventionsCount, icon: Award, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' }
-        ].map((tile, i) => {
-          const Icon = tile.icon;
-          return (
-            <div key={i} className="bg-white rounded-2xl p-4 border border-gray-150 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] uppercase font-black tracking-wider text-gray-400 mb-1">{tile.label}</p>
-                <h3 className="text-xl font-black text-secondary">{tile.value}</h3>
-              </div>
-              <div className={`${tile.color} p-2.5 rounded-xl border`}>
-                <Icon className="w-5 h-5" />
-              </div>
-            </div>
-          );
-        })}
+        <StatsCard
+          title="Total Active Chats"
+          value={activeChats}
+          icon={MessageSquare}
+          iconBg="bg-primary/10"
+          iconColor="text-primary"
+        />
+        <StatsCard
+          title="Unresolved Complaints"
+          value={complaintsCount}
+          icon={ShieldAlert}
+          iconBg="bg-red-50"
+          iconColor="text-red-600"
+        />
+        <StatsCard
+          title="Admin Unread"
+          value={totalUnread}
+          icon={Inbox}
+          iconBg={totalUnread > 0 ? "bg-amber-50" : "bg-gray-50"}
+          iconColor={totalUnread > 0 ? "text-amber-600" : "text-gray-500"}
+          className={totalUnread > 0 ? "animate-pulse" : ""}
+        />
+        <StatsCard
+          title="Interventions Injected"
+          value={interventionsCount}
+          icon={Award}
+          iconBg="bg-indigo-50"
+          iconColor="text-indigo-600"
+        />
       </div>
 
       {/* 2. CORE DASHBOARD SPLIT INTERFACE */}
@@ -396,24 +409,12 @@ const AdminChatMonitor = () => {
             </div>
 
             {/* Elegant Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search by client, provider, ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-150 focus:border-primary focus:bg-white rounded-xl text-xs outline-none transition-all placeholder-gray-400 text-secondary"
-              />
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-2.5 p-0.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-secondary transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
+            <AdminSearchBar
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by client, provider, ID..."
+              onClear={() => setSearchTerm('')}
+            />
 
             {/* Sleek Category Filter Tabs */}
             <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-none">
@@ -711,23 +712,39 @@ const AdminChatMonitor = () => {
                     🔒 Oversight Mode Active. Intervene Chat to participate in conversation.
                   </div>
                 ) : (
-                  <form onSubmit={handleAdminSendMessage} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Send message or official administrative note here..."
-                      className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-primary focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 text-secondary"
-                    />
+                  <div className="space-y-2">
+                    {/* QUICK ACTION BUBBLES */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none pb-1">
+                      {getQuickReplies('admin', selectedRoom?.bookingId?.status).map((reply) => (
+                        <button
+                          key={reply}
+                          type="button"
+                          onClick={() => handleAdminSendMessage(null, reply)}
+                          className="px-2.5 py-1 bg-gray-50 hover:bg-primary hover:text-white border border-gray-200 hover:border-primary text-secondary text-[10px] font-bold rounded-full transition-all shrink-0 active:scale-95 shadow-sm cursor-pointer"
+                        >
+                          {reply}
+                        </button>
+                      ))}
+                    </div>
 
-                    <button
-                      type="submit"
-                      disabled={!newMessage.trim()}
-                      className="p-3 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl transition-all shadow-md active:scale-95 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none shrink-0"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </form>
+                    <form onSubmit={(e) => handleAdminSendMessage(e)} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Send message or official administrative note here..."
+                        className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 focus:border-primary focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 text-secondary"
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={!newMessage.trim()}
+                        className="p-3 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl transition-all shadow-md active:scale-95 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none shrink-0"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </form>
+                  </div>
                 )}
               </div>
             </>
