@@ -186,6 +186,9 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
   const submitterInfo = actualUserType === 'customer'
     ? (complaint.userId || complaint.customer)
     : (complaint.providerId || complaint.provider);
+  const opposingParty = actualUserType === 'customer'
+    ? (complaint.provider || booking?.provider)
+    : (complaint.customer || booking?.customer || complaint.userId);
 
   // Payout Badge Config
   const payoutBadgeStyles = {
@@ -369,51 +372,68 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                   </div>
                 </div>
 
-                {/* Submitter */}
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
-                  <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
-                    <FiUser className="text-primary" size={14} /> Submitted By
-                  </h4>
-                  {submitterInfo ? (
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${actualUserType === 'customer' ? 'bg-blue-500' : 'bg-purple-500'}`}>
-                        <FiUser className="text-white" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-secondary">{submitterInfo.name || 'N/A'}</p>
-                        {submitterInfo.email && (
-                          <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                            <FiMail size={10} /> {submitterInfo.email}
-                          </p>
-                        )}
-                        {submitterInfo.phone && (
-                          <p className="text-xs text-gray-400 flex items-center gap-1">
-                            <FiPhone size={10} /> {submitterInfo.phone}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ) : <p className="text-sm text-gray-400">N/A</p>}
-
-                  {/* Affected provider (service issue) */}
-                  {complaint.provider && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs text-gray-400 mb-2">Affected Provider</p>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center">
-                          <FiTool className="text-white" size={14} />
+                {/* Submitter & Involved Parties */}
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-4">
+                  <div>
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <FiUser className="text-primary" size={12} /> Submitted By ({actualUserType === 'customer' ? 'Customer' : 'Provider'})
+                    </h4>
+                    {submitterInfo ? (
+                      <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${actualUserType === 'customer' ? 'bg-blue-500' : 'bg-purple-500'}`}>
+                          <FiUser className="text-white" size={14} />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-secondary">{complaint.provider?.name || 'N/A'}</p>
-                          {complaint.provider?.email && (
-                            <p className="text-xs text-gray-400 flex items-center gap-1">
-                              <FiMail size={10} /> {complaint.provider.email}
+                          <p className="text-sm font-semibold text-secondary">{submitterInfo.name || 'N/A'}</p>
+                          {submitterInfo.email && (
+                            <p className="text-xs text-gray-450 flex items-center gap-1 mt-0.5">
+                              <FiMail size={10} /> {submitterInfo.email}
+                            </p>
+                          )}
+                          {submitterInfo.phone && (
+                            <p className="text-xs text-gray-450 flex items-center gap-1">
+                              <FiPhone size={10} /> {submitterInfo.phone}
                             </p>
                           )}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    ) : <p className="text-xs text-gray-405 italic">No submitter info available</p>}
+                  </div>
+
+                  {/* Opposing/Affected Party */}
+                  <div>
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      {actualUserType === 'customer' ? (
+                        <>
+                          <FiTool className="text-purple-500" size={12} /> Affected Provider
+                        </>
+                      ) : (
+                        <>
+                          <FiUser className="text-blue-500" size={12} /> Involved Customer
+                        </>
+                      )}
+                    </h4>
+                    {opposingParty ? (
+                      <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${actualUserType === 'customer' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                          {actualUserType === 'customer' ? <FiTool className="text-white" size={14} /> : <FiUser className="text-white" size={14} />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-secondary">{opposingParty.name || 'N/A'}</p>
+                          {opposingParty.email && (
+                            <p className="text-xs text-gray-455 flex items-center gap-1 mt-0.5">
+                              <FiMail size={10} /> {opposingParty.email}
+                            </p>
+                          )}
+                          {opposingParty.phone && (
+                            <p className="text-xs text-gray-455 flex items-center gap-1">
+                              <FiPhone size={10} /> {opposingParty.phone}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : <p className="text-xs text-gray-405 italic">No opposing party info available</p>}
+                  </div>
 
                   {/* Booking ID */}
                   {complaint.booking && (
@@ -1134,7 +1154,7 @@ const ComplaintsPage = () => {
             <table className="w-full min-w-[700px]">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['#', 'Title & Category', 'Submitter', 'User Type', 'Status', 'Provider', 'Date', 'Action'].map(h => (
+                  {['#', 'Title & Category', 'User Type', 'Customer', 'Provider', 'Status', 'Date', 'Action'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -1164,7 +1184,8 @@ const ComplaintsPage = () => {
                 ) : (
                   complaints.map((c, idx) => {
                     const actualUserType = c.userType || (c.userId || c.customer ? 'customer' : 'provider');
-                    const submitter = actualUserType === 'customer' ? (c.userId || c.customer) : (c.providerId || c.provider);
+                    const customerParty = c.userId || c.customer || c.booking?.customer;
+                    const providerParty = c.providerId || c.provider || c.booking?.provider;
                     return (
                     <tr
                       key={c._id}
@@ -1178,25 +1199,32 @@ const ComplaintsPage = () => {
                         <p className="text-sm font-semibold text-secondary truncate">{c.title || 'No Title'}</p>
                         <p className="text-xs text-gray-400 truncate mt-0.5">{c.category || '—'}</p>
                       </td>
-                      <td className="px-4 py-3.5 max-w-[140px]">
-                        <p className="text-sm font-medium text-secondary truncate">
-                          {submitter?.name || 'Unknown'}
-                        </p>
-                        <p className="text-[11px] text-gray-400 truncate">
-                          {submitter?.email || '—'}
-                        </p>
-                      </td>
                       <td className="px-4 py-3.5"><TypeBadge type={actualUserType} /></td>
-                      <td className="px-4 py-3.5"><StatusBadge status={c.status} /></td>
-                      <td className="px-4 py-3.5 max-w-[120px]">
-                        {(c.providerId || c.provider) ? (
-                          <div>
+                      <td className="px-4 py-3.5 max-w-[140px]">
+                        {customerParty ? (
+                          <>
                             <p className="text-sm font-medium text-secondary truncate">
-                              {c.providerId?.name || c.provider?.name || 'N/A'}
+                              {customerParty.name || 'Unknown'}
                             </p>
-                          </div>
+                            <p className="text-[11px] text-gray-400 truncate">
+                              {customerParty.email || '—'}
+                            </p>
+                          </>
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
+                      <td className="px-4 py-3.5 max-w-[140px]">
+                        {providerParty ? (
+                          <>
+                            <p className="text-sm font-medium text-secondary truncate">
+                              {providerParty.name || 'Unknown'}
+                            </p>
+                            <p className="text-[11px] text-gray-400 truncate">
+                              {providerParty.email || '—'}
+                            </p>
+                          </>
+                        ) : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3.5"><StatusBadge status={c.status} /></td>
                       <td className="px-4 py-3.5 text-xs text-gray-400 whitespace-nowrap">{formatDate(c.createdAt)}</td>
                       <td className="px-4 py-3.5">
                         <button

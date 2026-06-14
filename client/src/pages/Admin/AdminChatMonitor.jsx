@@ -430,8 +430,8 @@ const AdminChatMonitor = () => {
                     key={tab.id}
                     onClick={() => setActiveFilter(tab.id)}
                     className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border ${isActive
-                        ? 'bg-primary border-primary text-white shadow-sm'
-                        : 'bg-gray-50 border-gray-150 hover:bg-gray-100 text-gray-500 hover:text-secondary'
+                      ? 'bg-primary border-primary text-white shadow-sm'
+                      : 'bg-gray-50 border-gray-150 hover:bg-gray-100 text-gray-500 hover:text-secondary'
                       }`}
                   >
                     {tab.label}
@@ -476,10 +476,10 @@ const AdminChatMonitor = () => {
                     key={room._id}
                     onClick={() => handleSelectRoom(room)}
                     className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col gap-2 relative overflow-hidden ${isSelected
-                        ? 'bg-primary/5 border-primary shadow-sm'
-                        : room.unreadAdmin > 0
-                          ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300 shadow-sm border-l-4 border-l-amber-500'
-                          : 'bg-white hover:bg-gray-50 border-gray-150 hover:border-gray-200 shadow-sm'
+                      ? 'bg-primary/5 border-primary shadow-sm'
+                      : room.unreadAdmin > 0
+                        ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300 shadow-sm border-l-4 border-l-amber-500'
+                        : 'bg-white hover:bg-gray-50 border-gray-150 hover:border-gray-200 shadow-sm'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -653,7 +653,7 @@ const AdminChatMonitor = () => {
                       label = 'Provider';
                       bubbleColor = 'bg-emerald-50 text-emerald-950 border-emerald-200 rounded-bl-none';
                     } else if (isMe) {
-                      label = 'Admin Support';
+                      label = 'Support Team';
                       bubbleColor = 'bg-indigo-900 text-white border-indigo-950 rounded-br-none';
                       alignClass = 'justify-end';
                     }

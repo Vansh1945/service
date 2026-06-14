@@ -373,7 +373,14 @@ const getAllComplaints = async (req, res) => {
       .populate('provider', 'name email')
       .populate('userId', 'name email')
       .populate('providerId', 'name email')
-      .populate('booking', 'date services bookingId complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory cancellationProgress totalAmount')
+      .populate({
+        path: 'booking',
+        select: 'date services bookingId customer provider complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory cancellationProgress totalAmount',
+        populate: [
+          { path: 'customer', select: 'name email phone' },
+          { path: 'provider', select: 'name email phone' }
+        ]
+      })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -510,13 +517,25 @@ const enrichComplaintData = async (complaint) => {
     }
   }
 
-  // ─── Resolution History ─────────────────────────────────────
   const resolutionHistory = [
     { event: 'Complaint Created', timestamp: complaint.createdAt, by: complaint.userType === 'customer' ? 'Customer' : 'Provider', note: complaint.title },
-    ...(complaint.statusHistory || []).map(h => ({ event: `Status changed to ${h.status}`, timestamp: h.updatedAt || h.timestamp, by: 'System/Admin' }))
+    ...(complaint.statusHistory || []).map(h => ({ event: `Status changed to ${h.status}`, timestamp: h.updatedAt || h.timestamp, by: 'Support Team' }))
   ];
   if (complaint.booking?.complaintProofs) {
     complaint.booking.complaintProofs.forEach(proof => {
+      // Deduplicate the initial submission proof which is already represented by "Complaint Created"
+      const proofTime = new Date(proof.createdAt).getTime();
+      const complaintTime = new Date(complaint.createdAt).getTime();
+      const timeDiffSeconds = Math.abs(proofTime - complaintTime) / 1000;
+
+      const normalizedDesc = (complaint.description || '').replace(/^\[.*?\]\n/, '').trim();
+      const normalizedMsg = (proof.message || '').trim();
+
+      if (timeDiffSeconds < 15 && (normalizedDesc === normalizedMsg || normalizedDesc.includes(normalizedMsg) || normalizedMsg.includes(normalizedDesc))) {
+        // This is the initial complaint submission proof, skip it to prevent duplication
+        return;
+      }
+
       resolutionHistory.push({
         event: `${proof.uploadedBy.charAt(0).toUpperCase() + proof.uploadedBy.slice(1)} Replied`,
         timestamp: proof.createdAt, by: proof.uploadedBy, note: proof.message,
@@ -548,13 +567,12 @@ const enrichComplaintData = async (complaint) => {
   let providerHistory = { completedBookings: 0, avgRating: 0, complaintRatio: 0, cancellationRatio: 0 };
   if (providerId) {
     const providerDoc = await Provider.findById(providerId)
-      .select('completedBookings cancelledBookings averageRating performanceScore')
+      .select('completedBookings canceledBookings performanceScore')
       .lean();
     if (providerDoc) {
       const completed = providerDoc.completedBookings || 0;
-      const cancelled = providerDoc.cancelledBookings || 0;
-      const rawRating = providerDoc.averageRating || providerDoc.performanceScore || 0;
-      const avgRating = Number(rawRating) || 0;
+      const cancelled = providerDoc.canceledBookings || 0;
+      const avgRating = providerDoc.performanceScore?.rating || 0;
       const totalJobs = completed + cancelled;
       const cancelRatio = totalJobs > 0 ? cancelled / totalJobs : 0;
       const complaintRatio = completed > 0 ? providerComplaintsCount / completed : 0;
@@ -578,7 +596,7 @@ const enrichComplaintData = async (complaint) => {
     const userDoc = await User.findById(customerUserId).select('createdAt totalBookings').lean();
     const [totalBookings, refundedTx, customerComplaints] = await Promise.all([
       Booking.countDocuments({ customer: customerUserId }),
-      Transaction.countDocuments({ user: customerUserId, refundStatus: { $in: ['refunded', 'partial'] } }),
+      Transaction.countDocuments({ user: customerUserId, $or: [{ refundStatus: 'completed' }, { paymentStatus: 'refunded' }] }),
       ComplaintModel.countDocuments({ $or: [{ userId: customerUserId }, { customer: customerUserId }] })
     ]);
 
@@ -713,7 +731,14 @@ const getComplaint = async (req, res) => {
       .populate('provider', 'name email phone')
       .populate('userId', 'name email phone')
       .populate('providerId', 'name email phone')
-      .populate('booking', 'date services bookingId complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory payoutHoldUntil totalAmount cancellationProgress')
+      .populate({
+        path: 'booking',
+        select: 'date services bookingId customer provider complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory payoutHoldUntil totalAmount cancellationProgress',
+        populate: [
+          { path: 'customer', select: 'name email phone' },
+          { path: 'provider', select: 'name email phone' }
+        ]
+      })
       .lean();
 
     if (!complaint) {

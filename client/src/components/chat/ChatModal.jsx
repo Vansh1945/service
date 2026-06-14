@@ -4,10 +4,11 @@ import { useSocket } from '../../socket/SocketContext';
 import axiosInstance from '../../api/axiosInstance';
 import {
   Send, Image, X, Phone, User, Check, CheckCheck,
-  Clock, MapPin, AlertCircle, Info, ShieldAlert, Loader
+  Clock, MapPin, AlertCircle, Info, ShieldAlert, Loader, Headphones
 } from 'lucide-react';
 import { formatRelativeTime } from '../../utils/format';
 import CDNImage from '../CDNImage';
+import { getQuickReplies } from './quickReplies';
 
 const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_customer', complaintId, customerId, providerId }) => {
   const { user, showToast } = useAuth();
@@ -277,10 +278,10 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
     statusText = otherTyping ? 'typing...' : otherOnline ? 'Online' : 'Offline';
     showBookingCode = true;
   } else if (targetRoomType === 'customer_admin') {
-    headerName = 'Admin Support';
+    headerName = 'Support Team';
     statusText = 'Always enabled';
   } else if (targetRoomType === 'provider_admin') {
-    headerName = 'Admin Support';
+    headerName = 'Support Team';
     statusText = 'Always enabled';
   } else if (targetRoomType === 'complaint_admin') {
     headerName = 'Complaint Resolution';
@@ -293,33 +294,7 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
   const bookingCode = booking?.bookingId || (bookingId ? bookingId.slice(-8).toUpperCase() : '');
   const isLocked = isChatLocked();
 
-  const getFilteredQuickReplies = () => {
-    const status = booking?.status || 'pending';
-    if (isCustomer) {
-      // Customer
-      if (status === 'completed') {
-        return ['Call me'];
-      }
-      if (status === 'pending') {
-        return ['Call me'];
-      }
-      return ['Gate open', 'Call me', 'Reached home'];
-    } else {
-      // Provider
-      let list = ['Arriving in 10 min', 'Reached location', 'Work started', 'Need response'];
-      if (status === 'completed') {
-        return ['Need response'];
-      }
-      if (status === 'pending') {
-        return ['Need response'];
-      }
-      if (['accepted', 'confirmed'].includes(status)) {
-        list = list.filter(r => r !== 'Work started');
-      }
-      return list;
-    }
-  };
-  const quickReplies = getFilteredQuickReplies();
+  const quickReplies = getQuickReplies(userRole, booking?.status);
 
   return (
     <div className="fixed inset-0 z-[999] flex items-end md:items-center justify-center md:justify-end">
@@ -345,9 +320,13 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
                   alt={headerName}
                   className="w-9 h-9 rounded-full object-cover border-2 border-white ring-2 ring-primary/10"
                 />
+              ) : ['customer_admin', 'provider_admin', 'complaint_admin'].includes(targetRoomType) ? (
+                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                  <Headphones className="w-4.5 h-4.5" />
+                </div>
               ) : (
-                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                  {headerName.charAt(0)}
+                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                  <User className="w-4.5 h-4.5" />
                 </div>
               )}
               {isPC && (

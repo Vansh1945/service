@@ -106,7 +106,7 @@ const Navbar = () => {
             </Link>
 
             {/* Desktop Navigation  */}
-            <div className="hidden lg:block ml-8 xl:ml-12 flex-shrink-0">
+            <div className="hidden lg:block ml-12 xl:ml-20 flex-shrink-0">
               <div className="flex space-x-1">
                 {navLinks.map((link) => (
                   <NavItem

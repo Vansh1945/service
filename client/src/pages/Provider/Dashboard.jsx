@@ -220,7 +220,7 @@ const Dashboard = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 xl:grid-cols-6 gap-2 sm:gap-4">
           <StatsCard
             to="/provider/earnings"
             title="Total Earnings"
@@ -286,15 +286,15 @@ const Dashboard = () => {
           </div>
           <div className="grid grid-cols-3 divide-x divide-slate-100 text-center">
             <div>
-              <p className="text-2xl md:text-3xl font-extrabold text-slate-800">{Number(ratings?.averageRating || 4.3).toFixed(1)}</p>
+              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.averageRating || 4.3).toFixed(1)}</p>
               <p className="text-xs font-medium text-slate-400 mt-1.5">Rating</p>
             </div>
             <div>
-              <p className="text-2xl md:text-3xl font-extrabold text-slate-800">{Number(ratings?.onTimeRate || 42.5).toFixed(1)}%</p>
+              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.onTimeRate || 42.5).toFixed(1)}%</p>
               <p className="text-xs font-medium text-slate-400 mt-1.5">On-Time</p>
             </div>
             <div>
-              <p className="text-2xl md:text-3xl font-extrabold text-slate-800">{Number(ratings?.completionRate || 83.3).toFixed(1)}%</p>
+              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.completionRate || 83.3).toFixed(1)}%</p>
               <p className="text-xs font-medium text-slate-400 mt-1.5">Completion</p>
             </div>
           </div>

@@ -443,7 +443,7 @@ const ComplaintsPage = () => {
             </div>
             <div>
               <p className="text-sm font-semibold">Still need help?</p>
-              <p className="text-xs text-gray-300">Chat directly with admin support</p>
+              <p className="text-xs text-gray-300">Chat directly with Support Team</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -465,8 +465,8 @@ const ComplaintsPage = () => {
 
       {/* New Complaint Modal */}
       {openNewComplaint && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" 
+        <div
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
           role="button"
           tabIndex={0}
           onClick={() => { setOpenNewComplaint(false); resetForm(); }}
@@ -596,8 +596,8 @@ const ComplaintsPage = () => {
 
       {/* Complaint Detail Modal */}
       {openComplaintDetail && selectedComplaint && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" 
+        <div
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
           role="button"
           tabIndex={0}
           onClick={() => setOpenComplaintDetail(false)}
@@ -711,7 +711,7 @@ const ComplaintsPage = () => {
                       {selectedComplaint.resolutionHistory.map((step, i) => (
                         <div key={i} className="relative">
                           <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${step.event.includes('Resolved') || step.event.includes('Solved') ? 'border-green-500' :
-                              step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
+                            step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
                             }`} />
                           <div className="flex justify-between items-start mb-0.5">
                             <p className={`text-[11px] font-bold ${step.event.includes('Resolved') ? 'text-green-600' : 'text-secondary'
@@ -757,10 +757,10 @@ const ComplaintsPage = () => {
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-500">Refund Type</span>
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${selectedComplaint.booking.adminRefundDecision === 'approved'
-                            ? 'bg-green-50 text-green-700 border-green-100'
-                            : selectedComplaint.booking.adminRefundDecision === 'partial'
-                              ? 'bg-amber-50 text-amber-700 border-amber-100'
-                              : 'bg-red-50 text-red-600 border-red-100'
+                          ? 'bg-green-50 text-green-700 border-green-100'
+                          : selectedComplaint.booking.adminRefundDecision === 'partial'
+                            ? 'bg-amber-50 text-amber-700 border-amber-100'
+                            : 'bg-red-50 text-red-600 border-red-100'
                           }`}>
                           {selectedComplaint.booking.adminRefundDecision === 'approved' ? '✓ Full Refund'
                             : selectedComplaint.booking.adminRefundDecision === 'partial' ? '◑ Partial Refund'
@@ -857,8 +857,8 @@ const ComplaintsPage = () => {
       )}
       {/* Image Preview Gallery Modal */}
       {previewImage && (
-        <div 
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[99999]" 
+        <div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[99999]"
           role="button"
           tabIndex={0}
           onClick={() => setPreviewImage(null)}
