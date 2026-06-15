@@ -513,11 +513,12 @@ const ProviderRegistration = () => {
         });
         const response = await ProviderService.completeProfile(fd);
         const data = response.data;
-        resolve('Profile completed successfully! Your account is pending approval.');
+        resolve('Profile completed successfully!');
 
-        // Grab stored token and log in the user properly
-        const storedToken = getCookie('token');
-        loginUser(storedToken, 'provider', data.provider);
+        // Auto‑logout after registration completion (no alert)
+        setCookie('token', '', -1); // delete auth token
+        // Optionally redirect to login or start page
+        navigate('/login', { replace: true });
       } catch (err) {
         reject(err.response?.data?.message || err.message);
       } finally {
@@ -526,8 +527,8 @@ const ProviderRegistration = () => {
     });
     toast.promise(promise, {
       pending: 'Completing profile...',
-      success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 },
+      success: { render({ data }) { return data; }, autoClose: 2000 },
+      error: { render({ data }) { return data; }, autoClose: 2000 },
     });
   };
 

@@ -1463,10 +1463,10 @@ const getBooking = async (req, res) => {
 
     // Sanitize live location / tracking data if the provider is not active on this specific booking
     if (booking.provider) {
-      const isThisBookingActive = booking.provider.activeBooking && 
-                                  booking.provider.activeBooking.toString() === booking._id.toString();
+      const isThisBookingActive = booking.provider.activeBooking &&
+        booking.provider.activeBooking.toString() === booking._id.toString();
       const isTrackable = (isThisBookingActive && ['accepted'].includes(booking.status)) ||
-                          ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
+        ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
       if (!isTrackable) {
         if (booking.provider.currentLocation) {
           booking.provider.currentLocation = null;
@@ -2514,13 +2514,13 @@ const acceptBooking = async (req, res) => {
 
       const providerBookings = session
         ? await Booking.find({
-            provider: providerId,
-            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-          }).session(session)
+          provider: providerId,
+          status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+        }).session(session)
         : await Booking.find({
-            provider: providerId,
-            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-          });
+          provider: providerId,
+          status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+        });
 
       if (providerBookings.length >= maxBookings) {
         throw new Error(`You have reached the maximum limit of parallel bookings (${maxBookings}). Complete your current jobs first.`);
@@ -2533,59 +2533,59 @@ const acceptBooking = async (req, res) => {
       /* BACKUP COMMENT: Original acceptBooking saved non-atomically, triggering race conditions. Replacing with atomic findOneAndUpdate. */
       const updatedBooking = session
         ? await Booking.findOneAndUpdate(
-            {
-              _id: id,
-              status: { $in: ['pending', 'scheduled'] },
-              $or: [
-                { provider: { $exists: false } },
-                { provider: null }
-              ]
+          {
+            _id: id,
+            status: { $in: ['pending', 'scheduled'] },
+            $or: [
+              { provider: { $exists: false } },
+              { provider: null }
+            ]
+          },
+          {
+            $set: {
+              status: 'accepted',
+              provider: providerId,
+              updatedAt: new Date(),
+              ...(time && { time })
             },
-            {
-              $set: {
+            $push: {
+              statusHistory: {
                 status: 'accepted',
-                provider: providerId,
-                updatedAt: new Date(),
-                ...(time && { time })
-              },
-              $push: {
-                statusHistory: {
-                  status: 'accepted',
-                  timestamp: new Date(),
-                  note: `Booking accepted atomically by provider: ${provider.name}`,
-                  updatedBy: 'provider'
-                }
+                timestamp: new Date(),
+                note: `Booking accepted atomically by provider: ${provider.name}`,
+                updatedBy: 'provider'
               }
-            },
-            { new: true, runValidators: true, session }
-          )
+            }
+          },
+          { new: true, runValidators: true, session }
+        )
         : await Booking.findOneAndUpdate(
-            {
-              _id: id,
-              status: { $in: ['pending', 'scheduled'] },
-              $or: [
-                { provider: { $exists: false } },
-                { provider: null }
-              ]
+          {
+            _id: id,
+            status: { $in: ['pending', 'scheduled'] },
+            $or: [
+              { provider: { $exists: false } },
+              { provider: null }
+            ]
+          },
+          {
+            $set: {
+              status: 'accepted',
+              provider: providerId,
+              updatedAt: new Date(),
+              ...(time && { time })
             },
-            {
-              $set: {
+            $push: {
+              statusHistory: {
                 status: 'accepted',
-                provider: providerId,
-                updatedAt: new Date(),
-                ...(time && { time })
-              },
-              $push: {
-                statusHistory: {
-                  status: 'accepted',
-                  timestamp: new Date(),
-                  note: `Booking accepted atomically by provider: ${provider.name}`,
-                  updatedBy: 'provider'
-                }
+                timestamp: new Date(),
+                note: `Booking accepted atomically by provider: ${provider.name}`,
+                updatedBy: 'provider'
               }
-            },
-            { new: true, runValidators: true }
-          );
+            }
+          },
+          { new: true, runValidators: true }
+        );
 
       if (!updatedBooking) {
         throw new Error('This booking has already been accepted by another service provider or is unavailable.');
@@ -2617,12 +2617,12 @@ const acceptBooking = async (req, res) => {
       // Populate booking details for response
       const populatedBooking = session
         ? await Booking.findById(booking._id)
-            .populate('customer', 'name email phone')
-            .populate('services.service', 'title description price')
-            .session(session)
+          .populate('customer', 'name email phone')
+          .populate('services.service', 'title description price')
+          .session(session)
         : await Booking.findById(booking._id)
-            .populate('customer', 'name email phone')
-            .populate('services.service', 'title description price');
+          .populate('customer', 'name email phone')
+          .populate('services.service', 'title description price');
 
       return {
         populatedBooking,
@@ -2797,19 +2797,19 @@ const startBooking = async (req, res) => {
     // Dual-Layer S2 Precise Geofencing Verification (Level 20)
     /* BACKUP COMMENT: Original was synchronous S2 calculations, blocking the main Event Loop. Offloading to worker threads now. */
     const { latLngToS2CellIdAsync, getNeighborsAsync, getLevelAsync } = require('../utils/s2HelperAsync');
-    const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 20);
+    const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 16);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
 
     let isTargetValid = false;
     if (targetS2Precise && targetS2Precise.length === 16) {
       try {
         const lvl = await getLevelAsync('0x' + targetS2Precise);
-        if (lvl === 20) isTargetValid = true;
+        if (lvl === 16) isTargetValid = true;
       } catch (e) { }
     }
 
     if (!isTargetValid) {
-      targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 20);
+      targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 16);
     }
     const neighborCells = await getNeighborsAsync(targetS2Precise);
     const acceptableCells = [targetS2Precise, ...neighborCells];
@@ -2819,18 +2819,34 @@ const startBooking = async (req, res) => {
       booking.statusHistory.push({
         status: booking.status,
         timestamp: new Date(),
-        note: `S2 Geofencing verification failed. Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
+        note: `Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
         updatedBy: 'system'
       });
       await booking.save();
 
+      console.error('[Geofence][START] Provider/Target mismatch', {
+        bookingId: booking._id,
+        providerLat,
+        providerLng,
+        providerS2Precise,
+        targetLat: targetLoc.latitude,
+        targetLng: targetLoc.longitude,
+        targetS2Precise,
+        distanceMeters: Math.round(distance)
+      });
+
       return res.status(400).json({
         success: false,
-        message: `S2 Geofencing verification failed. You are outside the precise geofence boundary of the service location.`
+        message: `You are outside the precise geofence boundary of the service location.`,
+        providerLocation: { latitude: providerLat, longitude: providerLng },
+        targetLocation: { latitude: targetLoc.latitude, longitude: targetLoc.longitude },
+        providerS2Cell: providerS2Precise,
+        targetS2Cell: targetS2Precise,
+        distanceMeters: Math.round(distance)
       });
     }
 
-    if (distance > 150) {
+    if (distance > 200) {
       await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
 
       // Push warning to history
@@ -3285,16 +3301,32 @@ const completeBooking = async (req, res) => {
       booking.statusHistory.push({
         status: booking.status,
         timestamp: new Date(),
-        note: `S2 Geofencing verification failed. Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
+        note: `Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
         updatedBy: 'system'
       });
       await booking.save({ session });
+
+      console.error('[Geofence][COMPLETE] Provider/Target mismatch', {
+        bookingId: booking._id,
+        providerLat,
+        providerLng,
+        providerS2Precise,
+        targetLat: targetLoc.latitude,
+        targetLng: targetLoc.longitude,
+        targetS2Precise,
+        distanceMeters: Math.round(distance)
+      });
 
       await safeAbort(session);
       safeEnd(session);
       return res.status(400).json({
         success: false,
-        message: `S2 Geofencing verification failed. You are outside the precise geofence boundary of the service location.`
+        message: `You are outside the precise geofence boundary of the service location.`,
+        providerLocation: { latitude: providerLat, longitude: providerLng },
+        targetLocation: { latitude: targetLoc.latitude, longitude: targetLoc.longitude },
+        providerS2Cell: providerS2Precise,
+        targetS2Cell: targetS2Precise,
+        distanceMeters: Math.round(distance)
       });
     }
 
