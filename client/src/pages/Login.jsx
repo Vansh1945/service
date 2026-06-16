@@ -125,7 +125,7 @@ const LoginPage = () => {
       if (role === 'admin' || user?.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
       } else if (role === 'provider') {
-        navigate(user?.approved ? '/provider/dashboard' : '/provider/profile-completion', { replace: true });
+        navigate(user?.approved ? '/provider/dashboard' : '/provider/test', { replace: true });
       } else {
         navigate('/customer/services', { replace: true });
       }
