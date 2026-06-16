@@ -11,14 +11,14 @@ const ProtectedRoute = ({ allowedRoles, requireTest }) => {
 
   // Check if route requires specific roles
   if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // Provider: approval check and qualification test check
   if (requireTest && role === 'provider' && user) {
     // 1. Enforce approval validation
     if (!user.approved) {
-      return <Navigate to="/unauthorized" replace />;
+      return <Navigate to="/login" replace />;
     }
     // 2. Enforce qualification test validation
     if (!user.testPassed) {
