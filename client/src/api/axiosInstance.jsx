@@ -20,7 +20,21 @@ const processQueue = (error, token = null) => {
 
 const getRequestKey = (config) => {
     const { method, url, data, params } = config;
-    return `${method}:${url}:${JSON.stringify(data)}:${JSON.stringify(params)}`;
+    let serializedData = "";
+    if (data instanceof FormData) {
+        const tempObj = {};
+        for (const [key, value] of data.entries()) {
+            if (value instanceof File) {
+                tempObj[key] = `${value.name}:${value.size}`;
+            } else {
+                tempObj[key] = value;
+            }
+        }
+        serializedData = JSON.stringify(tempObj);
+    } else {
+        serializedData = JSON.stringify(data);
+    }
+    return `${method}:${url}:${serializedData}:${JSON.stringify(params)}`;
 };
 
 const setCookie = (name, value, days = 7) => {

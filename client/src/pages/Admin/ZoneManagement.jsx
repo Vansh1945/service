@@ -771,7 +771,8 @@ const ZoneManagement = () => {
       fetchZones();
     } catch (err) {
       console.error("Error toggling zone status:", err);
-      if (showToast) showToast('Failed to toggle status', 'error');
+      const errMsg = err.response?.data?.message || 'Failed to toggle status';
+      if (showToast) showToast(errMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -969,7 +970,7 @@ const ZoneManagement = () => {
       {/* Main Panel Content Area */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4 relative min-h-0 overflow-hidden">
         {/* Left Side Sidebar Panel - Controls & Zone lists */}
-        <div className={`${sidebarOpen ? 'w-full lg:w-96' : 'w-0 lg:w-0'} ${activeTab === 'list' ? 'flex' : 'hidden lg:flex'
+        <div className={`${sidebarOpen ? 'w-full lg:w-96 lg:shrink-0' : 'w-0 lg:w-0'} ${activeTab === 'list' ? 'flex' : 'hidden lg:flex'
           } bg-white border border-gray-200 rounded-2xl flex flex-col min-h-0 overflow-hidden transition-all duration-300 relative z-[2] shadow-sm`}>
           <div className="p-4 border-b border-gray-100 space-y-3 shrink-0 max-h-[70vh] overflow-y-auto">
             <div className="flex justify-between items-center">
@@ -993,7 +994,7 @@ const ZoneManagement = () => {
 
             {/* Form Input Display Area */}
             {showForm && (
-              <form onSubmit={handleSaveZone} className="bg-gray-50 border border-gray-200 p-3 rounded-xl space-y-3 animate-slide-up shadow-inner">
+              <form onSubmit={handleSaveZone} className="bg-gray-50 border border-gray-200 p-3 pb-5 rounded-xl space-y-3 animate-slide-up shadow-inner">
                 <div className="flex justify-between items-center border-b border-gray-200 pb-1.5">
                   <span className="text-[10px] text-primary font-black uppercase tracking-wider">
                     {editingZoneId ? '✏️ Edit Zone Configuration' : '📐 New Zone Boundary'}

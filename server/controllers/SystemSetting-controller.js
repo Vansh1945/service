@@ -314,9 +314,18 @@ const updateBanner = async (req, res) => {
     let finalStartDate = startDate ? new Date(startDate) : new Date();
     let finalEndDate = (noExpiry === 'true' || noExpiry === true) ? null : (endDate ? new Date(endDate) : null);
 
+    const updateData = { title, subtitle, startDate: finalStartDate, endDate: finalEndDate };
+
+    // Handle image upload
+    if (req.files && req.files.image && req.files.image[0]) {
+      updateData.image = req.files.image[0].path; // Cloudinary URL
+    } else if (image) {
+      updateData.image = image;
+    }
+
     const banner = await Banner.findByIdAndUpdate(
       id,
-      { image, title, subtitle, startDate: finalStartDate, endDate: finalEndDate },
+      updateData,
       { new: true, runValidators: true }
     );
     if (!banner) {

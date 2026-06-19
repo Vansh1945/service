@@ -540,10 +540,25 @@ exports.toggleZoneStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Zone not found", data: null });
     }
     if (zone.status === 'inactive') {
-      const overlapQuery = { _id: { $ne: id }, status: 'active', polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: zone.polygon.coordinates } } } };
-      const overlapping = await Zone.findOne(overlapQuery);
-      if (overlapping) {
-        return res.status(400).json({ success: false, message: `Cannot activate: overlaps with existing active zone (${overlapping.name})` });
+      const targetParentZone = zone.parentZone;
+      const targetPolygon = zone.polygon;
+      if (targetPolygon && targetPolygon.coordinates) {
+        const overlappingZones = await Zone.find({
+          status: 'active',
+          _id: { $ne: id },
+          polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } }
+        });
+        for (const overlapping of overlappingZones) {
+          const isParentChildRelationship = 
+            (targetParentZone && overlapping._id.equals(targetParentZone)) ||
+            (overlapping.parentZone && overlapping.parentZone.equals(zone._id));
+
+          if (isParentChildRelationship) {
+            continue;
+          } else {
+            return res.status(400).json({ success: false, message: `Cannot activate: overlaps with existing active zone (${overlapping.name})` });
+          }
+        }
       }
       zone.status = 'active';
     } else {

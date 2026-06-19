@@ -29,6 +29,8 @@ const CategoryBanner = () => {
   const [activeTab, setActiveTab] = useState('banners');
   const [previewBanner, setPreviewBanner] = useState('');
   const [previewCategoryIcon, setPreviewCategoryIcon] = useState('');
+  const [fileInputKey, setFileInputKey] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
 
   const { API, token } = useAuth();
 
@@ -37,12 +39,22 @@ const CategoryBanner = () => {
   }, []);
 
   useEffect(() => {
+    let objectUrl;
     if (bannerImageFile) {
-      const objectUrl = URL.createObjectURL(bannerImageFile);
+      objectUrl = URL.createObjectURL(bannerImageFile);
       setPreviewBanner(objectUrl);
-      return () => URL.revokeObjectURL(objectUrl);
+    } else if (newBanner.image && newBanner.image instanceof File) {
+      objectUrl = URL.createObjectURL(newBanner.image);
+      setPreviewBanner(objectUrl);
+    } else if (!editingBanner) {
+      setPreviewBanner('');
     }
-  }, [bannerImageFile]);
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [bannerImageFile, newBanner.image, editingBanner]);
 
   useEffect(() => {
     if (categoryIconFile) {
@@ -65,10 +77,12 @@ const CategoryBanner = () => {
   };
 
   const addBanner = async () => {
-    if (!newBanner.title) {
+    if (!newBanner.image) {
+      toast.error('Please upload a banner image');
       return;
     }
 
+    setSubmitting(true);
     try {
       const formData = new FormData();
       formData.append('title', newBanner.title);
@@ -84,14 +98,19 @@ const CategoryBanner = () => {
       const data = response.data;
       setBanners([...banners, data.data]);
       setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
+      setPreviewBanner('');
+      setFileInputKey(prev => prev + 1);
       toast.success('Banner added successfully');
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.message || 'Failed to add banner');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const updateBanner = async () => {
+    setSubmitting(true);
     try {
       const formData = new FormData();
       formData.append('title', newBanner.title);
@@ -108,11 +127,15 @@ const CategoryBanner = () => {
       setEditingBanner(null);
       setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
       setBannerImageFile(null);
+      setPreviewBanner('');
+      setFileInputKey(prev => prev + 1);
       fetchData();
       toast.success('Banner updated successfully');
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.message || 'Failed to update banner');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -141,9 +164,11 @@ const CategoryBanner = () => {
 
   const createCategory = async () => {
     if (!newCategory.name) {
+      toast.error('Category name is required');
       return;
     }
 
+    setSubmitting(true);
     try {
       const formData = new FormData();
       formData.append('name', newCategory.name);
@@ -161,10 +186,13 @@ const CategoryBanner = () => {
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.message || 'Failed to create category');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const updateCategory = async () => {
+    setSubmitting(true);
     try {
       const formData = new FormData();
       formData.append('name', newCategory.name);
@@ -183,6 +211,8 @@ const CategoryBanner = () => {
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.message || 'Failed to update category');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -239,6 +269,7 @@ const CategoryBanner = () => {
     setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
     setBannerImageFile(null);
     setPreviewBanner('');
+    setFileInputKey(prev => prev + 1);
   };
 
   const resetCategoryForm = () => {
@@ -274,12 +305,12 @@ const CategoryBanner = () => {
 
         {/* Tab Navigation */}
         <div className="mb-8">
-          <div className="flex flex-wrap gap-2 border-b border-gray-200">
+          <div className="flex border-b border-gray-200">
             {['banners', 'categories'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-3 rounded-t-lg font-medium font-inter transition-all ${activeTab === tab
+                className={`flex-1 text-center text-xs sm:text-sm md:text-base px-2 py-3 rounded-t-lg font-medium font-inter transition-all ${activeTab === tab
                   ? 'bg-primary text-white border-b-2 border-accent'
                   : 'text-secondary hover:text-primary hover:bg-gray-100'
                   }`}
@@ -340,6 +371,7 @@ const CategoryBanner = () => {
                       <FaUpload className="inline mr-2" />
                       {previewBanner ? 'Change Image' : 'Upload Image'}
                       <input
+                        key={fileInputKey}
                         type="file"
                         accept="image/*"
                         onChange={(e) => editingBanner
@@ -356,7 +388,7 @@ const CategoryBanner = () => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2 font-inter">
-                      Title *
+                      Title
                     </label>
                     <input
                       type="text"
@@ -428,9 +460,17 @@ const CategoryBanner = () => {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={editingBanner ? updateBanner : addBanner}
-                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all hover:scale-[1.02]"
+                  disabled={submitting}
+                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingBanner ? <><FaSave /> Update Banner</> : <><FaPlus /> Add Banner</>}
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      {editingBanner ? 'Updating...' : 'Adding...'}
+                    </>
+                  ) : (
+                    editingBanner ? <><FaSave /> Update Banner</> : <><FaPlus /> Add Banner</>
+                  )}
                 </button>
                 {editingBanner && (
                   <button
@@ -594,9 +634,17 @@ const CategoryBanner = () => {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={editingCategory ? updateCategory : createCategory}
-                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all hover:scale-[1.02]"
+                  disabled={submitting}
+                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingCategory ? <><FaSave /> Update Category</> : <><FaPlus /> Create Category</>}
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      {editingCategory ? 'Updating...' : 'Creating...'}
+                    </>
+                  ) : (
+                    editingCategory ? <><FaSave /> Update Category</> : <><FaPlus /> Create Category</>
+                  )}
                 </button>
                 {editingCategory && (
                   <button

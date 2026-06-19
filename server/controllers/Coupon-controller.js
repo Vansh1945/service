@@ -235,7 +235,7 @@ const deleteCoupon = async (req, res) => {
   }
 };
 
-// Hard delete coupon (ONLY if expired)
+// Hard delete coupon
 const hardDeleteCoupon = async (req, res) => {
   try {
     const { id } = req.params;
@@ -249,22 +249,23 @@ const hardDeleteCoupon = async (req, res) => {
     }
 
     const now = new Date();
+    const isExpired = coupon.expiryDate && new Date(coupon.expiryDate) < now;
+    const isDeactivated = coupon.isActive === false;
 
-    // Check expiry
-    if (!coupon.expiryDate || coupon.expiryDate > now) {
+    if (!isDeactivated && !isExpired) {
       return res.status(400).json({
         success: false,
-        message: 'Only expired coupons can be permanently deleted',
+        message: 'Only deactivated or expired coupons can be permanently deleted',
       });
     }
 
-    console.log(`Deleting expired coupon: ${coupon.code}`);
+    console.log(`Deleting coupon: ${coupon.code}`);
 
     await Coupon.findByIdAndDelete(id);
 
     res.json({
       success: true,
-      message: 'Expired coupon permanently deleted',
+      message: 'Coupon permanently deleted',
     });
   } catch (error) {
     res.status(500).json({
