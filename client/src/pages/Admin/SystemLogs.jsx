@@ -3,7 +3,6 @@ import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import { FiTerminal, FiRefreshCw, FiCopy, FiDownload, FiSearch, FiActivity, FiAlertTriangle, FiClock } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import StatsCard from '../../components/ui/StatsCard';
 
 // LevelBadge component to show INFO, WARNING, ERROR beautifully
@@ -128,7 +127,13 @@ const SystemLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const searchParamQuery = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(searchParamQuery);
+
+  useEffect(() => {
+    setSearchTerm(searchParamQuery);
+  }, [searchParamQuery]);
 
   // Custom filter selections
   const [selectedFilter, setSelectedFilter] = useState('ALL');
@@ -368,13 +373,7 @@ const SystemLogs = () => {
             </select>
 
             {/* Search Input */}
-            <AdminSearchBar
-              placeholder="Search logs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onClear={() => setSearchTerm('')}
-              className="w-full sm:w-64 font-semibold text-xs text-secondary"
-            />
+            
           </div>
         </div>
 

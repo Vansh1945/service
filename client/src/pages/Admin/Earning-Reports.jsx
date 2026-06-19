@@ -16,7 +16,7 @@ import * as PaymentService from '../../services/PaymentService';
 import * as BookingService from '../../services/BookingService';
 import { useAuth } from '../../context/auth';
 import { useAdminFilter } from '../../context/AdminFilterContext';
-import AdminFilterBar from '../../components/AdminFilterBar';
+import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 const AdminEarningReports = () => {
   const { API, token, showToast } = useAuth();
@@ -277,52 +277,34 @@ const AdminEarningReports = () => {
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Earning Reports</h1>
               <p className="text-gray-600 mt-1">Generate and download comprehensive financial reports</p>
             </div>
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg border border-gray-300"
-            >
-              <FiRefreshCw className="w-4 h-4" />
-              Reset Filters
-            </button>
           </div>
 
           {/* Filter Section */}
-          <div className="bg-white rounded-xl border p-5 mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FiFilter className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-gray-700">Report Filters</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Group By
-                </label>
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                >
-                  <option value="month">Monthly</option>
-                  <option value="week">Weekly</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Provider ID
-                </label>
-                <input
-                  type="text"
-                  value={providerId}
-                  onChange={(e) => setProviderId(e.target.value)}
-                  placeholder="e.g., PROV001"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-            </div>
-
-          </div>
+          <AdminLocalFilterBar
+            filters={{ groupBy, providerId }}
+            onChange={(key, value) => {
+              if (key === 'groupBy') setGroupBy(value);
+              if (key === 'providerId') setProviderId(value);
+            }}
+            onClear={clearFilters}
+            fields={[
+              {
+                key: 'groupBy',
+                label: 'Group By',
+                type: 'select',
+                options: [
+                  { value: 'month', label: 'Monthly' },
+                  { value: 'week', label: 'Weekly' }
+                ]
+              },
+              {
+                key: 'providerId',
+                label: 'Provider ID',
+                type: 'text',
+                placeholder: 'e.g., PROV001'
+              }
+            ]}
+          />
         </div>
 
         {/* Reports Section */}

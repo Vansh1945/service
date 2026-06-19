@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as ContactService from '../../services/ContactService';
 import Pagination from '../../components/Pagination';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import { formatDate, formatDateTime } from '../../utils/format';
 import StatsCard from '../../components/ui/StatsCard';
-import AdminSearchBar from '../../components/AdminSearchBar';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import {
   MessageSquare,
   Eye,
@@ -207,6 +208,14 @@ const UserContacts = () => {
     dateRange: 'month'
   });
 
+  const [searchParams] = useSearchParams();
+  const searchParamQuery = searchParams.get('search') || '';
+
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, search: searchParamQuery }));
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [searchParamQuery]);
+
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -230,6 +239,7 @@ const UserContacts = () => {
         page: pagination.page,
         limit: pagination.limit,
         status: filters.status || undefined,
+        search: filters.search || undefined,
         dateRange: filters.dateRange || undefined
       };
 
@@ -370,58 +380,30 @@ const UserContacts = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
-            <h3 className="text-lg font-bold text-secondary">Filters</h3>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={clearFilters}
-                className="text-sm text-primary hover:text-teal-700 font-medium"
-              >
-                Clear All
-              </button>
-              <select
-                value={filters.dateRange}
-                onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="year">This Year</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <AdminSearchBar
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                placeholder="Search by name, email, or subject..."
-                onClear={() => handleFilterChange('search', '')}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {statusOptions.map(option => {
-                const Icon = option.icon;
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => handleFilterChange('status', option.value)}
-                    className={`px-4 py-2.5 rounded-lg border transition-colors flex items-center ${filters.status === option.value
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                      }`}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <AdminLocalFilterBar
+          filters={filters}
+          onChange={handleFilterChange}
+          onClear={clearFilters}
+          fields={[
+            {
+              key: 'status',
+              label: 'Status',
+              type: 'select',
+              options: statusOptions
+            },
+            {
+              key: 'dateRange',
+              label: 'Time Period',
+              type: 'select',
+              options: [
+                { value: 'today', label: 'Today' },
+                { value: 'week', label: 'This Week' },
+                { value: 'month', label: 'This Month' },
+                { value: 'year', label: 'This Year' }
+              ]
+            }
+          ]}
+        />
 
         {/* Table Container */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">

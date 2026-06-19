@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Plus,
   Edit,
@@ -53,7 +53,14 @@ const AdminCoupons = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showHardDeleteModal, setShowHardDeleteModal] = useState(false);
   const [couponToDelete, setCouponToDelete] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+  useEffect(() => {
+    setSearchTerm(urlSearch);
+  }, [urlSearch]);
+
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -875,14 +882,6 @@ const AdminCoupons = () => {
         {/* Filters and Search */}
         <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
           <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-            <div className="flex-1">
-              <AdminSearchBar
-                placeholder="Search coupons by code..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onClear={() => setSearchTerm('')}
-              />
-            </div>
             <div className="flex items-center gap-2 md:gap-3">
               <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />
               <select

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import Loader from '../../components/ui-skeletons/Loader';
 import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
@@ -39,11 +39,17 @@ const AdminQuestions = () => {
   const [editingId, setEditingId] = useState(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
   const [filters, setFilters] = useState({
-    search: '',
+    search: urlSearch,
     category: '',
     isActive: ''
   });
+
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, search: urlSearch }));
+  }, [urlSearch]);
 
   // Bulk upload
   const [bulkQuestions, setBulkQuestions] = useState('');
@@ -739,15 +745,7 @@ const AdminQuestions = () => {
               <h2 className="text-xl font-semibold mb-3 text-secondary">Filters</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-secondary mb-1 text-sm font-medium">Search</label>
-                  <AdminSearchBar
-                    value={filters.search}
-                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                    onClear={() => setFilters({ ...filters, search: '' })}
-                    placeholder="Search questions..."
-                  />
-                </div>
+
 
                 <div>
                   <label className="block text-secondary mb-1 text-sm font-medium">Category</label>

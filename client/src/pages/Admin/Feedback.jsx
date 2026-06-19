@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import * as FeedbackService from '../../services/FeedbackService';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Star, User, MessageSquare, Eye, X,
   ChevronLeft, ChevronRight, Calendar, BarChart3,
-  CheckCircle, Slash
+  CheckCircle, Slash, Filter
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import { formatDate } from '../../utils/format';
 const AdminFeedback = () => {
   const { token, API, showToast } = useAuth();
@@ -18,7 +19,14 @@ const AdminFeedback = () => {
   const [stats, setStats] = useState({ total: 0, averageRating: 0, providerFeedback: 0, serviceFeedback: 0 });
   const [loading, setLoading] = useState(true);
 
-  const [filters, setFilters] = useState({ rating: '', type: '', search: '', startDate: '', endDate: '' });
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [filters, setFilters] = useState({ rating: '', type: '', search: urlSearch, startDate: '', endDate: '' });
+
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, search: urlSearch }));
+  }, [urlSearch]);
+
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });
 
   const ratingOptions = [
@@ -144,7 +152,7 @@ const AdminFeedback = () => {
             <MessageSquare className="text-primary" size={30} />
             Feedback Management
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">Monitor and review customer feedback across all bookings</p>
+          <p className="text-gray-555 mt-1 text-sm">Monitor and review customer feedback across all bookings</p>
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
@@ -180,44 +188,35 @@ const AdminFeedback = () => {
         </div>
 
         {/* ── Filters ── */}
-        <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-secondary">Filters</h2>
-            <button onClick={clearFilters} className="text-sm text-primary hover:underline">Clear All</button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search */}
-            <AdminSearchBar
-              placeholder="Search feedback..."
-              value={filters.search}
-              onChange={e => handleFilterChange('search', e.target.value)}
-              onClear={() => handleFilterChange('search', '')}
-            />
-            {/* Rating */}
-            <select
-              value={filters.rating}
-              onChange={e => handleFilterChange('rating', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-secondary"
-            >
-              {ratingOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            {/* Type */}
-            <select
-              value={filters.type}
-              onChange={e => handleFilterChange('type', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-secondary"
-            >
-              {typeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            {/* Date Range */}
-            <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={filters.startDate} onChange={e => handleFilterChange('startDate', e.target.value)}
-                className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" />
-              <input type="date" value={filters.endDate} onChange={e => handleFilterChange('endDate', e.target.value)}
-                className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" />
-            </div>
-          </div>
-        </div>
+        <AdminLocalFilterBar
+          filters={filters}
+          onChange={handleFilterChange}
+          onClear={clearFilters}
+          fields={[
+            {
+              key: 'rating',
+              label: 'Rating',
+              type: 'select',
+              options: ratingOptions
+            },
+            {
+              key: 'type',
+              label: 'Type',
+              type: 'select',
+              options: typeOptions
+            },
+            {
+              key: 'startDate',
+              label: 'Start Date',
+              type: 'date'
+            },
+            {
+              key: 'endDate',
+              label: 'End Date',
+              type: 'date'
+            }
+          ]}
+        />
 
         {/* ── Table ── */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">

@@ -1344,7 +1344,13 @@ exports.getDashboardData = async (req, res) => {
 
         // Default range for analytics (like last 7 days if not provided)
         const end = endDate ? new Date(endDate) : new Date();
+        if (endDate) {
+            end.setHours(23, 59, 59, 999);
+        }
         const start = startDate ? new Date(startDate) : new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (startDate) {
+            start.setHours(0, 0, 0, 0);
+        }
 
         // Date ranges for today's earnings
         const today = new Date();
@@ -1352,12 +1358,15 @@ exports.getDashboardData = async (req, res) => {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
+        const lifetimeBookingMatchStage = { provider: new mongoose.Types.ObjectId(providerId) };
+        const lifetimeEarningMatchStage = { provider: new mongoose.Types.ObjectId(providerId), status: { $ne: 'cancelled' } };
+
         const bookingMatchStage = { provider: new mongoose.Types.ObjectId(providerId) };
         const earningMatchStage = { provider: new mongoose.Types.ObjectId(providerId), status: { $ne: 'cancelled' } };
 
         if (startDate && endDate) {
-            bookingMatchStage.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
-            earningMatchStage.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+            bookingMatchStage.createdAt = { $gte: start, $lte: end };
+            earningMatchStage.createdAt = { $gte: start, $lte: end };
         }
 
         // Parallel aggregation queries for better performance
@@ -1376,7 +1385,7 @@ exports.getDashboardData = async (req, res) => {
         ] = await Promise.all([
             // 1. Booking Stats
             Booking.aggregate([
-                { $match: bookingMatchStage },
+                { $match: lifetimeBookingMatchStage },
                 {
                     $group: {
                         _id: '$status',
@@ -1387,7 +1396,7 @@ exports.getDashboardData = async (req, res) => {
 
             // 2. Combined Earnings (today and lifetime/selected range)
             ProviderEarning.aggregate([
-                { $match: earningMatchStage },
+                { $match: lifetimeEarningMatchStage },
                 {
                     $group: {
                         _id: null,

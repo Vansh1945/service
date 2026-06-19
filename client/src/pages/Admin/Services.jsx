@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Plus,
   Edit,
@@ -39,6 +39,7 @@ import useCategory from '../../hooks/useCategory';
 import { formatCurrency, formatDuration } from '../../utils/format';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 
 
@@ -180,7 +181,15 @@ const AdminServices = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+  useEffect(() => {
+    setSearchTerm(urlSearch);
+  }, [urlSearch]);
+
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showDisableDiscountsModal, setShowDisableDiscountsModal] = useState(false);
@@ -774,44 +783,38 @@ const AdminServices = () => {
         </div>
 
         {/* Filters and Search */}
-        <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
-          <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-            <div className="flex-1">
-              <AdminSearchBar
-                placeholder="Search services..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onClear={() => setSearchTerm('')}
-              />
-            </div>
-            <div className="flex items-center gap-2 md:gap-3">
-              <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                <option value="">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat._id} value={cat._id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        <AdminLocalFilterBar
+          filters={{ category: categoryFilter, status: statusFilter }}
+          onChange={(key, value) => {
+            if (key === 'category') setCategoryFilter(value);
+            if (key === 'status') setStatusFilter(value);
+          }}
+          onClear={() => {
+            setCategoryFilter('');
+            setStatusFilter('all');
+          }}
+          fields={[
+            {
+              key: 'category',
+              label: 'Category',
+              type: 'select',
+              options: [
+                { value: '', label: 'All Categories' },
+                ...categories.map(cat => ({ value: cat._id || cat.value, label: cat.name || cat.label }))
+              ]
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              type: 'select',
+              options: [
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]
+            }
+          ]}
+        />
 
         {/* Services Table */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">

@@ -9,11 +9,20 @@ import {
   DollarSign, XCircle, Lock, Unlock, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import StatsCard from '../../components/ui/StatsCard';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
 import PriceDisplay from '../../components/PriceDisplay';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
+
+const refundOptions = [
+  { value: 'all', label: 'All Cases' },
+  { value: 'pending', label: 'Pending Refund' },
+  { value: 'disputed', label: 'Disputes Only' },
+  { value: 'completed', label: 'Approved Claims' },
+  { value: 'rejected', label: 'Rejected Claims' },
+  { value: 'held', label: 'Escrow Frozen' }
+];
 // ── Status Badges (Standardized Clean Designs) ────────────────────────
 const RefundStatusBadge = ({ status }) => {
   const cfg = {
@@ -890,39 +899,19 @@ const RefundPage = () => {
         </div>
 
         {/* Console Filter deck */}
-        <div className="bg-white p-4 rounded-xl shadow-md border border-gray-100 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-
-          <AdminSearchBar
-            placeholder="Search by Booking ID, Customer or Provider..."
-            value={searchTerm}
-            onChange={e => handleSearchChange(e.target.value)}
-            onClear={() => handleSearchChange('')}
-            className="flex-1 max-w-xl"
-          />
-
-          {/* Filter Deck Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-            {[
-              { id: 'all', label: 'All Cases', icon: Inbox },
-              { id: 'pending', label: 'Pending Refund', icon: Clock },
-              { id: 'disputed', label: 'Disputes Only', icon: AlertCircle },
-              { id: 'completed', label: 'Approved Claims', icon: CheckCircle },
-              { id: 'rejected', label: 'Rejected Claims', icon: XCircle },
-              { id: 'held', label: 'Escrow Frozen', icon: Lock },
-            ].map(f => (
-              <button
-                key={f.id} onClick={() => handleFilterChange(f.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer ${filterStatus === f.id
-                  ? 'bg-secondary text-white shadow-sm'
-                  : 'bg-gray-550 text-gray-550 hover:bg-gray-100 border border-gray-200 hover:text-gray-705'
-                  }`}
-              >
-                <f.icon size={13} className="stroke-[2.5]" /> {f.label}
-              </button>
-            ))}
-          </div>
-
-        </div>
+        <AdminLocalFilterBar
+          filters={{ refundStatus: filterStatus }}
+          onChange={(key, value) => handleFilterChange(value)}
+          onClear={() => handleFilterChange('all')}
+          fields={[
+            {
+              key: 'refundStatus',
+              label: 'Refund Status',
+              type: 'select',
+              options: refundOptions
+            }
+          ]}
+        />
 
         {/* Data Grid table */}
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">

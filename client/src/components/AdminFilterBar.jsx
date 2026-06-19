@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAdminFilter } from '../context/AdminFilterContext';
 import HierarchicalZoneSelector from './HierarchicalZoneSelector';
-import { FiCalendar, FiClock, FiGlobe, FiRefreshCw } from 'react-icons/fi';
+import { FiCalendar, FiClock, FiGlobe, FiRefreshCw, FiFilter, FiX } from 'react-icons/fi';
 
 const AdminFilterBar = ({ onApply }) => {
   const {
@@ -212,6 +212,81 @@ const AdminFilterBar = ({ onApply }) => {
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+export const AdminLocalFilterBar = ({
+  filters,
+  onChange,
+  onClear,
+  fields,
+  showFilters,
+  setShowFilters
+}) => {
+  const isCollapsible = typeof showFilters === 'boolean' && typeof setShowFilters === 'function';
+  const shouldRenderFields = !isCollapsible || showFilters;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-150 p-5 mb-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+        <h3 className="text-sm font-bold text-secondary flex items-center gap-2 font-inter">
+          <FiFilter className="w-4 h-4 text-primary" /> Filter Options
+        </h3>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClear}
+            className="text-xs font-semibold text-gray-555 hover:text-red-500 transition-colors"
+          >
+            Clear All
+          </button>
+          {isCollapsible && (
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="p-1 text-gray-400 hover:text-secondary rounded-lg transition-colors"
+            >
+              {showFilters ? <FiX className="w-4 h-4" /> : <FiFilter className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {shouldRenderFields && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {fields.map((field) => (
+            <div key={field.key}>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                {field.label}
+              </label>
+              {field.type === 'select' ? (
+                <select
+                  value={filters[field.key] ?? ''}
+                  onChange={(e) => onChange(field.key, e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                >
+                  {field.options.map((opt) => {
+                    const val = typeof opt === 'object' ? opt.value : opt;
+                    const label = typeof opt === 'object' ? opt.label : opt;
+                    return (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <input
+                  type={field.type || 'text'}
+                  value={filters[field.key] ?? ''}
+                  onChange={(e) => onChange(field.key, e.target.value)}
+                  placeholder={field.placeholder || ''}
+                  className="w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

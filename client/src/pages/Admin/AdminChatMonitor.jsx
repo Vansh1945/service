@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import axiosInstance from '../../api/axiosInstance';

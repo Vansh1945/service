@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
+import AdminSearchBar from '../components/AdminSearchBar';
 
 import * as SystemService from '../services/SystemService';
 
@@ -286,24 +287,29 @@ const AdminLayout = () => {
         {/* Top navigation bar */}
         <header className="bg-white border-b border-gray-200 shadow-sm z-10">
           <div className="flex items-center justify-between px-4 py-4 lg:px-6">
-            {/* Left side - Mobile menu button */}
-            <div className="flex items-center">
+            {/* Left side - Mobile menu button & Search bar */}
+            <div className="flex items-center flex-1">
               <button
                 type="button"
-                className="p-2 rounded-lg text-secondary lg:hidden hover:bg-primary/10 hover:text-primary transition-colors"
+                className="p-2 rounded-lg text-secondary lg:hidden hover:bg-primary/10 hover:text-primary transition-colors flex-shrink-0"
                 onClick={() => setSidebarOpen(true)}
               >
                 <FiMenu className="w-6 h-6" />
               </button>
 
               {/* Page title on mobile */}
-              <h1 className="ml-3 text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter lg:hidden">
+              <h1 className="ml-3 text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter lg:hidden flex-shrink-0">
                 {menuGroups.flatMap(g => g.items).find(item => item.path === location.pathname)?.name || 'Dashboard'}
               </h1>
+
+              {/* Desktop Global Search Bar */}
+              <div className="hidden lg:block w-full max-w-md ml-6">
+                <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages, bookings, providers..." />
+              </div>
             </div>
 
             {/* Right side - Actions and profile */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 flex-shrink-0">
 
               {/* Notifications */}
               <NotificationBell />
@@ -387,6 +393,10 @@ const AdminLayout = () => {
 
         {/* Main content */}
         <main className="flex-1 overflow-auto bg-gray-50">
+          {/* Mobile Global Search Bar */}
+          <div className="block lg:hidden sticky top-0 px-4 py-3 bg-white border-b border-gray-200 shadow-sm z-20">
+            <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages..." />
+          </div>
           <div className="p-4 lg:p-6 xl:p-8">
             <Outlet />
           </div>

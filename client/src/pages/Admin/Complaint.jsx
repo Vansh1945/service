@@ -16,7 +16,7 @@ import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
 import { useAdminFilter } from '../../context/AdminFilterContext';
-import AdminFilterBar from '../../components/AdminFilterBar';
+import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -914,6 +914,7 @@ const ComplaintsPage = () => {
   const { getComputedDateRange, getMergedQuery, resetGlobalFilters } = useAdminFilter();
   const [searchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('complaintId');
+  const urlSearch = searchParams.get('search') || '';
   const [complaints, setComplaints] = useState([]);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -921,7 +922,7 @@ const ComplaintsPage = () => {
   const [updating, setUpdating] = useState(false);
 
   const [filters, setFilters] = useState({
-    status: '', category: '', search: '', startDate: '',
+    status: '', category: '', search: urlSearch, startDate: '',
     endDate: '', userType: '', providerId: ''
   });
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });
@@ -1021,36 +1022,35 @@ const ComplaintsPage = () => {
     }
   }, [globalDates.startDate, globalDates.endDate]);
 
-  useEffect(() => { fetchComplaints(); }, [filters, pagination.page]);
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, search: urlSearch }));
+    setPagination(p => ({ ...p, page: 1 }));
+  }, [urlSearch]);
 
   useEffect(() => {
-    if (entityId) {
-      fetchComplaintDetails(entityId);
-    }
-  }, [entityId]);
-
-  // ── Derived stats ──
-  const customerCount = complaints.filter(c => c.userType === 'customer').length;
-  const providerCount = complaints.filter(c => c.userType === 'provider').length;
-  const pendingCount = complaints.filter(c => c.status === 'Open' || c.status === 'Reopened').length;
-
-
+    fetchComplaints();
+  }, [filters, pagination.page]);
 
   return (
-    <div className="min-h-screen bg-background font-inter flex flex-col">
-      <AdminFilterBar />
-      <div className="p-4 md:p-6 flex-1 w-full">
-        <div className="max-w-7xl mx-auto space-y-5">
-
+    <div className="p-4 md:p-6 min-h-screen bg-gray-50/50">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* ── Page Header ── */}
-        <div className="animate-fade-in">
-          <h1 className="text-2xl md:text-3xl font-bold text-secondary font-poppins flex items-center gap-3">
-            <span className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-              <FiMessageSquare className="text-primary" size={20} />
-            </span>
-            Complaint Management
-          </h1>
-          <p className="text-sm text-gray-400 mt-1 ml-13 pl-0.5">Monitor and manage all customer &amp; provider complaints</p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-secondary font-poppins flex items-center gap-3">
+              <span className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                <FiMessageSquare className="text-primary" size={20} />
+              </span>
+              Complaint Management
+            </h1>
+            <p className="text-sm text-gray-400 mt-1 ml-13 pl-0.5">Monitor and manage all customer &amp; provider complaints</p>
+          </div>
+          <button
+            onClick={fetchComplaints}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-secondary hover:text-primary border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-all font-semibold text-sm cursor-pointer shrink-0"
+          >
+            <FiRefreshCw size={14} /> Refresh
+          </button>
         </div>
 
         {/* ── Stat Cards ── */}
@@ -1086,66 +1086,31 @@ const ComplaintsPage = () => {
         </div>
 
         {/* ── Filters ── */}
-        <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-5 animate-fade-in">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-secondary flex items-center gap-2">
-              <FiFilter className="text-primary" size={15} /> Filters
-            </h2>
-            <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-red-500 transition-colors font-medium">
-              Clear All
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {/* Search – spans full width */}
-            <div className="sm:col-span-2 lg:col-span-3">
-              <AdminSearchBar
-                placeholder="Search by title, user..."
-                value={filters.search}
-                onChange={e => handleFilterChange('search', e.target.value)}
-                onClear={() => handleFilterChange('search', '')}
-              />
-            </div>
-
-            {/* User Type */}
-            <select
-              value={filters.userType}
-              onChange={e => handleFilterChange('userType', e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white text-sm text-secondary outline-none transition-all"
-            >
-              {userTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-
-            {/* Status */}
-            <select
-              value={filters.status}
-              onChange={e => handleFilterChange('status', e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white text-sm text-secondary outline-none transition-all"
-            >
-              {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-
-            {/* Provider ID */}
-            <div className="relative">
-              <FiUsers className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
-              <input
-                type="text"
-                placeholder="Provider ID..."
-                value={filters.providerId}
-                onChange={e => handleFilterChange('providerId', e.target.value)}
-                className="pl-9 w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white text-sm outline-none transition-all"
-              />
-            </div>
-
-            {/* Refresh – spans full */}
-            <button
-              onClick={fetchComplaints}
-              className="sm:col-span-2 lg:col-span-3 w-full px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
-            >
-              <FiRefreshCw size={14} /> Refresh
-            </button>
-          </div>
-        </div>
+        <AdminLocalFilterBar
+          filters={filters}
+          onChange={handleFilterChange}
+          onClear={clearFilters}
+          fields={[
+            {
+              key: 'userType',
+              label: 'User Type',
+              type: 'select',
+              options: userTypeOptions
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              type: 'select',
+              options: statusOptions
+            },
+            {
+              key: 'providerId',
+              label: 'Provider ID',
+              type: 'text',
+              placeholder: 'Provider ID...'
+            }
+          ]}
+        />
 
         {/* ── Complaints List ── */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden animate-slide-up">
@@ -1271,7 +1236,6 @@ const ComplaintsPage = () => {
         />
       )}
       </div>
-    </div>
   );
 };
 

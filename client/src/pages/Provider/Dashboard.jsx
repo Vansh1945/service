@@ -5,7 +5,7 @@ import {
   FiTrendingUp, FiClock, FiAlertCircle, FiCreditCard,
   FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
 } from 'react-icons/fi';
-import Loader from '../../components/ui-skeletons/Loader';
+import DashboardSkeleton from '../../components/ui-skeleton/DashboardSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
@@ -126,7 +126,7 @@ const Dashboard = () => {
     }
   }, [loading, dashboardData.summary]);
 
-  if (loading) return <Loader />;
+  if (loading) return <DashboardSkeleton type="provider" showRecentBookings={true} />;
 
   const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, todaysEarnings, pendingRequests, recentBookings } = dashboardData;
   const COLORS = ['#0D9488', '#F97316', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -178,7 +178,7 @@ const Dashboard = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2 font-poppins">
-              Welcome back, {profile?.name || 'Vansh'}! <span className="animate-bounce">👋</span>
+              Welcome back, {profile?.name || 'Provider'}! <span className="animate-bounce">👋</span>
             </h1>
             <p className="text-slate-400 text-sm mt-1">Here's what's happening today.</p>
           </div>
@@ -286,15 +286,15 @@ const Dashboard = () => {
           </div>
           <div className="grid grid-cols-3 divide-x divide-slate-100 text-center">
             <div>
-              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.averageRating || 4.3).toFixed(1)}</p>
+              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.averageRating ?? 0).toFixed(1)}</p>
               <p className="text-xs font-medium text-slate-400 mt-1.5">Rating</p>
             </div>
             <div>
-              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.onTimeRate || 42.5).toFixed(1)}%</p>
+              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.onTimeRate ?? 0).toFixed(1)}%</p>
               <p className="text-xs font-medium text-slate-400 mt-1.5">On-Time</p>
             </div>
             <div>
-              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.completionRate || 83.3).toFixed(1)}%</p>
+              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.completionRate ?? 0).toFixed(1)}%</p>
               <p className="text-xs font-medium text-slate-400 mt-1.5">Completion</p>
             </div>
           </div>
@@ -385,7 +385,7 @@ const Dashboard = () => {
             </div>
             <div className="mt-4 pt-4 border-t border-slate-100">
               <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Bookings</p>
-              <p className="text-xl font-bold text-slate-800 mt-0.5">{summary?.totalBookings || 60}</p>
+              <p className="text-xl font-bold text-slate-800 mt-0.5">{summary?.totalBookings ?? 0}</p>
             </div>
           </div>
         </div>

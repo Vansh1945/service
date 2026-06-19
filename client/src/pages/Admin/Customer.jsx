@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import { formatDate } from '../../utils/format';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
     Users,
     UserCheck,
@@ -39,7 +40,14 @@ const AdminCustomersDashboard = () => {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [showViewModal, setShowViewModal] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchParams] = useSearchParams();
+    const urlSearch = searchParams.get('search') || '';
+    const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+    useEffect(() => {
+        setSearchTerm(urlSearch);
+    }, [urlSearch]);
+
     const [statusFilter, setStatusFilter] = useState('all');
     const [bookingFilter, setBookingFilter] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
@@ -158,6 +166,11 @@ const AdminCustomersDashboard = () => {
         setShowViewModal(true);
     };
 
+    const clearFilters = () => {
+        setStatusFilter('all');
+        setBookingFilter('all');
+    };
+
 
     // Format address
     const formatAddress = (address) => {
@@ -272,42 +285,39 @@ const AdminCustomersDashboard = () => {
                 </div>
 
                 {/* Filters and Search */}
-                <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
-                    <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-                        <div className="flex-1">
-                            <AdminSearchBar
-                                placeholder="Search customers by name, email, phone, city, state..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onClear={() => setSearchTerm('')}
-                            />
-                        </div>
-                        <div className="flex items-center gap-2 md:gap-3">
-                            <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                            >
-                                <option value="all">All Status</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="new">New (7 days)</option>
-                            </select>
-                            <select
-                                value={bookingFilter}
-                                onChange={(e) => setBookingFilter(e.target.value)}
-                                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                            >
-                                <option value="all">All Bookings</option>
-                                <option value="withBookings">With Bookings</option>
-                                <option value="withoutBookings">Without Bookings</option>
-                                <option value="firstBookingPending">First Booking Pending</option>
-                                <option value="firstBookingUsed">First Booking Used</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+                <AdminLocalFilterBar
+                    filters={{ status: statusFilter, bookings: bookingFilter }}
+                    onChange={(key, value) => {
+                        if (key === 'status') setStatusFilter(value);
+                        if (key === 'bookings') setBookingFilter(value);
+                    }}
+                    onClear={clearFilters}
+                    fields={[
+                        {
+                            key: 'status',
+                            label: 'Status',
+                            type: 'select',
+                            options: [
+                                { value: 'all', label: 'All Status' },
+                                { value: 'active', label: 'Active' },
+                                { value: 'inactive', label: 'Inactive' },
+                                { value: 'new', label: 'New (7 days)' }
+                            ]
+                        },
+                        {
+                            key: 'bookings',
+                            label: 'Bookings',
+                            type: 'select',
+                            options: [
+                                { value: 'all', label: 'All Bookings' },
+                                { value: 'withBookings', label: 'With Bookings' },
+                                { value: 'withoutBookings', label: 'Without Bookings' },
+                                { value: 'firstBookingPending', label: 'First Booking Pending' },
+                                { value: 'firstBookingUsed', label: 'First Booking Used' }
+                            ]
+                        }
+                    ]}
+                />
 
                 {/* Loading State */}
                 {loading && (

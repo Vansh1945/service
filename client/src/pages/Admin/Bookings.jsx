@@ -88,11 +88,10 @@ import Pagination from '../../components/Pagination';
 import DeleteConfirmModal from '../../components/modals/DeleteConfirmModal';
 import RescheduleModal from '../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../context/AdminFilterContext';
-import AdminFilterBar from '../../components/AdminFilterBar';
+import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import StatsCard from '../../components/ui/StatsCard';
 import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
     Calendar,
     User,
@@ -117,7 +116,8 @@ import {
     ExternalLink,
     Lock,
     Unlock,
-    CheckSquare
+    CheckSquare,
+    Filter
 } from 'lucide-react';
 
 // Static option arrays outside component — never change between renders
@@ -1065,74 +1065,36 @@ const AdminBookingsView = () => {
             <AdminFilterBar onApply={fetchBookings} />
 
             {/* Local Page Filters Section */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-secondary">Local Page Filters</h3>
-                    <div className="flex items-center space-x-2">
-                        <button
-                            onClick={clearFilters}
-                            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
-                        >
-                            Clear Local
-                        </button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Search */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                        <AdminSearchBar
-                            placeholder="Search bookings..."
-                            value={searchQuery}
-                            onChange={(e) => handleFilterChange('search', e.target.value)}
-                            onClear={() => handleFilterChange('search', '')}
-                        />
-                    </div>
-
-                    {/* Status Filter */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select
-                            value={filters.status}
-                            onChange={(e) => handleFilterChange('status', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                            {statusOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Payment Status Filter */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-                        <select
-                            value={filters.paymentStatus}
-                            onChange={(e) => handleFilterChange('paymentStatus', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                            {paymentStatusOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
+            <AdminLocalFilterBar
+                filters={filters}
+                onChange={handleFilterChange}
+                onClear={clearFilters}
+                fields={[
+                    {
+                        key: 'status',
+                        label: 'Status',
+                        type: 'select',
+                        options: statusOptions
+                    },
+                    {
+                        key: 'paymentStatus',
+                        label: 'Payment Status',
+                        type: 'select',
+                        options: paymentStatusOptions
+                    }
+                ]}
+            />
 
                 {/* Active Filters Badges */}
                 <div className="flex flex-wrap items-center gap-2 mt-4">
                     {filters.status && (
-                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
+                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
                             Status: {statusOptions.find(s => s.value === filters.status)?.label}
                             <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('status', '')} />
                         </span>
                     )}
                     {filters.paymentStatus && (
-                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
+                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
                             Payment: {paymentStatusOptions.find(p => p.value === filters.paymentStatus)?.label}
                             <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('paymentStatus', '')} />
                         </span>
@@ -1145,14 +1107,13 @@ const AdminBookingsView = () => {
                             </span>
                             <button
                                 onClick={() => handleFilterChange('search', '')}
-                                className="text-xs text-red-500 hover:underline font-medium"
+                                className="text-xs text-red-505 hover:underline font-medium"
                             >
                                 Clear Filter
                             </button>
                         </div>
                     )}
                 </div>
-            </div>
 
             {/* Bookings Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">

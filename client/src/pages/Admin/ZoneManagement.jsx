@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import StatsCard from '../../components/ui/StatsCard';
 import * as BookingService from '../../services/BookingService';
 import * as ZoneService from '../../services/ZoneService';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -123,7 +123,13 @@ const ZoneManagement = () => {
   const [loading, setLoading] = useState(false);
 
   // Search, Filter and Collapse States
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const searchParamQuery = searchParams.get('search') || '';
+  const [searchQuery, setSearchQuery] = useState(searchParamQuery);
+
+  useEffect(() => {
+    setSearchQuery(searchParamQuery);
+  }, [searchParamQuery]);
   const [filterCity, setFilterCity] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -1198,12 +1204,7 @@ const ZoneManagement = () => {
                   </button>
                 </div>
 
-                <AdminSearchBar
-                  placeholder="Search zones..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onClear={() => setSearchQuery('')}
-                />
+                
                 <div className="grid grid-cols-2 gap-1.5 text-[8.5px] font-bold">
                   <select
                     value={filterCity}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Plus,
   Edit,
@@ -71,7 +71,13 @@ const SurgeManagement = () => {
   const [selectedRule, setSelectedRule] = useState(null);
 
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const searchParamQuery = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(searchParamQuery);
+
+  useEffect(() => {
+    setSearchTerm(searchParamQuery);
+  }, [searchParamQuery]);
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -544,12 +550,7 @@ const SurgeManagement = () => {
         <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
-              <AdminSearchBar
-                placeholder="Search surge rules..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onClear={() => setSearchTerm('')}
-              />
+              
             </div>
             <div className="flex items-center gap-3">
               <Filter className="text-gray-400 w-5 h-5 shrink-0" />

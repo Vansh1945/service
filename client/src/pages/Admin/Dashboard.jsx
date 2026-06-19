@@ -3,7 +3,7 @@ import { useAuth } from '../../context/auth';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import LoadingSpinner from '../../components/ui-skeletons/Loader';
+import DashboardSkeleton from '../../components/ui-skeleton/DashboardSkeleton';
 import {
   FiCalendar, FiDollarSign, FiUsers, FiUser,
   FiTrendingUp, FiPieChart, FiArrowUp, FiClock,
@@ -97,7 +97,7 @@ const AdminDashboard = () => {
   }, [initialLoading, analytics]);
 
   if (initialLoading) {
-    return <LoadingSpinner />;
+    return <DashboardSkeleton type="admin" showActivity={true} />;
   }
 
 

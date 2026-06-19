@@ -11,7 +11,6 @@ import {
 import * as AdminService from '../../services/AdminService';
 import * as NotificationService from '../../services/NotificationService';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import Processing from '../../components/ui-skeletons/Processing';
 import { formatDate } from '../../utils/format';
 
@@ -62,7 +61,13 @@ const AdminProfile = () => {
   // Admin list state
   const [admins, setAdmins] = useState([]);
   const [adminStats, setAdminStats] = useState({ total: 0, page: 1, pages: 1 });
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const searchParamQuery = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(searchParamQuery);
+
+  useEffect(() => {
+    setSearchTerm(searchParamQuery);
+  }, [searchParamQuery]);
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [currentPage, setCurrentPage] = useState(1);
   const [showAdminList, setShowAdminList] = useState(false);
@@ -286,16 +291,7 @@ const AdminProfile = () => {
       <div className="bg-gray-50 rounded-lg p-4 sm:p-6 mt-4">
         {/* Search and Stats */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-          <AdminSearchBar
-            placeholder="Search admins by name or email..."
-            value={searchTerm}
-            onChange={handleSearch}
-            onClear={() => {
-              setSearchTerm('');
-              setCurrentPage(1);
-            }}
-            className="flex-1 max-w-md mb-4 sm:mb-0"
-          />
+          
           <div className="text-sm text-secondary whitespace-nowrap">
             Total Admins: <span className="font-semibold">{adminStats.total}</span>
           </div>

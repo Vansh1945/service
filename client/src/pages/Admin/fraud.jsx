@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   FiShield, FiRefreshCw, FiAlertTriangle, FiSmartphone,
   FiMapPin, FiXCircle, FiMessageSquare, FiUserX,
@@ -70,7 +70,13 @@ const AdminFraud = () => {
   // Filters & Pagination
   const [filterRisk, setFilterRisk] = useState('');
   const [filterDate, setFilterDate] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [searchQuery, setSearchQuery] = useState(urlSearch);
+
+  useEffect(() => {
+    setSearchQuery(urlSearch);
+  }, [urlSearch]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
@@ -339,14 +345,7 @@ const AdminFraud = () => {
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="flex-1 sm:flex-initial">
-              <AdminSearchBar
-                placeholder="Search database..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onClear={() => setSearchQuery('')}
-              />
-            </div>
+
 
             <select
               value={filterRisk}

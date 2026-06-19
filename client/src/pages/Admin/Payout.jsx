@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import Processing from '../../components/ui-skeletons/Processing';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
@@ -15,9 +15,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import {
   DollarSign, Clock, CheckCircle, BarChart3,
   Eye, Check, X, RefreshCw, ChevronLeft, ChevronRight,
-  User, CreditCard, FileText, Calendar
+  User, CreditCard, FileText, Calendar, Filter
 } from 'lucide-react';
 import { formatDate, formatDateTime, formatTime, formatCurrency, formatNumber } from '../../utils/format';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 const AdminPayout = () => {
   const { user, API } = useAuth();
@@ -35,7 +36,14 @@ const AdminPayout = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const [filters, setFilters] = useState({ status: '', startDate: '', endDate: '', providerSearch: '', sortBy: '' });
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [filters, setFilters] = useState({ status: '', startDate: '', endDate: '', providerSearch: urlSearch, sortBy: '' });
+
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, providerSearch: urlSearch }));
+    setPage(1);
+  }, [urlSearch]);
 
   useEffect(() => { fetchWithdrawals(); }, [page, filters]);
 
@@ -137,7 +145,7 @@ const AdminPayout = () => {
                 <DollarSign className="text-primary" size={30} />
                 Payout Management
               </h1>
-              <p className="text-gray-500 mt-1 text-sm">Review and process provider withdrawal requests</p>
+              <p className="text-gray-555 mt-1 text-sm">Review and process provider withdrawal requests</p>
             </div>
             <button
               onClick={fetchWithdrawals}
@@ -181,55 +189,49 @@ const AdminPayout = () => {
         </div>
 
         {/* ── Filters ── */}
-        <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-secondary">Filters</h2>
-            <button onClick={clearFilters} className="text-sm text-primary hover:underline">Clear All</button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <select
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-secondary"
-              value={filters.status}
-              onChange={e => handleFilterChange('status', e.target.value)}
-            >
-              <option value="">All Status</option>
-              {['requested', 'under_review', 'approved', 'processing', 'completed', 'rejected'].map(s => (
-                <option key={s} value={s}>{s.replace('_', ' ')}</option>
-              ))}
-            </select>
-            <DatePicker
-              selected={filters.startDate ? new Date(filters.startDate) : null}
-              onChange={date => handleFilterChange('startDate', date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '')}
-              dateFormat="yyyy-MM-dd"
-              placeholderText="Start Date"
-              className="px-3 py-2 w-full bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-            />
-            <DatePicker
-              selected={filters.endDate ? new Date(filters.endDate) : null}
-              onChange={date => handleFilterChange('endDate', date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '')}
-              dateFormat="yyyy-MM-dd"
-              placeholderText="End Date"
-              className="px-3 py-2 w-full bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-            />
-            <AdminSearchBar
-              placeholder="Search provider…"
-              value={filters.providerSearch}
-              onChange={e => handleFilterChange('providerSearch', e.target.value)}
-              onClear={() => handleFilterChange('providerSearch', '')}
-            />
-            <select
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm text-secondary"
-              value={filters.sortBy}
-              onChange={e => handleFilterChange('sortBy', e.target.value)}
-            >
-              <option value="">Sort: Default</option>
-              <option value="amount_desc">Amount ↓</option>
-              <option value="amount_asc">Amount ↑</option>
-              <option value="createdAt_desc">Newest First</option>
-              <option value="createdAt_asc">Oldest First</option>
-            </select>
-          </div>
-        </div>
+        <AdminLocalFilterBar
+          filters={filters}
+          onChange={handleFilterChange}
+          onClear={clearFilters}
+          fields={[
+            {
+              key: 'status',
+              label: 'Status',
+              type: 'select',
+              options: [
+                { value: '', label: 'All Status' },
+                { value: 'requested', label: 'Requested' },
+                { value: 'under_review', label: 'Under Review' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'processing', label: 'Processing' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'rejected', label: 'Rejected' }
+              ]
+            },
+            {
+              key: 'startDate',
+              label: 'Start Date',
+              type: 'date'
+            },
+            {
+              key: 'endDate',
+              label: 'End Date',
+              type: 'date'
+            },
+            {
+              key: 'sortBy',
+              label: 'Sort By',
+              type: 'select',
+              options: [
+                { value: '', label: 'Sort: Default' },
+                { value: 'amount_desc', label: 'Amount ↓' },
+                { value: 'amount_asc', label: 'Amount ↑' },
+                { value: 'createdAt_desc', label: 'Newest First' },
+                { value: 'createdAt_asc', label: 'Oldest First' }
+              ]
+            }
+          ]}
+        />
 
         {/* ── Table ── */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">

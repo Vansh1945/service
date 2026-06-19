@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import * as TransactionService from '../../services/TransactionService';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import { useAdminFilter } from '../../context/AdminFilterContext';
-import AdminFilterBar from '../../components/AdminFilterBar';
+import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
 import {
@@ -120,7 +120,7 @@ const AdminTransactions = () => {
     const [filters, setFilters] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return {
-            bookingId: params.get('bookingId') || '',
+            bookingId: params.get('bookingId') || params.get('search') || '',
             status: 'all'
         };
     });
@@ -168,7 +168,7 @@ const AdminTransactions = () => {
     // Update filters from URL search param if exists (for in-page navigation)
     useEffect(() => {
         const params = new URLSearchParams(loc.search);
-        const bookingIdParam = params.get('bookingId');
+        const bookingIdParam = params.get('bookingId') || params.get('search');
         if (bookingIdParam !== undefined && bookingIdParam !== filters.bookingId) {
             setFilters(prev => ({ ...prev, bookingId: bookingIdParam || '' }));
             setPagination(prev => ({ ...prev, page: 1 }));
@@ -267,42 +267,25 @@ const AdminTransactions = () => {
             <AdminFilterBar onApply={fetchTransactions} />
 
             {/* Local Page Filters */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-end">
-                <div className="flex-1 w-full">
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Search Booking / Txn ID</label>
-                    <AdminSearchBar
-                      placeholder="Enter Booking ID..."
-                      value={filters.bookingId}
-                      onChange={e => handleFilterChange({ target: { name: 'bookingId', value: e.target.value } })}
-                      onClear={() => handleFilterChange({ target: { name: 'bookingId', value: '' } })}
-                    />
-                </div>
-                <div className="w-full md:w-64">
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Payment Status</label>
-                    <div className="relative">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <select
-                            name="status"
-                            value={filters.status}
-                            onChange={handleFilterChange}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none transition-all"
-                        >
-                            {statusOptions.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                <button
-                    onClick={() => {
-                        setFilters({ bookingId: '', status: 'all' });
-                        setPagination(prev => ({ ...prev, page: 1 }));
-                    }}
-                    className="px-6 py-2.5 text-sm font-semibold text-gray-500 hover:text-primary transition-colors"
-                >
-                    Reset
-                </button>
-            </div>
+            <AdminLocalFilterBar
+                filters={filters}
+                onChange={(key, value) => {
+                    setFilters(prev => ({ ...prev, [key]: value }));
+                    setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+                onClear={() => {
+                    setFilters({ bookingId: '', status: 'all' });
+                    setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+                fields={[
+                    {
+                        key: 'status',
+                        label: 'Payment Status',
+                        type: 'select',
+                        options: statusOptions
+                    }
+                ]}
+            />
 
             {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

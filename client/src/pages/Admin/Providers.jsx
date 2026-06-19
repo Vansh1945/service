@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Users,
   Eye,
@@ -45,7 +45,7 @@ import * as AdminService from '../../services/AdminService';
 import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import { formatDate } from '../../utils/format';
 import { useAdminFilter } from '../../context/AdminFilterContext';
-import AdminFilterBar from '../../components/AdminFilterBar';
+import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import StatsCard from '../../components/ui/StatsCard';
 
 const AdminProvidersPage = () => {
@@ -55,7 +55,13 @@ const AdminProvidersPage = () => {
   const [filteredProviders, setFilteredProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+  useEffect(() => {
+    setSearchTerm(urlSearch);
+  }, [urlSearch]);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalAction, setApprovalAction] = useState('');
   const [approvalRemarks, setApprovalRemarks] = useState('');
@@ -559,20 +565,47 @@ const AdminProvidersPage = () => {
         {/* Reusable Premium Filter Bar */}
         <AdminFilterBar onApply={fetchProviders} />
 
-        {/* Search Bar */}
-        <AdminSearchBar
-          placeholder="Search by name, email, phone, services, area, bank details..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          onClear={() => setSearchTerm('')}
-          className="mb-6"
-        />
+
 
         {/* Filters and Sorting */}
-        <FilterSection
+        <AdminLocalFilterBar
           filters={filters}
-          setFilters={setFilters}
-          clearFilters={clearFilters}
+          onChange={(key, val) => setFilters({ ...filters, [key]: val })}
+          onClear={clearFilters}
+          fields={[
+            { key: 'services', label: 'Services', placeholder: 'e.g., Cleaning', type: 'text' },
+            { key: 'city', label: 'City', placeholder: 'Filter by city', type: 'text' },
+            { key: 'state', label: 'State', placeholder: 'Filter by state', type: 'text' },
+            { key: 'experience', label: 'Min Experience', placeholder: 'Years', type: 'number' },
+            { key: 'age', label: 'Min Age', placeholder: 'Age', type: 'number' },
+            { key: 'testPassed', label: 'Test Status', type: 'select', options: [
+              { value: '', label: 'All' },
+              { value: 'true', label: 'Passed' },
+              { value: 'false', label: 'Not Passed' }
+            ] },
+            { key: 'profileComplete', label: 'Profile Status', type: 'select', options: [
+              { value: '', label: 'All' },
+              { value: 'true', label: 'Complete' },
+              { value: 'false', label: 'Incomplete' }
+            ] },
+            { key: 'bankVerified', label: 'Bank Verification', type: 'select', options: [
+              { value: '', label: 'All' },
+              { value: 'true', label: 'Verified' },
+              { value: 'false', label: 'Not Verified' }
+            ] },
+            { key: 'hasResume', label: 'Has Resume', type: 'select', options: [
+              { value: '', label: 'All' },
+              { value: 'true', label: 'Yes' },
+              { value: 'false', label: 'No' }
+            ] },
+            { key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: [
+              { value: '', label: 'All' },
+              { value: 'true', label: 'Yes' },
+              { value: 'false', label: 'No' }
+            ] },
+            { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
+            { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' }
+          ]}
           showFilters={showFilters}
           setShowFilters={setShowFilters}
         />
@@ -1212,81 +1245,7 @@ const ProviderDetailsModal = ({
   );
 };
 
-// Hoisted Filter Section Component
-const FilterSection = ({
-  filters,
-  setFilters,
-  clearFilters,
-  showFilters,
-  setShowFilters
-}) => (
-  <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-6">
-    <div className="flex justify-between items-center mb-4">
-      <h3 className="text-lg font-semibold text-secondary flex items-center">
-        <Filter className="w-5 h-5 mr-2" />
-        Advanced Filters
-      </h3>
-      <div className="flex gap-2">
-        <button
-          onClick={clearFilters}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium"
-        >
-          Clear All
-        </button>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          {showFilters ? <X className="w-5 h-5" /> : <Filter className="w-5 h-5" />}
-        </button>
-      </div>
-    </div>
 
-    {showFilters && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {[
-          { key: 'services', label: 'Services', placeholder: 'e.g., Cleaning', type: 'text' },
-          { key: 'city', label: 'City', placeholder: 'Filter by city', type: 'text' },
-          { key: 'state', label: 'State', placeholder: 'Filter by state', type: 'text' },
-          { key: 'experience', label: 'Min Experience', placeholder: 'Years', type: 'number' },
-          { key: 'age', label: 'Min Age', placeholder: 'Age', type: 'number' },
-          { key: 'testPassed', label: 'Test Status', type: 'select', options: ['All', 'Passed', 'Not Passed'] },
-          { key: 'profileComplete', label: 'Profile Status', type: 'select', options: ['All', 'Complete', 'Incomplete'] },
-          { key: 'bankVerified', label: 'Bank Verification', type: 'select', options: ['All', 'Verified', 'Not Verified'] },
-          { key: 'hasResume', label: 'Has Resume', type: 'select', options: ['All', 'Yes', 'No'] },
-          { key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: ['All', 'Yes', 'No'] },
-          { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
-          { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' },
-        ].map(({ key, label, placeholder, type, options }) => (
-          <div key={key}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-            {type === 'select' ? (
-              <select
-                value={filters[key]}
-                onChange={(e) => setFilters({ ...filters, [key]: e.target.value.toLowerCase() })}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
-              >
-                {options.map(option => (
-                  <option key={option} value={option === 'All' ? '' : option.toLowerCase()}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type={type}
-                value={filters[key]}
-                onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}
-                placeholder={placeholder}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
-              />
-            )}
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
 
 // Approval Modal Component
 const ApprovalModal = ({

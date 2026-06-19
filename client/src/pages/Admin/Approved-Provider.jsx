@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import Modal from '../../components/ui/Modal';
-import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   Filter,
   Eye,
@@ -29,6 +29,7 @@ import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import { formatDate } from '../../utils/format';
 import StatsCard from '../../components/ui/StatsCard';
+import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 // ─── Pure helpers at module scope ───────────────────────────────────────────
 
@@ -103,7 +104,14 @@ const AdminProviders = () => {
   const [providers, setProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+  useEffect(() => {
+    setSearchTerm(urlSearch);
+  }, [urlSearch]);
+
   const [statusFilter, setStatusFilter] = useState('approved');
   const [serviceFilter, setServiceFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
@@ -172,6 +180,13 @@ const AdminProviders = () => {
     setApprovalRemarks('');
   }, []);
 
+  const clearFilters = useCallback(() => {
+    setStatusFilter('approved');
+    setServiceFilter('all');
+    setRatingFilter('all');
+    setSearchTerm('');
+  }, []);
+
   const handleStatusUpdate = async (action, durationDays = null) => {
     if (!selectedProvider) return;
 
@@ -219,6 +234,52 @@ const AdminProviders = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentProviders = filteredProviders.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredProviders.length / itemsPerPage);
+
+  const filterFields = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: 'approved', label: 'Approved' },
+        { value: 'all', label: 'All Providers' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'rejected', label: 'Rejected' },
+        { value: 'active', label: 'Active' }
+      ]
+    },
+    {
+      key: 'service',
+      label: 'Services',
+      type: 'select',
+      options: [
+        { value: 'all', label: 'All Services' },
+        { value: 'Electrical', label: 'Electrical' },
+        { value: 'AC', label: 'AC' },
+        { value: 'Appliance Repair', label: 'Appliance Repair' },
+        { value: 'Other', label: 'Other' }
+      ]
+    },
+    {
+      key: 'rating',
+      label: 'Ratings',
+      type: 'select',
+      options: [
+        { value: 'all', label: 'All Ratings' },
+        { value: '5', label: '5 Stars' },
+        { value: '4', label: '4+ Stars' },
+        { value: '3', label: '3+ Stars' },
+        { value: '2', label: '2+ Stars' },
+        { value: '1', label: '1+ Stars' }
+      ]
+    }
+  ];
+
+  const handleLocalFilterChange = (key, value) => {
+    if (key === 'status') setStatusFilter(value);
+    if (key === 'service') setServiceFilter(value);
+    if (key === 'rating') setRatingFilter(value);
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-6">
@@ -271,55 +332,12 @@ const AdminProviders = () => {
         </div>
 
         {/* Filters and Search */}
-        <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
-          <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-            <div className="flex-1">
-              <AdminSearchBar
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search providers by name, email or phone..."
-                onClear={() => setSearchTerm('')}
-              />
-            </div>
-            <div className="flex items-center gap-2 md:gap-3">
-              <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                <option value="approved">Approved</option>
-                <option value="all">All Providers</option>
-                <option value="pending">Pending</option>
-                <option value="rejected">Rejected</option>
-                <option value="active">Active</option>
-              </select>
-              <select
-                value={serviceFilter}
-                onChange={(e) => setServiceFilter(e.target.value)}
-                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                <option value="all">All Services</option>
-                <option value="Electrical">Electrical</option>
-                <option value="AC">AC</option>
-                <option value="Appliance Repair">Appliance Repair</option>
-                <option value="Other">Other</option>
-              </select>
-              <select
-                value={ratingFilter}
-                onChange={(e) => setRatingFilter(e.target.value)}
-                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                <option value="all">All Ratings</option>
-                <option value="5">5 Stars</option>
-                <option value="4">4+ Stars</option>
-                <option value="3">3+ Stars</option>
-                <option value="2">2+ Stars</option>
-                <option value="1">1+ Stars</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        <AdminLocalFilterBar
+          filters={{ status: statusFilter, service: serviceFilter, rating: ratingFilter }}
+          onChange={handleLocalFilterChange}
+          onClear={clearFilters}
+          fields={filterFields}
+        />
 
         {/* Providers Table */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
