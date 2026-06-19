@@ -296,7 +296,7 @@ const ProviderTestPage = () => {
     if (currentTest && Object.keys(answers).length > 0) {
       setAutoSaveStatus('saving');
       const timer = setTimeout(() => {
-        localStorage.setItem(`test_answers_${currentTest.testId}`, JSON.stringify(answers));
+        sessionStorage.setItem(`test_answers_${currentTest.testId}`, JSON.stringify(answers));
         setAutoSaveStatus('saved');
       }, 1000);
       return () => clearTimeout(timer);
@@ -305,7 +305,7 @@ const ProviderTestPage = () => {
 
   useEffect(() => {
     if (currentTest) {
-      const savedAnswers = localStorage.getItem(`test_answers_${currentTest.testId}`);
+      const savedAnswers = sessionStorage.getItem(`test_answers_${currentTest.testId}`);
       if (savedAnswers) {
         setAnswers(JSON.parse(savedAnswers));
       }
@@ -424,7 +424,7 @@ const ProviderTestPage = () => {
         setCurrentTest(null);
         setActiveTab('results');
         setShowConfirmSubmit(false);
-        localStorage.removeItem(`test_answers_${currentTest.testId}`);
+        sessionStorage.removeItem(`test_answers_${currentTest.testId}`);
         showToast('Test submitted successfully!', 'success');
         fetchTestHistory();
       } else {
@@ -450,7 +450,7 @@ const ProviderTestPage = () => {
           setTimeLeft(activeTest.timeRemaining);
           setActiveTab('test');
 
-          const savedAnswers = localStorage.getItem(`test_answers_${activeTest.testId}`);
+          const savedAnswers = sessionStorage.getItem(`test_answers_${activeTest.testId}`);
           if (savedAnswers) {
             setAnswers(JSON.parse(savedAnswers));
           }

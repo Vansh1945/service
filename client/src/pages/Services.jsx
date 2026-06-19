@@ -104,7 +104,7 @@ const Services = ({ limit }) => {
   const displayedServices = limit ? services.slice(0, limit) : services;
 
   return (
-    <section className="bg-transparent py-2 px-4 md:px-8 relative group/section">
+    <section className="max-w-7xl mx-auto bg-transparent py-2 px-4 sm:px-6 lg:px-8 relative group/section">
       <div className="w-full relative">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-3">

@@ -70,7 +70,7 @@ const Home = () => {
       <HeroSection />
 
       {/* Trust Badges / Features Section */}
-      <div className="w-full px-4 md:px-8 mt-2 mb-2">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-2 mb-2">
         <div className="flex overflow-x-auto gap-4 pb-2 lg:pb-0 lg:grid lg:grid-cols-5 scrollbar-hide snap-x snap-mandatory">
           {features.map((item, idx) => {
             const IconComponent = item.icon;
@@ -102,7 +102,7 @@ const Home = () => {
 
       {/* Why Choose Us Section */}
       <section className="py-8 bg-white border-t border-gray-100">
-        <div className="max-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left Column - Content */}
             <div className="space-y-6">
@@ -201,7 +201,7 @@ const Home = () => {
 
       {/* Stats Ribbon Strip */}
       <section className="bg-teal-900 text-white py-6">
-        <div className="max-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center divide-x-0 md:divide-x divide-teal-800">
             {[
               {
@@ -248,7 +248,7 @@ const Home = () => {
 
       {/* Need Help Banner */}
       <section className="py-6 bg-teal-50/50">
-        <div className="max-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-teal-50/70 border border-teal-100/50 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full border border-teal-600 flex items-center justify-center shrink-0 bg-teal-100/30">

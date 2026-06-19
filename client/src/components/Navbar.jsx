@@ -82,7 +82,7 @@ const Navbar = () => {
         : 'bg-white border-b border-gray-100'
         }`}
     >
-      <div className="w-full px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 md:h-18 lg:h-20 items-center">
           {/* Left side - Logo & Desktop Nav */}
           <div className="flex items-center flex-1 min-w-0">

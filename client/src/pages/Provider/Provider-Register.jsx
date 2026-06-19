@@ -513,12 +513,19 @@ const ProviderRegistration = () => {
         });
         const response = await ProviderService.completeProfile(fd);
         const data = response.data;
-        resolve('Profile completed successfully!');
 
-        // Auto‑logout after registration completion (no alert)
-        setCookie('token', '', -1); // delete auth token
-        // Optionally redirect to login or start page
-        navigate('/login', { replace: true });
+        // Clear all auth cookies before navigating to prevent stale auth state
+        setCookie('token', '', -1);
+        setCookie('role', '', -1);
+        setCookie('user', '', -1);
+        setCookie('refreshToken', '', -1);
+
+        resolve('Profile completed successfully!\nYour account is pending approval. Please contact support for assistance.');
+
+        // Navigate to login after a short delay so the success toast is visible
+        setTimeout(() => {
+          navigate('/login', { replace: true });
+        }, 1500);
       } catch (err) {
         reject(err.response?.data?.message || err.message);
       } finally {
@@ -527,7 +534,7 @@ const ProviderRegistration = () => {
     });
     toast.promise(promise, {
       pending: 'Completing profile...',
-      success: { render({ data }) { return data; }, autoClose: 2000 },
+      success: { render({ data }) { return data; }, autoClose: 3000 },
       error: { render({ data }) { return data; }, autoClose: 2000 },
     });
   };
@@ -537,13 +544,8 @@ const ProviderRegistration = () => {
     setIsSubmitting(true);
     const promise = new Promise(async (resolve, reject) => {
       try {
-        const res = await fetch(`${API}/provider/register/initiate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to resend OTP');
+        const response = await ProviderService.registerInitiate({ email: formData.email });
+        const data = response.data;
         if (data.profileComplete) {
           setStep(3);
           resolve(data.message || 'Incomplete profile found. Please login to complete.');
@@ -556,7 +558,7 @@ const ProviderRegistration = () => {
           resolve('New OTP sent successfully!');
         }
       } catch (err) {
-        reject(err.message);
+        reject(err.response?.data?.message || err.message);
       } finally {
         setIsSubmitting(false);
       }
@@ -569,7 +571,7 @@ const ProviderRegistration = () => {
   };
 
 
-  // ── Step content ──────────────────────────────────────────────────────────
+  // ── Step content ─────────────────────
 
   const renderStepContent = () => {
     switch (step) {

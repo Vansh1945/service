@@ -284,11 +284,25 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
     }
   }
 
+  // Fetch company name for sender identity (avoids generic "Support Team" spam trigger)
+  let senderName = "Raj Electrical Service";
+  try {
+    const config = await SystemConfig.findOne();
+    if (config?.companyName) senderName = config.companyName;
+  } catch (_) {}
+
   const payload = {
-    sender: { name: "Support Team", email: senderEmail },
+    sender: { name: senderName, email: senderEmail },
     to: [{ email: to }],
+    replyTo: { name: senderName, email: senderEmail },
     subject: finalSubject,
-    htmlContent: finalHtml
+    htmlContent: finalHtml,
+    headers: {
+      "X-Mailer": senderName,
+      "List-Unsubscribe": `<mailto:${senderEmail}?subject=Unsubscribe>`,
+      "Precedence": "bulk"
+    },
+    tags: [templateType || "transactional"]
   };
 
   try {

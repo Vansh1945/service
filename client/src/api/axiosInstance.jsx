@@ -189,6 +189,7 @@ api.interceptors.response.use(
                 const tempFcmToken = localStorage.getItem("tempFcmToken");
                 const fcmToken = localStorage.getItem("fcmToken");
                 localStorage.clear();
+                sessionStorage.clear();
                 if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
                 if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
                 if (fcmToken) localStorage.setItem("fcmToken", fcmToken);
@@ -222,6 +223,7 @@ api.interceptors.response.use(
                 const tempFcmToken = localStorage.getItem("tempFcmToken");
                 const fcmToken = localStorage.getItem("fcmToken");
                 localStorage.clear();
+                sessionStorage.clear();
                 if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
                 if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
                 if (fcmToken) localStorage.setItem("fcmToken", fcmToken);

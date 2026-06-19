@@ -48,12 +48,10 @@ const eraseCookie = (name) => {
     document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
 };
 
-// Clean up any sensitive data left in localStorage/sessionStorage
+// Clean up any sensitive auth data left in localStorage (auth now uses cookies)
 if (typeof window !== "undefined" && window.localStorage) {
-    const keysToRemove = ["token", "refreshToken", "user"];
-    keysToRemove.forEach(key => {
+    ["token", "refreshToken", "user"].forEach(key => {
         if (localStorage.getItem(key)) localStorage.removeItem(key);
-        if (sessionStorage.getItem(key)) sessionStorage.removeItem(key);
     });
 }
 
@@ -249,6 +247,12 @@ export const AuthProvider = ({ children }) => {
                 if (finalRole === 'admin' || userObj.isAdmin) {
                     navigate('/admin/dashboard', { replace: true });
                 } else if (finalRole === 'provider') {
+                    if (!userObj.approved) {
+                        // Unapproved provider should not access provider routes
+                        showToast('Your account is pending approval. Please contact support for assistance.', 'info');
+                        logoutUser();
+                        return;
+                    }
                     if (!userObj.testPassed) {
                         navigate('/provider/test');
                     } else {
@@ -277,15 +281,14 @@ export const AuthProvider = ({ children }) => {
         eraseCookie("role");
         eraseCookie("user");
 
-        // Selective clear to preserve device identity and PWA keys
+        // Selective localStorage clear — preserve device identity and PWA keys
         const preserved = {};
         const keysToPreserve = [
             "persistentDeviceId",
             "tempFcmToken",
             "fcmToken",
             "installMode",
-            "installRole",
-            "system_settings_cache"
+            "installRole"
         ];
 
         for (let i = 0; i < localStorage.length; i++) {
@@ -296,6 +299,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         localStorage.clear();
+        sessionStorage.clear();
 
         // Restore preserved keys
         Object.entries(preserved).forEach(([k, v]) => {

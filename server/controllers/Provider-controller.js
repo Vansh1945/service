@@ -622,7 +622,7 @@ exports.completeProfile = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Profile completed successfully. Your account is pending approval.',
+            message: 'Profile completed successfully. Your account is pending approval. Please contact support for assistance.',
             provider: {
                 id: provider._id,
                 name: provider.name,

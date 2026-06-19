@@ -226,6 +226,11 @@
     scrollbar-width: none;
     /* Firefox */
   }
+
+  /* Global Container Override for visual balance and wider content grid */
+  .max-w-7xl {
+    max-width: 1440px !important;
+  }
 }
 
 /* Accessibility: Respect user motion preferences */

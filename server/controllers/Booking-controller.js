@@ -2824,17 +2824,6 @@ const startBooking = async (req, res) => {
       });
       await booking.save();
 
-      console.error('[Geofence][START] Provider/Target mismatch', {
-        bookingId: booking._id,
-        providerLat,
-        providerLng,
-        providerS2Precise,
-        targetLat: targetLoc.latitude,
-        targetLng: targetLoc.longitude,
-        targetS2Precise,
-        distanceMeters: Math.round(distance)
-      });
-
       return res.status(400).json({
         success: false,
         message: `You are outside the precise geofence boundary of the service location.`,
@@ -2846,7 +2835,7 @@ const startBooking = async (req, res) => {
       });
     }
 
-    if (distance > 200) {
+    if (distance > 50) { // Allow start/completion within ~50 meters (≈150 feet)
       await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
 
       // Push warning to history
@@ -3306,27 +3295,11 @@ const completeBooking = async (req, res) => {
       });
       await booking.save({ session });
 
-      console.error('[Geofence][COMPLETE] Provider/Target mismatch', {
-        bookingId: booking._id,
-        providerLat,
-        providerLng,
-        providerS2Precise,
-        targetLat: targetLoc.latitude,
-        targetLng: targetLoc.longitude,
-        targetS2Precise,
-        distanceMeters: Math.round(distance)
-      });
-
       await safeAbort(session);
       safeEnd(session);
       return res.status(400).json({
         success: false,
-        message: `You are outside the precise geofence boundary of the service location.`,
-        providerLocation: { latitude: providerLat, longitude: providerLng },
-        targetLocation: { latitude: targetLoc.latitude, longitude: targetLoc.longitude },
-        providerS2Cell: providerS2Precise,
-        targetS2Cell: targetS2Precise,
-        distanceMeters: Math.round(distance)
+        message: `You are outside the precise geofence boundary of the service location.`
       });
     }
 
