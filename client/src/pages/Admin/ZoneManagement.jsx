@@ -6,9 +6,10 @@ import * as AdminService from '../../services/AdminService';
 import StatsCard from '../../components/ui/StatsCard';
 import * as BookingService from '../../services/BookingService';
 import * as ZoneService from '../../services/ZoneService';
-import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   MapPin, Users, Zap, Trash2, Edit, X,
   Plus, RefreshCw, AlertTriangle, Layers,
@@ -33,6 +34,21 @@ const legacyZonePopupEnabled = false;
 // Point-in-Polygon (Ray-casting) spatial containment check
 const isPointInPolygon = (lat, lng, polygon) => {
   if (!polygon || polygon.length < 3) return false;
+
+  // Bounding box pre-filter optimization
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (let i = 0; i < polygon.length; i++) {
+    const pLat = polygon[i][0];
+    const pLng = polygon[i][1];
+    if (pLat < minLat) minLat = pLat;
+    if (pLat > maxLat) maxLat = pLat;
+    if (pLng < minLng) minLng = pLng;
+    if (pLng > maxLng) maxLng = pLng;
+  }
+  if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) {
+    return false;
+  }
+
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const latI = polygon[i][0];
@@ -81,6 +97,52 @@ const generateApproximatedPolygon = (lat, lng, radiusKm = 2) => {
   return points;
 };
 
+// Simplify polygon using Ramer-Douglas-Peucker algorithm to prevent Leaflet lag
+const simplifyPolygon = (points, tolerance = 0.0001) => {
+  if (points.length <= 4) return points;
+
+  const getSqSegDist = (p, p1, p2) => {
+    let x = p1[0], y = p1[1];
+    let dx = p2[0] - x;
+    let dy = p2[1] - y;
+    if (dx !== 0 || dy !== 0) {
+      let t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) {
+        x = p2[0];
+        y = p2[1];
+      } else if (t > 0) {
+        x += dx * t;
+      }
+    }
+    dx = p[0] - x;
+    dy = p[1] - y;
+    return dx * dx + dy * dy;
+  };
+
+  const simplifyDPStep = (pts, first, last, sqTolerance, simplified) => {
+    let maxSqDist = sqTolerance;
+    let index = -1;
+    for (let i = first + 1; i < last; i++) {
+      const sqDist = getSqSegDist(pts[i], pts[first], pts[last]);
+      if (sqDist > maxSqDist) {
+        index = i;
+        maxSqDist = sqDist;
+      }
+    }
+    if (maxSqDist > sqTolerance) {
+      if (index - first > 1) simplifyDPStep(pts, first, index, sqTolerance, simplified);
+      simplified.push(pts[index]);
+      if (last - index > 1) simplifyDPStep(pts, index, last, sqTolerance, simplified);
+    }
+  };
+
+  const sqTolerance = tolerance * tolerance;
+  const simplified = [points[0]];
+  simplifyDPStep(points, 0, points.length - 1, sqTolerance, simplified);
+  simplified.push(points[points.length - 1]);
+  return simplified;
+};
+
 // Helper component to smoothly center Leaflet map
 const MapCenterer = ({ center, zoom }) => {
   const map = useMap();
@@ -102,15 +164,40 @@ const MapDrawingEvents = ({ isDrawing, onMapClick }) => {
   });
   return null;
 };
-
-const mockProviders = [
-  { _id: 'p-1', name: 'Amrinder Singh', serviceCategory: 'Electrician', isOnline: true, status: 'available', coords: [31.330, 75.580] },
-  { _id: 'p-2', name: 'Rajesh Kumar', serviceCategory: 'Plumber', isOnline: true, status: 'busy', coords: [31.325, 75.572] },
-  { _id: 'p-3', name: 'Gurbaksh Singh', serviceCategory: 'HVAC Specialist', isOnline: true, status: 'overloaded', coords: [31.335, 75.590] },
-  { _id: 'p-4', name: 'Priya Sharma', serviceCategory: 'Cleaning', isOnline: true, status: 'available', coords: [31.135, 75.480] },
-  { _id: 'p-5', name: 'Amit Verma', serviceCategory: 'Appliance Repair', isOnline: true, status: 'busy', coords: [31.220, 75.775] }
-];
 const defaultZones = [];
+
+// Color mapping based on Priority and Status
+const getZoneStyle = (status, priority) => {
+  if (status === 'inactive') {
+    return { color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 };
+  }
+  if (priority === 'high') {
+    return { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2.5 };
+  }
+  if (priority === 'medium') {
+    return { color: '#eab308', fillColor: '#eab308', fillOpacity: 0.2, weight: 2 };
+  }
+  return { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.2, weight: 2 };
+};
+
+const getProviderMarkerIcon = (status) => {
+  let color = '#22c55e';
+  if (status === 'busy') color = '#eab308';
+  else if (status === 'overloaded') color = '#ef4444';
+
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `
+      <div class="relative flex items-center justify-center">
+        <div class="w-6 h-6 rounded-full bg-white border-2 flex items-center justify-center shadow-md" style="border-color: ${color};">
+          <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color};"></span>
+        </div>
+      </div>
+    `,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
+  });
+};
 
 const ZoneManagement = () => {
   const { showToast } = useAuth();
@@ -147,10 +234,10 @@ const ZoneManagement = () => {
   const [formData, setFormData] = useState({
     name: '',
     city: 'Jalandhar',
-    priority: 'medium',
+    priority: 'low',
     status: 'active',
-    maxProviders: 20,
-    serviceRadius: 5,
+    maxProviders: 0,
+    serviceRadius: 20,
     zoneLevel: 'city',
     parentZone: '',
     adjacentZones: []
@@ -233,7 +320,7 @@ const ZoneManagement = () => {
       const [provRes, bookRes, custRes] = await Promise.all([
         AdminService.getAllProviders().catch(() => null),
         BookingService.getAllBookings({ limit: 1000 }).catch(() => null),
-        AdminService.getAllCustomers().catch(() => null)
+        AdminService.getAllCustomers({ limit: 1000 }).catch(() => null)
       ]);
 
       if (provRes && provRes.data) {
@@ -348,17 +435,6 @@ const ZoneManagement = () => {
     };
   }, [providers, bookings, customers]);
 
-  const getZoneMemberPreview = useCallback((coordinates) => {
-    const providersPreview = providers
-      .filter(provider => provider.coords && isPointInPolygon(provider.coords[0], provider.coords[1], coordinates))
-      .slice(0, 2);
-
-    const customersPreview = customers
-      .filter(customer => isPointInPolygon(customer.lat, customer.lng, coordinates))
-      .slice(0, 2);
-
-    return { providersPreview, customersPreview };
-  }, [providers, customers]);
 
   const renderZoneMapPopup = (zone, zoneStats) => {
     let dotColor = 'bg-emerald-500';
@@ -466,38 +542,7 @@ const ZoneManagement = () => {
     );
   };
 
-  // Color mapping based on Priority and Status
-  const getZoneStyle = (status, priority) => {
-    if (status === 'inactive') {
-      return { color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 };
-    }
-    if (priority === 'high') {
-      return { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2.5 };
-    }
-    if (priority === 'medium') {
-      return { color: '#eab308', fillColor: '#eab308', fillOpacity: 0.2, weight: 2 };
-    }
-    return { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.2, weight: 2 };
-  };
 
-  const getProviderMarkerIcon = (status) => {
-    let color = '#22c55e';
-    if (status === 'busy') color = '#eab308';
-    else if (status === 'overloaded') color = '#ef4444';
-
-    return L.divIcon({
-      className: 'bg-transparent',
-      html: `
-        <div class="relative flex items-center justify-center">
-          <div class="w-6 h-6 rounded-full bg-white border-2 flex items-center justify-center shadow-md" style="border-color: ${color};">
-            <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color};"></span>
-          </div>
-        </div>
-      `,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-  };
 
   // Click handler to add points to polygon drawing
   const handleMapClick = (latlng) => {
@@ -527,10 +572,10 @@ const ZoneManagement = () => {
     setFormData({
       name: '',
       city: 'Jalandhar',
-      priority: 'medium',
+      priority: 'low',
       status: 'active',
-      maxProviders: 20,
-      serviceRadius: 5,
+      maxProviders: 0,
+      serviceRadius: 20,
       zoneLevel: 'city',
       parentZone: '',
       adjacentZones: []
@@ -551,84 +596,67 @@ const ZoneManagement = () => {
     const zoneId = (zone._id || zone.id).toString();
     let newZones = [...currentSelected];
 
-    if (currentSelected.includes(zoneId)) {
-      // DESELECT logic
-      newZones = newZones.filter(id => id.toString() !== zoneId);
+    // Helper to get all descendant IDs for a given zone
+    const getDescendantIds = (parentId, levels) => {
+      let ids = [];
+      let currentParentIds = [parentId];
+      for (const level of levels) {
+        const children = zones.filter(z => z.zoneLevel === level && currentParentIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
+        const childIds = children.map(c => (c._id || c.id).toString());
+        ids = [...ids, ...childIds];
+        currentParentIds = childIds;
+      }
+      return ids;
+    };
 
-      if (zone.zoneLevel === 'state') {
-        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const cityIds = childCities.map(c => (c._id || c.id).toString());
-        newZones = newZones.filter(id => !cityIds.includes(id));
-
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
-        const microIds = childMicros.map(m => (m._id || m.id).toString());
-        newZones = newZones.filter(id => !microIds.includes(id));
-      } else if (zone.zoneLevel === 'city') {
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const microIds = childMicros.map(m => (m._id || m.id).toString());
-        newZones = newZones.filter(id => !microIds.includes(id));
-
-        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentStateId) {
-          newZones = newZones.filter(id => id.toString() !== parentStateId);
-        }
-      } else if (zone.zoneLevel === 'micro') {
-        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentCityId) {
-          newZones = newZones.filter(id => id.toString() !== parentCityId);
-          const parentCity = zones.find(z => (z._id || z.id).toString() === parentCityId);
-          const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
-          if (parentStateId) {
-            newZones = newZones.filter(id => id.toString() !== parentStateId);
-          }
+    // Helper to get ancestor chain IDs
+    const getAncestorIds = (z) => {
+      const ancestors = [];
+      let current = z;
+      while (current) {
+        const parentId = (current.parentZone?._id || current.parentZone || '').toString();
+        if (parentId) {
+          ancestors.push(parentId);
+          current = zones.find(zn => (zn._id || zn.id).toString() === parentId);
+        } else {
+          current = null;
         }
       }
+      return ancestors;
+    };
+
+    const levelDescendants = {
+      'city': ['service', 'local', 'micro'],
+      'service': ['local', 'micro'],
+      'local': ['micro'],
+      'micro': []
+    };
+
+    if (currentSelected.includes(zoneId)) {
+      // DESELECT: remove self + all descendants + deselect ancestors
+      newZones = newZones.filter(id => id.toString() !== zoneId);
+      const descendantIds = getDescendantIds(zoneId, levelDescendants[zone.zoneLevel] || []);
+      newZones = newZones.filter(id => !descendantIds.includes(id));
+      const ancestorIds = getAncestorIds(zone);
+      newZones = newZones.filter(id => !ancestorIds.includes(id));
     } else {
-      // SELECT logic
+      // SELECT: add self + all descendants
       newZones.push(zoneId);
+      const descendantIds = getDescendantIds(zoneId, levelDescendants[zone.zoneLevel] || []);
+      newZones = Array.from(new Set([...newZones, ...descendantIds]));
 
-      if (zone.zoneLevel === 'state') {
-        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const cityIds = childCities.map(c => (c._id || c.id).toString());
-
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
-        const microIds = childMicros.map(m => (m._id || m.id).toString());
-
-        newZones = Array.from(new Set([...newZones, ...cityIds, ...microIds]));
-      } else if (zone.zoneLevel === 'city') {
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const microIds = childMicros.map(m => (m._id || m.id).toString());
-        newZones = Array.from(new Set([...newZones, ...microIds]));
-
-        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentStateId) {
-          const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
-          const allSiblingCityIds = siblingCities.map(c => (c._id || c.id).toString());
-          const areAllSelected = allSiblingCityIds.every(id => newZones.includes(id));
-          if (areAllSelected) {
-            newZones.push(parentStateId);
-          }
-        }
-      } else if (zone.zoneLevel === 'micro') {
-        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentCityId) {
-          const siblingMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === parentCityId);
-          const allSiblingMicroIds = siblingMicros.map(m => (m._id || m.id).toString());
-          const areAllSelected = allSiblingMicroIds.every(id => newZones.includes(id));
-          if (areAllSelected) {
-            newZones.push(parentCityId);
-
-            const parentCity = zones.find(z => (z._id || z.id).toString() === parentCityId);
-            const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
-            if (parentStateId) {
-              const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
-              const allSiblingCityIds = siblingCities.map(c => (c._id || c.id).toString());
-              const areAllSelected = allSiblingCityIds.every(id => newZones.includes(id));
-              if (areAllSelected) {
-                newZones.push(parentStateId);
-              }
-            }
-          }
+      // Auto-select parent if all siblings are selected
+      let current = zone;
+      while (current) {
+        const parentId = (current.parentZone?._id || current.parentZone || '').toString();
+        if (!parentId) break;
+        const siblings = zones.filter(z => z.zoneLevel === current.zoneLevel && (z.parentZone?._id || z.parentZone || '').toString() === parentId);
+        const allSiblingIds = siblings.map(s => (s._id || s.id).toString());
+        if (allSiblingIds.every(id => newZones.includes(id))) {
+          newZones = Array.from(new Set([...newZones, parentId]));
+          current = zones.find(z => (z._id || z.id).toString() === parentId);
+        } else {
+          break;
         }
       }
     }
@@ -647,7 +675,7 @@ const ZoneManagement = () => {
     }
     setAutoGenerating(true);
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(geoQuery)}&format=json&polygon_geojson=1&countrycodes=in`);
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(geoQuery)}&format=json&polygon_geojson=1&countrycodes=in&limit=10`);
       const data = await response.json();
 
       if (!data || data.length === 0) {
@@ -655,11 +683,20 @@ const ZoneManagement = () => {
         return;
       }
 
-      const result = data[0];
+      // First, try to find any result that has a Polygon or MultiPolygon boundary
+      let result = data.find(item => item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon'));
+      let foundExactPolygon = true;
+
+      // Fallback to the first result if no polygon is found
+      if (!result) {
+        result = data[0];
+        foundExactPolygon = false;
+      }
+
       const lat = parseFloat(result.lat);
       const lng = parseFloat(result.lon);
 
-      if (result.geojson && (result.geojson.type === 'Polygon' || result.geojson.type === 'MultiPolygon')) {
+      if (foundExactPolygon && result.geojson) {
         let polygonCoords = [];
         if (result.geojson.type === 'Polygon') {
           polygonCoords = result.geojson.coordinates[0];
@@ -667,9 +704,14 @@ const ZoneManagement = () => {
           polygonCoords = result.geojson.coordinates[0][0];
         }
 
-        const leafletCoords = polygonCoords.map(coord => [coord[1], coord[0]]);
+        let leafletCoords = polygonCoords.map(coord => [coord[1], coord[0]]);
         if (leafletCoords.length > 1 && leafletCoords[0][0] === leafletCoords[leafletCoords.length - 1][0] && leafletCoords[0][1] === leafletCoords[leafletCoords.length - 1][1]) {
           leafletCoords.pop();
+        }
+
+        // Simplify complex boundaries (> 100 points) to avoid lag/freeze in map interaction
+        if (leafletCoords.length > 100) {
+          leafletCoords = simplifyPolygon(leafletCoords, 0.00015);
         }
 
         setDrawPoints(leafletCoords);
@@ -685,14 +727,73 @@ const ZoneManagement = () => {
         if (showToast) showToast(`Generated approximated polygon using ${radius} km radius around ${result.display_name.split(',')[0]}`, 'success');
       }
     } catch (err) {
-      console.error("Error geocoding location:", err);
-      if (showToast) showToast('Failed to auto-generate boundary. Please draw manually.', 'error');
+      if (showToast) showToast('Failed to auto-generate boundary.', 'error');
     } finally {
       setAutoGenerating(false);
     }
   }, [geoQuery, formData.serviceRadius, showToast]);
 
-  // Save new or updated zone
+  const handleZoneNameBlur = useCallback(async () => {
+    if (!formData.name || !formData.name.trim()) return;
+    if (drawPoints.length > 0) return;
+
+    setAutoGenerating(true);
+    try {
+      const query = formData.name.trim() + (formData.city ? `, ${formData.city}` : '');
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&countrycodes=in&limit=10`);
+      const data = await response.json();
+
+      if (!data || data.length === 0) {
+        return;
+      }
+
+      let result = data.find(item => item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon'));
+      let foundExactPolygon = true;
+
+      if (!result) {
+        result = data[0];
+        foundExactPolygon = false;
+      }
+
+      const lat = parseFloat(result.lat);
+      const lng = parseFloat(result.lon);
+
+      if (foundExactPolygon && result.geojson) {
+        let polygonCoords = [];
+        if (result.geojson.type === 'Polygon') {
+          polygonCoords = result.geojson.coordinates[0];
+        } else {
+          polygonCoords = result.geojson.coordinates[0][0];
+        }
+
+        let leafletCoords = polygonCoords.map(coord => [coord[1], coord[0]]);
+        if (leafletCoords.length > 1 && leafletCoords[0][0] === leafletCoords[leafletCoords.length - 1][0] && leafletCoords[0][1] === leafletCoords[leafletCoords.length - 1][1]) {
+          leafletCoords.pop();
+        }
+
+        if (leafletCoords.length > 100) {
+          leafletCoords = simplifyPolygon(leafletCoords, 0.00015);
+        }
+
+        setDrawPoints(leafletCoords);
+        setMapCenter([lat, lng]);
+        setMapZoom(14);
+        if (showToast) showToast(`Suggested boundary generated for "${formData.name}"!`, 'success');
+      } else {
+        const radius = Number(formData.serviceRadius) || 5;
+        const generatedCoords = generateApproximatedPolygon(lat, lng, radius);
+        setDrawPoints(generatedCoords);
+        setMapCenter([lat, lng]);
+        setMapZoom(13);
+        if (showToast) showToast(`Suggested boundary approximation created for "${formData.name}"!`, 'success');
+      }
+    } catch (err) {
+      console.error("Error auto-generating boundary from zone name blur:", err);
+    } finally {
+      setAutoGenerating(false);
+    }
+  }, [formData.name, formData.city, formData.serviceRadius, drawPoints.length, showToast]);
+
   const handleSaveZone = useCallback(async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -704,8 +805,23 @@ const ZoneManagement = () => {
       return;
     }
 
-    const geoCoords = drawPoints.map(p => [p[1], p[0]]);
-    geoCoords.push([drawPoints[0][1], drawPoints[0][0]]); // Close the loop
+    const trimmedCoords = ZoneService.computeNonOverlappingPolygon(
+      drawPoints,
+      zones,
+      editingZoneId,
+      formData.zoneLevel !== 'city' && formData.parentZone ? formData.parentZone : null
+    );
+
+    if (trimmedCoords === null) {
+      if (showToast) showToast('This zone is completely covered by existing active zones.', 'error');
+      return;
+    }
+
+    // Render trimmed polygon immediately on the map interface
+    setDrawPoints(trimmedCoords);
+
+    const geoCoords = trimmedCoords.map(p => [p[1], p[0]]);
+    geoCoords.push([trimmedCoords[0][1], trimmedCoords[0][0]]); // Close the loop
 
     const payload = {
       name: formData.name,
@@ -719,7 +835,7 @@ const ZoneManagement = () => {
       maxProviders: Number(formData.maxProviders),
       serviceRadius: Number(formData.serviceRadius),
       zoneLevel: formData.zoneLevel,
-      parentZone: formData.zoneLevel !== 'state' && formData.parentZone ? formData.parentZone : null,
+      parentZone: formData.zoneLevel !== 'city' && formData.parentZone ? formData.parentZone : null,
       adjacentZones: formData.adjacentZones || []
     };
 
@@ -738,13 +854,13 @@ const ZoneManagement = () => {
       setEditingZoneId(null);
       fetchZones();
     } catch (err) {
-      console.error("Error saving zone:", err);
+      console.error("Error saving zone details:", err.response?.data || err);
       const errMsg = err.response?.data?.message || 'Failed to save service zone';
       if (showToast) showToast(errMsg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [formData, drawPoints, editingZoneId, showToast, fetchZones]);
+  }, [formData, drawPoints, editingZoneId, zones, showToast, fetchZones]);
 
   // Trigger Zone Editing
   const handleEditZone = useCallback((zone) => {
@@ -769,7 +885,7 @@ const ZoneManagement = () => {
   }, []);
 
   // Quick enable/disable status toggle from card
-  const handleToggleStatus = useCallback(async (id, currentStatus) => {
+  const handleToggleStatus = useCallback(async (id) => {
     try {
       setLoading(true);
       await ZoneService.toggleZoneStatus(id);
@@ -790,12 +906,12 @@ const ZoneManagement = () => {
     try {
       setLoading(true);
       await ZoneService.deleteZone(deleteConfirmId);
-      if (showToast) showToast('Service zone deactivated successfully.', 'success');
+      if (showToast) showToast('Service zone deleted successfully.', 'success');
       setDeleteConfirmId(null);
       fetchZones();
     } catch (err) {
       console.error("Error deleting zone:", err);
-      if (showToast) showToast('Failed to deactivate zone', 'error');
+      if (showToast) showToast('Failed to delete zone', 'error');
     } finally {
       setLoading(false);
     }
@@ -809,52 +925,53 @@ const ZoneManagement = () => {
   }, []);
 
   const parentOptions = useMemo(() => {
-    if (formData.zoneLevel === 'state') return [];
-    if (formData.zoneLevel === 'city') {
-      return zones.filter(z => z.zoneLevel === 'state' && z.id !== editingZoneId);
+    if (formData.zoneLevel === 'city') return [];
+    if (formData.zoneLevel === 'service') {
+      return zones.filter(z => z.zoneLevel === 'city' && z.id !== editingZoneId);
+    }
+    if (formData.zoneLevel === 'local') {
+      return zones.filter(z => z.zoneLevel === 'service' && z.id !== editingZoneId);
     }
     if (formData.zoneLevel === 'micro') {
-      return zones.filter(z => z.zoneLevel === 'city' && z.id !== editingZoneId);
+      return zones.filter(z => z.zoneLevel === 'local' && z.id !== editingZoneId);
     }
     return [];
   }, [zones, formData.zoneLevel, editingZoneId]);
 
   const zoneTree = useMemo(() => {
-    const states = zones.filter(z => z.zoneLevel === 'state');
-    const cities = zones.filter(z => z.zoneLevel === 'city');
-    const micros = zones.filter(z => z.zoneLevel === 'micro');
+    const cityZones = zones.filter(z => z.zoneLevel === 'city');
+    const serviceZones = zones.filter(z => z.zoneLevel === 'service');
+    const localZones = zones.filter(z => z.zoneLevel === 'local');
+    const microZones = zones.filter(z => z.zoneLevel === 'micro');
 
-    return states.map(state => {
-      const stateCities = cities.filter(c => {
-        const pId = c.parentZone?._id || c.parentZone;
-        return pId === state.id;
+    return cityZones.map(city => {
+      const cityServices = serviceZones.filter(s => {
+        const pId = s.parentZone?._id || s.parentZone;
+        return pId === city.id;
       });
 
-      const cityNodes = stateCities.map(city => {
-        const cityMicros = micros.filter(m => {
-          const pId = m.parentZone?._id || m.parentZone;
-          return pId === city.id;
+      const serviceNodes = cityServices.map(service => {
+        const serviceLocals = localZones.filter(l => {
+          const pId = l.parentZone?._id || l.parentZone;
+          return pId === service.id;
         });
 
-        return {
-          ...city,
-          children: cityMicros
-        };
+        const localNodes = serviceLocals.map(local => {
+          const localMicros = microZones.filter(m => {
+            const pId = m.parentZone?._id || m.parentZone;
+            return pId === local.id;
+          });
+
+          return { ...local, children: localMicros };
+        });
+
+        return { ...service, children: localNodes };
       });
 
-      return {
-        ...state,
-        children: cityNodes
-      };
+      return { ...city, children: serviceNodes };
     });
   }, [zones]);
 
-  const toggleNode = useCallback((nodeId) => {
-    setExpandedNodes(prev => ({
-      ...prev,
-      [nodeId]: !prev[nodeId]
-    }));
-  }, []);
 
   // Search and Filters Logic
   const filteredZones = useMemo(() => {
@@ -906,6 +1023,96 @@ const ZoneManagement = () => {
       avgResponse: avgResponse || 12
     };
   }, [zones, providers]);
+
+  const zoneStatsMap = useMemo(() => {
+    const statsMap = {};
+    zones.forEach(zone => {
+      let provCount = 0;
+      let activeJobs = 0;
+      let customerCount = 0;
+      const coords = zone.coordinates;
+      if (coords && coords.length >= 3) {
+        providers.forEach(p => {
+          if (p.coords && isPointInPolygon(p.coords[0], p.coords[1], coords)) {
+            provCount++;
+          }
+        });
+        bookings.forEach(b => {
+          if (isPointInPolygon(b.lat, b.lng, coords)) {
+            activeJobs++;
+          }
+        });
+        customers.forEach(c => {
+          if (isPointInPolygon(c.lat, c.lng, coords)) {
+            customerCount++;
+          }
+        });
+      }
+      statsMap[zone.id] = {
+        providersCount: provCount,
+        activeBookingsCount: activeJobs,
+        customerCount: customerCount
+      };
+    });
+    return statsMap;
+  }, [zones, providers, bookings, customers]);
+
+  const renderedZones = useMemo(() => {
+    return zones.map(zone => {
+      const zoneStyle = getZoneStyle(zone.status, zone.priority);
+      const zoneDetails = zoneStatsMap[zone.id] || { providersCount: 0, activeBookingsCount: 0, customerCount: 0 };
+
+      return (
+        <Polygon
+          key={zone.id}
+          positions={zone.coordinates}
+          pathOptions={zoneStyle}
+        >
+          <Tooltip sticky>
+            <span className="font-sans font-bold text-xs uppercase text-slate-800">{zone.name} Zone ({zone.city})</span>
+          </Tooltip>
+          <Popup minWidth={288} maxWidth={320} closeButton>
+            {renderZoneMapPopup(zone, zoneDetails)}
+          </Popup>
+        </Polygon>
+      );
+    });
+  }, [zones, zoneStatsMap]);
+
+  const renderedProviders = useMemo(() => {
+    return providers.map(prov => (
+      <Marker
+        key={prov._id}
+        position={prov.coords}
+        icon={getProviderMarkerIcon(prov.status)}
+      >
+        <Popup>
+          <div className="p-1 font-sans text-xs text-slate-900 text-left">
+            <h4 className="font-black text-slate-900 capitalize">{prov.name}</h4>
+            <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">{prov.serviceCategory}</p>
+            <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase">Status: {prov.status}</p>
+          </div>
+        </Popup>
+      </Marker>
+    ));
+  }, [providers]);
+
+  const renderedBookings = useMemo(() => {
+    return bookings.map(book => (
+      <Circle
+        key={'heat-' + book._id}
+        center={[book.lat, book.lng]}
+        radius={250}
+        pathOptions={{
+          color: '#ef4444',
+          fillColor: '#ef4444',
+          fillOpacity: 0.12,
+          weight: 1,
+          dashArray: "4,4"
+        }}
+      />
+    ));
+  }, [bookings]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-150px)] text-gray-850 font-sans relative overflow-hidden">
@@ -1041,23 +1248,53 @@ const ZoneManagement = () => {
                     placeholder="e.g. Jalandhar City Center"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    onBlur={handleZoneNameBlur}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400 font-semibold"
                     required
-                  />
-                  <p className="text-[7.5px] text-gray-400 font-medium">Unique name for this zone. Must be unique per city.</p>
+                  />                  <p className="text-[7.5px] text-gray-400 font-medium">Unique name for this zone. Must be unique per city.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Zone Level</label>
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                      <span>Zone Level</span>
+                      <span className="relative group cursor-pointer text-primary text-[10px]">
+                        ℹ️
+                        <span className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block w-56 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
+                          <strong className="text-primary block mb-1 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
+                          • <strong>City:</strong> Pure City/State boundary (Bada level).<br/>
+                          • <strong>Service:</strong> Category-wise dispatch level.<br/>
+                          • <strong>Local:</strong> Sectors aur localities ke liye.<br/>
+                          • <strong>Micro:</strong> Hyper-local building/galiyon ke liye.
+                        </span>
+                      </span>
+                    </label>
                     <select
                       value={formData.zoneLevel}
-                      onChange={(e) => setFormData(prev => ({ ...prev, zoneLevel: e.target.value, parentZone: '' }))}
+                      onChange={(e) => {
+                        const lvl = e.target.value;
+                        const defaults = {
+                          city: { priority: 'low', maxProviders: 0, serviceRadius: 20 },
+                          service: { priority: 'medium', maxProviders: 100, serviceRadius: 8 },
+                          local: { priority: 'medium', maxProviders: 35, serviceRadius: 3 },
+                          micro: { priority: 'high', maxProviders: 10, serviceRadius: 1 }
+                        }[lvl] || { priority: 'medium', maxProviders: 20, serviceRadius: 5 };
+
+                        setFormData(prev => ({
+                          ...prev,
+                          zoneLevel: lvl,
+                          parentZone: '',
+                          priority: defaults.priority,
+                          maxProviders: defaults.maxProviders,
+                          serviceRadius: defaults.serviceRadius
+                        }));
+                      }}
                       className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
                     >
-                      <option value="state">🌍 State</option>
                       <option value="city">🏙️ City</option>
-                      <option value="micro">📍 Micro Zone</option>
+                      <option value="service">⚡ Service</option>
+                      <option value="local">📍 Local</option>
+                      <option value="micro">🎯 Micro</option>
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -1074,14 +1311,13 @@ const ZoneManagement = () => {
                 </div>
 
                 {/* Parent Zone Dropdown */}
-                {formData.zoneLevel !== 'state' && (
+                {formData.zoneLevel !== 'city' && (
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Parent Zone *</label>
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Parent Zone (Optional)</label>
                     <select
                       value={formData.parentZone}
                       onChange={(e) => setFormData(prev => ({ ...prev, parentZone: e.target.value }))}
                       className="w-full px-2.5 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
-                      required
                     >
                       <option value="">Select Parent Zone</option>
                       {parentOptions.map(p => (
@@ -1114,13 +1350,26 @@ const ZoneManagement = () => {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Max Providers</label>
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                      <span>Max Providers</span>
+                      <span className="relative group cursor-pointer text-primary text-[10px]">
+                        ℹ️
+                        <span className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
+                          <strong className="text-primary block mb-0.5 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
+                          • City: <strong>0</strong> (unlimited) ya 200+<br/>
+                          • Service: <strong>50 - 150</strong> providers<br/>
+                          • Local: <strong>20 - 50</strong> providers<br/>
+                          • Micro: <strong>5 - 15</strong> providers
+                        </span>
+                      </span>
+                    </label>
                     <input
                       type="number"
-                      placeholder="e.g. 20"
-                      value={formData.maxProviders}
+                      placeholder={formData.zoneLevel === 'city' ? "Unlimited" : "e.g. 20"}
+                      value={formData.zoneLevel === 'city' ? 0 : formData.maxProviders}
+                      disabled={formData.zoneLevel === 'city'}
                       onChange={(e) => setFormData(prev => ({ ...prev, maxProviders: e.target.value }))}
-                      className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
+                      className={`w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold ${formData.zoneLevel === 'city' ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
                       min="0"
                     />
                   </div>
@@ -1139,7 +1388,19 @@ const ZoneManagement = () => {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Service Radius (KM)</label>
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1">
+                      <span>Service Radius (KM)</span>
+                      <span className="relative group cursor-pointer text-primary text-[10px]">
+                        ℹ️
+                        <span className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
+                          <strong className="text-primary block mb-0.5 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
+                          • City: <strong>15 - 30 KM</strong><br/>
+                          • Service: <strong>5 - 10 KM</strong><br/>
+                          • Local: <strong>2 - 5 KM</strong><br/>
+                          • Micro: <strong>0.5 - 2 KM</strong>
+                        </span>
+                      </span>
+                    </label>
                     <input
                       type="number"
                       placeholder="e.g. 5"
@@ -1158,24 +1419,27 @@ const ZoneManagement = () => {
                   <p className="text-amber-600 font-bold">When done → fill details → click "Save Boundary".</p>
                 </div>
 
-                <div className="flex gap-2 pt-1.5">
+                <div className="flex gap-2 pt-1.5 pb-4">
                   <button
                     type="submit"
-                    className="flex-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg transition-all font-black text-center shadow-md cursor-pointer text-xs"
+                    disabled={loading}
+                    className="flex-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg transition-all font-black text-center shadow-md cursor-pointer text-xs disabled:opacity-50 disabled:pointer-events-none"
                   >
-                    Save Boundary
+                    {loading ? 'Saving...' : 'Save Boundary'}
                   </button>
                   <button
                     type="button"
                     onClick={handleClearDrawing}
-                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs"
+                    disabled={loading}
+                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:pointer-events-none"
                   >
                     Clear Map
                   </button>
                   <button
                     type="button"
                     onClick={handleCancelForm}
-                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs"
+                    disabled={loading}
+                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:pointer-events-none"
                   >
                     Cancel
                   </button>
@@ -1204,7 +1468,7 @@ const ZoneManagement = () => {
                   </button>
                 </div>
 
-                
+
                 <div className="grid grid-cols-2 gap-1.5 text-[8.5px] font-bold">
                   <select
                     value={filterCity}
@@ -1241,8 +1505,9 @@ const ZoneManagement = () => {
                     className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
                   >
                     <option value="">All Levels</option>
-                    <option value="state">State</option>
                     <option value="city">City</option>
+                    <option value="service">Service</option>
+                    <option value="local">Local</option>
                     <option value="micro">Micro</option>
                   </select>
                 </div>
@@ -1252,7 +1517,7 @@ const ZoneManagement = () => {
 
           {/* Scrollable list card representation */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white">
-            {showForm ? null : sidebarTab === 'tree' ? (
+            {sidebarTab === 'tree' ? (
               /* Tree View Mode */
               zoneTree.length === 0 ? (
                 <div className="py-12 text-center text-gray-400 text-xs italic font-semibold font-sans">
@@ -1260,172 +1525,138 @@ const ZoneManagement = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {zoneTree.map(stateNode => (
-                    <div key={stateNode.id} className="border border-gray-150 rounded-xl p-2 bg-gray-50/50 mb-2 text-left animate-slide-up">
-                      {/* State Node Header */}
-                      <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className={`w-2 h-2 rounded-full ${stateNode.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                          <span className="truncate">{stateNode.name}</span>
-                          <span className="text-[7.5px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-black tracking-wider uppercase">State</span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => handleFocusZone(stateNode.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleEditZone(stateNode)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleOpenAnalytics(stateNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </div>
+                  {(() => {
+                    const levelBadge = {
+                      'city': { bg: 'bg-primary/10', text: 'text-primary', label: 'City', dot: 'w-2 h-2' },
+                      'service': { bg: 'bg-teal-500/10', text: 'text-teal-600', label: 'Service', dot: 'w-1.5 h-1.5' },
+                      'local': { bg: 'bg-blue-500/10', text: 'text-blue-600', label: 'Local', dot: 'w-1.5 h-1.5' },
+                      'micro': { bg: 'bg-purple-500/10', text: 'text-purple-600', label: 'Micro', dot: 'w-1 h-1' }
+                    };
 
-                      {/* Render Children (Cities) */}
-                      {stateNode.children && stateNode.children.length > 0 && (
-                        <div className="mt-1 space-y-1">
-                          {stateNode.children.map(cityNode => (
-                            <div key={cityNode.id} className="pl-4 ml-2 border-l border-gray-200">
-                              <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${cityNode.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                                  <span className="truncate">{cityNode.name}</span>
-                                  <span className="text-[7.5px] bg-teal-500/10 text-teal-600 px-1.5 py-0.2 rounded font-black tracking-wider uppercase">City</span>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button onClick={() => handleFocusZone(cityNode.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => handleEditZone(cityNode)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => handleOpenAnalytics(cityNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
-                                </div>
-                              </div>
-
-                              {/* Render Children (Micro Zones) */}
-                              {cityNode.children && cityNode.children.length > 0 && (
-                                <div className="mt-1 space-y-1">
-                                  {cityNode.children.map(microNode => (
-                                    <div key={microNode.id} className="pl-4 ml-2 border-l border-gray-200">
-                                      <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className={`w-1 h-1 rounded-full ${microNode.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                                          <span className="truncate">{microNode.name}</span>
-                                          <span className="text-[7.5px] bg-purple-500/10 text-purple-600 px-1.5 py-0.2 rounded font-black tracking-wider uppercase">Micro</span>
-                                        </div>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                          <button onClick={() => handleFocusZone(microNode.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
-                                          <button onClick={() => handleEditZone(microNode)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                                          <button onClick={() => handleOpenAnalytics(microNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                    const renderTreeNode = (node, depth = 0) => {
+                      const badge = levelBadge[node.zoneLevel] || levelBadge['city'];
+                      return (
+                        <div key={node.id} className={depth > 0 ? "pl-4 ml-2 border-l border-gray-200" : "border border-gray-150 rounded-xl p-2 bg-gray-50/50 mb-2 text-left animate-slide-up"}>
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`${badge.dot} rounded-full ${node.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                              <span className="truncate">{node.name}</span>
+                              <span className={`text-[7.5px] ${badge.bg} ${badge.text} px-1.5 py-0.2 rounded font-black tracking-wider uppercase`}>{badge.label}</span>
                             </div>
-                          ))}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => handleFocusZone(node.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleEditZone(node)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleOpenAnalytics(node.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                          {node.children && node.children.length > 0 && (
+                            <div className="mt-1 space-y-1">
+                              {node.children.map(child => renderTreeNode(child, depth + 1))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      );
+                    };
+
+                    return zoneTree.map(node => renderTreeNode(node, 0));
+                  })()}
                 </div>
               )
             ) : filteredZones.length > 0 ? (
               filteredZones.map(zone => {
-                const zoneStats = getZoneStats(zone.coordinates);
+                const zoneStats = zoneStatsMap[zone.id] || { providersCount: 0, activeBookingsCount: 0, customerCount: 0 };
                 return (
                   <div
                     key={zone.id}
-                    className="p-3 bg-white border border-gray-150 rounded-xl space-y-2.5 hover:border-gray-300 hover:shadow-md shadow-sm transition-all flex flex-col relative group select-text text-left animate-slide-up"
+                    className="p-4 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 transition-all flex flex-col space-y-3 shadow-sm select-none"
                   >
-                    {/* Header row */}
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center space-x-1.5 min-w-0 flex-1">
-                        <span className={`w-1.5 h-3.5 rounded-full shrink-0 ${zone.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-wider truncate cursor-text capitalize text-left" title={zone.name}>{zone.name}</h4>
+                    {/* Header: Status, Title, Level badge, Actions */}
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${zone.status === 'active' ? 'bg-success' : 'bg-neutral-300'}`} />
+                        <h4 className="text-xs font-bold text-neutral-800 truncate capitalize" title={zone.name}>{zone.name}</h4>
+                        <span className="text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider scale-95 shrink-0">
+                          {zone.zoneLevel || 'city'}
+                        </span>
                       </div>
-                      <div className="flex items-center space-x-1 shrink-0 ml-2">
+                      
+                      <div className="flex items-center space-x-1 shrink-0">
                         <button
                           onClick={() => handleToggleStatus(zone.id, zone.status)}
-                          title={zone.status === 'active' ? 'Click to deactivate this zone' : 'Click to activate this zone'}
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase transition-all tracking-wider ${zone.status === 'active'
-                            ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-gray-100 border border-gray-200 text-gray-500 hover:bg-gray-200'
-                            }`}
+                          title={zone.status === 'active' ? 'Deactivate' : 'Activate'}
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${
+                            zone.status === 'active'
+                              ? 'bg-success-light border-success/30 text-success'
+                              : 'bg-neutral-55 border-neutral-200 text-neutral-500'
+                          }`}
                         >
-                          {zone.status === 'active' ? '● Active' : '○ Disabled'}
+                          {zone.status === 'active' ? 'Active' : 'Disabled'}
                         </button>
-
                         <button
                           onClick={() => handleEditZone(zone)}
-                          className="p-1 bg-gray-50 border border-gray-200 rounded-lg text-gray-550 hover:text-gray-900 hover:bg-gray-150 transition-all"
-                          title="Edit zone boundary and settings"
+                          className="p-1 bg-neutral-50 border border-neutral-200 rounded text-neutral-500 hover:text-neutral-800 transition-all"
+                          title="Edit Zone"
                         >
                           <Edit className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(zone.id)}
-                          className="p-1 bg-gray-50 border border-gray-200 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                          title="Permanently delete this zone"
+                          className="p-1 bg-neutral-50 border border-neutral-200 rounded text-neutral-400 hover:text-danger transition-all"
+                          title="Delete Zone"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
 
-                    {/* Zone meta info & Hierarchy preview */}
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[9px] text-gray-500 font-semibold bg-gray-50 p-1.5 rounded-lg border border-gray-100">
-                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase font-black tracking-wider text-[7.5px]">{zone.zoneLevel || 'city'}</span>
+                    {/* Metadata Line */}
+                    <div className="text-[10px] text-neutral-500 font-medium flex items-center flex-wrap gap-x-2 gap-y-1">
+                      <span className="capitalize">{zone.city}</span>
+                      <span className="text-neutral-300">•</span>
+                      <span>{zone.serviceRadius} km Radius</span>
+                      <span className="text-neutral-300">•</span>
+                      <span className={`font-semibold ${
+                        zone.priority === 'high' ? 'text-danger' : zone.priority === 'medium' ? 'text-warning' : 'text-success'
+                      }`}>{zone.priority} Priority</span>
                       {zone.parentZone && (
                         <>
-                          <span className="text-gray-300">➔</span>
-                          <span className="capitalize text-gray-650" title="Parent zone name">Parent: {(zone.parentZone?.name || zone.parentZone)}</span>
-                        </>
-                      )}
-                      {zone.adjacentZones && zone.adjacentZones.length > 0 && (
-                        <>
-                          <span className="text-gray-300">|</span>
-                          <span className="text-gray-650" title="Adjacent zones count">Neighbours: {zone.adjacentZones.length}</span>
+                          <span className="text-neutral-300">•</span>
+                          <span className="truncate max-w-[100px]">Parent: {zone.parentZone?.name || zone.parentZone}</span>
                         </>
                       )}
                     </div>
 
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[9px] text-gray-500 font-semibold">
-                      <span className="flex items-center gap-0.5 cursor-text" title="City this zone belongs to"><MapPin className="w-3 h-3 text-primary" /> {zone.city}</span>
-                      <span className="text-gray-300">|</span>
-                      <span className={`font-black cursor-text ${zone.priority === 'high' ? 'text-red-600' :
-                        zone.priority === 'medium' ? 'text-yellow-600' : 'text-emerald-600'
-                        }`} title={`Priority: ${zone.priority} — affects dispatch speed`}>{zone.priority} Priority</span>
-                      <span className="text-gray-300">|</span>
-                      <span className="cursor-text" title="Max providers limit for this zone">Max: {zone.maxProviders}</span>
-                      <span className="text-gray-300">|</span>
-                      <span className="cursor-text" title="Service matching radius in kilometers">Radius: {zone.serviceRadius} km</span>
-                    </div>
-
-                    {/* Stats grid */}
-                    <div className="grid grid-cols-3 gap-1.5 text-[9px]">
-                      <div className="bg-blue-50/60 p-1.5 rounded-lg border border-blue-100 flex flex-col justify-center animate-pulse-slow" title="Total active providers inside this zone">
-                        <span className="text-[7px] text-blue-400 font-bold uppercase">Providers</span>
-                        <span className="text-blue-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.providersCount}</span>
+                    {/* Compact Metrics Row */}
+                    <div className="flex items-center justify-between bg-neutral-50 border border-neutral-100 rounded-lg p-2 text-[10px] text-neutral-600">
+                      <div className="flex items-center space-x-1">
+                        <span className="font-bold text-neutral-800">{zoneStats.providersCount}</span>
+                        <span className="text-neutral-500">Providers</span>
                       </div>
-                      <div className="bg-purple-50/60 p-1.5 rounded-lg border border-purple-100 flex flex-col justify-center" title="Total customers saved addresses inside this zone">
-                        <span className="text-[7px] text-purple-400 font-bold uppercase">Customers</span>
-                        <span className="text-purple-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.customerCount}</span>
+                      <span className="text-neutral-300">|</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="font-bold text-neutral-800">{zoneStats.customerCount}</span>
+                        <span className="text-neutral-500">Customers</span>
                       </div>
-                      <div className="bg-amber-50/60 p-1.5 rounded-lg border border-amber-100 flex flex-col justify-center" title="Active bookings/jobs happening inside this zone right now">
-                        <span className="text-[7px] text-amber-500 font-bold uppercase">Active Jobs</span>
-                        <span className="text-amber-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.activeBookingsCount}</span>
+                      <span className="text-neutral-300">|</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="font-bold text-neutral-800">{zoneStats.activeBookingsCount}</span>
+                        <span className="text-neutral-500">Active Jobs</span>
                       </div>
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-2">
                       <button
                         onClick={() => handleFocusZone(zone.coordinates)}
-                        className="flex-1 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[8px] font-black rounded-lg transition-all uppercase tracking-widest border border-gray-200 flex items-center justify-center gap-1 shadow-sm"
-                        title="Center the map on this zone and zoom in"
+                        className="flex-1 py-1.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1"
                       >
-                        <Eye className="w-3.5 h-3.5" /> View on Map
+                        <Eye className="w-3.5 h-3.5 text-neutral-500" /> Map View
                       </button>
                       <button
                         onClick={() => handleOpenAnalytics(zone.id)}
-                        className="flex-1 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-[8px] font-black rounded-lg transition-all uppercase tracking-widest border border-primary/20 flex items-center justify-center gap-1 shadow-sm"
-                        title="View members and performance metrics for this zone"
+                        className="flex-1 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1 border border-primary/15"
                       >
-                        <Activity className="w-3.5 h-3.5" /> View Analytics
+                        <Activity className="w-3.5 h-3.5 text-primary" /> Analytics
                       </button>
                     </div>
                   </div>
@@ -1468,11 +1699,31 @@ const ZoneManagement = () => {
 
           {/* Leaflet Map Component container */}
           <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: '100%', width: '100%', zIndex: 5 }}>
-            <TileLayer
-              attribution='&copy; OpenStreetMap contributors &copy; Google Satellite'
-              url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
-              maxZoom={20}
-            />
+            <LayersControl position="topright">
+              <LayersControl.BaseLayer checked name="Fast Street Map">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  maxZoom={19}
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer name="3D Street Map (Google)">
+                <TileLayer
+                  attribution='&copy; Google Maps'
+                  url="https://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}"
+                  maxZoom={20}
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer name="Satellite Hybrid">
+                <TileLayer
+                  attribution='&copy; Google Satellite'
+                  url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                  maxZoom={20}
+                />
+              </LayersControl.BaseLayer>
+            </LayersControl>
 
             <MapCenterer center={mapCenter} zoom={mapZoom} />
 
@@ -1483,31 +1734,33 @@ const ZoneManagement = () => {
             {isDrawing && drawPoints.length > 0 && (
               <>
                 <Polyline positions={drawPoints} color="#eab308" weight={2} dashArray="5,5" />
-                {drawPoints.map((point, index) => (
-                  <Marker
-                    key={'draw-pt-' + index}
-                    position={point}
-                    draggable={true}
-                    eventHandlers={{
-                      dragend: (e) => {
-                        const { lat, lng } = e.target.getLatLng();
-                        handleUpdatePoint(index, lat, lng);
-                      },
-                      click: () => {
-                        handleDeletePoint(index);
-                      }
-                    }}
-                    icon={L.divIcon({
-                      className: 'bg-yellow-500 w-3.5 h-3.5 rounded-full border border-white cursor-pointer shadow-md animate-pulse',
-                      iconSize: [14, 14],
-                      iconAnchor: [7, 7]
-                    })}
-                  >
-                    <Tooltip sticky>
-                      <span className="font-sans font-extrabold text-[9px] uppercase text-slate-900">Drag point or click to delete vertex</span>
-                    </Tooltip>
-                  </Marker>
-                ))}
+                {drawPoints.length <= 120 ? (
+                  drawPoints.map((point, index) => (
+                    <Marker
+                      key={'draw-pt-' + index}
+                      position={point}
+                      draggable={true}
+                      eventHandlers={{
+                        dragend: (e) => {
+                          const { lat, lng } = e.target.getLatLng();
+                          handleUpdatePoint(index, lat, lng);
+                        },
+                        click: () => {
+                          handleDeletePoint(index);
+                        }
+                      }}
+                      icon={L.divIcon({
+                        className: 'bg-yellow-500 w-3.5 h-3.5 rounded-full border border-white cursor-pointer shadow-md animate-pulse',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7]
+                      })}
+                    >
+                      <Tooltip sticky>
+                        <span className="font-sans font-extrabold text-[9px] uppercase text-slate-900">Drag point or click to delete vertex</span>
+                      </Tooltip>
+                    </Marker>
+                  ))
+                ) : null}
                 {drawPoints.length >= 3 && (
                   <Polygon
                     positions={drawPoints}
@@ -1516,60 +1769,14 @@ const ZoneManagement = () => {
                 )}
               </>
             )}
-
             {/* Render saved zones on the map */}
-            {zones.map(zone => {
-              const zoneStyle = getZoneStyle(zone.status, zone.priority);
-              const zoneDetails = getZoneStats(zone.coordinates);
-
-              return (
-                <Polygon
-                  key={zone.id}
-                  positions={zone.coordinates}
-                  pathOptions={zoneStyle}
-                >
-                  <Tooltip sticky>
-                    <span className="font-sans font-bold text-xs uppercase text-slate-800">{zone.name} Zone ({zone.city})</span>
-                  </Tooltip>
-                  <Popup minWidth={288} maxWidth={320} closeButton>
-                    {renderZoneMapPopup(zone, zoneDetails)}
-                  </Popup>
-                </Polygon>
-              );
-            })}
+            {renderedZones}
 
             {/* Provider Coverage Check display */}
-            {providers.map(prov => (
-              <Marker
-                key={prov._id}
-                position={prov.coords}
-                icon={getProviderMarkerIcon(prov.status)}
-              >
-                <Popup>
-                  <div className="p-1 font-sans text-xs text-slate-900 text-left">
-                    <h4 className="font-black text-slate-900 capitalize">{prov.name}</h4>
-                    <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">{prov.serviceCategory}</p>
-                    <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase">Status: {prov.status}</p>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            {renderedProviders}
 
             {/* Booking density Heat circles inside zones */}
-            {bookings.map(book => (
-              <Circle
-                key={'heat-' + book._id}
-                center={[book.lat, book.lng]}
-                radius={250}
-                pathOptions={{
-                  color: '#ef4444',
-                  fillColor: '#ef4444',
-                  fillOpacity: 0.12,
-                  weight: 1,
-                  dashArray: "4,4"
-                }}
-              />
-            ))}
+            {renderedBookings}
           </MapContainer>
         </div>
       </div>
@@ -1922,26 +2129,36 @@ const HierarchicalZoneSelector = ({
   }, []);
 
   const tree = useMemo(() => {
-    const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
-    const cities = zones.filter(z => z.zoneLevel === 'city');
-    const micros = zones.filter(z => z.zoneLevel === 'micro');
+    const cityZones = zones.filter(z => z.zoneLevel === 'city' || !z.zoneLevel);
+    const serviceZones = zones.filter(z => z.zoneLevel === 'service');
+    const localZones = zones.filter(z => z.zoneLevel === 'local');
+    const microZones = zones.filter(z => z.zoneLevel === 'micro');
 
-    return states.map(state => {
-      const stateCities = cities.filter(c => {
-        const pId = c.parentZone?._id || c.parentZone;
-        return pId?.toString() === (state._id || state.id)?.toString();
+    return cityZones.map(city => {
+      const cityServices = serviceZones.filter(s => {
+        const pId = s.parentZone?._id || s.parentZone;
+        return pId?.toString() === (city._id || city.id)?.toString();
       });
 
-      const cityNodes = stateCities.map(city => {
-        const cityMicros = micros.filter(m => {
-          const pId = m.parentZone?._id || m.parentZone;
-          return pId?.toString() === (city._id || city.id)?.toString();
+      const serviceNodes = cityServices.map(service => {
+        const serviceLocals = localZones.filter(l => {
+          const pId = l.parentZone?._id || l.parentZone;
+          return pId?.toString() === (service._id || service.id)?.toString();
         });
 
-        return { ...city, children: cityMicros };
+        const localNodes = serviceLocals.map(local => {
+          const localMicros = microZones.filter(m => {
+            const pId = m.parentZone?._id || m.parentZone;
+            return pId?.toString() === (local._id || local.id)?.toString();
+          });
+
+          return { ...local, children: localMicros };
+        });
+
+        return { ...service, children: localNodes };
       });
 
-      return { ...state, children: cityNodes };
+      return { ...city, children: serviceNodes };
     });
   }, [zones]);
 
@@ -2015,7 +2232,7 @@ const HierarchicalZoneSelector = ({
             {node.name}
           </span>
           <span className="text-[8px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
-            {node.zoneLevel || 'state'}
+            {node.zoneLevel || 'city'}
           </span>
         </div>
 

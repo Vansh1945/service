@@ -23,26 +23,36 @@ const HierarchicalZoneSelector = ({
   }, []);
 
   const tree = useMemo(() => {
-    const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
-    const cities = zones.filter(z => z.zoneLevel === 'city');
-    const micros = zones.filter(z => z.zoneLevel === 'micro');
+    const cityZones = zones.filter(z => z.zoneLevel === 'city' || !z.zoneLevel);
+    const serviceZones = zones.filter(z => z.zoneLevel === 'service');
+    const localZones = zones.filter(z => z.zoneLevel === 'local');
+    const microZones = zones.filter(z => z.zoneLevel === 'micro');
 
-    return states.map(state => {
-      const stateCities = cities.filter(c => {
-        const pId = c.parentZone?._id || c.parentZone;
-        return pId?.toString() === (state._id || state.id)?.toString();
+    return cityZones.map(city => {
+      const cityServices = serviceZones.filter(s => {
+        const pId = s.parentZone?._id || s.parentZone;
+        return pId?.toString() === (city._id || city.id)?.toString();
       });
 
-      const cityNodes = stateCities.map(city => {
-        const cityMicros = micros.filter(m => {
-          const pId = m.parentZone?._id || m.parentZone;
-          return pId?.toString() === (city._id || city.id)?.toString();
+      const serviceNodes = cityServices.map(service => {
+        const serviceLocals = localZones.filter(l => {
+          const pId = l.parentZone?._id || l.parentZone;
+          return pId?.toString() === (service._id || service.id)?.toString();
         });
 
-        return { ...city, children: cityMicros };
+        const localNodes = serviceLocals.map(local => {
+          const localMicros = microZones.filter(m => {
+            const pId = m.parentZone?._id || m.parentZone;
+            return pId?.toString() === (local._id || local.id)?.toString();
+          });
+
+          return { ...local, children: localMicros };
+        });
+
+        return { ...service, children: localNodes };
       });
 
-      return { ...state, children: cityNodes };
+      return { ...city, children: serviceNodes };
     });
   }, [zones]);
 
@@ -176,7 +186,7 @@ const HierarchicalZoneSelector = ({
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by state, city, or micro zone..."
+              placeholder="Search by city, service, local, or micro zone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
@@ -203,12 +213,13 @@ const HierarchicalZoneSelector = ({
             {matchedZones.map(zone => {
               const id = zone._id || zone.id;
               let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200/60';
-              if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200/60';
+              if (zone.zoneLevel === 'service') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200/60';
+              if (zone.zoneLevel === 'local') badgeColor = 'bg-indigo-50 text-indigo-800 border-indigo-200/60';
               if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200/60';
 
               return (
                 <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border shadow-sm capitalize ${badgeColor}`}>
-                  <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
+                  <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'CITY'})</span>
                   <button
                     type="button"
                     onClick={() => {

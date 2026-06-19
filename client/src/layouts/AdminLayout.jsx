@@ -315,9 +315,12 @@ const AdminLayout = () => {
               <NotificationBell />
 
               {/* Profile dropdown */}
-              <div className="relative">
+              <div className="relative z-30">
+                {profileDropdownOpen && (
+                  <div className="fixed inset-0 z-10" onClick={() => setProfileDropdownOpen(false)} />
+                )}
                 <button
-                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-primary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-primary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 relative z-20"
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                 >
                   {user?.profilePicUrl ? (

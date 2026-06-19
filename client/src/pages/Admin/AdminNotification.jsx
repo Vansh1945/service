@@ -1324,26 +1324,36 @@ const HierarchicalZoneSelector = ({
     }, []);
 
     const tree = useMemo(() => {
-        const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
-        const cities = zones.filter(z => z.zoneLevel === 'city');
-        const micros = zones.filter(z => z.zoneLevel === 'micro');
+        const cityZones = zones.filter(z => z.zoneLevel === 'city' || !z.zoneLevel);
+        const serviceZones = zones.filter(z => z.zoneLevel === 'service');
+        const localZones = zones.filter(z => z.zoneLevel === 'local');
+        const microZones = zones.filter(z => z.zoneLevel === 'micro');
 
-        return states.map(state => {
-            const stateCities = cities.filter(c => {
-                const pId = c.parentZone?._id || c.parentZone;
-                return pId?.toString() === (state._id || state.id)?.toString();
+        return cityZones.map(city => {
+            const cityServices = serviceZones.filter(s => {
+                const pId = s.parentZone?._id || s.parentZone;
+                return pId?.toString() === (city._id || city.id)?.toString();
             });
 
-            const cityNodes = stateCities.map(city => {
-                const cityMicros = micros.filter(m => {
-                    const pId = m.parentZone?._id || m.parentZone;
-                    return pId?.toString() === (city._id || city.id)?.toString();
+            const serviceNodes = cityServices.map(service => {
+                const serviceLocals = localZones.filter(l => {
+                    const pId = l.parentZone?._id || l.parentZone;
+                    return pId?.toString() === (service._id || service.id)?.toString();
                 });
 
-                return { ...city, children: cityMicros };
+                const localNodes = serviceLocals.map(local => {
+                    const localMicros = microZones.filter(m => {
+                        const pId = m.parentZone?._id || m.parentZone;
+                        return pId?.toString() === (local._id || local.id)?.toString();
+                    });
+
+                    return { ...local, children: localMicros };
+                });
+
+                return { ...service, children: localNodes };
             });
 
-            return { ...state, children: cityNodes };
+            return { ...city, children: serviceNodes };
         });
     }, [zones]);
 

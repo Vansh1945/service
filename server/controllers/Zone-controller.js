@@ -111,25 +111,25 @@ exports.createZone = async (req, res) => {
     }
 
     // Validate hierarchy constraints
-    if (zoneLevel === 'state' && parentZone) {
-      return res.status(400).json({ success: false, message: "State zones must not have a parentZone" });
+    if (zoneLevel === 'city' && parentZone) {
+      return res.status(400).json({ success: false, message: "City zones must not have a parentZone" });
     }
-    if (zoneLevel === 'city') {
-      if (!parentZone) {
-        return res.status(400).json({ success: false, message: "City zones must reference a state as parentZone" });
-      }
-      const parent = await Zone.findById(parentZone);
-      if (!parent || parent.zoneLevel !== 'state') {
-        return res.status(400).json({ success: false, message: "Parent zone must be a state" });
-      }
-    }
-    if (zoneLevel === 'micro') {
-      if (!parentZone) {
-        return res.status(400).json({ success: false, message: "Micro zones must reference a city as parentZone" });
-      }
+    if (zoneLevel === 'service' && parentZone) {
       const parent = await Zone.findById(parentZone);
       if (!parent || parent.zoneLevel !== 'city') {
-        return res.status(400).json({ success: false, message: "Parent zone must be a city" });
+        return res.status(400).json({ success: false, message: "Parent zone must be a City level zone" });
+      }
+    }
+    if (zoneLevel === 'local' && parentZone) {
+      const parent = await Zone.findById(parentZone);
+      if (!parent || parent.zoneLevel !== 'service') {
+        return res.status(400).json({ success: false, message: "Parent zone must be a Service level zone" });
+      }
+    }
+    if (zoneLevel === 'micro' && parentZone) {
+      const parent = await Zone.findById(parentZone);
+      if (!parent || parent.zoneLevel !== 'local') {
+        return res.status(400).json({ success: false, message: "Parent zone must be a Local level zone" });
       }
     }
 
@@ -141,26 +141,24 @@ exports.createZone = async (req, res) => {
       }
     }
 
-    // Overlap validation with hierarchical containment
+    // Overlap validation — only same-level overlap is blocked
     if (status !== 'inactive') {
-      // Find any overlapping active zones (including potential parent zone)
       const overlappingZones = await Zone.find({
         status: 'active',
         polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: normalizedPolygon.coordinates } } }
       });
       for (const overlapping of overlappingZones) {
-        // Allow overlap if overlapping zone is the specified parent zone and the new zone is fully contained within it
+        // Allow overlap with parent/child zones
         if (parentZone && overlapping._id.equals(parentZone)) {
-          const isContained = await Zone.findOne({
-            _id: parentZone,
-            polygon: { $geoWithin: { $geometry: { type: "Polygon", coordinates: normalizedPolygon.coordinates } } }
-          });
-          if (!isContained) {
-            return res.status(400).json({ success: false, message: "Micro zone must be fully inside parent city" });
+          continue;
+        }
+        // Only same-level active zones are not allowed to overlap
+        if (overlapping.zoneLevel === zoneLevel) {
+          const poly1 = normalizedPolygon.coordinates[0];
+          const poly2 = overlapping.polygon.coordinates[0];
+          if (isPolygonInteriorOverlapping(poly1, poly2)) {
+            return res.status(400).json({ success: false, message: `Same-level overlap not allowed with zone: ${overlapping.name}` });
           }
-        } else {
-          // Any other overlap is disallowed (same-level or other zones)
-          return res.status(400).json({ success: false, message: `Same-level overlap not allowed with zone: ${overlapping.name}` });
         }
       }
     }
@@ -172,10 +170,10 @@ exports.createZone = async (req, res) => {
       priority,
       status,
       serviceRadius,
-      maxProviders,
+      maxProviders: (zoneLevel || 'city') === 'city' ? 0 : maxProviders,
       description,
       zoneLevel: zoneLevel || 'city',
-      parentZone: parentZone || null,
+      parentZone: zoneLevel !== 'city' && parentZone ? parentZone : null,
       adjacentZones: adjacentZones || [],
       createdBy: req.user ? req.user._id : (req.admin ? req.admin._id : undefined)
     });
@@ -218,6 +216,21 @@ exports.getAllZones = async (req, res) => {
  */
 const isPointInPolygon = (lat, lng, polygon) => {
   if (!polygon || polygon.length < 3) return false;
+
+  // Bounding box pre-filter optimization
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (let i = 0; i < polygon.length; i++) {
+    const pLng = polygon[i][0];
+    const pLat = polygon[i][1];
+    if (pLat < minLat) minLat = pLat;
+    if (pLat > maxLat) maxLat = pLat;
+    if (pLng < minLng) minLng = pLng;
+    if (pLng > maxLng) maxLng = pLng;
+  }
+  if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) {
+    return false;
+  }
+
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const lngI = polygon[i][0];
@@ -230,6 +243,36 @@ const isPointInPolygon = (lat, lng, polygon) => {
     if (intersect) inside = !inside;
   }
   return inside;
+};
+
+const isPolygonInteriorOverlapping = (poly1Coords, poly2Coords) => {
+  if (!poly1Coords || poly1Coords.length < 3 || !poly2Coords || poly2Coords.length < 3) return false;
+
+  const checkCentroidAndMidpoints = (p1, p2) => {
+    let sumLng = 0;
+    let sumLat = 0;
+    const len = p1.length - 1;
+    for (let i = 0; i < len; i++) {
+      sumLng += p1[i][0];
+      sumLat += p1[i][1];
+    }
+    const centroid = [sumLng / len, sumLat / len];
+
+    // Check if centroid is inside both p1 and p2
+    if (isPointInPolygon(centroid[1], centroid[0], p1) && isPointInPolygon(centroid[1], centroid[0], p2)) return true;
+
+    // Check midpoints between centroid and boundary vertices
+    for (let i = 0; i < len; i++) {
+      const midpoint = [
+        (centroid[0] + p1[i][0]) / 2,
+        (centroid[1] + p1[i][1]) / 2
+      ];
+      if (isPointInPolygon(midpoint[1], midpoint[0], p1) && isPointInPolygon(midpoint[1], midpoint[0], p2)) return true;
+    }
+    return false;
+  };
+
+  return checkCentroidAndMidpoints(poly1Coords, poly2Coords) || checkCentroidAndMidpoints(poly2Coords, poly1Coords);
 };
 
 /**
@@ -304,7 +347,7 @@ exports.getZoneById = async (req, res) => {
     let matchedUsers = [];
     if (polygonCoords) {
       const usersInZone = await User.find({
-        isSuspended: false,
+        isSuspended: { $ne: true },
         $or: [
           { currentZone: id },
           {
@@ -320,7 +363,7 @@ exports.getZoneById = async (req, res) => {
         ]
       }).select('_id name email phone profilePicUrl currentLocation address').lean();
 
-      const allUsers = await User.find({ isSuspended: false }).select('_id name email phone profilePicUrl currentLocation address').lean();
+      const allUsers = await User.find({ isSuspended: { $ne: true } }).select('_id name email phone profilePicUrl currentLocation address').lean();
       const matchedUserMap = new Map();
 
       usersInZone.forEach(u => matchedUserMap.set(u._id.toString(), u));
@@ -433,53 +476,52 @@ exports.updateZone = async (req, res) => {
     const targetStatus = status !== undefined ? status : zone.status;
     const targetPolygon = normalizedPolygon !== undefined ? normalizedPolygon : zone.polygon;
     const targetParentZone = parentZone !== undefined ? parentZone : zone.parentZone;
+    const targetZoneLevel = zoneLevel !== undefined ? zoneLevel : zone.zoneLevel;
 
-    // Overlap validation with hierarchical containment
+    // Overlap validation — only same-level overlap is blocked
     if (targetStatus !== 'inactive' && targetPolygon && targetPolygon.coordinates) {
-      // Find any overlapping active zones
       const overlappingZones = await Zone.find({
         status: 'active',
         _id: { $ne: id },
         polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } }
       });
       for (const overlapping of overlappingZones) {
-        // If this zone has a parent, allow overlap only with that parent zone
+        // Allow overlap with parent/child zones
         if (targetParentZone && overlapping._id.equals(targetParentZone)) {
-          // Ensure child polygon is fully inside parent (basic containment check)
-          const containmentCheck = await Zone.findOne({
-            _id: targetParentZone,
-            polygon: { $geoWithin: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } }
-          });
-          if (!containmentCheck) {
-            return res.status(400).json({ success: false, message: "Micro zone must be fully inside parent city" });
+          continue;
+        }
+        // Only same-level active zones are not allowed to overlap
+        if (overlapping.zoneLevel === targetZoneLevel) {
+          const poly1 = targetPolygon.coordinates[0];
+          const poly2 = overlapping.polygon.coordinates[0];
+          if (isPolygonInteriorOverlapping(poly1, poly2)) {
+            return res.status(400).json({ success: false, message: `Zone overlaps with existing active zone: ${overlapping.name}` });
           }
-        } else {
-          return res.status(400).json({ success: false, message: `Zone overlaps with existing active zone: ${overlapping.name}` });
         }
       }
     }
 
     const newLevel = zoneLevel !== undefined ? zoneLevel : zone.zoneLevel;
     const newParent = parentZone !== undefined ? parentZone : zone.parentZone;
-    if (newLevel === 'state' && newParent) {
-      return res.status(400).json({ success: false, message: "State zones must not have a parentZone" });
+    if (newLevel === 'city' && newParent) {
+      return res.status(400).json({ success: false, message: "City zones must not have a parentZone" });
     }
-    if (newLevel === 'city') {
-      if (!newParent) {
-        return res.status(400).json({ success: false, message: "City zones must reference a state as parentZone" });
-      }
-      const parent = await Zone.findById(newParent);
-      if (!parent || parent.zoneLevel !== 'state') {
-        return res.status(400).json({ success: false, message: "Parent zone must be a state" });
-      }
-    }
-    if (newLevel === 'micro') {
-      if (!newParent) {
-        return res.status(400).json({ success: false, message: "Micro zones must reference a city as parentZone" });
-      }
+    if (newLevel === 'service' && newParent) {
       const parent = await Zone.findById(newParent);
       if (!parent || parent.zoneLevel !== 'city') {
-        return res.status(400).json({ success: false, message: "Parent zone must be a city" });
+        return res.status(400).json({ success: false, message: "Parent zone must be a City level zone" });
+      }
+    }
+    if (newLevel === 'local' && newParent) {
+      const parent = await Zone.findById(newParent);
+      if (!parent || parent.zoneLevel !== 'service') {
+        return res.status(400).json({ success: false, message: "Parent zone must be a Service level zone" });
+      }
+    }
+    if (newLevel === 'micro' && newParent) {
+      const parent = await Zone.findById(newParent);
+      if (!parent || parent.zoneLevel !== 'local') {
+        return res.status(400).json({ success: false, message: "Parent zone must be a Local level zone" });
       }
     }
     // Duplicate name check if name/city changes
@@ -502,6 +544,7 @@ exports.updateZone = async (req, res) => {
     if (description !== undefined) zone.description = description;
     if (city !== undefined) zone.city = city;
     if (zoneLevel !== undefined) zone.zoneLevel = zoneLevel;
+    if (zone.zoneLevel === 'city') zone.maxProviders = 0; // City level has no provider limit
     if (parentZone !== undefined) zone.parentZone = parentZone;
     if (adjacentZones !== undefined) zone.adjacentZones = adjacentZones;
     await zone.save();
@@ -512,7 +555,7 @@ exports.updateZone = async (req, res) => {
 };
 
 /**
- * Delete a Zone (Soft Delete by setting status to inactive)
+ * Delete a Zone (Hard Delete and clean up references)
  */
 exports.deleteZone = async (req, res) => {
   try {
@@ -521,13 +564,38 @@ exports.deleteZone = async (req, res) => {
     if (!zone) {
       return res.status(404).json({ success: false, message: "Zone not found", data: null });
     }
-    zone.status = 'inactive';
-    await zone.save();
-    return res.status(200).json({ success: true, message: "Zone deactivated successfully", data: zone });
+    
+    // Perform hard delete
+    await Zone.findByIdAndDelete(id);
+
+    // Clean up references in other zones
+    await Zone.updateMany(
+      { parentZone: id },
+      { $set: { parentZone: null } }
+    );
+    await Zone.updateMany(
+      { adjacentZones: id },
+      { $pull: { adjacentZones: id } }
+    );
+
+    // Clean up references in Provider and User models
+    const Provider = mongoose.model('Provider');
+    const User = mongoose.model('User');
+    await Provider.updateMany(
+      { currentZone: id },
+      { $set: { currentZone: null } }
+    );
+    await User.updateMany(
+      { currentZone: id },
+      { $set: { currentZone: null } }
+    );
+
+    return res.status(200).json({ success: true, message: "Zone deleted successfully", data: zone });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message, data: null });
   }
 };
+
 
 /**
  * Toggle Zone Status between active and inactive
@@ -556,7 +624,12 @@ exports.toggleZoneStatus = async (req, res) => {
           if (isParentChildRelationship) {
             continue;
           } else {
-            return res.status(400).json({ success: false, message: `Cannot activate: overlaps with existing active zone (${overlapping.name})` });
+            // Check if there is an actual interior overlap, not just touching borders
+            const poly1 = targetPolygon.coordinates[0];
+            const poly2 = overlapping.polygon.coordinates[0];
+            if (isPolygonInteriorOverlapping(poly1, poly2)) {
+              return res.status(400).json({ success: false, message: `Cannot activate: overlaps with existing active zone (${overlapping.name})` });
+            }
           }
         }
       }

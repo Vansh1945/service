@@ -527,7 +527,7 @@ const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
     const val = parseFloat(bSplits[key]);
     if (!isNaN(val)) return val;
   }
-  
+
   let sSplits = systemSplits;
   if (typeof sSplits === 'string') {
     try { sSplits = JSON.parse(sSplits); } catch (_) { sSplits = null; }
@@ -536,7 +536,7 @@ const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
     const val = parseFloat(sSplits[key]);
     if (!isNaN(val)) return val;
   }
-  
+
   return defaultVal;
 };
 
@@ -1473,10 +1473,9 @@ const ProviderBooking = () => {
                                   </span>
                                 )}
                               </div>
-                              {service.service?.shortDescription && (
-                                <p className="text-xs font-semibold text-primary mb-1 italic">"{service.service?.shortDescription}"</p>
-                              )}
-                              <p className="text-xs text-gray-500 mb-2">{service.service?.description || 'No description'}</p>
+                              <p className="text-xs text-gray-550 mb-2">
+                                {service.service?.shortDescription || 'No description'}
+                              </p>
 
                               <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
                                 <span className="flex items-center gap-1"><Timer className="w-3 h-3" />{formatDuration(service.service?.duration)}</span>

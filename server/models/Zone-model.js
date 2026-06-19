@@ -48,7 +48,7 @@ const zoneSchema = new mongoose.Schema({
   // New hierarchical fields
   zoneLevel: {
     type: String,
-    enum: ['state', 'city', 'micro'],
+    enum: ['city', 'service', 'local', 'micro'],
     default: 'city'
   },
   parentZone: {
@@ -106,7 +106,7 @@ zoneSchema.statics.findZoneByCoordinates = async function(lat, lng) {
   }
   if (zones.length === 0) return null;
 
-  const levelWeight = { micro: 3, city: 2, state: 1 };
+  const levelWeight = { micro: 4, local: 3, service: 2, city: 1 };
   const priorityWeight = { high: 3, medium: 2, low: 1 };
 
   zones.sort((a, b) => {
@@ -122,5 +122,75 @@ zoneSchema.statics.findZoneByCoordinates = async function(lat, lng) {
 
   return zones[0];
 };
+
+// Point-in-Polygon containment check for S2 cell generator
+const isPointInPolygonForS2 = (lat, lng, polygon) => {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const lngI = polygon[i][0];
+    const latI = polygon[i][1];
+    const lngJ = polygon[j][0];
+    const latJ = polygon[j][1];
+
+    const intersect = ((latI > lat) !== (latJ > lat))
+      && (lng < (lngJ - lngI) * (lat - latI) / (latJ - latI) + lngI);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};
+
+// Pre-save hook to compute and sync S2 cell coverage for the zone polygon
+zoneSchema.pre('save', async function(next) {
+  if (this.isModified('polygon') || this.isNew) {
+    try {
+      const { latLngToS2CellIdAsync } = require('../utils/s2HelperAsync');
+      const polygonCoords = this.polygon && this.polygon.coordinates && this.polygon.coordinates[0];
+      
+      if (polygonCoords && polygonCoords.length >= 3) {
+        const lats = polygonCoords.map(c => c[1]);
+        const lngs = polygonCoords.map(c => c[0]);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+
+        const uniqueCells = new Set();
+
+        // 1. Add all boundary vertices' cell IDs
+        const boundaryPromises = polygonCoords.map(async (coord) => {
+          const cell = await latLngToS2CellIdAsync(coord[1], coord[0], 13);
+          if (cell) uniqueCells.add(cell);
+        });
+
+        // 2. Sample points in a grid within the bounding box
+        const step = 0.005; // ~500m grid sampling step
+        const gridPoints = [];
+        for (let lat = minLat + step/2; lat < maxLat; lat += step) {
+          for (let lng = minLng + step/2; lng < maxLng; lng += step) {
+            if (isPointInPolygonForS2(lat, lng, polygonCoords)) {
+              gridPoints.push({ lat, lng });
+            }
+          }
+        }
+
+        // Limit grid points to maximum 1000 points to prevent thread pool congestion
+        const cappedGridPoints = gridPoints.slice(0, 1000);
+
+        const gridPromises = cappedGridPoints.map(async (point) => {
+          const cell = await latLngToS2CellIdAsync(point.lat, point.lng, 13);
+          if (cell) uniqueCells.add(cell);
+        });
+
+        await Promise.all([...boundaryPromises, ...gridPromises]);
+
+        this.s2CellIds = Array.from(uniqueCells);
+      }
+    } catch (err) {
+      console.error('Error generating zone S2 cell IDs in pre-save:', err);
+    }
+  }
+  next();
+});
 
 module.exports = mongoose.model("Zone", zoneSchema);

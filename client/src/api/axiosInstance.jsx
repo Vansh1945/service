@@ -31,6 +31,8 @@ const getRequestKey = (config) => {
             }
         }
         serializedData = JSON.stringify(tempObj);
+    } else if (typeof data === 'string') {
+        serializedData = data;
     } else {
         serializedData = JSON.stringify(data);
     }

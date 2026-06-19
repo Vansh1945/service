@@ -664,74 +664,74 @@ const LiveTrackingPage = () => {
     .map(([lat, lng]) => [lat, lng, 0.85]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-150px)] bg-gray-50 text-gray-850 overflow-hidden font-sans select-none rounded-2xl border border-gray-200 shadow-sm">
+    <div className="flex flex-col h-[calc(100vh-150px)] bg-neutral-50 text-neutral-800 overflow-hidden font-sans select-none rounded-xl border border-neutral-200 shadow-sm">
       {/* Top Telemetry Header Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 relative z-[2] shadow-sm backdrop-blur">
+      <div className="bg-white border-b border-neutral-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-[2] shadow-sm">
         <div className="flex items-center space-x-3 w-full md:w-auto justify-between md:justify-start">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
+            <div className="p-2 bg-primary/10 rounded-lg">
               <Layers className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-sm md:text-base font-black uppercase tracking-widest bg-gradient-to-r from-teal-600 via-emerald-600 to-indigo-600 bg-clip-text text-transparent">
-                Live Dispatch Control Center
+              <h1 className="text-base font-bold text-neutral-800 tracking-tight">
+                Live Dispatch Center
               </h1>
-              <p className="text-[9px] text-gray-500 font-extrabold uppercase tracking-widest flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                Satellite Telemetry Stream
+              <p className="text-[10px] text-neutral-500 font-semibold flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+                Active Tracking Session
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
             <button
               onClick={() => navigate('/admin/chat-monitor')}
-              className="p-2 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 text-white rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0"
+              className="p-2 bg-primary text-white rounded-lg transition-all active:scale-95 flex items-center justify-center shrink-0"
               title="Open Chat Monitor"
             >
               <MessageSquare className="w-4 h-4" />
             </button>
             <button
               onClick={fetchData}
-              className="p-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-all flex items-center justify-center shrink-0 text-primary"
+              className="p-2 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-lg transition-all flex items-center justify-center shrink-0 text-primary"
             >
-              <RefreshCw className="w-4 h-4 text-primary " />
+              <RefreshCw className="w-4 h-4 text-primary" />
             </button>
           </div>
         </div>
 
         {/* Global Summary Stats Widgets */}
         <div className="flex flex-row md:flex-wrap gap-2 md:gap-3 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-hide snap-x">
-          <div className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start shadow-sm">
-            <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+          <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start">
+            <span className="w-2 h-2 bg-success rounded-full" />
             <div>
-              <p className="text-[8px] uppercase font-black tracking-widest text-gray-400">Available</p>
-              <h3 className="text-xs font-black text-gray-800">{providers.filter(p => getProviderComputedStatus(p) === 'AVAILABLE').length}</h3>
+              <p className="text-[9px] uppercase font-bold text-neutral-500">Available</p>
+              <h3 className="text-xs font-bold text-neutral-800">{providers.filter(p => getProviderComputedStatus(p) === 'AVAILABLE').length}</h3>
             </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start shadow-sm">
-            <span className="w-2.5 h-2.5 bg-yellow-500 rounded-full" />
+          <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start">
+            <span className="w-2 h-2 bg-warning rounded-full" />
             <div>
-              <p className="text-[8px] uppercase font-black tracking-widest text-gray-400">On The Way</p>
-              <h3 className="text-xs font-black text-gray-800">{providers.filter(p => getProviderComputedStatus(p) === 'ON_THE_WAY').length}</h3>
+              <p className="text-[9px] uppercase font-bold text-neutral-500">On The Way</p>
+              <h3 className="text-xs font-bold text-neutral-800">{providers.filter(p => getProviderComputedStatus(p) === 'ON_THE_WAY').length}</h3>
             </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start shadow-sm">
-            <span className="w-2.5 h-2.5 bg-blue-500 rounded-full" />
+          <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start">
+            <span className="w-2 h-2 bg-info rounded-full" />
             <div>
-              <p className="text-[8px] uppercase font-black tracking-widest text-gray-400">Working</p>
-              <h3 className="text-xs font-black text-gray-800">{providers.filter(p => getProviderComputedStatus(p) === 'WORKING').length}</h3>
+              <p className="text-[9px] uppercase font-bold text-neutral-500">Working</p>
+              <h3 className="text-xs font-bold text-neutral-800">{providers.filter(p => getProviderComputedStatus(p) === 'WORKING').length}</h3>
             </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start shadow-sm">
-            <span className="w-2.5 h-2.5 bg-red-500 rounded-full" />
+          <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start">
+            <span className="w-2 h-2 bg-danger rounded-full" />
             <div>
-              <p className="text-[8px] uppercase font-black tracking-widest text-gray-400">Offline</p>
-              <h3 className="text-xs font-black text-gray-800">{providers.filter(p => getProviderComputedStatus(p) === 'OFFLINE').length}</h3>
+              <p className="text-[9px] uppercase font-bold text-neutral-500">Offline</p>
+              <h3 className="text-xs font-bold text-neutral-800">{providers.filter(p => getProviderComputedStatus(p) === 'OFFLINE').length}</h3>
             </div>
           </div>
           <button
             onClick={() => navigate('/admin/chat-monitor')}
-            className="hidden md:flex items-center gap-1.5 p-2.5 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all hover:scale-105 active:scale-95 shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-teal-700 text-white rounded-lg font-semibold text-xs transition-all hover:scale-105 active:scale-95 shrink-0"
             title="Open Chat Monitor"
           >
             <MessageSquare className="w-4 h-4" />
@@ -739,8 +739,8 @@ const LiveTrackingPage = () => {
           </button>
           <button
             onClick={fetchData}
-            className="hidden md:block p-2.5 bg-gray-150 hover:bg-gray-200 border border-gray-200 rounded-xl transition-all hover:scale-105 active:scale-95 shrink-0"
-            title="Ingest Live Logs"
+            className="hidden md:block p-2.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-lg transition-all hover:scale-105 active:scale-95 shrink-0"
+            title="Refresh Live Data"
           >
             <RefreshCw className="w-4 h-4 text-primary" />
           </button>
@@ -749,25 +749,25 @@ const LiveTrackingPage = () => {
 
       <div className="flex-1 flex flex-col-reverse lg:flex-row overflow-hidden relative">
         {/* Left Side Sidebar - Telemetry Panel & Dispatch Control */}
-        <div className="w-full lg:w-80 h-[40%] lg:h-full bg-white border-t lg:border-t-0 lg:border-r border-gray-200 flex flex-col relative z-10 shrink-0 shadow-sm">
-          <div className="p-3 md:p-4 border-b border-gray-200 shrink-0">
+        <div className="w-full lg:w-80 h-[40%] lg:h-full bg-white border-t lg:border-t-0 lg:border-r border-neutral-200 flex flex-col relative z-10 shrink-0">
+          <div className="p-4 border-b border-neutral-200 shrink-0">
             {/* Nav Tabs */}
-            <div className="flex bg-gray-100/80 p-1 rounded-xl border border-gray-200 mb-3">
+            <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 mb-3">
               <button
                 onClick={() => { setActiveTab('providers'); setSearchQuery(''); }}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all uppercase tracking-widest ${activeTab === 'providers' ? 'bg-primary text-white font-black shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold transition-all uppercase tracking-wider ${activeTab === 'providers' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
               >
                 Fleet
               </button>
               <button
                 onClick={() => { setActiveTab('bookings'); setSearchQuery(''); }}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all uppercase tracking-widest ${activeTab === 'bookings' ? 'bg-primary text-white font-black shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold transition-all uppercase tracking-wider ${activeTab === 'bookings' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
               >
                 Bookings
               </button>
               <button
                 onClick={() => { setActiveTab('logs'); setSearchQuery(''); }}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all uppercase tracking-widest ${activeTab === 'logs' ? 'bg-primary text-white font-black shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold transition-all uppercase tracking-wider ${activeTab === 'logs' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
               >
                 Logs
               </button>
@@ -776,13 +776,13 @@ const LiveTrackingPage = () => {
             {/* Filter Search Bar */}
             {activeTab !== 'logs' && (
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                 <input
                   type="text"
                   placeholder={activeTab === 'providers' ? 'Filter fleet...' : 'Filter active jobs...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-gray-55 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-primary/50 text-gray-900 placeholder-gray-450 transition-all font-sans"
+                  className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary/50 text-neutral-800 placeholder-neutral-400 transition-all"
                 />
               </div>
             )}

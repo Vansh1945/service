@@ -20,8 +20,8 @@ export const deleteAdmin = (id) => {
     return axiosInstance.delete(`/admin/admins/${id}`);
 };
 
-export const getAllCustomers = () => {
-    return axiosInstance.get("/admin/customers");
+export const getAllCustomers = (params) => {
+    return axiosInstance.get("/admin/customers", { params });
 };
 
 export const getCustomerById = (id) => {
