@@ -60,7 +60,77 @@ export default defineConfig(({ mode }) => {
           injectionPoint: undefined
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png'],
-        manifest: {}
+        manifest: {
+          name: "Raj Electrical Services",
+          short_name: "Raj Services",
+          description: "Book certified electricians for home and commercial electrical repairs, installations, and maintenance.",
+          id: "/",
+          start_url: "/",
+          display: "standalone",
+          background_color: "#ffffff",
+          theme_color: "#0D9488",
+          orientation: "portrait",
+          dir: "ltr",
+          lang: "en-US",
+          categories: ["business", "utilities"],
+          icons: [
+            {
+              src: "/icon-192.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any"
+            },
+            {
+              src: "/icon-192.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "maskable"
+            },
+            {
+              src: "/icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "any"
+            },
+            {
+              src: "/icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable"
+            }
+          ],
+          shortcuts: [
+            {
+              name: "Book Service",
+              short_name: "Book",
+              description: "Book an electrical service",
+              url: "/",
+              icons: [{ src: "/icon-192.png", sizes: "192x192" }]
+            }
+          ],
+          screenshots: [
+            {
+              src: "/icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+              form_factor: "wide",
+              label: "Raj Electrical Services Desktop"
+            },
+            {
+              src: "/icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+              form_factor: "narrow",
+              label: "Raj Electrical Services Mobile"
+            }
+          ],
+          launch_handler: {
+            client_mode: ["navigate-new", "focus-existing"]
+          },
+          edge_side_panel: {
+            preferred_width: 480
+          }
+        }
       })
     ],
 
