@@ -93,3 +93,7 @@ export const generateComplaintReport = (params, config) => {
 export const generateRefundReport = (params, config) => {
     return axiosInstance.get("/payment/admin/refund-report", { params, ...config });
 };
+
+export const adminDirectPayout = (data) => {
+    return axiosInstance.post("/payment/admin/payout/direct", data);
+};

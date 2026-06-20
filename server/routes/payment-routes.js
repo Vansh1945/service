@@ -21,6 +21,7 @@ router.get("/earnings-report", providerAuthMiddleware, paymentController.downloa
 router.get("/withdrawal-report", providerAuthMiddleware, paymentController.downloadWithdrawalReport);
 
 // Admin routes
+router.post("/admin/payout/direct", adminAuthMiddleware, paymentController.adminDirectPayout);
 router.get("/admin/withdrawal-requests", adminAuthMiddleware, paymentController.getAllWithdrawalRequests);
 router.put("/admin/withdrawal-request/:id/approve", adminAuthMiddleware, paymentController.approveWithdrawalRequest);
 router.put("/admin/withdrawal-request/:id/reject", adminAuthMiddleware, paymentController.rejectWithdrawalRequest);

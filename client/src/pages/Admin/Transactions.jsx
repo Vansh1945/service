@@ -396,9 +396,9 @@ const AdminTransactions = () => {
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
                                                     <PriceDisplay amount={commissionSplit} type={txn.type === 'refund' ? 'negative' : 'gray-bold'} prefix={txn.type === 'refund' ? '-' : ''} className="text-sm font-semibold" />
-                                                    {txn.commissionRule?.name && (
+                                                    {txn.booking?.commissionRule?.name && (
                                                         <span className="text-[9px] text-gray-400 italic opacity-85">
-                                                            {txn.commissionRule.name}
+                                                            {txn.booking.commissionRule.name}
                                                         </span>
                                                     )}
                                                 </div>
@@ -479,19 +479,32 @@ const AdminTransactions = () => {
 
                         {/* Modal Body */}
                         <div className="px-8 py-8 space-y-8 overflow-y-auto max-h-[70vh]">
-                            {/* Status and Amount Summary */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Total Paid</span>
-                                    <p className="text-3xl font-black text-secondary">
+                                    <p className="text-2xl font-black text-secondary">
                                         <PriceDisplay amount={getAmountInRupees(selectedTransaction)} type="text-only" />
                                     </p>
                                 </div>
-                                <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
+                                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Payment Status</span>
-                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border mt-1 ${getStatusColor(selectedTransaction.paymentStatus)}`}>
-                                        {getStatusIcon(selectedTransaction.paymentStatus)}
-                                        {selectedTransaction.paymentStatus?.toUpperCase()}
+                                    <div>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border mt-1 ${getStatusColor(selectedTransaction.paymentStatus)}`}>
+                                            {getStatusIcon(selectedTransaction.paymentStatus)}
+                                            {selectedTransaction.paymentStatus?.toUpperCase()}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Payment Method</span>
+                                    <span className="text-sm font-extrabold text-secondary uppercase block mt-1">
+                                        {selectedTransaction.paymentMethod || 'CASH'}
+                                    </span>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Transaction Date</span>
+                                    <span className="text-xs font-semibold text-secondary block mt-1">
+                                        {formatDateTime(selectedTransaction.createdAt)}
                                     </span>
                                 </div>
                             </div>
@@ -618,9 +631,9 @@ const AdminTransactions = () => {
                                     <div className="flex justify-between items-center text-sm border-t border-gray-205 pt-2">
                                         <div className="flex flex-col">
                                             <span className="text-gray-500">Commission (Platform)</span>
-                                            {selectedTransaction.commissionRule?.name && (
+                                            {selectedTransaction.booking?.commissionRule?.name && (
                                                 <span className="text-[10px] text-gray-400 italic">
-                                                    Rule: {selectedTransaction.commissionRule.name} ({selectedTransaction.commissionRule.rate}{selectedTransaction.commissionRule.type === 'percentage' ? '%' : ' Fixed'})
+                                                    Rule: {selectedTransaction.booking.commissionRule.name} ({selectedTransaction.booking.commissionRule.rate}{selectedTransaction.booking.commissionRule.type === 'percentage' ? '%' : ' Fixed'})
                                                 </span>
                                             )}
                                         </div>
@@ -700,28 +713,6 @@ const AdminTransactions = () => {
                                     </div>
                                 </div>
                             )}
-
-                            {/* Additional Info */}
-                            <div className="grid grid-cols-2 gap-8">
-                                <div>
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Payment Method</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                                            <CreditCard className="w-4 h-4 text-secondary" />
-                                        </div>
-                                        <span className="text-sm font-semibold text-secondary">{selectedTransaction.paymentMethod?.toUpperCase()}</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Transaction Date</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-1.5 bg-gray-100 rounded-lg">
-                                            <Calendar className="w-4 h-4 text-secondary" />
-                                        </div>
-                                        <span className="text-sm font-semibold text-secondary">{formatDateTime(selectedTransaction.createdAt)}</span>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         {/* Modal Footer */}

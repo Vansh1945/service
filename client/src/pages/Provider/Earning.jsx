@@ -1221,7 +1221,11 @@ const ProviderEarningsDashboard = () => {
                 <div>
                   <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Transfer Info</p>
                   <p className="text-sm font-semibold text-secondary">
-                    {selectedWithdrawal.transferDate ? `${formatDate(selectedWithdrawal.transferDate)}` : 'Pending'}
+                    {selectedWithdrawal.transferDate ? (
+                      selectedWithdrawal.transferTime 
+                        ? `${formatDate(selectedWithdrawal.transferDate)} at ${formatTime(selectedWithdrawal.transferTime)}`
+                        : formatDate(selectedWithdrawal.transferDate)
+                    ) : 'Pending'}
                   </p>
                 </div>
               </div>

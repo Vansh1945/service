@@ -388,6 +388,7 @@ const verifyPayment = async (req, res) => {
 
     // Update Transaction
     transaction.razorpayPaymentId = razorpay_payment_id;
+    transaction.transactionId = razorpay_payment_id;
     transaction.razorpaySignature = razorpay_signature;
     transaction.razorpayOrderId = razorpay_order_id;
     if (razorpayResponse) {
@@ -554,6 +555,7 @@ const handleSuccessfulPayment = async (payment, session) => {
 
   transaction.paymentStatus = 'success';
   transaction.razorpayPaymentId = payment.id;
+  transaction.transactionId = payment.id;
   transaction.razorpayResponse = payment;
   transaction.paymentMethod = payment.method || 'online';
   transaction.updatedAt = new Date();
@@ -611,6 +613,7 @@ const handleFailedPayment = async (payment, session) => {
     {
       paymentStatus: 'failed',
       razorpayPaymentId: payment.id,
+      transactionId: payment.id,
       razorpayResponse: payment,
       updatedAt: new Date()
     },
@@ -733,7 +736,10 @@ const getAllTransactions = async (req, res) => {
       .populate({
         path: 'booking',
         select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings companySurgeShare providerSurgeShare visitingCharge rainCharge trafficCharge nightCharge demandSurge platformFee customCharges commissionRule',
-        populate: { path: 'services.service', select: 'title' }
+        populate: [
+          { path: 'services.service', select: 'title' },
+          { path: 'commissionRule', select: 'name rate type' }
+        ]
       })
       .populate('provider', 'name email phone providerId')
       .sort({ createdAt: -1 })
@@ -769,10 +775,12 @@ const getTransactionById = async (req, res) => {
       .populate('user', 'name email phone')
       .populate({
         path: 'booking',
-        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied',
-        populate: { path: 'services.service', select: 'title' }
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings companySurgeShare providerSurgeShare visitingCharge rainCharge trafficCharge nightCharge demandSurge platformFee customCharges commissionRule',
+        populate: [
+          { path: 'services.service', select: 'title' },
+          { path: 'commissionRule', select: 'name rate type' }
+        ]
       })
-      // .populate('commissionRule', 'name rate type')
       .populate('provider', 'name email phone providerId')
       .lean();
 
@@ -1004,6 +1012,7 @@ const adminRetryVerify = async (req, res) => {
     // Process successful payment
     transaction.paymentStatus = 'success';
     transaction.razorpayPaymentId = successfulPayment.id;
+    transaction.transactionId = successfulPayment.id;
     transaction.razorpayResponse = successfulPayment;
     transaction.paymentMethod = successfulPayment.method || transaction.paymentMethod;
     transaction.updatedAt = new Date();

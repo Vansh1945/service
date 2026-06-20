@@ -3149,6 +3149,128 @@ const generateRefundReport = async (req, res) => {
   }
 };
 
+const adminDirectPayout = async (req, res) => {
+  const session = await safeStartSession();
+  if (session) {
+    session.startTransaction();
+  }
+
+  try {
+    const { providerId, amount, paymentMethod, transactionReference, utrNo, notes, transferDate, transferTime } = req.body;
+
+    if (!providerId) {
+      await safeAbort(session);
+      safeEnd(session);
+      return res.status(400).json({ success: false, message: "Provider ID is required" });
+    }
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      await safeAbort(session);
+      safeEnd(session);
+      return res.status(400).json({ success: false, message: "Valid payout amount is required" });
+    }
+
+    const provider = await Provider.findById(providerId);
+    if (!provider) {
+      await safeAbort(session);
+      safeEnd(session);
+      return res.status(404).json({ success: false, message: "Provider not found" });
+    }
+
+    if (!provider.wallet) {
+      provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+    }
+
+    if (provider.wallet.availableBalance < amount) {
+      await safeAbort(session);
+      safeEnd(session);
+      return res.status(400).json({ success: false, message: `Insufficient provider balance. Available: ₹${provider.wallet.availableBalance}` });
+    }
+
+    // Deduct available balance and increment total withdrawn
+    provider.wallet.availableBalance -= amount;
+    provider.wallet.totalWithdrawn += amount;
+    provider.wallet.lastUpdated = new Date();
+
+    if (session) {
+      await provider.save({ session });
+    } else {
+      await provider.save();
+    }
+
+    const finalMethod = ['bank_transfer', 'upi', 'neft', 'rtgs', 'other'].includes(paymentMethod) ? paymentMethod : 'bank_transfer';
+
+    const paymentRecord = new PaymentRecord({
+      provider: provider._id,
+      amount,
+      netAmount: amount,
+      paymentMethod: finalMethod,
+      paymentDetails: {
+        accountNumber: provider.bankDetails?.accountNo || '',
+        accountName: provider.bankDetails?.accountName || provider.name,
+        ifscCode: provider.bankDetails?.ifsc || '',
+        upiId: provider.bankDetails?.upiId || '',
+        bankName: provider.bankDetails?.bankName || '',
+      },
+      status: 'completed',
+      utrNo: utrNo || '',
+      transferDate: transferDate ? new Date(transferDate) : new Date(),
+      transferTime: transferTime || new Date().toLocaleTimeString('en-US', { hour12: false }),
+      adminRemark: notes || "Direct payout processed by Admin",
+      admin: req.admin._id,
+      completedAt: new Date(),
+      transactionReference: transactionReference || `PAYOUT-DIR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+    });
+
+    if (session) {
+      await paymentRecord.save({ session });
+    } else {
+      await paymentRecord.save();
+    }
+
+    await safeCommit(session);
+    safeEnd(session);
+
+    // Notify provider about the direct payout
+    try {
+      sendNotification(
+        provider._id,
+        'provider',
+        'Direct Payout Released',
+        `Admin has released a direct payout of ₹${amount} to your account.`,
+        'payout',
+        paymentRecord._id
+      );
+      await sendMail({
+        to: provider.email,
+        templateType: 'withdrawApproved',
+        variables: {
+          name: provider.name,
+          withdrawAmount: amount,
+          remark: notes || 'Direct payout processed by Admin',
+          date: new Date().toLocaleDateString()
+        }
+      });
+    } catch (err) { /* ignore */ }
+
+    return res.status(200).json({
+      success: true,
+      message: "Direct payout processed successfully",
+      data: paymentRecord
+    });
+
+  } catch (error) {
+    await safeAbort(session);
+    safeEnd(session);
+    console.error("Error initiating direct payout:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during direct payout",
+      error: error.message
+    });
+  }
+};
+
 
 module.exports = {
   // Webhook
@@ -3177,5 +3299,6 @@ module.exports = {
   outstandingBalanceReport,
   releaseHeldEarnings,
   generateComplaintReport,
-  generateRefundReport
+  generateRefundReport,
+  adminDirectPayout
 };

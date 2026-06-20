@@ -100,7 +100,15 @@ const transactionSchema = new Schema({
 // Generate transaction ID
 transactionSchema.pre('save', function (next) {
   if (!this.transactionId) {
-    this.transactionId = `txn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const paymentMethodLower = this.paymentMethod?.toLowerCase();
+    if (paymentMethodLower === 'wallet') {
+      this.transactionId = `TXN-WLT-${Date.now()}`;
+    } else if (paymentMethodLower === 'cash') {
+      const suffix = this.bookingId ? this.bookingId.slice(-6) : Math.floor(Math.random() * 1000);
+      this.transactionId = `CASH-${Date.now()}-${suffix}`;
+    } else {
+      this.transactionId = `TXN_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    }
   }
   this.updatedAt = Date.now();
   next();

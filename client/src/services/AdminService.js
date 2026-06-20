@@ -36,8 +36,8 @@ export const updateProviderStatus = (id, data) => {
     return axiosInstance.put(`/admin/providers/${id}/status`, data);
 };
 
-export const getAllProviders = () => {
-    return axiosInstance.get("/admin/providers");
+export const getAllProviders = (params) => {
+    return axiosInstance.get("/admin/providers", { params });
 };
 
 export const getProviderDetails = (id) => {
