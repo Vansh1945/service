@@ -16,6 +16,8 @@ import { formatAddress } from '../../utils/providerHelpers';
 
 
 
+import PwaInstallBanner from '../../components/PwaInstallBanner';
+
 const Dashboard = () => {
   const { token, showToast } = useAuth();
 
@@ -173,6 +175,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 font-inter animate-slide-up">
       <div className="max-w-7xl mx-auto space-y-6">
+        <PwaInstallBanner role="provider" />
 
         {/* Header */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center md:justify-between gap-4">

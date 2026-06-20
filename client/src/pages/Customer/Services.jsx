@@ -17,6 +17,7 @@ import ServiceCard from './components/ServiceCard';
 import ServiceEmptyState from './components/ServiceEmptyState';
 import { getDynamicCategoryIcon } from './components/categoryIconHelper';
 import ServiceFilterPanel from './components/ServiceFilterPanel';
+import PwaInstallBanner from '../../components/PwaInstallBanner';
 
 const ServiceListingPage = () => {
   const navigate = useNavigate();
@@ -260,6 +261,7 @@ const ServiceListingPage = () => {
 
       {/* Main Container */}
       <div className="max-w-[98%] mx-auto px-2 md:px-4 py-2 flex flex-col gap-5">
+        <PwaInstallBanner role="customer" />
 
         {/* Horizontal Categories Ribbon */}
         <div className="relative bg-white rounded-2xl border border-gray-100 p-2 md:p-3.5 shadow-sm">

@@ -17,6 +17,7 @@ import Processing from '../../components/ui-skeletons/Processing';
 import ErrorState from '../../components/Error';
 import { formatDate, formatTime, formatCurrency } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
+import PwaInstallBanner from '../../components/PwaInstallBanner';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -513,6 +514,8 @@ const BookingConfirmation = () => {
       </div>
 
       <div className="max-w-[98%] mx-auto px-4 pt-4 pb-2">
+        <PwaInstallBanner role="customer" />
+
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-5">

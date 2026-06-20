@@ -444,6 +444,24 @@ const App = () => {
       return;
     }
 
+    const installTarget = params.get('install');
+    if (installTarget && ['customer', 'provider'].includes(installTarget)) {
+      // Clear URL params to avoid loops
+      const newUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+
+      localStorage.setItem("installMode", "standalone");
+      localStorage.setItem("installRole", installTarget);
+      
+      // Dispatch trigger PWA install event after a brief delay to let page mount
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('triggerPwaInstall', {
+          detail: { role: installTarget }
+        }));
+      }, 800);
+      return;
+    }
+
     if (route) {
       setIsDeepLink(true);
 
