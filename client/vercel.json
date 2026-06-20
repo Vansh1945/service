@@ -31,6 +31,22 @@
   ],
   "routes": [
     {
+      "src": "/logo.png",
+      "dest": "https://raj-electrical-services.onrender.com/api/system-setting/settings/branding-logo?role=customer"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "https://raj-electrical-services.onrender.com/api/system-setting/settings/branding-favicon?role=customer"
+    },
+    {
+      "src": "/icon-192.png",
+      "dest": "https://raj-electrical-services.onrender.com/api/system-setting/settings/branding-logo?role=customer"
+    },
+    {
+      "src": "/icon-512.png",
+      "dest": "https://raj-electrical-services.onrender.com/api/system-setting/settings/branding-logo?role=customer"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://raj-electrical-services.onrender.com/api/$1"
     },

@@ -1053,6 +1053,45 @@ const restoreDefaultTemplate = async (req, res) => {
 };
 
 
+// getBrandingLogoRedirect()
+const getBrandingLogoRedirect = async (req, res) => {
+  try {
+    const { role = 'customer' } = req.query;
+    const config = await SystemConfig.findOne();
+    if (!config) {
+      return res.status(404).send('Config not found');
+    }
+    const branding = config[`${role}Branding`] || {};
+    const logoUrl = branding.logo || branding.icon || config.logo;
+    if (logoUrl) {
+      return res.redirect(logoUrl);
+    }
+    res.status(404).send('Logo not found');
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+};
+
+// getBrandingFaviconRedirect()
+const getBrandingFaviconRedirect = async (req, res) => {
+  try {
+    const { role = 'customer' } = req.query;
+    const config = await SystemConfig.findOne();
+    if (!config) {
+      return res.status(404).send('Config not found');
+    }
+    const branding = config[`${role}Branding`] || {};
+    const faviconUrl = branding.favicon || config.favicon || branding.icon || config.logo;
+    if (faviconUrl) {
+      return res.redirect(faviconUrl);
+    }
+    res.status(404).send('Favicon not found');
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+};
+
+
 module.exports = {
   getSystemSetting,
   updateSystemSetting,
@@ -1076,5 +1115,7 @@ module.exports = {
   updateEmailTemplate,
   previewEmailTemplate,
   testSendEmailTemplate,
-  restoreDefaultTemplate
+  restoreDefaultTemplate,
+  getBrandingLogoRedirect,
+  getBrandingFaviconRedirect
 };

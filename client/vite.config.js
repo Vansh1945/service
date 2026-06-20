@@ -59,7 +59,7 @@ export default defineConfig(({ mode }) => {
         injectManifest: {
           injectionPoint: undefined
         },
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png'],
+        includeAssets: ['apple-touch-icon.png', 'masked-icon.svg'],
         manifest: {
           name: "Raj Electrical Services",
           short_name: "Raj Services",
@@ -158,9 +158,7 @@ export default defineConfig(({ mode }) => {
               if (id.includes('lucide-react') || id.includes('react-icons') || id.includes('@heroicons')) {
                 return 'vendor-icons';
               }
-              if (id.includes('@mui') || id.includes('@emotion')) {
-                return 'vendor-mui';
-              }
+
               if (id.includes('react-datepicker') || id.includes('react-time-picker')) {
                 return 'vendor-pickers';
               }

@@ -69,6 +69,8 @@ const uploadBrandingSettings = multer({
 router.get('/system-data', systemSettingController.getSystemSetting);
 router.get('/categories', systemSettingController.getActiveCategories);
 router.get('/banners', systemSettingController.getBanners);
+router.get('/settings/branding-logo', systemSettingController.getBrandingLogoRedirect);
+router.get('/settings/branding-favicon', systemSettingController.getBrandingFaviconRedirect);
 
 // BRANDING ROUTES (Publicly readable, but updates are admin protected)
 router.get('/settings/branding/:role', systemSettingController.getBrandingSettings);
