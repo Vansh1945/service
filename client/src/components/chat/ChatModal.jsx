@@ -473,15 +473,14 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
           )}
           <div ref={messagesEndRef} />
         </div>
-
         {/* QUICK ACTION BUBBLES */}
         {!isLocked && !loading && !error && (
-          <div className="px-3 py-1.5 bg-white border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-hide">
+          <div className="px-3 py-2 bg-slate-50/50 border-t border-gray-100 flex flex-wrap items-center gap-2 shrink-0">
             {quickReplies.map((reply) => (
               <button
                 key={reply}
                 onClick={() => handleSendMessage(reply)}
-                className="px-2.5 py-1 bg-gray-50 hover:bg-primary hover:text-white border border-gray-200 hover:border-primary text-secondary text-[10px] font-bold rounded-full transition-all shrink-0 active:scale-95 shadow-sm"
+                className="px-3 py-1 bg-white hover:bg-primary/5 text-slate-700 hover:text-primary border border-slate-200 hover:border-primary/50 text-xs font-semibold rounded-full shadow-sm hover:shadow transition-all duration-200 active:scale-95"
               >
                 {reply}
               </button>

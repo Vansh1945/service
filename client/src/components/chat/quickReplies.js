@@ -1,6 +1,6 @@
 /**
- * Predefined quick reply messages based on user roles and booking statuses
- * Used in ChatModal to show quick action message chips.
+ * Predefined quick reply messages based on user roles and booking statuses.
+ * Stylized and selected to mimic quick-replies in delivery & ride-sharing apps (Blinkit, Rapido, etc.).
  */
 
 export const getQuickReplies = (role, status = 'pending') => {
@@ -21,24 +21,62 @@ export const getQuickReplies = (role, status = 'pending') => {
   // Customer Quick Replies
   if (normRole === 'customer') {
     if (normStatus === 'completed') {
-      return ['Call me', 'Thanks for the service', 'Please check the issue'];
+      return [
+        'Thanks for the service!',
+        'Great job, thank you.',
+        'Need help',
+        'Please call me'
+      ];
     }
     if (normStatus === 'pending') {
-      return ['Call me', 'Please accept the booking', 'Is this date available?'];
+      return [
+        'Please accept the booking',
+        'Is this timing confirmed?',
+        'Please call me',
+        'Need help'
+      ];
     }
-    return ['Gate open', 'Call me', 'Reached home', 'Please come fast'];
+    // For accepted, in-progress, etc.
+    return [
+      'Where are you?',
+      'Please come fast',
+      'Gate is open',
+      'Call me when you reach',
+      'I am at home',
+      'Need help'
+    ];
   }
 
   // Provider Quick Replies
   if (normRole === 'provider') {
     if (normStatus === 'completed') {
-      return ['Need response', 'Thank you', 'Work completed'];
+      return [
+        'Thank you!',
+        'Work completed',
+        'Please rate the service',
+        'Need help'
+      ];
     }
     if (normStatus === 'pending') {
-      return ['Need response', 'I can accept this booking', 'Let me check availability'];
+      return [
+        'I can accept this booking',
+        'Let me check availability',
+        'Need help',
+        'Please confirm booking'
+      ];
     }
-    
-    const defaultList = ['Arriving in 10 min', 'Reached location', 'Work started', 'Need response'];
+
+    // For accepted, confirmed, in-progress, etc.
+    const defaultList = [
+      'I am on my way',
+      'Arriving in 5 min',
+      'Arriving in 10 min',
+      'Reached location',
+      'Please come outside',
+      'Work started',
+      'Need help'
+    ];
+
     if (['accepted', 'confirmed'].includes(normStatus)) {
       return defaultList.filter(r => r !== 'Work started');
     }
@@ -47,3 +85,4 @@ export const getQuickReplies = (role, status = 'pending') => {
 
   return [];
 };
+

@@ -69,8 +69,6 @@ const getBrandingVersion = () => {
 };
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    const version = getBrandingVersion();
-    navigator.serviceWorker.register(`/sw.js?v=${version}`).catch(err => console.error('SW registration failed:', err));
-  });
+  const version = getBrandingVersion();
+  navigator.serviceWorker.register(`/sw.js?v=${version}`).catch(err => console.error('SW registration failed:', err));
 }

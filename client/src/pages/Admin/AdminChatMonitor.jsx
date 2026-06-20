@@ -715,13 +715,13 @@ const AdminChatMonitor = () => {
                 ) : (
                   <div className="space-y-2">
                     {/* QUICK ACTION BUBBLES */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none pb-1">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 pb-1.5">
                       {getQuickReplies('admin', selectedRoom?.bookingId?.status).map((reply) => (
                         <button
                           key={reply}
                           type="button"
                           onClick={() => handleAdminSendMessage(null, reply)}
-                          className="px-2.5 py-1 bg-gray-50 hover:bg-primary hover:text-white border border-gray-200 hover:border-primary text-secondary text-[10px] font-bold rounded-full transition-all shrink-0 active:scale-95 shadow-sm cursor-pointer"
+                          className="px-3 py-1 bg-white hover:bg-primary/5 text-slate-700 hover:text-primary border border-slate-200 hover:border-primary/50 text-xs font-semibold rounded-full shadow-sm hover:shadow transition-all duration-200 active:scale-95 cursor-pointer"
                         >
                           {reply}
                         </button>
