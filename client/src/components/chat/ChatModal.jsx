@@ -426,7 +426,7 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
       <div
         ref={modalRef}
         className="relative z-10 bg-white/95 backdrop-blur-md flex flex-col shadow-2xl border border-gray-150 transition-all duration-300 ease-out transform
-          w-full h-[80vh] rounded-t-2xl md:mr-6 md:mb-6 md:w-96 md:h-[580px] md:rounded-2xl"
+          w-full h-[80vh] rounded-t-2xl md:mr-6 md:mb-6 md:w-96 md:h-[580px] md:rounded-2xl overflow-hidden"
       >
         {/* HEADER PANEL */}
         <div className="flex flex-col bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 shrink-0 rounded-t-2xl px-4 py-3">
@@ -512,7 +512,7 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
         </div>
 
         {/* MESSAGES THREAD VIEWPORT */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3 bg-gray-50/50 scrollbar-hide">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader className="w-6 h-6 text-primary mb-2 animate-spin" />
