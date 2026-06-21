@@ -926,6 +926,9 @@ const ComplaintsPage = () => {
     endDate: '', userType: '', providerId: ''
   });
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });
+  const [customerCount, setCustomerCount] = useState(0);
+  const [providerCount, setProviderCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const statusOptions = [
     { value: '', label: 'All Status' },
@@ -956,6 +959,9 @@ const ComplaintsPage = () => {
       if (res.data?.success) {
         setComplaints(res.data.data || []);
         setPagination(p => ({ ...p, total: res.data.total || 0, pages: res.data.pages || 1 }));
+        setCustomerCount(res.data.customerCount || 0);
+        setProviderCount(res.data.providerCount || 0);
+        setPendingCount(res.data.pendingCount || 0);
       } else showToast('Failed to fetch complaints', 'error');
     } catch { showToast('Error fetching complaints', 'error'); }
     finally { setLoading(false); }

@@ -389,6 +389,10 @@ const getAllComplaints = async (req, res) => {
     // Get total count for pagination
     const total = await Complaint.countDocuments(query);
 
+    const customerCount = await Complaint.countDocuments({ ...query, userType: 'customer' });
+    const providerCount = await Complaint.countDocuments({ ...query, userType: 'provider' });
+    const pendingCount = await Complaint.countDocuments({ ...query, status: { $in: ['submitted', 'Open', 'In-Progress'] } });
+
     // Extract all provider IDs to batch-count complaints in a single aggregate query
     const providerIds = complaints.map(c => c.provider?._id || c.provider).filter(Boolean);
     const countResults = await Complaint.aggregate([
@@ -415,6 +419,9 @@ const getAllComplaints = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / limit),
+      customerCount,
+      providerCount,
+      pendingCount
     });
   } catch (error) {
     console.error('Error fetching complaints:', error);
