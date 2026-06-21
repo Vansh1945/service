@@ -499,26 +499,38 @@ cron.schedule('* * * * *', async () => {
     try {
         const mongoose = require('mongoose');
         const Booking = mongoose.model('Booking');
-        const timeoutThreshold = new Date(Date.now() - 45 * 1000); // 45 seconds timeout
-        const expiredBookings = await Booking.find({
-            status: 'assigned',
-            provider: { $ne: null },
-            'metadata.assignedAt': { $lte: timeoutThreshold }
-        });
+        const { SystemConfig } = require('../models/SystemSetting');
 
-        for (const booking of expiredBookings) {
-            console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Re-assigning...`);
-            
-            if (!booking.metadata) booking.metadata = {};
-            if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
-            booking.metadata.ignoredProviders.push(booking.provider);
-            
-            booking.provider = null;
-            booking.status = 'pending';
-            await booking.save();
+        let settings = await SystemConfig.findOne();
+        if (!settings) {
+            settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
+            await settings.save();
+        }
 
-            const ProviderAssignmentService = require('../services/ProviderAssignmentService');
-            ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
+        const enableTimeout = settings?.bookingSettings?.enableProviderAcceptTimeout !== false;
+        if (enableTimeout) {
+            const timeoutMinutes = settings?.bookingSettings?.providerAcceptTimeoutMinutes || 5;
+            const timeoutThreshold = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+            const expiredBookings = await Booking.find({
+                status: 'assigned',
+                provider: { $ne: null },
+                'metadata.assignedAt': { $lte: timeoutThreshold }
+            });
+
+            for (const booking of expiredBookings) {
+                console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Re-assigning...`);
+                
+                if (!booking.metadata) booking.metadata = {};
+                if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
+                booking.metadata.ignoredProviders.push(booking.provider);
+                
+                booking.provider = null;
+                booking.status = 'pending';
+                await booking.save();
+
+                const ProviderAssignmentService = require('../services/ProviderAssignmentService');
+                ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
+            }
         }
 
         const now = new Date();

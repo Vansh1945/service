@@ -154,6 +154,14 @@ const systemConfigSchema = new mongoose.Schema(
       endTime: {
         type: String,
         default: "21:00"
+      },
+      enableProviderAcceptTimeout: {
+        type: Boolean,
+        default: true
+      },
+      providerAcceptTimeoutMinutes: {
+        type: Number,
+        default: 5
       }
     },
     walletSettings: {

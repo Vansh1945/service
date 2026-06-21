@@ -63,7 +63,9 @@ const SystemSetting = () => {
       maxBookingDays: 3,
       slotInterval: 30,
       startTime: '09:00',
-      endTime: '21:00'
+      endTime: '21:00',
+      enableProviderAcceptTimeout: true,
+      providerAcceptTimeoutMinutes: 5
     },
     walletSettings: {
       minWithdrawal: 500,
@@ -201,6 +203,8 @@ const SystemSetting = () => {
             slotInterval: settingsData.data.bookingSettings?.slotInterval ?? 30,
             startTime: settingsData.data.bookingSettings?.startTime || "09:00",
             endTime: settingsData.data.bookingSettings?.endTime || "21:00",
+            enableProviderAcceptTimeout: settingsData.data.bookingSettings?.enableProviderAcceptTimeout ?? true,
+            providerAcceptTimeoutMinutes: settingsData.data.bookingSettings?.providerAcceptTimeoutMinutes ?? 5,
           },
           walletSettings: {
             minWithdrawal: settingsData.data.walletSettings?.minWithdrawal ?? 500,
@@ -796,7 +800,7 @@ const SystemSetting = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                <ToggleSwitch
+                 <ToggleSwitch
                   label="Auto Assign Provider"
                   description={
                     systemSettings.bookingSettings.autoAssignProvider
@@ -806,6 +810,27 @@ const SystemSetting = () => {
                   checked={systemSettings.bookingSettings.autoAssignProvider}
                   onChange={(val) => handleNestedChange('bookingSettings', 'autoAssignProvider', val)}
                 />
+
+                <ToggleSwitch
+                  label="Enable Provider Acceptance Timeout"
+                  description="Automatically unassign booking if provider does not accept within the timeout window."
+                  checked={systemSettings.bookingSettings.enableProviderAcceptTimeout}
+                  onChange={(val) => handleNestedChange('bookingSettings', 'enableProviderAcceptTimeout', val)}
+                />
+
+                {systemSettings.bookingSettings.enableProviderAcceptTimeout && (
+                  <div>
+                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Provider Acceptance Timeout (Minutes)</label>
+                    <input
+                      type="number"
+                      value={systemSettings.bookingSettings.providerAcceptTimeoutMinutes}
+                      onChange={(e) => handleNestedChange('bookingSettings', 'providerAcceptTimeoutMinutes', Number(e.target.value))}
+                      min="1"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5 font-inter">Time in minutes after which an unaccepted auto-assigned booking is released back to pending.</p>
+                  </div>
+                )}
 
                 <ToggleSwitch
                   label="Allow Pay after Service (COD)"
