@@ -448,6 +448,14 @@ const verifyPayment = async (req, res) => {
       }
     });
 
+    // Trigger auto-assignment asynchronously
+    try {
+      const ProviderAssignmentService = require('../services/ProviderAssignmentService');
+      ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
+    } catch (assignError) {
+      console.error('Error triggering auto-assignment after verification:', assignError);
+    }
+
   } catch (error) {
     await session.abortTransaction();
     console.error('Error verifying payment:', error);
@@ -503,11 +511,18 @@ const handleWebhook = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
+  let bookingToAssignId = null;
+
   try {
     // Handle different webhook events
     switch (event) {
       case 'payment.captured':
         await handleSuccessfulPayment(payment, session);
+        // Find the transaction to get booking ID
+        const txn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
+        if (txn) {
+          bookingToAssignId = txn.booking;
+        }
         break;
       case 'payment.failed':
         await handleFailedPayment(payment, session);
@@ -521,6 +536,15 @@ const handleWebhook = async (req, res) => {
 
     await session.commitTransaction();
     res.json({ success: true });
+
+    if (bookingToAssignId) {
+      try {
+        const ProviderAssignmentService = require('../services/ProviderAssignmentService');
+        ProviderAssignmentService.autoAssignProviderIfEnabled(bookingToAssignId);
+      } catch (assignError) {
+        console.error('Error triggering auto-assignment after webhook captured:', assignError);
+      }
+    }
   } catch (error) {
     await session.abortTransaction();
     console.error('Webhook processing error:', error);

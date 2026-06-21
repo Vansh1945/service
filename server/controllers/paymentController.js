@@ -193,12 +193,21 @@ const handleWebhook = async (req, res) => {
 // PRODUCTION FIX
 const handlePaymentCaptured = async (payment) => {
   const session = await safeStartSession();
+  let bookingId = null;
   try {
     if (session) {
       await session.withTransaction(async () => {
+        const existingTxn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
+        if (existingTxn) {
+          bookingId = existingTxn.booking;
+        }
         await executePaymentCapturedOperations(payment, session);
       });
     } else {
+      const existingTxn = await Transaction.findOne({ razorpayOrderId: payment.order_id });
+      if (existingTxn) {
+        bookingId = existingTxn.booking;
+      }
       await executePaymentCapturedOperations(payment, null);
     }
   } catch (error) {
@@ -207,6 +216,15 @@ const handlePaymentCaptured = async (payment) => {
   } finally {
     if (session) {
       await session.endSession();
+    }
+  }
+
+  if (bookingId) {
+    try {
+      const ProviderAssignmentService = require('../services/ProviderAssignmentService');
+      ProviderAssignmentService.autoAssignProviderIfEnabled(bookingId);
+    } catch (assignError) {
+      console.error('Error triggering auto-assignment after payment capture:', assignError);
     }
   }
 };

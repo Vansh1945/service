@@ -95,6 +95,15 @@ class ProviderAssignmentService {
       }
 
       if (!settings || !settings.bookingSettings || !settings.bookingSettings.autoAssignProvider) {
+        const booking = await Booking.findById(bookingId).populate('services.service');
+        if (booking && !booking.provider) {
+          const { triggerEventNotification } = require('../utils/notificationHelper');
+          await triggerEventNotification('booking_created', {
+            serviceName: booking.services?.[0]?.serviceDetails?.title || 'service',
+            street: booking.address?.street || 'your area',
+            booking
+          });
+        }
         return null;
       }
 
