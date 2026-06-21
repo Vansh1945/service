@@ -51,6 +51,8 @@ router.post('/send', sharedChatAuth, requireCustomerOrProviderOrAdmin, chatContr
 router.get('/messages/:roomId', sharedChatAuth, requireCustomerOrProviderOrAdmin, chatController.getMessages);
 router.patch('/mark-seen', sharedChatAuth, requireCustomerOrProviderOrAdmin, chatController.markSeen);
 router.post('/typing', sharedChatAuth, requireCustomerOrProviderOrAdmin, chatController.typingStatus);
+router.post('/delete-for-me', sharedChatAuth, requireCustomerOrProviderOrAdmin, chatController.deleteMessageForMe);
+router.get('/search/:roomId', sharedChatAuth, requireCustomerOrProviderOrAdmin, chatController.searchMessages);
 
 const { uploadComplaintImage, handleUploadErrors } = require('../middlewares/upload');
 

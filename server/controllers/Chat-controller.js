@@ -163,8 +163,8 @@ const createRoom = async (req, res) => {
 
     // Return existing room if already created
     let room = await ChatRoom.findOne(query)
-      .populate('customerId', 'name email phone profilePicUrl')
-      .populate('providerId', 'name email phone profilePicUrl providerId isOnline');
+      .populate('customerId', 'name email phone profilePicUrl lastSeen')
+      .populate('providerId', 'name email phone profilePicUrl providerId isOnline lastSeen');
 
     if (room) {
       let isModified = false;
@@ -252,8 +252,8 @@ const createRoom = async (req, res) => {
 
     // Populate profiles
     await room.populate([
-      { path: 'customerId', select: 'name email phone profilePicUrl' },
-      { path: 'providerId', select: 'name email phone profilePicUrl providerId isOnline' }
+      { path: 'customerId', select: 'name email phone profilePicUrl lastSeen' },
+      { path: 'providerId', select: 'name email phone profilePicUrl providerId isOnline lastSeen' }
     ]);
 
     // Send admin notification if it is a provider_customer room
@@ -319,6 +319,20 @@ const sendMessage = async (req, res) => {
     }
 
     // Build message
+    const { getSocketId } = require('../socket/userSocketMap');
+    let isOtherOnline = false;
+    let otherPartyId = null;
+
+    if (senderRole === 'customer') {
+      otherPartyId = room.providerId;
+    } else if (senderRole === 'provider') {
+      otherPartyId = room.customerId;
+    }
+
+    if (otherPartyId) {
+      isOtherOnline = !!getSocketId(otherPartyId);
+    }
+
     const newMessage = {
       senderId,
       senderRole,
@@ -326,7 +340,10 @@ const sendMessage = async (req, res) => {
       content: messageType === 'text' || messageType === 'system' ? content : '',
       fileUrl: fileUrl || null,
       seen: false,
-      delivered: true,
+      replyTo: req.body.replyTo || null,
+      delivered: isOtherOnline,
+      deliveredAt: isOtherOnline ? new Date() : null,
+      status: isOtherOnline ? 'delivered' : 'sent',
       createdAt: new Date()
     };
 
@@ -436,11 +453,17 @@ const adminGetMessages = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Chat room not found' });
     }
 
+    const adminId = req.adminID || (req.user && req.user._id) || req.userID;
+    // Filter messages that are NOT deleted for this admin
+    const visibleMessages = room.messages.filter(msg => {
+      return !msg.deletedForUsers || !msg.deletedForUsers.some(id => id.toString() === adminId.toString());
+    });
+
     // Pagination – same logic as getMessages
-    const totalMessages = room.messages.length;
+    const totalMessages = visibleMessages.length;
     const startIndex = Math.max(0, totalMessages - (page * limit));
     const endIndex = totalMessages - ((page - 1) * limit);
-    const paginatedMessages = room.messages.slice(startIndex, endIndex);
+    const paginatedMessages = visibleMessages.slice(startIndex, endIndex);
 
     res.status(200).json({
       success: true,
@@ -487,12 +510,17 @@ const getMessages = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized access to chat room' });
     }
 
+    // Filter messages that are NOT deleted for this user
+    const visibleMessages = room.messages.filter(msg => {
+      return !msg.deletedForUsers || !msg.deletedForUsers.some(id => id.toString() === userId.toString());
+    });
+
     // Slice messages arrays for in-memory pagination
-    const totalMessages = room.messages.length;
+    const totalMessages = visibleMessages.length;
     const startIndex = Math.max(0, totalMessages - (page * limit));
     const endIndex = totalMessages - ((page - 1) * limit);
 
-    const paginatedMessages = room.messages.slice(startIndex, endIndex);
+    const paginatedMessages = visibleMessages.slice(startIndex, endIndex);
 
     res.status(200).json({
       success: true,
@@ -730,6 +758,93 @@ const uploadChatFile = async (req, res) => {
   }
 };
 
+/**
+ * 10. Delete a message for current user (Delete For Me)
+ */
+const deleteMessageForMe = async (req, res) => {
+  try {
+    const { roomId, messageId } = req.body;
+    const userId = (req.user && req.user._id) || req.adminID || req.providerId || req.userID;
+
+    if (!roomId || !messageId) {
+      return res.status(400).json({ success: false, message: 'Room ID and Message ID are required' });
+    }
+
+    const room = await ChatRoom.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ success: false, message: 'Chat room not found' });
+    }
+
+    // Find the message
+    const msg = room.messages.id(messageId);
+    if (!msg) {
+      return res.status(404).json({ success: false, message: 'Message not found' });
+    }
+
+    // Add user to deletedForUsers if not already there
+    if (!msg.deletedForUsers.some(id => id.toString() === userId.toString())) {
+      msg.deletedForUsers.push(userId);
+      await room.save();
+    }
+
+    res.status(200).json({ success: true, message: 'Message deleted for you successfully' });
+  } catch (error) {
+    console.error('Error in deleteMessageForMe:', error);
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
+/**
+ * 11. Search messages in a room
+ */
+const searchMessages = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { q } = req.query;
+    const userId = (req.user && req.user._id) || req.adminID || req.providerId || req.userID;
+    const userRole = req.role;
+
+    if (!roomId) {
+      return res.status(400).json({ success: false, message: 'Room ID is required' });
+    }
+    if (!q) {
+      return res.status(400).json({ success: false, message: 'Search query is required' });
+    }
+
+    const room = await ChatRoom.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ success: false, message: 'Chat room not found' });
+    }
+
+    // Verify participant
+    const isCustomer = room.customerId && room.customerId.toString() === userId.toString() && userRole === 'customer';
+    const isProvider = room.providerId && room.providerId.toString() === userId.toString() && userRole === 'provider';
+    const isAdmin = userRole === 'admin';
+
+    if (!isCustomer && !isProvider && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Unauthorized access to chat room' });
+    }
+
+    const searchRegex = new RegExp(q, 'i');
+    const matchedMessages = room.messages.filter(msg => {
+      // Must not be deleted for this user
+      const isDeleted = msg.deletedForUsers && msg.deletedForUsers.some(id => id.toString() === userId.toString());
+      if (isDeleted) return false;
+
+      // Must match search term
+      return msg.content && searchRegex.test(msg.content);
+    });
+
+    res.status(200).json({
+      success: true,
+      data: matchedMessages
+    });
+  } catch (error) {
+    console.error('Error in searchMessages:', error);
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
 module.exports = {
   adminGetMessages,
   createRoom,
@@ -739,5 +854,7 @@ module.exports = {
   typingStatus,
   adminMonitor,
   joinAdmin,
-  uploadChatFile
+  uploadChatFile,
+  deleteMessageForMe,
+  searchMessages
 };

@@ -280,6 +280,44 @@ const initSocket = (httpServer) => {
             socket.join('admin_live_room');
         }
 
+        // Mark undelivered messages as delivered for this user
+        (async () => {
+            try {
+                const ChatRoom = require('../models/ChatRoom-model');
+                const rooms = await ChatRoom.find({
+                    $or: [
+                        { customerId: userId },
+                        { providerId: userId }
+                    ]
+                });
+                
+                for (const room of rooms) {
+                    let modified = false;
+                    const recipientIdStr = userId.toString();
+                    room.messages.forEach(msg => {
+                        if (msg.senderId.toString() !== recipientIdStr && !msg.delivered) {
+                            msg.delivered = true;
+                            msg.deliveredAt = new Date();
+                            if (msg.status === 'sent') {
+                                msg.status = 'delivered';
+                            }
+                            modified = true;
+                        }
+                    });
+                    
+                    if (modified) {
+                        await room.save();
+                        io.to(room._id.toString()).emit('chat:delivered', {
+                            roomId: room._id.toString(),
+                            deliveredBy: userId
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Error marking undelivered messages on connect:', err.message);
+            }
+        })();
+
         // 1. Join Tracking Room
         socket.on('join-booking-tracking', async ({ bookingId }) => {
             try {
@@ -303,7 +341,7 @@ const initSocket = (httpServer) => {
                     if (provider && socket.userRole === 'customer') {
                         const isThisBookingActive = provider.activeBooking && 
                                                     provider.activeBooking.toString() === bookingId.toString();
-                        const isTrackable = (isThisBookingActive && ['accepted'].includes(booking.status)) ||
+                        const isTrackable = (isThisBookingActive && ['accepted', 'assigned'].includes(booking.status)) ||
                                             ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
                         if (!isTrackable) {
                             trackingEnabled = false;
@@ -371,7 +409,7 @@ const initSocket = (httpServer) => {
 
                 // Security: tracking only while en route / in service
                 const blockedStatuses = ['completed', 'cancelled', 'pending', 'no-show'];
-                const allowedStatuses = ['accepted', 'arriving', 'started', 'in-progress', 'in_progress'];
+                const allowedStatuses = ['accepted', 'arriving', 'started', 'in-progress', 'in_progress', 'assigned'];
                 if (blockedStatuses.includes(booking.status) || !allowedStatuses.includes(booking.status)) {
                     return socket.emit('error-alert', { message: 'Location tracking is inactive for this status' });
                 }
@@ -555,6 +593,46 @@ const initSocket = (httpServer) => {
                     console.log(`💬 Socket user ${userId} also joined namespace room: ${ns}`);
                     // Broadcast online status to the room
                     io.to(roomId.toString()).emit('chat:user-online', { userId, isOnline: true });
+
+                    // Mark messages from others as delivered & seen
+                    let modified = false;
+                    room.messages.forEach(msg => {
+                        if (msg.senderId.toString() !== userId.toString()) {
+                            if (!msg.delivered) {
+                                msg.delivered = true;
+                                msg.deliveredAt = new Date();
+                                if (msg.status === 'sent') msg.status = 'delivered';
+                                modified = true;
+                            }
+                            if (!msg.seen) {
+                                msg.seen = true;
+                                msg.readAt = new Date();
+                                msg.status = 'read';
+                                modified = true;
+                            }
+                        }
+                    });
+
+                    const userRole = socket.userRole;
+                    if (userRole === 'customer' && room.unreadCustomer > 0) {
+                        room.unreadCustomer = 0;
+                        modified = true;
+                    } else if (userRole === 'provider' && room.unreadProvider > 0) {
+                        room.unreadProvider = 0;
+                        modified = true;
+                    } else if (userRole === 'admin' && room.unreadAdmin > 0) {
+                        room.unreadAdmin = 0;
+                        modified = true;
+                    }
+
+                    if (modified) {
+                        await room.save();
+                        io.to(roomId.toString()).emit('chat:seen', {
+                            roomId,
+                            seenBy: userId,
+                            seenRole: userRole
+                        });
+                    }
                 }
             } catch (err) {
                 console.error('Error joining namespace room in socket:', err.message);
@@ -565,7 +643,7 @@ const initSocket = (httpServer) => {
         // 2. Chat Send (Save & Emit)
         socket.on('chat-send', async (payload) => {
             try {
-                const { roomId, messageType, content, fileUrl } = payload;
+                const { roomId, messageType, content, fileUrl, replyTo } = payload;
                 if (!roomId) return;
 
                 const ChatRoom = require('../models/ChatRoom-model');
@@ -601,6 +679,10 @@ const initSocket = (httpServer) => {
                 }
 
                 // Build message
+                const { getSocketId } = require('./userSocketMap');
+                const otherPartyId = socket.userRole === 'customer' ? room.providerId : room.customerId;
+                const isOtherOnline = otherPartyId && !!getSocketId(otherPartyId);
+
                 const newMessage = {
                     senderId: userId,
                     senderRole: socket.userRole,
@@ -608,7 +690,10 @@ const initSocket = (httpServer) => {
                     content: messageType === 'text' || messageType === 'system' ? content : '',
                     fileUrl: fileUrl || null,
                     seen: false,
-                    delivered: true,
+                    replyTo: replyTo || null,
+                    delivered: isOtherOnline,
+                    deliveredAt: isOtherOnline ? new Date() : null,
+                    status: isOtherOnline ? 'delivered' : 'sent',
                     createdAt: new Date()
                 };
 
@@ -748,6 +833,18 @@ const initSocket = (httpServer) => {
             removeUser(socket.id);
             // Broadcast offline status to all rooms
             io.emit('chat:user-online', { userId, isOnline: false });
+
+            try {
+                const now = new Date();
+                if (socket.userRole === 'provider') {
+                    await Provider.findByIdAndUpdate(userId, { lastSeen: now });
+                } else if (socket.userRole === 'customer') {
+                    const User = require('../models/User-model');
+                    await User.findByIdAndUpdate(userId, { lastSeen: now });
+                }
+            } catch (err) {
+                console.error('Error updating lastSeen on disconnect:', err.message);
+            }
         });
     });
 

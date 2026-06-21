@@ -1,21 +1,19 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/auth';
-import DatePicker from 'react-datepicker';
-import TimePicker from 'react-time-picker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-time-picker/dist/TimePicker.css';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
+  Calendar, Clock, MapPin, User, Phone, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
-  ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
+  ShoppingCart, Wrench, Activity, Edit3,
+  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings, getBooking } from '../../services/BookingService';
 import { toggleFavoriteProvider } from '../../services/CustomerService';
 import Pagination from '../../components/Pagination';
 import BookingCardSkeleton from '../../components/ui-skeletons/BookingCardSkeleton';
-import { formatDate, formatTime, formatDateTime, formatCurrency } from '../../utils/format';
+import { formatDate, formatTime, formatDateTime } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
 import ChatModal from '../../components/chat/ChatModal';
 import useDebounce from '../../hooks/useDebounce';
@@ -297,14 +295,14 @@ const PaymentDetails = ({ booking }) => {
             ['paid', 'escrow_hold'].includes(booking.paymentStatus)
               ? 'text-emerald-600 font-semibold'
               : booking.paymentStatus === 'refunded'
-              ? 'text-purple-600 font-semibold'
-              : 'text-accent font-semibold'
+                ? 'text-purple-600 font-semibold'
+                : 'text-accent font-semibold'
           }>
             {['paid', 'escrow_hold'].includes(booking.paymentStatus)
               ? 'Paid'
               : booking.paymentStatus === 'refunded'
-              ? 'Refunded'
-              : 'Pending'}
+                ? 'Refunded'
+                : 'Pending'}
           </span>
         </div>
         <div className="flex justify-between items-center animate-fadeIn">
@@ -524,7 +522,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
           )}
 
           {/* Secure Verification PIN Card */}
-          {['scheduled', 'accepted', 'in-progress', 'in_progress'].includes(booking.status) && (
+          {['scheduled', 'accepted', 'in-progress', 'in_progress', 'assigned'].includes(booking.status) && (
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 shadow-sm">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center border border-blue-200 text-blue-600 shadow-sm shrink-0">
@@ -559,7 +557,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <AddressBlock address={booking.address} phone={user?.phone} />
-            {provider && ['accepted', 'in_progress', 'in-progress', 'completed'].includes(booking.status) && (
+            {provider && ['accepted', 'in_progress', 'in-progress', 'completed', 'assigned'].includes(booking.status) && (
               <ProviderCard provider={provider} status={booking.status} />
             )}
           </div>
@@ -727,22 +725,21 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-secondary"><PriceDisplay amount={booking.totalAmount || 0} type="large-bold-secondary" /></p>
-                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  ['paid', 'escrow_hold'].includes(booking.paymentStatus)
+                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${['paid', 'escrow_hold'].includes(booking.paymentStatus)
                     ? 'bg-green-100 text-green-600'
                     : booking.paymentStatus === 'refunded'
-                    ? 'bg-purple-100 text-purple-600'
-                    : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
-                      ? 'bg-yellow-100 text-yellow-600'
-                      : 'bg-red-50 text-accent')
-                }`}>
+                      ? 'bg-purple-100 text-purple-600'
+                      : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                        ? 'bg-yellow-100 text-yellow-600'
+                        : 'bg-red-50 text-accent')
+                  }`}>
                   {['paid', 'escrow_hold'].includes(booking.paymentStatus)
                     ? `✓ Paid`
                     : booking.paymentStatus === 'refunded'
-                    ? '✓ Refunded'
-                    : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
-                      ? 'Pay After Service'
-                      : 'Unpaid')}
+                      ? '✓ Refunded'
+                      : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                        ? 'Pay After Service'
+                        : 'Unpaid')}
                 </p>
               </div>
             </div>
@@ -782,7 +779,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           <button onClick={() => onView(booking._id)} className="flex items-center justify-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-2 rounded-xl hover:bg-blue-50 border border-blue-200 transition-colors w-full sm:w-auto">
             <Eye className="w-3.5 h-3.5" /> View Details
           </button>
-          {provider && ['accepted', 'in_progress', 'in-progress', 'arriving'].includes(booking.status) && (
+          {provider && ['accepted', 'in_progress', 'in-progress', 'arriving', 'assigned'].includes(booking.status) && (
             <button onClick={() => navigate(`/customer/track/${booking._id}`)} className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 px-3 py-2 rounded-xl transition-all shadow-md active:scale-95 animate-pulse w-full sm:w-auto">
               <MapPin className="w-3.5 h-3.5" /> Track En Route
             </button>

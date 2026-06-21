@@ -97,6 +97,49 @@ const safeEnd = (session) => {
 // Helper to get synchronized payout status
 const getPayoutStatus = (earning, booking) => BookingService.getPayoutStatus(earning, booking);
 
+// Helper to add system messages to chat
+const addSystemMessageToChat = async (bookingId, content) => {
+  try {
+    const ChatRoom = require('../models/ChatRoom-model');
+    const { getIO } = require('../socket/socketServer');
+    
+    const room = await ChatRoom.findOne({ bookingId, roomType: 'provider_customer' });
+    if (!room) return;
+
+    const newMessage = {
+      senderId: new mongoose.Types.ObjectId(),
+      senderRole: 'admin',
+      messageType: 'system',
+      content: content,
+      seen: false,
+      delivered: true,
+      createdAt: new Date()
+    };
+
+    room.messages.push(newMessage);
+    room.lastMessage = content;
+    await room.save();
+
+    const savedMessage = room.messages[room.messages.length - 1];
+
+    try {
+      const io = getIO();
+      io.to(room._id.toString()).emit('chat:new-message', {
+        roomId: room._id,
+        message: savedMessage,
+        lastMessage: content,
+        unreadCustomer: room.unreadCustomer,
+        unreadProvider: room.unreadProvider,
+        unreadAdmin: room.unreadAdmin
+      });
+    } catch (sErr) {
+      console.warn('Socket emit for system message failed:', sErr.message);
+    }
+  } catch (err) {
+    console.error('Error adding system message to chat:', err.message);
+  }
+};
+
 // Scheduling Overlap Check Helper
 const checkProviderOverlap = (newBooking, providerBookings, bufferMinutes = 30) => ProviderAssignmentService.checkProviderOverlap(newBooking, providerBookings, bufferMinutes);
 
@@ -1961,6 +2004,9 @@ const cancelBooking = async (req, res) => {
       await safeCommit(session);
       safeEnd(session);
 
+      // Add system message to chat
+      await addSystemMessageToChat(booking._id, 'Booking cancelled by customer');
+
       // Track cancellation fraud in background (non-blocking)
       logCancellationFraud(req, booking, userId, 'customer');
 
@@ -2649,6 +2695,9 @@ const acceptBooking = async (req, res) => {
       console.error('FCM Notification Error (Booking Accepted):', fcmError);
     }
 
+    // Add system message to chat
+    await addSystemMessageToChat(id, `Booking accepted by partner: ${result.providerName}`);
+
     return res.status(200).json({
       success: true,
       message: 'Booking accepted successfully',
@@ -2883,6 +2932,9 @@ const startBooking = async (req, res) => {
 
     await booking.save();
 
+    // Add system message to chat
+    await addSystemMessageToChat(booking._id, 'Service started by partner');
+
     // Real-time notification for customer
     try {
       if (booking.customer) {
@@ -3090,6 +3142,9 @@ const rejectBooking = async (req, res) => {
 
     await safeCommit(session);
     safeEnd(session);
+
+    // Add system message to chat
+    await addSystemMessageToChat(booking._id, 'Booking declined by partner');
 
     // Track cancellation fraud in background (non-blocking)
     logCancellationFraud(req, booking, providerId, 'provider');
@@ -3559,6 +3614,9 @@ const completeBooking = async (req, res) => {
 
     await safeCommit(session);
     safeEnd(session);
+
+    // Add system message to chat
+    await addSystemMessageToChat(booking._id, 'Service completed by partner');
 
     // Real-time notifications for customer and admins
     try {
@@ -4400,6 +4458,9 @@ const assignProvider = async (req, res) => {
 
 
     } catch (e) { }
+
+    // Add system message to chat
+    await addSystemMessageToChat(booking._id, `Booking assigned to partner: ${provider.name}`);
 
     res.json({
       success: true,

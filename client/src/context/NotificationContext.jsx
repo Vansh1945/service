@@ -25,6 +25,62 @@ export const NotificationProvider = ({ children }) => {
     const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
     const savedTokenRef = useRef(null);
     const activeAudioRef = useRef(null);
+    const pendingAudioRef = useRef(null);
+
+    const playAudio = (audio) => {
+        pendingAudioRef.current = audio;
+        audio.play().then(() => {
+            if (pendingAudioRef.current === audio) {
+                pendingAudioRef.current = null;
+            }
+        }).catch((playErr) => {
+            console.warn('[FCM/Socket Context] Foreground audio auto-play blocked by browser. Awaiting user interaction.', playErr);
+        });
+    };
+
+    const playNormalNotificationSound = (soundUrl) => {
+        if (soundUrl) {
+            const audio = new Audio(soundUrl);
+            audio.play().catch(e => console.warn('Normal notification sound blocked:', e));
+        }
+    };
+
+    const stopBookingAlert = () => {
+        if (activeAudioRef.current) {
+            try {
+                activeAudioRef.current.pause();
+                activeAudioRef.current.currentTime = 0;
+            } catch (audioErr) {
+                console.error('[NotificationContext] Error stopping audio:', audioErr);
+            }
+            activeAudioRef.current = null;
+        }
+        pendingAudioRef.current = null;
+    };
+
+    // Global listener for interaction to play blocked audio
+    useEffect(() => {
+        const handleUserInteraction = () => {
+            if (pendingAudioRef.current) {
+                const audio = pendingAudioRef.current;
+                audio.play().then(() => {
+                    pendingAudioRef.current = null;
+                }).catch(err => {
+                    console.error('[Interaction] Failed to play pending audio:', err);
+                });
+            }
+        };
+
+        window.addEventListener('click', handleUserInteraction, { capture: true });
+        window.addEventListener('touchstart', handleUserInteraction, { capture: true });
+        window.addEventListener('keydown', handleUserInteraction, { capture: true });
+
+        return () => {
+            window.removeEventListener('click', handleUserInteraction, { capture: true });
+            window.removeEventListener('touchstart', handleUserInteraction, { capture: true });
+            window.removeEventListener('keydown', handleUserInteraction, { capture: true });
+        };
+    }, []);
 
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
@@ -244,33 +300,26 @@ export const NotificationProvider = ({ children }) => {
                 return;
             }
 
-            // Stop any currently playing alert tone
-            if (activeAudioRef.current) {
-                try {
-                    activeAudioRef.current.pause();
-                    activeAudioRef.current.currentTime = 0;
-                } catch (audioErr) {
-                    console.error('Error stopping previous audio:', audioErr);
-                }
-                activeAudioRef.current = null;
-            }
-
             // Handle dedicated provider booking alert sound/vibrate in foreground
             const isBookingAlert = payloadData.isBookingAlert === 'true';
             if (isBookingAlert) {
-                const soundUrl = payloadData.soundUrl;
-                const bookingAlertTone = payloadData.bookingAlertTone !== 'false';
-                const bookingVibration = payloadData.bookingVibration !== 'false';
-                const bookingAlertDuration = Number(payloadData.bookingAlertDuration || 30);
-                const bookingRepeatAlert = payloadData.bookingRepeatAlert === 'true';
+                const soundUrl = payloadData.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
+                const bookingAlertTone = true;
+                const bookingVibration = true;
+                const bookingAlertDuration = Number(payloadData.bookingAlertDuration || 60);
+                const bookingRepeatAlert = true;
 
                 if (bookingAlertTone && soundUrl) {
+                    if (activeAudioRef.current) {
+                        try {
+                            activeAudioRef.current.pause();
+                            activeAudioRef.current.currentTime = 0;
+                        } catch (e) {}
+                    }
                     const audio = new Audio(soundUrl);
                     audio.loop = bookingRepeatAlert;
                     activeAudioRef.current = audio;
-                    audio.play().catch((playErr) => {
-                        console.warn('[FCM Context] Foreground audio auto-play blocked by browser. Awaiting user interaction.', playErr);
-                    });
+                    playAudio(audio);
 
                     // Set timeout to auto-stop the alert tone
                     setTimeout(() => {
@@ -291,6 +340,9 @@ export const NotificationProvider = ({ children }) => {
                 if (bookingVibration && 'vibrate' in navigator) {
                     navigator.vibrate([500, 200, 500, 200, 500]);
                 }
+            } else {
+                const soundUrl = payloadData.soundUrl || '/assets/sounds/notification.mp3';
+                playNormalNotificationSound(soundUrl);
             }
 
             if (Notification.permission === 'granted') {
@@ -302,17 +354,6 @@ export const NotificationProvider = ({ children }) => {
                 });
 
                 notif.onclick = () => {
-                    // Stop playing ringtone immediately when user clicks the notification banner
-                    if (activeAudioRef.current) {
-                        try {
-                            activeAudioRef.current.pause();
-                            activeAudioRef.current.currentTime = 0;
-                        } catch (audioErr) {
-                            console.error('Error stopping audio on notification click:', audioErr);
-                        }
-                        activeAudioRef.current = null;
-                    }
-
                     if (payloadData.notificationId) {
                         NotificationService.markClicked(payloadData.notificationId).catch(err => {
                             console.error('[FCM Foreground] Click event tracking failed:', err);
@@ -344,11 +385,11 @@ export const NotificationProvider = ({ children }) => {
         const handleSocketNotification = (payload) => {
             console.log('[Socket] Notification received in context:', payload);
             if (payload.isBookingAlert) {
-                const soundUrl = payload.soundUrl;
-                const bookingAlertTone = payload.bookingAlertTone !== false;
-                const bookingVibration = payload.bookingVibration !== false;
-                const bookingAlertDuration = Number(payload.bookingAlertDuration || 30);
-                const bookingRepeatAlert = payload.bookingRepeatAlert === true;
+                const soundUrl = payload.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
+                const bookingAlertTone = true;
+                const bookingVibration = true;
+                const bookingAlertDuration = Number(payload.bookingAlertDuration || 60);
+                const bookingRepeatAlert = true;
 
                 // Stop any currently playing alert tone
                 if (activeAudioRef.current) {
@@ -365,9 +406,7 @@ export const NotificationProvider = ({ children }) => {
                     const audio = new Audio(soundUrl);
                     audio.loop = bookingRepeatAlert;
                     activeAudioRef.current = audio;
-                    audio.play().catch((playErr) => {
-                        console.warn('[Socket Context] Foreground audio auto-play blocked by browser. Awaiting user interaction.', playErr);
-                    });
+                    playAudio(audio);
 
                     // Set timeout to auto-stop the alert tone
                     setTimeout(() => {
@@ -388,6 +427,9 @@ export const NotificationProvider = ({ children }) => {
                 if (bookingVibration && 'vibrate' in navigator) {
                     navigator.vibrate([500, 200, 500, 200, 500]);
                 }
+            } else {
+                const soundUrl = payload.soundUrl || '/assets/sounds/notification.mp3';
+                playNormalNotificationSound(soundUrl);
             }
         };
 
@@ -400,7 +442,8 @@ export const NotificationProvider = ({ children }) => {
     const contextValue = {
         fcmToken,
         notificationPermission,
-        requestPermission
+        requestPermission,
+        stopBookingAlert
     };
 
     return (

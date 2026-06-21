@@ -343,6 +343,10 @@ const providerSchema = new mongoose.Schema({
         bookingVibration: { type: Boolean, default: true },
         bookingAlertDuration: { type: Number, default: 30 },
         bookingRepeatAlert: { type: Boolean, default: false }
+    },
+    lastSeen: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true,

@@ -13,7 +13,7 @@ const messageSchema = new Schema({
   },
   messageType: {
     type: String,
-    enum: ['text', 'image', 'location', 'system'],
+    enum: ['text', 'image', 'document', 'location', 'system'],
     default: 'text'
   },
   content: {
@@ -35,6 +35,26 @@ const messageSchema = new Schema({
     type: Boolean,
     default: false
   },
+  deliveredAt: {
+    type: Date,
+    default: null
+  },
+  readAt: {
+    type: Date,
+    default: null
+  },
+  status: {
+    type: String,
+    enum: ['sending', 'sent', 'delivered', 'read', 'failed'],
+    default: 'sent'
+  },
+  replyTo: {
+    type: Schema.Types.ObjectId,
+    default: null
+  },
+  deletedForUsers: [{
+    type: Schema.Types.ObjectId
+  }],
   createdAt: {
     type: Date,
     default: Date.now

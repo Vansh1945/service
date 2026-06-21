@@ -964,19 +964,19 @@ const ProviderProfile = () => {
 
                     <form onSubmit={(e) => { e.preventDefault(); updateProfile('settings'); }} className="space-y-5">
                       {/* Enable Tone Switch */}
-                      <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                      <div className="flex items-center justify-between py-2 border-b border-gray-50 opacity-90">
                         <div>
-                          <label className="text-sm font-semibold text-secondary">Enable Alert Tone</label>
+                          <label className="text-sm font-semibold text-secondary">Enable Alert Tone (Always Enabled)</label>
                           <p className="text-xs text-gray-400 mt-0.5">Play a ringtone when a new booking is assigned or offered</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-not-allowed">
                           <input
                             type="checkbox"
-                            checked={profileData.notificationPreferences && profileData.notificationPreferences.bookingAlertTone !== false}
-                            onChange={(e) => handlePreferenceChange('bookingAlertTone', e.target.checked)}
+                            checked={true}
+                            disabled={true}
                             className="sr-only peer"
                           />
-                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                          <div className="w-9 h-5 bg-primary rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[18px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                         </label>
                       </div>
 
@@ -997,20 +997,20 @@ const ProviderProfile = () => {
                         </label>
                       </div>
 
-                      {/* Repeat Alert Tone Switch */}
-                      <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                       {/* Repeat Alert Tone Switch */}
+                      <div className="flex items-center justify-between py-2 border-b border-gray-50 opacity-90">
                         <div>
-                          <label className="text-sm font-semibold text-secondary">Repeat Alert Tone</label>
+                          <label className="text-sm font-semibold text-secondary">Repeat Alert Tone (Always Enabled)</label>
                           <p className="text-xs text-gray-400 mt-0.5">Continuously loop the ringtone until booking is accepted, rejected or expired</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-not-allowed">
                           <input
                             type="checkbox"
-                            checked={profileData.notificationPreferences && !!profileData.notificationPreferences.bookingRepeatAlert}
-                            onChange={(e) => handlePreferenceChange('bookingRepeatAlert', e.target.checked)}
+                            checked={true}
+                            disabled={true}
                             className="sr-only peer"
                           />
-                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                          <div className="w-9 h-5 bg-primary rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[18px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                         </label>
                       </div>
 

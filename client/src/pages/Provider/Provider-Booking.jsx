@@ -4,6 +4,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
+import { useNotification } from '../../context/NotificationContext';
 import {
   Calendar, Clock, MapPin, User, Phone, Mail, DollarSign, Eye, Check, X,
   AlertCircle, Percent, Wallet, Tag, ChevronDown, ChevronUp, Filter,
@@ -544,6 +545,7 @@ const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
 const ProviderBooking = () => {
   const navigate = useNavigate();
   const { API, user, token, logout, showToast, systemSettings } = useAuth();
+  const { stopBookingAlert } = useNotification() || {};
 
   const fallbackSplits = systemSettings?.surgeSplitSettings || {
     visiting: 60,
@@ -718,8 +720,14 @@ const ProviderBooking = () => {
       };
 
       let response;
-      if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
-      else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
+      if (action === 'accept') {
+        response = await BookingService.acceptBooking(bookingId);
+        if (stopBookingAlert) stopBookingAlert();
+      }
+      else if (action === 'reject') {
+        response = await BookingService.rejectBooking(bookingId);
+        if (stopBookingAlert) stopBookingAlert();
+      }
       else if (action === 'start') {
         const formData = new FormData();
         const images = additionalData.images || selectedImages;

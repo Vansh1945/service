@@ -323,13 +323,12 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 const isBookingAlert = role === 'provider' && (eventId === 'booking_created' || eventId === 'provider_assigned');
                 if (isBookingAlert) {
                     const soundUrl = config ? config.providerBookingRingtone : '';
-                    const prefs = recipient.notificationPreferences || {};
                     socketPayload.isBookingAlert = true;
-                    socketPayload.soundUrl = soundUrl || '';
-                    socketPayload.bookingAlertTone = prefs.bookingAlertTone !== false;
-                    socketPayload.bookingVibration = prefs.bookingVibration !== false;
-                    socketPayload.bookingAlertDuration = prefs.bookingAlertDuration !== undefined ? prefs.bookingAlertDuration : 30;
-                    socketPayload.bookingRepeatAlert = prefs.bookingRepeatAlert === true;
+                    socketPayload.soundUrl = soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
+                    socketPayload.bookingAlertTone = true;
+                    socketPayload.bookingVibration = true;
+                    socketPayload.bookingAlertDuration = 60;
+                    socketPayload.bookingRepeatAlert = true;
                 }
 
                 _io.to(room).emit('new_notification', socketPayload);
@@ -355,11 +354,10 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
                     const isBookingAlert = role === 'provider' && (eventId === 'booking_created' || eventId === 'provider_assigned');
                     const soundUrl = isBookingAlert && config ? config.providerBookingRingtone : '';
-                    const prefs = recipient.notificationPreferences || {};
-                    const bookingAlertTone = prefs.bookingAlertTone !== false;
-                    const bookingVibration = prefs.bookingVibration !== false;
-                    const bookingAlertDuration = prefs.bookingAlertDuration !== undefined ? prefs.bookingAlertDuration : 30;
-                    const bookingRepeatAlert = prefs.bookingRepeatAlert === true;
+                    const bookingAlertTone = true;
+                    const bookingVibration = true;
+                    const bookingAlertDuration = 60;
+                    const bookingRepeatAlert = true;
 
                     await notificationService.notifyUser(userId, role, {
                         title: finalTitle,
