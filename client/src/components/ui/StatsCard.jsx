@@ -30,14 +30,14 @@ const StatsCard = ({
       )}
       <div className="min-w-0 flex-grow">
         <p className="text-xs font-medium text-slate-500 mb-0.5 break-words leading-tight">{title}</p>
-        <p className="text-sm sm:text-base md:text-lg font-bold text-slate-800 leading-normal whitespace-nowrap">{value}</p>
+        <div className="text-sm sm:text-base md:text-lg font-bold text-slate-800 leading-normal">{value}</div>
         {trendValue && (
           <p className={`text-xs mt-1 ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
             {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '•'} {trendValue}% {trend === 'up' || trend === 'down' ? 'than last month' : ''}
           </p>
         )}
         {subtext && (
-          <p className="text-[10px] text-slate-400 mt-0.5 break-words leading-tight">{subtext}</p>
+          <div className="text-[10px] text-slate-400 mt-0.5 break-words leading-tight">{subtext}</div>
         )}
       </div>
     </CardWrapper>
