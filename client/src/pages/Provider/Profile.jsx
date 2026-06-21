@@ -73,7 +73,13 @@ const ProviderProfile = () => {
     createdAt: null,
     averageRating: 0,
     ratingCount: 0,
-    providerId: ''
+    providerId: '',
+    notificationPreferences: {
+      bookingAlertTone: true,
+      bookingVibration: true,
+      bookingAlertDuration: 30,
+      bookingRepeatAlert: false
+    }
   });
 
   const [editMode, setEditMode] = useState({ basic: false, professional: false, address: false, bank: false });
@@ -96,6 +102,12 @@ const ProviderProfile = () => {
             services: Array.isArray(data.provider.services) ? data.provider.services : [],
             address: data.provider.address || { street: '', city: '', state: '', postalCode: '', country: 'India', lat: null, lng: null },
             bankDetails: data.provider.bankDetails || { accountNo: '', ifsc: '', bankName: '', accountName: '', passbookImage: '', passbookImagePublicId: '', verified: false },
+            notificationPreferences: data.provider.notificationPreferences || {
+              bookingAlertTone: true,
+              bookingVibration: true,
+              bookingAlertDuration: 30,
+              bookingRepeatAlert: false
+            },
             feedbacks: data.provider.feedbacks || []
           });
         } else {
@@ -156,6 +168,24 @@ const ProviderProfile = () => {
     } else {
       setProfileData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  const handlePreferenceChange = (name, value) => {
+    setProfileData(prev => {
+      const currentPrefs = prev.notificationPreferences || {
+        bookingAlertTone: true,
+        bookingVibration: true,
+        bookingAlertDuration: 30,
+        bookingRepeatAlert: false
+      };
+      return {
+        ...prev,
+        notificationPreferences: {
+          ...currentPrefs,
+          [name]: value
+        }
+      };
+    });
   };
 
   const handleFileChange = (e, field) => {
@@ -232,6 +262,20 @@ const ProviderProfile = () => {
           if (!resumeFile) throw new Error('Please select a resume file');
           formData.append('resume', resumeFile);
           break;
+        case 'settings':
+          const currentPrefs = profileData.notificationPreferences || {
+            bookingAlertTone: true,
+            bookingVibration: true,
+            bookingAlertDuration: 30,
+            bookingRepeatAlert: false
+          };
+          formData.append('notificationPreferences', JSON.stringify({
+            bookingAlertTone: currentPrefs.bookingAlertTone !== false,
+            bookingVibration: currentPrefs.bookingVibration !== false,
+            bookingAlertDuration: Number(currentPrefs.bookingAlertDuration || 30),
+            bookingRepeatAlert: currentPrefs.bookingRepeatAlert === true
+          }));
+          break;
       }
 
       const response = await ProviderService.updateProfile(formData);
@@ -242,7 +286,8 @@ const ProviderProfile = () => {
           ...prev,
           ...data.provider,
           address: data.provider.address || prev.address,
-          bankDetails: data.provider.bankDetails || prev.bankDetails
+          bankDetails: data.provider.bankDetails || prev.bankDetails,
+          notificationPreferences: data.provider.notificationPreferences || prev.notificationPreferences
         }));
         setFileUploads({ profilePic: null, resume: null, passbookImage: null });
         setEditMode({ basic: false, professional: false, address: false, bank: false });
@@ -339,6 +384,7 @@ const ProviderProfile = () => {
                 { id: 'overview', label: 'Overview', icon: <Package className="w-4 h-4" /> },
                 { id: 'documents', label: 'Documents', icon: <FileText className="w-4 h-4" /> },
                 { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
+                { id: 'settings', label: 'Settings', icon: <Bell className="w-4 h-4" /> },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -427,11 +473,12 @@ const ProviderProfile = () => {
                 </div>
 
                 {/* Mobile Quick Links - Only visible on small screens */}
-                <div className="grid grid-cols-3 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
+                <div className="grid grid-cols-4 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
                   {[
                     { id: 'overview', label: 'Overview', icon: <Package className="w-4 h-4 text-primary" /> },
                     { id: 'documents', label: 'Docs', icon: <FileText className="w-4 h-4 text-rose-500" /> },
                     { id: 'profile', label: 'Profile', icon: <User className="w-4 h-4 text-accent" /> },
+                    { id: 'settings', label: 'Settings', icon: <Bell className="w-4 h-4 text-teal-600" /> },
                   ].map((link, idx) => (
                     <button
                       key={idx}
@@ -899,6 +946,101 @@ const ProviderProfile = () => {
                     <button onClick={() => setDeleteModal({ ...deleteModal, isOpen: true })} className="w-full sm:w-auto bg-red-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors shadow-sm">
                       Delete Account
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SETTINGS TAB */}
+              {activeTab === 'settings' && (
+                <div className="space-y-6 font-inter">
+                  <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-4 border-b pb-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-secondary">Notification Settings</h3>
+                        <p className="text-xs text-gray-450 mt-0.5">Customize alerts for new bookings and requests</p>
+                      </div>
+                      <Bell className="w-5 h-5 text-primary" />
+                    </div>
+
+                    <form onSubmit={(e) => { e.preventDefault(); updateProfile('settings'); }} className="space-y-5">
+                      {/* Enable Tone Switch */}
+                      <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                        <div>
+                          <label className="text-sm font-semibold text-secondary">Enable Alert Tone</label>
+                          <p className="text-xs text-gray-400 mt-0.5">Play a ringtone when a new booking is assigned or offered</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={profileData.notificationPreferences && profileData.notificationPreferences.bookingAlertTone !== false}
+                            onChange={(e) => handlePreferenceChange('bookingAlertTone', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                      </div>
+
+                      {/* Enable Vibration Switch */}
+                      <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                        <div>
+                          <label className="text-sm font-semibold text-secondary">Enable Vibration</label>
+                          <p className="text-xs text-gray-400 mt-0.5">Vibrate device on receiving booking alerts</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={profileData.notificationPreferences && profileData.notificationPreferences.bookingVibration !== false}
+                            onChange={(e) => handlePreferenceChange('bookingVibration', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                      </div>
+
+                      {/* Repeat Alert Tone Switch */}
+                      <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                        <div>
+                          <label className="text-sm font-semibold text-secondary">Repeat Alert Tone</label>
+                          <p className="text-xs text-gray-400 mt-0.5">Continuously loop the ringtone until booking is accepted, rejected or expired</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={profileData.notificationPreferences && !!profileData.notificationPreferences.bookingRepeatAlert}
+                            onChange={(e) => handlePreferenceChange('bookingRepeatAlert', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                      </div>
+
+                      {/* Tone Duration Dropdown */}
+                      <div className="py-2">
+                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Alert Ringing Duration</label>
+                        <select
+                          value={(profileData.notificationPreferences && profileData.notificationPreferences.bookingAlertDuration) || 30}
+                          onChange={(e) => handlePreferenceChange('bookingAlertDuration', Number(e.target.value))}
+                          className="w-full sm:w-auto px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white font-semibold text-secondary shadow-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        >
+                          <option value={5}>5 Seconds</option>
+                          <option value={10}>10 Seconds</option>
+                          <option value={15}>15 Seconds</option>
+                          <option value={30}>30 Seconds</option>
+                          <option value={45}>45 Seconds</option>
+                          <option value={60}>60 Seconds (Max)</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1.5">Ringtone will automatically stop playing after this duration</p>
+                      </div>
+
+                      <Processing
+                        type="submit"
+                        loading={isSaving}
+                        loadingText="Saving Preferences..."
+                        className="w-full py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/95 shadow-sm transition-all"
+                      >
+                        Save Notification Preferences
+                      </Processing>
+                    </form>
                   </div>
                 </div>
               )}

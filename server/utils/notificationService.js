@@ -60,8 +60,8 @@ const sendPushNotification = async (tokens, payload) => {
             android: {
                 priority: 'high',
                 notification: {
-                    sound: 'default',
-                    channelId: 'booking_notifications'
+                    sound: payload.sound || 'booking_ringtone',
+                    channelId: payload.channelId || 'booking_notifications'
                 }
             },
             //  Web push config — pass data so SW notificationclick can read url
@@ -497,6 +497,30 @@ const scheduleNotification = async (payload) => {
  */
 cron.schedule('* * * * *', async () => {
     try {
+        const mongoose = require('mongoose');
+        const Booking = mongoose.model('Booking');
+        const timeoutThreshold = new Date(Date.now() - 45 * 1000); // 45 seconds timeout
+        const expiredBookings = await Booking.find({
+            status: 'assigned',
+            provider: { $ne: null },
+            'metadata.assignedAt': { $lte: timeoutThreshold }
+        });
+
+        for (const booking of expiredBookings) {
+            console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Re-assigning...`);
+            
+            if (!booking.metadata) booking.metadata = {};
+            if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
+            booking.metadata.ignoredProviders.push(booking.provider);
+            
+            booking.provider = null;
+            booking.status = 'pending';
+            await booking.save();
+
+            const ProviderAssignmentService = require('../services/ProviderAssignmentService');
+            ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
+        }
+
         const now = new Date();
         // Find pending notifications where scheduledFor has passed, up to 3 retries max
         const pendingNotifications = await Notification.find({

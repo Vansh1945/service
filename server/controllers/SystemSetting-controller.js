@@ -59,6 +59,11 @@ const updateSystemSetting = async (req, res) => {
       updateData.favicon = req.files.favicon[0].path; // Cloudinary URL
     }
 
+    // Handle providerBookingRingtone upload
+    if (req.files && req.files.providerBookingRingtone && req.files.providerBookingRingtone[0]) {
+      updateData.providerBookingRingtone = req.files.providerBookingRingtone[0].path; // Cloudinary URL
+    }
+
     const config = await SystemConfig.findOneAndUpdate(
       {},
       { $set: updateData },

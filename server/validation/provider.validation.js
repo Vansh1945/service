@@ -97,7 +97,8 @@ const updateProviderProfileSchema = z.object({
   area: z.string().optional().or(z.literal('')),
   pincode: z.string().optional().or(z.literal('')),
   formattedAddress: z.string().optional().or(z.literal('')),
-  addressLine: z.string().optional().or(z.literal(''))
+  addressLine: z.string().optional().or(z.literal('')),
+  notificationPreferences: z.union([z.string(), z.record(z.any())]).optional()
 });
 
 module.exports = {

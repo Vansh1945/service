@@ -126,6 +126,7 @@ class ProviderAssignmentService {
       }).filter(Boolean);
 
       const baseProviderQuery = {
+        _id: { $nin: booking.metadata?.ignoredProviders || [] },
         role: 'provider',
         isActive: true,
         approved: true,
@@ -298,13 +299,15 @@ class ProviderAssignmentService {
 
       booking.provider = nearestProvider._id;
       booking.assignmentSource = selectedSource;
-      booking.status = 'accepted';
+      booking.status = 'assigned';
       booking.updatedAt = new Date();
+      if (!booking.metadata) booking.metadata = {};
+      booking.metadata.assignedAt = new Date();
 
       booking.statusHistory.push({
-        status: 'accepted',
+        status: 'assigned',
         timestamp: new Date(),
-        note: `Booking assigned to nearest provider: ${nearestProvider.name}`,
+        note: `Booking assigned to nearest provider: ${nearestProvider.name}. Awaiting provider acceptance.`,
         updatedBy: 'system'
       });
 
@@ -339,23 +342,18 @@ class ProviderAssignmentService {
       }
 
       try {
-        await sendNotification(
-          booking.customer,
-          'customer',
-          'Provider Assigned',
-          `Your booking has been assigned to ${nearestProvider.name}. Live tracking started!`,
-          'booking',
-          booking._id
-        );
+        const { triggerEventNotification } = require('../utils/notificationHelper');
+        
+        await triggerEventNotification('provider_assigned', {
+          providerName: nearestProvider.name,
+          booking
+        }, booking.customer);
 
-        await sendNotification(
-          nearestProvider._id,
-          'provider',
-          'New Assigned Booking',
-          `You have been assigned a new booking at ${booking.address?.street || 'your area'}.`,
-          'booking',
-          booking._id
-        );
+        await triggerEventNotification('booking_created', {
+          serviceName: booking.services?.[0]?.serviceDetails?.title || 'service',
+          street: booking.address?.street || 'your area',
+          booking
+        }, nearestProvider._id);
 
         const { getIO } = require('../socket/socketServer');
         const io = getIO();

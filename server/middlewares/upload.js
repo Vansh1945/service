@@ -77,7 +77,7 @@ const uploadResume = multer({
 
 const uploadServiceImage = multer({
   storage: createCloudinaryStorage('serviceImage', 'image', ['jpg', 'jpeg', 'png']),
-  limits: { 
+  limits: {
     fileSize: 25 * 1024 * 1024, // 25MB
     fieldSize: 25 * 1024 * 1024 // 25MB to allow large JSON fields like specialNotes
   },

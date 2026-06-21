@@ -203,22 +203,6 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   suspensionReason: String,
-  notificationPreferences: {
-    booking: { type: Boolean, default: true },
-    payment: { type: Boolean, default: true },
-    complaint: { type: Boolean, default: true },
-    promotional: { type: Boolean, default: true },
-    providerUpdates: { type: Boolean, default: true },
-    adminAlerts: { type: Boolean, default: true },
-    wallet: { type: Boolean, default: true },
-    reminder: { type: Boolean, default: true },
-    pushEnabled: { type: Boolean, default: true },
-    quietHours: {
-      enabled: { type: Boolean, default: false },
-      start: { type: String, default: '22:00' },
-      end: { type: String, default: '08:00' }
-    }
-  },
   favoriteProviders: [{
     providerId: {
       type: mongoose.Schema.Types.ObjectId,

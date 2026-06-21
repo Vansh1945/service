@@ -81,5 +81,11 @@ router.post('/admin/resend/:id', flexAuth, adminOnly, notificationController.res
 // GET /api/notifications/admin/analytics/:id — Analytics (Admin only)
 router.get('/admin/analytics/:id', flexAuth, adminOnly, notificationController.getAdminAnalytics);
 
+// Template CRUD routes (Admin only)
+router.get('/templates', flexAuth, adminOnly, notificationController.getTemplates);
+router.post('/templates', flexAuth, adminOnly, notificationController.createTemplate);
+router.put('/templates/:id', flexAuth, adminOnly, notificationController.updateTemplate);
+router.delete('/templates/:id', flexAuth, adminOnly, notificationController.deleteTemplate);
+
 module.exports = router;
 

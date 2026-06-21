@@ -231,7 +231,7 @@ const markAllRead = async (req, res) => {
 const getUnreadCount = async (req, res) => {
     try {
         const userId = req.userID || req.query.userId;
-        
+
         const query = { userId, isRead: false };
 
         let recipient;
@@ -338,7 +338,7 @@ const saveToken = async (req, res) => {
             if (tokenIndex > -1) {
                 user.fcmDevices.splice(tokenIndex, 1);
             }
-            
+
             user.fcmDevices.push({
                 token: cleanToken,
                 deviceId,
@@ -363,9 +363,9 @@ const saveToken = async (req, res) => {
         } else {
             console.error('saveToken error:', error);
         }
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Failed to save token', 
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to save token',
             error: error.message
         });
     }
@@ -980,6 +980,160 @@ const getAdminAnalytics = async (req, res) => {
     }
 };
 
+const getTemplates = async (req, res) => {
+    try {
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+        const templates = await NotificationTemplate.find({}).sort({ eventId: 1 });
+        return res.status(200).json({ success: true, data: templates });
+    } catch (error) {
+        console.error('getTemplates error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch templates' });
+    }
+};
+
+const createTemplate = async (req, res) => {
+    try {
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+        const template = await NotificationTemplate.create(req.body);
+        return res.status(201).json({ success: true, data: template });
+    } catch (error) {
+        console.error('createTemplate error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to create template', error: error.message });
+    }
+};
+
+const updateTemplate = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+        const template = await NotificationTemplate.findByIdAndUpdate(id, req.body, { new: true });
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        return res.status(200).json({ success: true, data: template });
+    } catch (error) {
+        console.error('updateTemplate error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to update template' });
+    }
+};
+
+const deleteTemplate = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+        const template = await NotificationTemplate.findByIdAndDelete(id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        return res.status(200).json({ success: true, message: 'Template deleted successfully' });
+    } catch (error) {
+        console.error('deleteTemplate error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to delete template' });
+    }
+};
+
+const seedDefaultTemplates = async () => {
+    try {
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+        const count = await NotificationTemplate.countDocuments();
+        if (count > 0) return;
+
+        const defaults = [
+            {
+                eventId: 'booking_created',
+                title: 'New Booking Request: {{serviceName}}',
+                message: 'You have a new booking request for {{serviceName}} at {{street}}.',
+                targetAudience: { role: 'provider', providerStatus: 'available' }
+            },
+            {
+                eventId: 'provider_assigned',
+                title: 'Provider Assigned',
+                message: 'Your booking has been assigned to {{providerName}}. Live tracking started!',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'provider_accepted',
+                title: 'Booking Accepted',
+                message: '{{providerName}} has accepted your booking request.',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'provider_reached',
+                title: 'Provider Arrived',
+                message: '{{providerName}} has arrived at your location.',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'work_started',
+                title: 'Job Started',
+                message: 'Work on your booking has started.',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'material_added',
+                title: 'Material Approval Needed',
+                message: 'New materials have been added to your booking. Please approve them.',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'material_approved',
+                title: 'Material Approved',
+                message: 'The customer has approved the added materials.',
+                targetAudience: { role: 'provider' }
+            },
+            {
+                eventId: 'material_rejected',
+                title: 'Material Rejected',
+                message: 'The customer has rejected the added materials.',
+                targetAudience: { role: 'provider' }
+            },
+            {
+                eventId: 'payment_success',
+                title: 'Payment Successful',
+                message: 'Payment of {{amount}} for booking {{bookingId}} is successful.',
+                targetAudience: { role: 'all' }
+            },
+            {
+                eventId: 'booking_completed',
+                title: 'Booking Completed',
+                message: 'Your booking has been completed successfully. Please leave a review!',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'dispute_created',
+                title: 'New Dispute Registered',
+                message: 'A dispute has been raised for booking {{bookingId}}. Review required.',
+                targetAudience: { role: 'admin' }
+            },
+            {
+                eventId: 'warranty_expiry',
+                title: 'Warranty Expiring Soon',
+                message: 'Your warranty for booking {{bookingId}} is expiring in {{days}} days.',
+                targetAudience: { role: 'customer' }
+            },
+            {
+                eventId: 'provider_verification_approved',
+                title: 'Verification Approved',
+                message: 'Congratulations! Your provider profile has been verified.',
+                targetAudience: { role: 'provider' }
+            },
+            {
+                eventId: 'provider_verification_rejected',
+                title: 'Verification Rejected',
+                message: 'Your provider profile verification was rejected: {{reason}}',
+                targetAudience: { role: 'provider' }
+            }
+        ];
+
+        await NotificationTemplate.insertMany(defaults);
+        console.log('[NotificationService] Seeded default notification templates successfully.');
+    } catch (e) {
+        console.error('[NotificationService] Seeding templates failed:', e);
+    }
+};
+
+setTimeout(seedDefaultTemplates, 5000);
+
 module.exports = {
     getNotifications,
     markRead,
@@ -996,5 +1150,10 @@ module.exports = {
     markClicked,
     getAdminAnalytics,
     emitStatsUpdate,
-    getAdminDashboardStats
+    getAdminDashboardStats,
+    getTemplates,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate
 };
+

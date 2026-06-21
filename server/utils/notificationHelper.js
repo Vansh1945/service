@@ -80,11 +80,182 @@ const computeNotificationUrl = (role, type, title, message) => {
     return '/'; // Fallback
 };
 
+const renderTemplateString = (str, context = {}) => {
+    if (!str) return '';
+    return str.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+        const trimmedKey = key.trim();
+        const value = trimmedKey.split('.').reduce((acc, curr) => {
+            if (acc && acc[curr] !== undefined) return acc[curr];
+            return undefined;
+        }, context);
+        return value !== undefined ? value : match;
+    });
+};
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    const d = R * c; // in metres
+    return d;
+};
+
+const triggerEventNotification = async (eventId, context = {}, overrideTargetUserId = null) => {
+    try {
+        const mongoose = require('mongoose');
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+
+        const template = await NotificationTemplate.findOne({ eventId, isActive: true });
+        if (!template) {
+            console.warn(`[NotificationHelper] Active template not found for event: ${eventId}`);
+            return null;
+        }
+
+        const title = renderTemplateString(template.title, context);
+        const message = renderTemplateString(template.message, context);
+        const type = template.priority === 'high' ? 'system' : 'booking';
+        const url = template.ctaUrl || '/';
+
+        const targetAudience = template.targetAudience || {};
+        const role = targetAudience.role || 'customer';
+
+        let targetUserIds = [];
+        if (overrideTargetUserId) {
+            targetUserIds = [overrideTargetUserId];
+        } else {
+            if (role === 'admin') {
+                const Admin = mongoose.model('Admin');
+                const admins = await Admin.find({ isActive: true }).select('_id');
+                targetUserIds = admins.map(a => a._id);
+            } else if (role === 'provider') {
+                const Provider = mongoose.model('Provider');
+                const providerQuery = { isActive: true, approved: true, isSuspended: { $ne: true } };
+
+                if (targetAudience.providerStatus) {
+                    if (targetAudience.providerStatus === 'online') {
+                        providerQuery.isOnline = true;
+                    } else if (targetAudience.providerStatus === 'available') {
+                        providerQuery.isOnline = true;
+                        providerQuery.activeBooking = null;
+                    }
+                }
+
+                if (targetAudience.serviceCategory) {
+                    providerQuery.services = targetAudience.serviceCategory;
+                }
+
+                if (targetAudience.ratingGte) {
+                    providerQuery['performanceScore.rating'] = { $gte: targetAudience.ratingGte };
+                }
+
+                if (eventId === 'booking_created' && context.booking) {
+                    const booking = context.booking;
+                    const bookingServicesCategories = booking.services?.map(item => {
+                        const cat = item.service?.category || item.serviceDetails?.category;
+                        return cat?._id ? cat._id.toString() : cat?.toString();
+                    }).filter(Boolean) || [];
+
+                    if (bookingServicesCategories.length > 0) {
+                        providerQuery.services = { $in: bookingServicesCategories };
+                    }
+
+                    const lat = parseFloat(booking.address?.lat);
+                    const lng = parseFloat(booking.address?.lng);
+                    const { SystemConfig } = require('../models/SystemSetting');
+                    const settings = await SystemConfig.findOne();
+                    const maxDistanceKm = settings?.bookingSettings?.autoAssignRadius || 15;
+                    const maxDistanceMeters = maxDistanceKm * 1000;
+
+                    const eligibleProviders = await Provider.find(providerQuery);
+
+                    const providersWithinRadius = eligibleProviders.filter(p => {
+                        const pLng = p.currentLocation?.coordinates?.[0];
+                        const pLat = p.currentLocation?.coordinates?.[1];
+                        if (typeof pLat === 'number' && typeof pLng === 'number' && (pLat !== 0 || pLng !== 0) && !isNaN(lat) && !isNaN(lng)) {
+                            const dist = calculateDistance(lat, lng, pLat, pLng);
+                            return dist <= maxDistanceMeters;
+                        }
+                        return false;
+                    });
+                    targetUserIds = providersWithinRadius.map(p => p._id);
+                } else {
+                    const matchedProviders = await Provider.find(providerQuery).select('_id');
+                    targetUserIds = matchedProviders.map(p => p._id);
+                }
+            } else if (role === 'customer') {
+                const User = mongoose.model('User');
+                const userQuery = { role: 'customer' };
+                if (targetAudience.subscriptionPlan) {
+                    userQuery.subscriptionPlan = targetAudience.subscriptionPlan;
+                }
+                const matchedCustomers = await User.find(userQuery).select('_id');
+                targetUserIds = matchedCustomers.map(u => u._id);
+            }
+        }
+
+        console.log(`[NotificationEngine] Triggered "${eventId}": matched ${targetUserIds.length} target users of role "${role}"`);
+
+        const results = [];
+        for (const userId of targetUserIds) {
+            const notif = await sendNotification(
+                userId,
+                role,
+                title,
+                message,
+                type,
+                context.booking?._id || context.bookingId || null,
+                url,
+                eventId
+            );
+            if (notif) results.push(notif);
+        }
+
+        return results;
+    } catch (e) {
+        console.error(`[NotificationHelper] Error triggering event "${eventId}":`, e);
+        return null;
+    }
+};
+
 /**
  * Create a notification in DB and emit it via Socket.io and FCM
  */
-const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null, url = '/') => {
+const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null, url = '/', eventId = null) => {
     try {
+        const mongoose = require('mongoose');
+        const NotificationTemplate = mongoose.model('NotificationTemplate');
+
+        let finalTitle = title;
+        let finalMessage = message;
+        let finalUrl = url;
+
+        if (typeof message === 'object' && message !== null) {
+            const template = await NotificationTemplate.findOne({ eventId: title, isActive: true });
+            if (template) {
+                finalTitle = renderTemplateString(template.title, message);
+                finalMessage = renderTemplateString(template.message, message);
+                if (template.ctaUrl) finalUrl = template.ctaUrl;
+            } else {
+                finalMessage = JSON.stringify(message);
+            }
+        } else {
+            const template = await NotificationTemplate.findOne({ eventId: title, isActive: true });
+            if (template) {
+                const context = { title, message, role, type, referenceId, url };
+                finalTitle = renderTemplateString(template.title, context);
+                finalMessage = renderTemplateString(template.message, context);
+                if (template.ctaUrl) finalUrl = template.ctaUrl;
+            }
+        }
+
         const { SystemConfig } = require('../models/SystemSetting');
         const config = await SystemConfig.findOne();
         if (config && config.notificationSettings) {
@@ -99,11 +270,9 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
         }
 
         let notification = null;
-        const generatedUrl = url !== '/' ? url : computeNotificationUrl(role, type, title, message);
+        const generatedUrl = finalUrl !== '/' ? finalUrl : computeNotificationUrl(role, type, finalTitle, finalMessage);
 
-        // If userId is provided, save to DB and emit to that specific user
         if (userId) {
-            // 1. Role Verification to prevent cross-role notification leaks
             let Model;
             if (role === 'admin') Model = Admin;
             else if (role === 'provider') Model = Provider;
@@ -115,7 +284,6 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 return null;
             }
 
-            // 2. Granular Preference Check
             const prefKey = typeToPreferenceMap[type];
             if (recipient.notificationPreferences && prefKey) {
                 if (recipient.notificationPreferences[prefKey] === false) {
@@ -127,37 +295,51 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             notification = await Notification.create({
                 userId,
                 role,
-                title,
-                message,
+                title: finalTitle,
+                message: finalMessage,
                 type,
                 referenceId,
                 url: generatedUrl
             });
 
-            // 3. Emit real-time event via Socket.io
             if (_io) {
                 const room = userId.toString();
                 const socketsInRoom = await _io.in(room).fetchSockets();
                 console.log(`[Socket] Emitting to room "${room}" — ${socketsInRoom.length} socket(s) connected`);
-                _io.to(room).emit('new_notification', {
+                
+                // Construct standard message data
+                const socketPayload = {
                     _id: notification._id,
-                    title,
-                    message,
+                    title: finalTitle,
+                    message: finalMessage,
                     type,
                     referenceId,
                     url: generatedUrl,
                     isRead: false,
                     createdAt: notification.createdAt
-                });
+                };
 
-                // Send real-time unread count update to guarantee client stays fully in-sync
+                // Detect booking alert to append socket ringtone metadata
+                const isBookingAlert = role === 'provider' && (eventId === 'booking_created' || eventId === 'provider_assigned');
+                if (isBookingAlert) {
+                    const soundUrl = config ? config.providerBookingRingtone : '';
+                    const prefs = recipient.notificationPreferences || {};
+                    socketPayload.isBookingAlert = true;
+                    socketPayload.soundUrl = soundUrl || '';
+                    socketPayload.bookingAlertTone = prefs.bookingAlertTone !== false;
+                    socketPayload.bookingVibration = prefs.bookingVibration !== false;
+                    socketPayload.bookingAlertDuration = prefs.bookingAlertDuration !== undefined ? prefs.bookingAlertDuration : 30;
+                    socketPayload.bookingRepeatAlert = prefs.bookingRepeatAlert === true;
+                }
+
+                _io.to(room).emit('new_notification', socketPayload);
+
                 const unreadCount = await Notification.countDocuments({ userId, isRead: false });
                 _io.to(room).emit('unread_count_updated', { unreadCount });
             } else {
                 console.warn('[Socket] _io not set — socket notification skipped');
             }
 
-            // 4. Send FCM Push Notification with granular Silencing (pushEnabled & quiet hours)
             let isPushAllowed = true;
             if (recipient.notificationPreferences) {
                 if (recipient.notificationPreferences.pushEnabled === false) {
@@ -171,17 +353,34 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             if (isPushAllowed) {
                 try {
                     console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
+                    const isBookingAlert = role === 'provider' && (eventId === 'booking_created' || eventId === 'provider_assigned');
+                    const soundUrl = isBookingAlert && config ? config.providerBookingRingtone : '';
+                    const prefs = recipient.notificationPreferences || {};
+                    const bookingAlertTone = prefs.bookingAlertTone !== false;
+                    const bookingVibration = prefs.bookingVibration !== false;
+                    const bookingAlertDuration = prefs.bookingAlertDuration !== undefined ? prefs.bookingAlertDuration : 30;
+                    const bookingRepeatAlert = prefs.bookingRepeatAlert === true;
+
                     await notificationService.notifyUser(userId, role, {
-                        title,
-                        body: message,
+                        title: finalTitle,
+                        body: finalMessage,
                         url: generatedUrl,
                         role: role,
+                        sound: isBookingAlert && bookingAlertTone ? soundUrl : undefined,
                         data: {
                             bookingId: referenceId ? referenceId.toString() : '',
                             userId: userId.toString(),
                             type: type,
                             url: generatedUrl,
-                            role: role
+                            role: role,
+                            ...(isBookingAlert ? {
+                                isBookingAlert: 'true',
+                                soundUrl: soundUrl || '',
+                                bookingAlertTone: bookingAlertTone ? 'true' : 'false',
+                                bookingVibration: bookingVibration ? 'true' : 'false',
+                                bookingAlertDuration: String(bookingAlertDuration),
+                                bookingRepeatAlert: bookingRepeatAlert ? 'true' : 'false'
+                            } : {})
                         }
                     });
                 } catch (fcmError) {
@@ -191,10 +390,9 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 console.log(`[NotificationHelper] FCM Push skipped/silenced for user ${userId}`);
             }
         } else if (role && _io) {
-            // If no userId but role is provided, broadcast to the role room (real-time only)
             _io.to(`role_${role}`).emit('new_notification', {
-                title,
-                message,
+                title: finalTitle,
+                message: finalMessage,
                 type,
                 referenceId,
                 url: generatedUrl,
@@ -202,12 +400,11 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 createdAt: new Date()
             });
 
-            // Optional: Broadcast to all tokens of users with this role if needed
             if (role === 'admin') {
                 try {
                     await notificationService.notifyAllAdmins({
-                        title,
-                        body: message,
+                        title: finalTitle,
+                        body: finalMessage,
                         url: generatedUrl,
                         role: 'admin',
                         data: {
@@ -247,5 +444,12 @@ const notifyAdmins = async (title, message, type = 'system', referenceId = null,
     }
 };
 
-module.exports = { sendNotification, notifyAdmins, setIO };
+module.exports = {
+    sendNotification,
+    notifyAdmins,
+    setIO,
+    renderTemplateString,
+    triggerEventNotification
+};
+
 

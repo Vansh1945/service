@@ -261,7 +261,7 @@ const executePaymentCapturedOperations = async (payment, session) => {
 
   console.log(`Payment captured: ${payment.id}, Transaction: ${existingTxn._id}`);
 
-  // Notify customer
+  // Notify customer and provider
   try {
     if (booking && booking.customer) {
       sendNotification(
@@ -272,6 +272,20 @@ const executePaymentCapturedOperations = async (payment, session) => {
         'payment',
         booking._id
       );
+    }
+    const { triggerEventNotification } = require('../utils/notificationHelper');
+    if (booking) {
+      const context = {
+        amount: booking.totalAmount,
+        bookingId: booking.bookingId || booking._id,
+        booking
+      };
+      if (booking.customer) {
+        await triggerEventNotification('payment_success', context, booking.customer);
+      }
+      if (booking.provider) {
+        await triggerEventNotification('payment_success', context, booking.provider);
+      }
     }
   } catch (e) { }
 };

@@ -398,6 +398,11 @@ const approveProvider = async (req, res) => {
                     'approved',
                     provider._id
                 );
+                const { triggerEventNotification } = require('../utils/notificationHelper');
+                await triggerEventNotification('provider_verification_approved', {
+                    remarks: finalRemarks || '',
+                    provider
+                }, provider._id);
             } catch (fcmError) {
                 console.error('Failed to send activation notification:', fcmError);
             }
@@ -441,6 +446,11 @@ const approveProvider = async (req, res) => {
                     'rejected',
                     provider._id
                 );
+                const { triggerEventNotification } = require('../utils/notificationHelper');
+                await triggerEventNotification('provider_verification_rejected', {
+                    reason: provider.rejectionReason,
+                    provider
+                }, provider._id);
             } catch (fcmError) { }
 
             try {

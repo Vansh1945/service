@@ -2643,6 +2643,12 @@ const acceptBooking = async (req, res) => {
           'booking',
           id
         );
+        const { triggerEventNotification } = require('../utils/notificationHelper');
+        await triggerEventNotification('provider_accepted', {
+          serviceName: result.populatedBooking.services[0].service.title,
+          providerName: result.providerName,
+          booking: result.populatedBooking
+        }, result.populatedBooking.customer._id);
       }
     } catch (fcmError) {
       console.error('FCM Notification Error (Booking Accepted):', fcmError);
@@ -2893,6 +2899,11 @@ const startBooking = async (req, res) => {
           'booking',
           booking._id
         );
+        const { triggerEventNotification } = require('../utils/notificationHelper');
+        await triggerEventNotification('work_started', {
+          serviceName: booking.services[0].service.title,
+          booking
+        }, booking.customer._id);
       }
     } catch (fcmError) {
       console.error('FCM Notification Error (Service Started):', fcmError);
@@ -3566,6 +3577,10 @@ const completeBooking = async (req, res) => {
           'booking',
           booking._id
         );
+        const { triggerEventNotification } = require('../utils/notificationHelper');
+        await triggerEventNotification('booking_completed', {
+          booking
+        }, customerId);
       }
       await notifyAdmins(
         'Booking Completed',

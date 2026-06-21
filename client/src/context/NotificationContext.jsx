@@ -23,6 +23,7 @@ export const NotificationProvider = ({ children }) => {
     const [fcmToken, setFcmToken] = useState(null);
     const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
     const savedTokenRef = useRef(null);
+    const activeAudioRef = useRef(null);
 
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
@@ -192,15 +193,18 @@ export const NotificationProvider = ({ children }) => {
         const unsubscribe = onMessage(messaging, (payload) => {
             console.log('[FCM] Foreground message received:', payload);
 
-            const title = payload.notification?.title || payload.data?.title || 'New Notification';
-            const body = payload.notification?.body || payload.data?.body || '';
+            const payloadData = payload.data || {};
+            const payloadNotif = payload.notification || {};
+
+            const title = payloadNotif.title || payloadData.title || 'New Notification';
+            const body = payloadNotif.body || payloadData.body || '';
 
             // Foreground App Update Interceptor
-            if (payload.data?.type === 'app_update') {
+            if (payloadData.type === 'app_update') {
                 console.log('[FCM Foreground Intercept] App update notification detected.');
                 window.dispatchEvent(new CustomEvent('appUpdateReceived', {
                     detail: {
-                        forceRefresh: payload.data?.forceRefresh,
+                        forceRefresh: payloadData.forceRefresh,
                         body: body,
                         releaseNotes: body
                     }
@@ -208,9 +212,9 @@ export const NotificationProvider = ({ children }) => {
                 return;
             }
 
-            const targetRoute = payload.data?.route || payload.data?.url || '/';
-            const requiredRole = payload.data?.role;
-            const entityId = payload.data?.entityId;
+            const targetRoute = payloadData.route || payloadData.url || '/';
+            const requiredRole = payloadData.role;
+            const entityId = payloadData.entityId;
 
             const handleNavigation = () => {
                 setIsDeepLink?.(true);
@@ -239,20 +243,77 @@ export const NotificationProvider = ({ children }) => {
                 return;
             }
 
-            // Removed toast.info to avoid duplicate UI popups, 
-            // relying purely on system-level Notification.
+            // Stop any currently playing alert tone
+            if (activeAudioRef.current) {
+                try {
+                    activeAudioRef.current.pause();
+                    activeAudioRef.current.currentTime = 0;
+                } catch (audioErr) {
+                    console.error('Error stopping previous audio:', audioErr);
+                }
+                activeAudioRef.current = null;
+            }
+
+            // Handle dedicated provider booking alert sound/vibrate in foreground
+            const isBookingAlert = payloadData.isBookingAlert === 'true';
+            if (isBookingAlert) {
+                const soundUrl = payloadData.soundUrl;
+                const bookingAlertTone = payloadData.bookingAlertTone !== 'false';
+                const bookingVibration = payloadData.bookingVibration !== 'false';
+                const bookingAlertDuration = Number(payloadData.bookingAlertDuration || 30);
+                const bookingRepeatAlert = payloadData.bookingRepeatAlert === 'true';
+
+                if (bookingAlertTone && soundUrl) {
+                    const audio = new Audio(soundUrl);
+                    audio.loop = bookingRepeatAlert;
+                    activeAudioRef.current = audio;
+                    audio.play().catch((playErr) => {
+                        console.warn('[FCM Context] Foreground audio auto-play blocked by browser. Awaiting user interaction.', playErr);
+                    });
+
+                    // Set timeout to auto-stop the alert tone
+                    setTimeout(() => {
+                        if (activeAudioRef.current === audio) {
+                            try {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            } catch (pauseErr) {
+                                console.error('Error auto-stopping alert audio:', pauseErr);
+                            }
+                            if (activeAudioRef.current === audio) {
+                                activeAudioRef.current = null;
+                            }
+                        }
+                    }, bookingAlertDuration * 1000);
+                }
+
+                if (bookingVibration && 'vibrate' in navigator) {
+                    navigator.vibrate([500, 200, 500, 200, 500]);
+                }
+            }
 
             if (Notification.permission === 'granted') {
                 const notif = new Notification(title, {
                     body: body,
                     icon: '/icon-192.png',
                     badge: '/icon-192.png',
-                    data: { url: targetRoute, role: requiredRole, entityId: entityId, notificationId: payload.data?.notificationId || null }
+                    data: { url: targetRoute, role: requiredRole, entityId: entityId, notificationId: payloadData.notificationId || null }
                 });
 
                 notif.onclick = () => {
-                    if (payload.data?.notificationId) {
-                        NotificationService.markClicked(payload.data.notificationId).catch(err => {
+                    // Stop playing ringtone immediately when user clicks the notification banner
+                    if (activeAudioRef.current) {
+                        try {
+                            activeAudioRef.current.pause();
+                            activeAudioRef.current.currentTime = 0;
+                        } catch (audioErr) {
+                            console.error('Error stopping audio on notification click:', audioErr);
+                        }
+                        activeAudioRef.current = null;
+                    }
+
+                    if (payloadData.notificationId) {
+                        NotificationService.markClicked(payloadData.notificationId).catch(err => {
                             console.error('[FCM Foreground] Click event tracking failed:', err);
                         });
                     }
@@ -262,7 +323,14 @@ export const NotificationProvider = ({ children }) => {
             }
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            if (activeAudioRef.current) {
+                try {
+                    activeAudioRef.current.pause();
+                } catch (e) {}
+            }
+        };
     }, [isAuthenticated, token, userRole, isAdmin]);
 
     const contextValue = {

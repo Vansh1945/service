@@ -134,4 +134,77 @@ notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 }); // Fast query for broadcast history
 notificationSchema.index({ status: 1, scheduledFor: 1 }); // Fast query for CRON scheduler
 
+const notificationTemplateSchema = new mongoose.Schema({
+    eventId: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true
+    },
+    title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    message: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    icon: {
+        type: String,
+        default: null
+    },
+    ctaText: {
+        type: String,
+        default: null
+    },
+    ctaUrl: {
+        type: String,
+        default: null
+    },
+    priority: {
+        type: String,
+        enum: ['low', 'medium', 'high'],
+        default: 'medium'
+    },
+    targetAudience: {
+        role: {
+            type: String,
+            enum: ['all', 'customer', 'provider', 'admin'],
+            default: 'all'
+        },
+        providerStatus: {
+            type: String,
+            default: null
+        },
+        serviceCategory: {
+            type: String,
+            default: null
+        },
+        bookingStatus: {
+            type: String,
+            default: null
+        },
+        ratingGte: {
+            type: Number,
+            default: null
+        },
+        subscriptionPlan: {
+            type: String,
+            default: null
+        }
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    }
+}, { timestamps: true });
+
+notificationTemplateSchema.index({ eventId: 1 });
+notificationTemplateSchema.index({ isActive: 1 });
+
+mongoose.model('NotificationTemplate', notificationTemplateSchema);
+
 module.exports = mongoose.model('Notification', notificationSchema);
+

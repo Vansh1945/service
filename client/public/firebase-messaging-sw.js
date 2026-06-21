@@ -27,8 +27,9 @@ messaging.onBackgroundMessage((payload) => {
     // Let Firebase handle the notification automatically to prevent duplicates
     if (payload.notification) return;
 
-    const title = payload.data?.title || 'New Notification';
-    const body = payload.data?.body || '';
+    const data = payload.data || {};
+    const title = data.title || 'New Notification';
+    const body = data.body || '';
     const icon = '/icon-192.png';
     const badge = '/icon-192.png';
 
@@ -36,8 +37,8 @@ messaging.onBackgroundMessage((payload) => {
         body,
         icon,
         badge,
-        tag: payload.data?.type || 'general', // Replaces same-type notifications instead of stacking
-        data: payload.data || {},
+        tag: data.type || 'general', // Replaces same-type notifications instead of stacking
+        data: data,
         vibrate: [200, 100, 200],
         requireInteraction: false, // Auto-dismiss on mobile
         actions: [
@@ -47,6 +48,22 @@ messaging.onBackgroundMessage((payload) => {
             }
         ]
     };
+
+    // Apply custom booking alert ringtone and vibration if configured
+    const isBookingAlert = data.isBookingAlert === 'true';
+    if (isBookingAlert) {
+        const bookingAlertTone = data.bookingAlertTone !== 'false';
+        const bookingVibration = data.bookingVibration !== 'false';
+        const soundUrl = data.soundUrl;
+
+        if (bookingAlertTone && soundUrl) {
+            notificationOptions.sound = soundUrl;
+        }
+        if (bookingVibration) {
+            notificationOptions.vibrate = [500, 200, 500, 200, 500];
+        }
+        notificationOptions.requireInteraction = true;
+    }
 
     self.registration.showNotification(title, notificationOptions);
 });

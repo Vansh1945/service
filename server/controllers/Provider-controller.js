@@ -793,6 +793,23 @@ exports.updateProviderProfile = async (req, res) => {
         }
 
         // Handle different update types or update all if no type specified
+        if (req.body.notificationPreferences) {
+            let prefs = req.body.notificationPreferences;
+            if (typeof prefs === 'string') {
+                try {
+                    prefs = JSON.parse(prefs);
+                } catch (e) {
+                    console.error('Failed to parse notificationPreferences string:', e);
+                }
+            }
+            if (typeof prefs === 'object' && prefs !== null) {
+                updates.notificationPreferences = {
+                    ...currentProvider.notificationPreferences,
+                    ...prefs
+                };
+            }
+        }
+
         if (!updateType || updateType === 'basic') {
             // Basic Information Updates
             if (isOnline !== undefined) {

@@ -503,7 +503,9 @@ const bookingSchema = new Schema({
 
   metadata: {
     ip: String,
-    userAgent: String
+    userAgent: String,
+    ignoredProviders: [{ type: Schema.Types.ObjectId, ref: 'Provider' }],
+    assignedAt: Date
   }
 }, {
   toJSON: {

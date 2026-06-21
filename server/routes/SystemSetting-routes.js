@@ -13,33 +13,37 @@ const {
   handleUploadErrors
 } = require('../middlewares/upload');
 
-// Combined upload for system settings (logo and favicon)
+// Combined upload for system settings (logo, favicon and ringtone)
 const uploadSystemSettings = multer({
   storage: new CloudinaryStorage({
     cloudinary: cloudinary,
     params: (req, file) => {
       let folder = 'systemLogo';
       let allowedFormats = ['jpg', 'jpeg', 'png', 'gif'];
-      let fileSizeLimit = 3 * 1024 * 1024; // 3MB
+      let resourceType = 'image';
 
       if (file.fieldname === 'favicon') {
         folder = 'systemFavicon';
         allowedFormats = ['jpg', 'jpeg', 'png', 'ico'];
-        fileSizeLimit = 1 * 1024 * 1024; // 1MB
+      } else if (file.fieldname === 'providerBookingRingtone') {
+        folder = 'systemRingtone';
+        allowedFormats = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'mp4'];
+        resourceType = 'video';
       }
 
       return {
         folder: folder,
-        resource_type: 'image',
+        resource_type: resourceType,
         allowed_formats: allowedFormats,
         public_id: `${folder}_${Date.now()}_${file.originalname.split('.')[0].replace(/\s/g, '-')}`,
       };
     },
   }),
-  limits: { fileSize: 3 * 1024 * 1024 }, // General limit, will be checked per field
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 }).fields([
   { name: 'logo', maxCount: 1 },
-  { name: 'favicon', maxCount: 1 }
+  { name: 'favicon', maxCount: 1 },
+  { name: 'providerBookingRingtone', maxCount: 1 }
 ]);
 
 // Combined upload for branding assets (logo, icon, splashScreen, favicon)

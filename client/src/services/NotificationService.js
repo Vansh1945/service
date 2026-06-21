@@ -64,3 +64,20 @@ export const markClicked = (id) => {
 export const getAdminDashboardStats = () => {
     return axiosInstance.get("/notifications/admin/dashboard-stats");
 };
+
+// Admin Template management
+export const getTemplates = () => {
+    return axiosInstance.get("/notifications/templates");
+};
+
+export const createTemplate = (data) => {
+    return axiosInstance.post("/notifications/templates", data);
+};
+
+export const updateTemplate = (id, data) => {
+    return axiosInstance.put(`/notifications/templates/${id}`, data);
+};
+
+export const deleteTemplate = (id) => {
+    return axiosInstance.delete(`/notifications/templates/${id}`);
+};

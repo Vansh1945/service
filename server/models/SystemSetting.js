@@ -51,6 +51,10 @@ const systemConfigSchema = new mongoose.Schema(
     favicon: {
       type: String, // image url
     },
+    providerBookingRingtone: {
+      type: String,
+      default: "",
+    },
     address: {
       type: String,
       trim: true,

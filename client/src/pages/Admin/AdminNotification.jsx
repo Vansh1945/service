@@ -57,6 +57,23 @@ const PRESETS = [
     },
 ];
 
+const EVENT_IDS = [
+    { value: 'booking_created', label: 'Booking Created (booking_created)' },
+    { value: 'provider_assigned', label: 'Provider Assigned (provider_assigned)' },
+    { value: 'provider_accepted', label: 'Provider Accepted (provider_accepted)' },
+    { value: 'provider_reached', label: 'Provider Reached (provider_reached)' },
+    { value: 'work_started', label: 'Work Started (work_started)' },
+    { value: 'material_added', label: 'Material Added (material_added)' },
+    { value: 'material_approved', label: 'Material Approved (material_approved)' },
+    { value: 'material_rejected', label: 'Material Rejected (material_rejected)' },
+    { value: 'payment_success', label: 'Payment Success (payment_success)' },
+    { value: 'booking_completed', label: 'Booking Completed (booking_completed)' },
+    { value: 'dispute_created', label: 'Dispute Created (dispute_created)' },
+    { value: 'warranty_expiry', label: 'Warranty Expiry (warranty_expiry)' },
+    { value: 'provider_verification_approved', label: 'Provider Verification Approved (provider_verification_approved)' },
+    { value: 'provider_verification_rejected', label: 'Provider Verification Rejected (provider_verification_rejected)' },
+];
+
 const STATUS_COLORS = {
     sent: 'bg-green-100 text-green-700 border-green-200',
     pending: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -104,6 +121,60 @@ const AdminNotification = () => {
         lastNotificationDeliverySuccess: 'N/A'
     });
     const [loadingStats, setLoadingStats] = useState(true);
+    const [systemSettings, setSystemSettings] = useState(null);
+    const [uploadingRingtone, setUploadingRingtone] = useState(false);
+
+    const fetchSystemSettings = async () => {
+        try {
+            const res = await SystemService.getSystemSettingAdmin();
+            if (res.data && res.data.success) {
+                setSystemSettings(res.data.data);
+            }
+        } catch (error) {
+            console.error('[AdminNotification] Failed to fetch system settings:', error);
+        }
+    };
+
+    const handleRingtoneUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const validExtensions = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'mp4'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!validExtensions.includes(ext)) {
+            toast.error('Invalid file format. Please upload an audio file (MP3, WAV, OGG, AAC, M4A).');
+            return;
+        }
+
+        try {
+            setUploadingRingtone(true);
+            const formData = new FormData();
+            formData.append('providerBookingRingtone', file);
+
+            const res = await SystemService.updateSystemSetting(formData);
+            if (res.data && res.data.success) {
+                setSystemSettings(res.data.data);
+                toast.success('Global booking ringtone uploaded successfully.');
+            } else {
+                toast.error((res.data && res.data.message) || 'Failed to upload ringtone.');
+            }
+        } catch (error) {
+            console.error('[AdminNotification] Ringtone upload error:', error);
+            toast.error(error.message || 'Failed to upload ringtone.');
+        } finally {
+            setUploadingRingtone(false);
+        }
+    };
+
+    const playSample = () => {
+        const url = systemSettings && systemSettings.providerBookingRingtone;
+        if (!url) return;
+        const audio = new Audio(url);
+        audio.play().catch(err => {
+            console.error('Play sample failed:', err);
+            toast.error('Browser blocked audio playback. Please interact with the page first.');
+        });
+    };
 
     const fetchStats = async () => {
         try {
@@ -121,6 +192,7 @@ const AdminNotification = () => {
 
     useEffect(() => {
         fetchStats();
+        fetchSystemSettings();
     }, []);
 
     useEffect(() => {
@@ -186,6 +258,183 @@ const AdminNotification = () => {
     // Modal States
     const [editModal, setEditModal] = useState({ open: false, item: null });
     const [confirmModal, setConfirmModal] = useState({ open: false, type: '', id: null, title: '' });
+
+    // Tabs State
+    const [activeTab, setActiveTab] = useState('compose');
+
+    // Templates State
+    const [templates, setTemplates] = useState([]);
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [templateModal, setTemplateModal] = useState({ open: false, item: null, isEdit: false });
+    const [templateForm, setTemplateForm] = useState({
+        eventId: '',
+        title: '',
+        message: '',
+        icon: '',
+        ctaText: '',
+        ctaUrl: '',
+        priority: 'medium',
+        targetAudience: {
+            role: 'all',
+            providerStatus: '',
+            serviceCategory: '',
+            bookingStatus: '',
+            ratingGte: '',
+            subscriptionPlan: ''
+        },
+        isActive: true
+    });
+
+    const fetchTemplates = async () => {
+        try {
+            setLoadingTemplates(true);
+            const res = await NotificationService.getTemplates();
+            if (res.data && res.data.success) {
+                setTemplates(res.data.data || []);
+            }
+        } catch (error) {
+            console.error('Error fetching templates:', error);
+            toast.error('Failed to fetch templates');
+        } finally {
+            setLoadingTemplates(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'templates') {
+            fetchTemplates();
+        }
+    }, [activeTab]);
+
+    const handleTemplateSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!templateForm.eventId.trim() || !templateForm.title.trim() || !templateForm.message.trim()) {
+            toast.error('Event ID, Title, and Message are required');
+            return;
+        }
+
+        try {
+            const dataToSave = {
+                eventId: templateForm.eventId.trim(),
+                title: templateForm.title.trim(),
+                message: templateForm.message.trim(),
+                icon: templateForm.icon.trim() || null,
+                ctaText: templateForm.ctaText.trim() || null,
+                ctaUrl: templateForm.ctaUrl.trim() || null,
+                priority: templateForm.priority,
+                targetAudience: {
+                    role: templateForm.targetAudience.role,
+                    providerStatus: templateForm.targetAudience.providerStatus.trim() || null,
+                    serviceCategory: templateForm.targetAudience.serviceCategory || null,
+                    bookingStatus: templateForm.targetAudience.bookingStatus.trim() || null,
+                    ratingGte: templateForm.targetAudience.ratingGte ? Number(templateForm.targetAudience.ratingGte) : null,
+                    subscriptionPlan: templateForm.targetAudience.subscriptionPlan.trim() || null
+                },
+                isActive: templateForm.isActive
+            };
+
+            let res;
+            if (templateModal.isEdit && templateModal.item && templateModal.item._id) {
+                res = await NotificationService.updateTemplate(templateModal.item._id, dataToSave);
+            } else {
+                res = await NotificationService.createTemplate(dataToSave);
+            }
+
+            if (res.data && res.data.success) {
+                toast.success(templateModal.isEdit ? 'Template updated successfully' : 'Template created successfully');
+                setTemplateModal({ open: false, item: null, isEdit: false });
+                fetchTemplates();
+            } else {
+                toast.error(res.data.message || 'Operation failed');
+            }
+        } catch (error) {
+            console.error('Error saving template:', error);
+            const errMsg = error.response && error.response.data && error.response.data.message;
+            toast.error(errMsg || 'Failed to save template');
+        }
+    };
+
+    const handleDeleteTemplate = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this template?')) return;
+        try {
+            const res = await NotificationService.deleteTemplate(id);
+            if (res.data && res.data.success) {
+                toast.success('Template deleted successfully');
+                fetchTemplates();
+            } else {
+                toast.error(res.data.message || 'Failed to delete template');
+            }
+        } catch (error) {
+            console.error('Error deleting template:', error);
+            toast.error('Failed to delete template');
+        }
+    };
+
+    const handleToggleTemplateStatus = async (template) => {
+        try {
+            const updatedStatus = !template.isActive;
+            const res = await NotificationService.updateTemplate(template._id, {
+                ...template,
+                isActive: updatedStatus
+            });
+            if (res.data && res.data.success) {
+                toast.success(`Template ${updatedStatus ? 'activated' : 'deactivated'} successfully`);
+                fetchTemplates();
+            } else {
+                toast.error(res.data.message || 'Failed to update template status');
+            }
+        } catch (error) {
+            console.error('Error toggling template status:', error);
+            toast.error('Failed to toggle status');
+        }
+    };
+
+    const openTemplateModal = (item = null) => {
+        if (item) {
+            const targetAud = item.targetAudience || {};
+            setTemplateForm({
+                eventId: item.eventId || '',
+                title: item.title || '',
+                message: item.message || '',
+                icon: item.icon || '',
+                ctaText: item.ctaText || '',
+                ctaUrl: item.ctaUrl || '',
+                priority: item.priority || 'medium',
+                targetAudience: {
+                    role: targetAud.role || 'all',
+                    providerStatus: targetAud.providerStatus || '',
+                    serviceCategory: targetAud.serviceCategory || '',
+                    bookingStatus: targetAud.bookingStatus || '',
+                    ratingGte: targetAud.ratingGte || '',
+                    subscriptionPlan: targetAud.subscriptionPlan || ''
+                },
+                isActive: item.isActive !== false
+            });
+            setTemplateModal({ open: true, item, isEdit: true });
+        } else {
+            setTemplateForm({
+                eventId: '',
+                title: '',
+                message: '',
+                icon: '',
+                ctaText: '',
+                ctaUrl: '',
+                priority: 'medium',
+                targetAudience: {
+                    role: 'all',
+                    providerStatus: '',
+                    serviceCategory: '',
+                    bookingStatus: '',
+                    ratingGte: '',
+                    subscriptionPlan: ''
+                },
+                isActive: true
+            });
+            setTemplateModal({ open: true, item: null, isEdit: false });
+        }
+    };
+
 
     const filteredHistory = history.filter(h => filter === 'all' || h.audience === filter);
 
@@ -542,7 +791,7 @@ const AdminNotification = () => {
         } else if (showPicker === 'body') {
             setForm(prev => ({ ...prev, body: prev.body + emojiObj.emoji }));
         }
-        setShowPicker(null); // Optional: close picker after select, or leave open for multiple emojis
+        setShowPicker(null);
     };
 
     return (
@@ -552,9 +801,9 @@ const AdminNotification = () => {
             <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <FiBell className="text-primary" /> Broadcast Notification
+                        <FiBell className="text-primary" /> Rule-Based Targeted Notification Engine
                     </h1>
-                    <p className="text-gray-600 mt-1">Send real-time push notifications to your users via Firebase Cloud Messaging.</p>
+                    <p className="text-gray-600 mt-1">Manage event-triggered templates and direct broadcast campaigns.</p>
                 </div>
             </div>
 
@@ -609,594 +858,821 @@ const AdminNotification = () => {
                 />
             </div>
 
-            {/* ── Main Layout ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            {/* ── Tabs Navigation ── */}
+            <div className="mb-6 border-b border-gray-200">
+                <nav className="flex space-x-8" aria-label="Tabs">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('compose')}
+                        className={`py-3 px-1 border-b-2 font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'compose'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        <FiSend size={16} /> Compose Broadcast
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('templates')}
+                        className={`py-3 px-1 border-b-2 font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'templates'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        <FiTarget size={16} /> Rule-Based Templates
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('history')}
+                        className={`py-3 px-1 border-b-2 font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'history'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        <FiClock size={16} /> Broadcast History
+                    </button>
+                </nav>
+            </div>
 
-                {/* ── Left Column: Compose Form ── */}
-                <div className="lg:col-span-2">
-                    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-5 md:p-6">
-                        <div className="flex items-center mb-6 border-b pb-4">
-                            <h2 className="text-lg font-semibold text-gray-900">Compose Notification</h2>
-                        </div>
-
-                        {/* Audience Selector */}
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                                <FiTarget className="text-primary" /> Target Audience *
-                            </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {AUDIENCE_OPTIONS.map(opt => (
-                                    <label
-                                        key={opt.value}
-                                        className={`relative flex flex-col p-4 cursor-pointer rounded-lg border-2 transition-all duration-200 ${form.audience === opt.value
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-gray-200 hover:border-primary/30 bg-gray-50'
-                                            }`}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="audience"
-                                            value={opt.value}
-                                            checked={form.audience === opt.value}
-                                            onChange={handleChange}
-                                            className="sr-only"
-                                        />
-                                        <div className="text-2xl mb-2">{opt.icon}</div>
-                                        <span className={`font-semibold text-sm ${form.audience === opt.value ? 'text-primary' : 'text-gray-800'}`}>
-                                            {opt.label}
-                                        </span>
-                                        <span className="text-xs text-gray-500 mt-1">{opt.desc}</span>
-
-                                        {/* Status checkmark */}
-                                        {form.audience === opt.value && (
-                                            <div className="absolute top-3 right-3 text-primary">
-                                                <FiCheckCircle size={18} />
-                                            </div>
-                                        )}
-                                    </label>
-                                ))}
+            {/* ── Tab: Compose Broadcast ── */}
+            {activeTab === 'compose' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 animate-fade-in">
+                    {/* Left Column: Compose Form */}
+                    <div className="lg:col-span-2">
+                        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-5 md:p-6">
+                            <div className="flex items-center mb-6 border-b pb-4">
+                                <h2 className="text-lg font-semibold text-gray-900">Compose Notification</h2>
                             </div>
-                        </div>
 
-                        {/* Broadcast Scope Selector */}
-                        <div className="mb-6">
-                            <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                                <FiTarget className="text-primary" /> Broadcast Scope *
-                            </label>
-                            <div className="flex gap-4">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setBroadcastScope('global');
-                                        setForm(prev => ({ ...prev, targetZones: [] }));
-                                    }}
-                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${broadcastScope === 'global'
-                                            ? 'border-primary bg-primary/5 text-primary'
-                                            : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
-                                        }`}
-                                >
-                                    🌐 Global Broadcast
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setBroadcastScope('zone_specific')}
-                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${broadcastScope === 'zone_specific'
-                                            ? 'border-primary bg-primary/5 text-primary'
-                                            : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
-                                        }`}
-                                >
-                                    📍 Zone-Targeted Broadcast
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Target Zones Selector */}
-                        {broadcastScope === 'zone_specific' && (
+                            {/* Audience Selector */}
                             <div className="mb-6">
-                                <HierarchicalZoneSelector
-                                    zones={zones}
-                                    selectedZoneIds={form.targetZones}
-                                    onChange={(newZoneIds) => {
-                                        if (Array.isArray(newZoneIds)) {
-                                            setForm(prev => ({ ...prev, targetZones: newZoneIds }));
-                                        } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
-                                            const targetId = (newZoneIds._id || newZoneIds.id).toString();
-                                            setForm(prev => ({ ...prev, targetZones: (prev.targetZones || []).filter(id => id.toString() !== targetId) }));
-                                        }
-                                    }}
-                                    label="Target Zones (State/City/Micro)"
-                                />
-                            </div>
-                        )}
-
-                        {/* Audience Filters */}
-                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                            <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                <FiFilter className="text-primary" /> Audience Filters (Optional)
-                            </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Target City</label>
-                                    <input
-                                        type="text"
-                                        name="city"
-                                        value={form.city}
-                                        onChange={handleChange}
-                                        placeholder="e.g. Amritsar"
-                                        className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                                {form.audience !== 'customer' && (
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Provider Category</label>
-                                        <select
-                                            name="providerCategory"
-                                            value={form.providerCategory}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                        >
-                                            <option value="">All Categories</option>
-                                            {categories.map(cat => (
-                                                <option key={cat._id} value={cat._id}>{cat.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Min. Bookings</label>
-                                    <input
-                                        type="number"
-                                        name="minBookings"
-                                        value={form.minBookings}
-                                        onChange={handleChange}
-                                        min="0"
-                                        className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-5">
-                            {/* Title */}
-                            <div className="relative">
-                                <label htmlFor="notif-title" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                                    <FiMessageSquare className="text-gray-400" /> Notification Title *
+                                <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                    <FiTarget className="text-primary" /> Target Audience *
                                 </label>
-                                <div className="relative">
-                                    <input
-                                        id="notif-title"
-                                        type="text"
-                                        name="title"
-                                        value={form.title}
-                                        onChange={handleChange}
-                                        placeholder="e.g. Special Offer Today! 🎉"
-                                        maxLength={80}
-                                        required
-                                        className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPicker(prev => prev === 'title' ? null : 'title')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
-                                        title="Add Emoji"
-                                    >
-                                        <FiSmile size={18} />
-                                    </button>
-                                </div>
-                                <div className="text-xs text-gray-400 text-right mt-1">{form.title.length}/80 chars</div>
-
-                                {showPicker === 'title' && (
-                                    <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
-                                        <Suspense fallback={<div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-xs text-gray-500">Loading emoji picker...</div>}>
-                                            <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
-                                        </Suspense>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Message */}
-                            <div className="relative">
-                                <label htmlFor="notif-body" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Message Body *
-                                </label>
-                                <div className="relative">
-                                    <textarea
-                                        id="notif-body"
-                                        name="body"
-                                        value={form.body}
-                                        onChange={handleChange}
-                                        placeholder="Write your notification message here... 🚀🔥⏱️"
-                                        maxLength={200}
-                                        required
-                                        rows={3}
-                                        className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 resize-y"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPicker(prev => prev === 'body' ? null : 'body')}
-                                        className="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
-                                        title="Add Emoji"
-                                    >
-                                        <FiSmile size={18} />
-                                    </button>
-                                </div>
-                                <div className="text-xs text-gray-400 text-right mt-1">{form.body.length}/200 chars</div>
-
-                                {showPicker === 'body' && (
-                                    <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
-                                        <Suspense fallback={<div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-xs text-gray-500">Loading emoji picker...</div>}>
-                                            <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
-                                        </Suspense>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Deep Link URL */}
-                            <div>
-                                <label htmlFor="notif-url" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                                    <FiLink className="text-gray-400" /> Deep Link URL <span className="text-gray-400 font-normal">(on click)</span>
-                                </label>
-                                <input
-                                    id="notif-url"
-                                    type="text"
-                                    name="url"
-                                    value={form.url}
-                                    onChange={handleChange}
-                                    placeholder="/customer/services"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono text-sm transition-colors duration-200"
-                                />
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {QUICK_LINKS.map(ql => (
-                                        <button
-                                            key={ql.url}
-                                            type="button"
-                                            onClick={() => setForm(prev => ({ ...prev, url: ql.url }))}
-                                            className={`px-3 py-1 text-xs rounded-full border transition-colors ${form.url === ql.url
-                                                ? 'bg-primary/10 border-primary text-primary font-medium'
-                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {AUDIENCE_OPTIONS.map(opt => (
+                                        <label
+                                            key={opt.value}
+                                            className={`relative flex flex-col p-4 cursor-pointer rounded-lg border-2 transition-all duration-200 ${form.audience === opt.value
+                                                ? 'border-primary bg-primary/5'
+                                                : 'border-gray-200 hover:border-primary/30 bg-gray-50'
                                                 }`}
                                         >
-                                            {ql.label}
-                                        </button>
+                                            <input
+                                                type="radio"
+                                                name="audience"
+                                                value={opt.value}
+                                                checked={form.audience === opt.value}
+                                                onChange={handleChange}
+                                                className="sr-only"
+                                            />
+                                            <div className="text-2xl mb-2">{opt.icon}</div>
+                                            <span className={`font-semibold text-sm ${form.audience === opt.value ? 'text-primary' : 'text-gray-800'}`}>
+                                                {opt.label}
+                                            </span>
+                                            <span className="text-xs text-gray-500 mt-1">{opt.desc}</span>
+
+                                            {form.audience === opt.value && (
+                                                <div className="absolute top-3 right-3 text-primary">
+                                                    <FiCheckCircle size={18} />
+                                                </div>
+                                            )}
+                                        </label>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Scheduling Section */}
-                            <div className="pt-2">
-                                <label className="flex items-center gap-2 cursor-pointer mb-3">
-                                    <input
-                                        type="checkbox"
-                                        checked={isScheduled}
-                                        onChange={(e) => setIsScheduled(e.target.checked)}
-                                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                                        <FiClock className="text-primary" /> Schedule for later
-                                    </span>
+                            {/* Broadcast Scope Selector */}
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
+                                    <FiTarget className="text-primary" /> Broadcast Scope *
                                 </label>
+                                <div className="flex gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBroadcastScope('global');
+                                            setForm(prev => ({ ...prev, targetZones: [] }));
+                                        }}
+                                        className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${broadcastScope === 'global'
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
+                                            }`}
+                                    >
+                                        🌐 Global Broadcast
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBroadcastScope('zone_specific')}
+                                        className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${broadcastScope === 'zone_specific'
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
+                                            }`}
+                                    >
+                                        📍 Zone-Targeted Broadcast
+                                    </button>
+                                </div>
+                            </div>
 
-                                {isScheduled && (
-                                    <div className="pl-6 animate-fade-in">
+                            {/* Target Zones Selector */}
+                            {broadcastScope === 'zone_specific' && (
+                                <div className="mb-6">
+                                    <HierarchicalZoneSelector
+                                        zones={zones}
+                                        selectedZoneIds={form.targetZones}
+                                        onChange={(newZoneIds) => {
+                                            if (Array.isArray(newZoneIds)) {
+                                                setForm(prev => ({ ...prev, targetZones: newZoneIds }));
+                                            } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                                                const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                                                setForm(prev => ({ ...prev, targetZones: (prev.targetZones || []).filter(id => id.toString() !== targetId) }));
+                                            }
+                                        }}
+                                        label="Target Zones (State/City/Micro)"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Audience Filters */}
+                            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                    <FiFilter className="text-primary" /> Audience Filters (Optional)
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Target City</label>
                                         <input
-                                            type="datetime-local"
-                                            name="scheduledTime"
-                                            value={form.scheduledTime}
+                                            type="text"
+                                            name="city"
+                                            value={form.city}
                                             onChange={handleChange}
-                                            min={new Date().toISOString().slice(0, 16)}
-                                            required={isScheduled}
-                                            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 text-sm"
+                                            placeholder="e.g. Amritsar"
+                                            className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                                         />
-                                        <p className="text-xs text-gray-500 mt-1.5">
-                                            Notification will be automatically dispatched at the selected time.
-                                        </p>
                                     </div>
-                                )}
+                                    {form.audience !== 'customer' && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Provider Category</label>
+                                            <select
+                                                name="providerCategory"
+                                                value={form.providerCategory}
+                                                onChange={handleChange}
+                                                className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                            >
+                                                <option value="">All Categories</option>
+                                                {categories.map(cat => (
+                                                    <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Min. Bookings</label>
+                                        <input
+                                            type="number"
+                                            name="minBookings"
+                                            value={form.minBookings}
+                                            onChange={handleChange}
+                                            min="0"
+                                            className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Status Banners */}
-                        {status === 'success' && (
-                            <div className="mt-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 flex gap-3 items-start">
-                                <FiCheckCircle className="mt-0.5 flex-shrink-0 text-green-500" size={18} />
+                            <div className="grid grid-cols-1 gap-5">
+                                {/* Title */}
+                                <div className="relative">
+                                    <label htmlFor="notif-title" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                        <FiMessageSquare className="text-gray-400" /> Notification Title *
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            id="notif-title"
+                                            type="text"
+                                            name="title"
+                                            value={form.title}
+                                            onChange={handleChange}
+                                            placeholder="e.g. Special Offer Today! 🎉"
+                                            maxLength={80}
+                                            required
+                                            className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPicker(prev => prev === 'title' ? null : 'title')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
+                                            title="Add Emoji"
+                                        >
+                                            <FiSmile size={18} />
+                                        </button>
+                                    </div>
+                                    <div className="text-xs text-gray-400 text-right mt-1">{form.title.length}/80 chars</div>
+
+                                    {showPicker === 'title' && (
+                                        <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
+                                            <Suspense fallback={<div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-xs text-gray-500">Loading emoji picker...</div>}>
+                                                <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
+                                            </Suspense>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Message */}
+                                <div className="relative">
+                                    <label htmlFor="notif-body" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Message Body *
+                                    </label>
+                                    <div className="relative">
+                                        <textarea
+                                            id="notif-body"
+                                            name="body"
+                                            value={form.body}
+                                            onChange={handleChange}
+                                            placeholder="Write your notification message here... 🚀🔥⏱️"
+                                            maxLength={200}
+                                            required
+                                            rows={3}
+                                            className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 resize-y"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPicker(prev => prev === 'body' ? null : 'body')}
+                                            className="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
+                                            title="Add Emoji"
+                                        >
+                                            <FiSmile size={18} />
+                                        </button>
+                                    </div>
+                                    <div className="text-xs text-gray-400 text-right mt-1">{form.body.length}/200 chars</div>
+
+                                    {showPicker === 'body' && (
+                                        <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
+                                            <Suspense fallback={<div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-xs text-gray-500">Loading emoji picker...</div>}>
+                                                <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
+                                            </Suspense>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Deep Link URL */}
                                 <div>
-                                    <h4 className="font-semibold text-sm">{message}</h4>
-                                    {result && (
-                                        <p className="text-xs mt-1 text-green-600">
-                                            Successfully sent to {result.sent} devices. ({result.total} total targets)
-                                        </p>
+                                    <label htmlFor="notif-url" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                        <FiLink className="text-gray-400" /> Deep Link URL <span className="text-gray-400 font-normal">(on click)</span>
+                                    </label>
+                                    <input
+                                        id="notif-url"
+                                        type="text"
+                                        name="url"
+                                        value={form.url}
+                                        onChange={handleChange}
+                                        placeholder="/customer/services"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono text-sm transition-colors duration-200"
+                                    />
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {QUICK_LINKS.map(ql => (
+                                            <button
+                                                key={ql.url}
+                                                type="button"
+                                                onClick={() => setForm(prev => ({ ...prev, url: ql.url }))}
+                                                className={`px-3 py-1 text-xs rounded-full border transition-colors ${form.url === ql.url
+                                                    ? 'bg-primary/10 border-primary text-primary font-medium'
+                                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                {ql.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Scheduling Section */}
+                                <div className="pt-2">
+                                    <label className="flex items-center gap-2 cursor-pointer mb-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={isScheduled}
+                                            onChange={(e) => setIsScheduled(e.target.checked)}
+                                            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                                            <FiClock className="text-primary" /> Schedule for later
+                                        </span>
+                                    </label>
+
+                                    {isScheduled && (
+                                        <div className="pl-6 animate-fade-in">
+                                            <input
+                                                type="datetime-local"
+                                                name="scheduledTime"
+                                                value={form.scheduledTime}
+                                                onChange={handleChange}
+                                                min={new Date().toISOString().slice(0, 16)}
+                                                required={isScheduled}
+                                                className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 text-sm"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1.5">
+                                                Notification will be automatically dispatched at the selected time.
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                        )}
 
-                        {status === 'error' && (
-                            <div className="mt-6 bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 flex gap-3 items-start">
-                                <FiAlertCircle className="mt-0.5 flex-shrink-0 text-red-500" size={18} />
-                                <div>
-                                    <h4 className="font-semibold text-sm">{message}</h4>
-                                    {result && (
-                                        <p className="text-xs mt-1 text-red-600">
-                                            Failed for {result.failed} devices.
-                                        </p>
-                                    )}
+                            {/* Status Banners */}
+                            {status === 'success' && (
+                                <div className="mt-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 flex gap-3 items-start">
+                                    <FiCheckCircle className="mt-0.5 flex-shrink-0 text-green-500" size={18} />
+                                    <div>
+                                        <h4 className="font-semibold text-sm">{message}</h4>
+                                        {result && (
+                                            <p className="text-xs mt-1 text-green-600">
+                                                Successfully sent to {result.sent} devices. ({result.total} total targets)
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Action Buttons */}
-                        <div className="mt-8 pt-5 border-t flex flex-col sm:flex-row gap-3">
-                            <button
-                                type="submit"
-                                disabled={status === 'loading'}
-                                className="flex-1 bg-primary hover:bg-teal-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                            >
-                                {status === 'loading' ? (
-                                    <><FiLoader className="" /> Sending...</>
-                                ) : (
-                                    <><FiSend /> Broadcast Alert</>
-                                )}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={resetForm}
-                                className="sm:w-32 bg-white border border-gray-300 text-gray-700 font-medium py-2.5 px-4 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                Reset
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                {/* ── Right Column: Preview & Presets ── */}
-                <div className="flex flex-col gap-6">
-
-                    {/* Live Preview Card */}
-                    <div className="bg-white rounded-xl shadow-sm border p-5">
-                        <h3 className="text-sm font-bold text-gray-800 mb-6 px-1 flex items-center gap-2">
-                            <FiBell className="text-primary" /> Notification View
-                        </h3>
-
-                        <div className="relative mx-auto w-[240px] h-[420px] border-[6px] border-gray-900 rounded-[2.5rem] shadow-xl overflow-hidden bg-gray-50 scale-95 origin-top">
-                            {/* Phone Notch */}
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-xl z-20"></div>
-
-                            {/* Wallpaper/Bg */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 via-white to-blue-500/10"></div>
-
-                            {/* Status Bar */}
-                            <div className="px-5 pt-3.5 flex justify-between items-center relative z-10 text-[9px] font-bold text-gray-500">
-                                <span>9:41</span>
-                                <div className="flex gap-1 items-center">
-                                    <div className="w-2.5 h-1.5 border border-gray-400 rounded-sm"></div>
-                                    <div className="w-2 h-2 bg-gray-400 rounded-full scale-50"></div>
+                            {status === 'error' && (
+                                <div className="mt-6 bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 flex gap-3 items-start">
+                                    <FiAlertCircle className="mt-0.5 flex-shrink-0 text-red-500" size={18} />
+                                    <div>
+                                        <h4 className="font-semibold text-sm">{message}</h4>
+                                        {result && (
+                                            <p className="text-xs mt-1 text-red-600">
+                                                Failed for {result.failed} devices.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
-                            {/* Notification Bubble */}
-                            <div className="mt-4 px-2 relative z-10">
-                                <motion.div
-                                    initial={{ opacity: 0, y: -20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    key={form.title + form.body}
-                                    className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-3 flex gap-2.5 items-start"
+                            {/* Action Buttons */}
+                            <div className="mt-8 pt-5 border-t flex flex-col sm:flex-row gap-3">
+                                <button
+                                    type="submit"
+                                    disabled={status === 'loading'}
+                                    className="flex-1 bg-primary hover:bg-teal-700 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
-                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 overflow-hidden">
-                                        {!logoLoaded && <FiBell className="text-primary" size={14} />}
-                                        <img
-                                            src="/icon-192.png"
-                                            alt="App"
-                                            className={`w-6 h-6 object-contain transition-opacity duration-200 ${logoLoaded ? 'opacity-100' : 'opacity-0 absolute'}`}
-                                            onLoad={() => setLogoLoaded(true)}
-                                            onError={() => setLogoLoaded(false)}
-                                        />
+                                    {status === 'loading' ? (
+                                        <><FiLoader className="animate-spin" /> Sending...</>
+                                    ) : (
+                                        <><FiSend /> Broadcast Alert</>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={resetForm}
+                                    className="sm:w-32 bg-white border border-gray-300 text-gray-700 font-medium py-2.5 px-4 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Reset
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Right Column: Preview & Presets */}
+                    <div className="flex flex-col gap-6">
+                        {/* Live Preview Card */}
+                        <div className="bg-white rounded-xl shadow-sm border p-5">
+                            <h3 className="text-sm font-bold text-gray-800 mb-6 px-1 flex items-center gap-2">
+                                <FiBell className="text-primary" /> Notification View
+                            </h3>
+
+                            <div className="relative mx-auto w-[240px] h-[420px] border-[6px] border-gray-900 rounded-[2.5rem] shadow-xl overflow-hidden bg-gray-50 scale-95 origin-top">
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-xl z-20"></div>
+                                <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 via-white to-blue-500/10"></div>
+                                <div className="px-5 pt-3.5 flex justify-between items-center relative z-10 text-[9px] font-bold text-gray-500">
+                                    <span>9:41</span>
+                                    <div className="flex gap-1 items-center">
+                                        <div className="w-2.5 h-1.5 border border-gray-400 rounded-sm"></div>
+                                        <div className="w-2 h-2 bg-gray-400 rounded-full scale-50"></div>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-center mb-0.5">
-                                            <span className="text-[8px] font-black text-primary uppercase tracking-tight">SERVICE APP</span>
-                                            <span className="text-[8px] text-gray-400">now</span>
+                                </div>
+
+                                <div className="mt-4 px-2 relative z-10">
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        key={form.title + form.body}
+                                        className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-3 flex gap-2.5 items-start"
+                                    >
+                                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 overflow-hidden">
+                                            {!logoLoaded && <FiBell className="text-primary" size={14} />}
+                                            <img
+                                                src="/icon-192.png"
+                                                alt="App"
+                                                className={`w-6 h-6 object-contain transition-opacity duration-200 ${logoLoaded ? 'opacity-100' : 'opacity-0 absolute'}`}
+                                                onLoad={() => setLogoLoaded(true)}
+                                                onError={() => setLogoLoaded(false)}
+                                            />
                                         </div>
-                                        <div className="text-[11px] font-bold text-gray-900 leading-tight truncate">
-                                            {form.title || "Notification Title"}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-center mb-0.5">
+                                                <span className="text-[8px] font-black text-primary uppercase tracking-tight">SERVICE APP</span>
+                                                <span className="text-[8px] text-gray-400">now</span>
+                                            </div>
+                                            <div className="text-[11px] font-bold text-gray-900 leading-tight truncate">
+                                                {form.title || "Notification Title"}
+                                            </div>
+                                            <div className="text-[10px] text-gray-600 line-clamp-2 mt-0.5 leading-snug">
+                                                {form.body || "Your message body will appear here..."}
+                                            </div>
                                         </div>
-                                        <div className="text-[10px] text-gray-600 line-clamp-2 mt-0.5 leading-snug">
-                                            {form.body || "Your message body will appear here..."}
-                                        </div>
-                                    </div>
-                                </motion.div>
+                                    </motion.div>
+                                </div>
+
+                                <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-16 h-1 bg-gray-300 rounded-full"></div>
                             </div>
 
-                            {/* Bottom Home Indicator */}
-                            <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-16 h-1 bg-gray-300 rounded-full"></div>
+                            <div className="mt-4 flex items-center justify-between text-[10px] px-2 text-gray-400 font-bold uppercase tracking-wider">
+                                <div className="flex items-center gap-1">
+                                    <FiUsers className="text-primary" size={12} />
+                                    <span className="capitalize">{form.audience}</span>
+                                </div>
+                                <div className="flex items-center gap-1 max-w-[100px] truncate">
+                                    <FiLink className="text-primary" size={12} />
+                                    <span className="truncate">{form.url}</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="mt-4 flex items-center justify-between text-[10px] px-2 text-gray-400 font-bold uppercase tracking-wider">
-                            <div className="flex items-center gap-1">
-                                <FiUsers className="text-primary" size={12} />
-                                <span className="capitalize">{form.audience}</span>
+                        {/* Quick Presets Menu */}
+                        <div className="bg-white rounded-lg shadow-sm border p-5">
+                            <h3 className="text-sm font-bold text-gray-800 mb-3 px-1">Quick Presets</h3>
+                            <div className="space-y-2">
+                                {PRESETS.map((preset, i) => (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => applyPreset(preset)}
+                                        className="w-full text-left p-3 rounded-lg border border-gray-100 bg-gray-50 hover:border-primary/30 hover:bg-primary/5 transition-colors group"
+                                    >
+                                        <div className="font-semibold text-sm text-gray-800 group-hover:text-primary transition-colors">{preset.label}</div>
+                                        <div className="text-xs text-gray-500 mt-1 truncate">{preset.title}</div>
+                                    </button>
+                                ))}
                             </div>
-                            <div className="flex items-center gap-1 max-w-[100px] truncate">
-                                <FiLink className="text-primary" size={12} />
-                                <span className="truncate">{form.url}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Tab: Rule-Based Templates ── */}
+            {activeTab === 'templates' && (
+                <div className="bg-white rounded-lg shadow-sm border p-5 md:p-6 mb-8 animate-fade-in">
+                    {/* Global Booking Ringtone Settings Card */}
+                    <div className="bg-gradient-to-r from-primary/10 to-blue-500/10 rounded-xl p-5 border border-primary/25 mb-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                    🎵 Global Provider Booking Ringtone
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Configure the alert tone played to providers for new, reassigned, or emergency bookings.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {systemSettings && systemSettings.providerBookingRingtone ? (
+                                    <>
+                                        <audio src={systemSettings.providerBookingRingtone} controls className="h-9 max-w-[200px]" />
+                                        <button
+                                            type="button"
+                                            onClick={playSample}
+                                            className="text-xs bg-primary hover:bg-teal-700 text-white font-bold px-3 py-2 rounded-lg shadow-sm transition-all"
+                                        >
+                                            Play
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-red-500 font-bold bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg">
+                                        No Ringtone Uploaded
+                                    </span>
+                                )}
+                                <label className={`text-xs font-bold px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 cursor-pointer shadow-sm hover:bg-gray-50 flex items-center gap-1.5 transition-all ${uploadingRingtone ? 'opacity-70 pointer-events-none' : ''}`}>
+                                    {uploadingRingtone ? 'Uploading...' : 'Change Tone'}
+                                    <input type="file" onChange={handleRingtoneUpload} accept="audio/*" className="hidden" />
+                                </label>
                             </div>
                         </div>
                     </div>
 
-                    {/* Quick Presets Menu */}
-                    <div className="bg-white rounded-lg shadow-sm border p-5">
-                        <h3 className="text-sm font-bold text-gray-800 mb-3 px-1">Quick Presets</h3>
-                        <div className="space-y-2">
-                            {PRESETS.map((preset, i) => (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                <FiTarget className="text-primary" /> Rule-Based Event Templates
+                            </h2>
+                            <p className="text-xs text-gray-500 mt-1">Configure automated notifications triggered by system lifecycle events.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => openTemplateModal()}
+                            className="bg-primary hover:bg-teal-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors text-sm shadow-sm"
+                        >
+                            + Create Template
+                        </button>
+                    </div>
+
+                    {loadingTemplates ? (
+                        <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                            <FiLoader className="animate-spin text-primary mb-2" size={24} />
+                            <span className="text-sm">Loading templates...</span>
+                        </div>
+                    ) : templates.length === 0 ? (
+                        <div className="py-10 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                            <FiBell className="mb-2 opacity-40" size={24} />
+                            <span className="text-sm font-medium">No templates configured</span>
+                            <button
+                                type="button"
+                                onClick={() => openTemplateModal()}
+                                className="mt-3 text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 font-bold"
+                            >
+                                Add Default / Custom Template
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {templates.map(tmpl => {
+                                const targetAud = tmpl.targetAudience || {};
+
+                                // Simple function to split and highlight placeholders without using advanced regex object methods
+                                const renderHighlightedMessage = (msg) => {
+                                    if (!msg) return '';
+                                    const parts = msg.split(/(\{\{[a-zA-Z0-9_]+\}\})/g);
+                                    return parts.map((part, idx) => {
+                                        if (part.startsWith('{{') && part.endsWith('}}')) {
+                                            return (
+                                                <span key={idx} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono text-[11px] font-bold">
+                                                    {part}
+                                                </span>
+                                            );
+                                        }
+                                        return part;
+                                    });
+                                };
+
+                                return (
+                                    <div key={tmpl._id} className="border border-gray-200 rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all bg-white relative group">
+                                        <div className="flex justify-between items-start gap-4">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase border bg-blue-50 text-blue-700 border-blue-200 font-mono">
+                                                        {tmpl.eventId}
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${tmpl.priority === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        tmpl.priority === 'medium' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                            'bg-gray-50 text-gray-700 border-gray-200'
+                                                        }`}>
+                                                        {tmpl.priority} Priority
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${tmpl.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200'
+                                                        }`}>
+                                                        {tmpl.isActive ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 text-sm">{tmpl.title}</h4>
+                                                <div className="text-xs text-gray-600 mt-1.5 leading-relaxed bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                    {renderHighlightedMessage(tmpl.message)}
+                                                </div>
+
+                                                {/* Target Criteria Details */}
+                                                <div className="mt-3 flex flex-wrap gap-2 items-center">
+                                                    <span className="text-[10px] text-gray-500 font-semibold">Audience:</span>
+                                                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold capitalize">
+                                                        {targetAud.role || 'all'}
+                                                    </span>
+                                                    {targetAud.providerStatus && (
+                                                        <span className="text-[10px] bg-gray-105 text-gray-600 px-2 py-0.5 rounded border">
+                                                            Status: {targetAud.providerStatus}
+                                                        </span>
+                                                    )}
+                                                    {targetAud.serviceCategory && (
+                                                        <span className="text-[10px] bg-gray-105 text-gray-600 px-2 py-0.5 rounded border">
+                                                            Category: {
+                                                                (categories.find(c => c._id === targetAud.serviceCategory) || { name: targetAud.serviceCategory }).name
+                                                            }
+                                                        </span>
+                                                    )}
+                                                    {targetAud.bookingStatus && (
+                                                        <span className="text-[10px] bg-gray-105 text-gray-600 px-2 py-0.5 rounded border">
+                                                            Booking: {targetAud.bookingStatus}
+                                                        </span>
+                                                    )}
+                                                    {targetAud.ratingGte && (
+                                                        <span className="text-[10px] bg-gray-105 text-gray-600 px-2 py-0.5 rounded border">
+                                                            Min Rating: ★{targetAud.ratingGte}
+                                                        </span>
+                                                    )}
+                                                    {targetAud.subscriptionPlan && (
+                                                        <span className="text-[10px] bg-gray-105 text-gray-600 px-2 py-0.5 rounded border">
+                                                            Plan: {targetAud.subscriptionPlan}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Action switches and buttons */}
+                                            <div className="flex flex-col gap-2 items-end">
+                                                {/* Toggle Switch */}
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={tmpl.isActive}
+                                                        onChange={() => handleToggleTemplateStatus(tmpl)}
+                                                        className="sr-only peer"
+                                                    />
+                                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                                </label>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openTemplateModal(tmpl)}
+                                                    className="text-gray-600 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors mt-2"
+                                                >
+                                                    <FiEdit2 size={12} /> Edit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteTemplate(tmpl._id)}
+                                                    className="text-red-650 hover:bg-red-50 hover:text-red-700 px-2.5 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors border border-transparent hover:border-red-100"
+                                                >
+                                                    <FiTrash2 size={12} /> Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Tab: Broadcast History ── */}
+            {activeTab === 'history' && (
+                <div className="bg-white rounded-lg shadow-sm border p-5 md:p-6 mb-8 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                <FiClock className="text-primary" /> Broadcast History Logs
+                            </h2>
+                            <p className="text-xs text-gray-500 mt-1">Track delivery rate, read rate, and clicked count for all broadcasts.</p>
+                        </div>
+
+                        {/* Filters */}
+                        <div className="flex flex-wrap overflow-x-auto whitespace-nowrap scrollbar-hide p-1 bg-gray-100 rounded-lg">
+                            {['all', 'customer', 'provider'].map(f => (
                                 <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => applyPreset(preset)}
-                                    className="w-full text-left p-3 rounded-lg border border-gray-100 bg-gray-50 hover:border-primary/30 hover:bg-primary/5 transition-colors group"
+                                    key={f}
+                                    onClick={() => setFilter(f)}
+                                    className={`px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${filter === f
+                                        ? 'bg-white text-primary shadow-sm font-bold'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
                                 >
-                                    <div className="font-semibold text-sm text-gray-800 group-hover:text-primary transition-colors">{preset.label}</div>
-                                    <div className="text-xs text-gray-500 mt-1 truncate">{preset.title}</div>
+                                    {f}
                                 </button>
                             ))}
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* ── Notification History ── */}
-            <div className="bg-white rounded-lg shadow-sm border p-5 md:p-6 mb-8">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <FiClock className="text-primary" /> Broadcast History
-                    </h2>
-
-                    {/* Filters */}
-                    <div className="flex flex-wrap overflow-x-auto whitespace-nowrap scrollbar-hide p-1 bg-gray-100 rounded-lg">
-                        {['all', 'customer', 'provider'].map(f => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                className={`px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${filter === f
-                                    ? 'bg-white text-primary shadow-sm'
-                                    : 'text-gray-600 hover:text-gray-900'
-                                    }`}
-                            >
-                                {f}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {loadingHistory ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-gray-400">
-                        <FiLoader className=" text-primary mb-2" size={24} />
-                        <span className="text-sm">Loading logs...</span>
-                    </div>
-                ) : filteredHistory.length === 0 ? (
-                    <div className="py-6 sm:py-10 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-                        <FiBell className="mb-2 opacity-40" size={24} />
-                        <span className="text-sm font-medium">No broadcast history found</span>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filteredHistory.map(item => (
-                            <div key={item._id} className="border border-gray-200 rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all bg-white relative group">
-                                <div className="flex justify-between items-start gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${STATUS_COLORS[item.status] || 'bg-gray-100'}`}>
-                                                {item.status}
-                                            </span>
-                                            {item.isScheduled && item.status === 'pending' && (
-                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-blue-100">
-                                                    <FiCalendar size={10} /> Scheduled: {formatDateTime(item.scheduledFor)}
+                    {loadingHistory ? (
+                        <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                            <FiLoader className="text-primary mb-2 animate-spin" size={24} />
+                            <span className="text-sm">Loading logs...</span>
+                        </div>
+                    ) : filteredHistory.length === 0 ? (
+                        <div className="py-6 sm:py-10 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                            <FiBell className="mb-2 opacity-40" size={24} />
+                            <span className="text-sm font-medium">No broadcast history found</span>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {filteredHistory.map(item => (
+                                <div key={item._id} className="border border-gray-200 rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all bg-white relative group">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${STATUS_COLORS[item.status] || 'bg-gray-100'}`}>
+                                                    {item.status}
                                                 </span>
-                                            )}
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
-                                        <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
-
-                                        {/* Filters Preview */}
-                                        {(item.targetCity || item.minBookings > 0 || item.targetProviderCategory || item.targetZones) && (
-                                            <div className="mt-2 flex flex-wrap gap-2">
-                                                {item.targetCity && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">📍 {item.targetCity}</span>}
-                                                {item.minBookings > 0 && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">⭐ Min: {item.minBookings}</span>}
-
-                                                {/* Target Zones Display */}
-                                                {(!item.targetZones || item.targetZones.length === 0) ? (
-                                                    <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold border border-blue-100">🌍 Global</span>
-                                                ) : (
-                                                    item.targetZones.map(zone => {
-                                                        const parentChain = [];
-                                                        let curr = zone;
-                                                        while (curr) {
-                                                            parentChain.unshift(curr.name);
-                                                            curr = curr.parentZone;
-                                                        }
-                                                        const fullChainName = parentChain.join(" > ");
-                                                        return (
-                                                            <span key={zone._id || zone} className="text-[9px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-semibold border border-teal-100 capitalize">
-                                                                📍 {fullChainName}
-                                                            </span>
-                                                        );
-                                                    })
+                                                {item.isScheduled && item.status === 'pending' && (
+                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-blue-100">
+                                                        <FiCalendar size={10} /> Scheduled: {formatDateTime(item.scheduledFor)}
+                                                    </span>
                                                 )}
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <button
-                                            onClick={() => handleResend(item)}
-                                            className="text-primary bg-primary/10 hover:bg-primary hover:text-white px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
-                                            title="Reuse Template"
-                                        >
-                                            <FiRefreshCw size={12} /> Reuse
-                                        </button>
-                                        <button
-                                            onClick={() => setEditModal({ open: true, item })}
-                                            className="text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
-                                        >
-                                            <FiEdit2 size={12} /> Edit
-                                        </button>
-                                    </div>
-                                </div>
+                                            <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
+                                            <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
 
-                                <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500">
-                                    <div className="flex items-center gap-1.5">
-                                        <FiUsers className="text-primary/70" />
-                                        <span className="capitalize">{item.audience}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 max-w-[120px] truncate">
-                                        <FiLink className="text-primary/70" />
-                                        <span className="truncate">{item.url || '/'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <FiClock className="text-primary/70" />
-                                        <span>{formatDate(item.sentAt || item.createdAt)}</span>
-                                    </div>
-                                </div>
+                                            {/* Filters Preview */}
+                                            {(item.targetCity || item.minBookings > 0 || item.targetProviderCategory || (item.targetZones && item.targetZones.length > 0)) && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    {item.targetCity && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 border">📍 {item.targetCity}</span>}
+                                                    {item.minBookings > 0 && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 border">⭐ Min: {item.minBookings}</span>}
 
-                                <div className="mt-3 flex items-center justify-between">
-                                    <div className="flex flex-wrap gap-2">
-                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold" title="Total Sent">
-                                            Sent: {item.totalSent || 0}
-                                        </span>
-                                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold" title="Delivered/Success">
-                                            Del: {item.deliveredCount || 0}
-                                        </span>
-                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold" title="Read Count">
-                                            Read: {item.readCount || 0}
-                                        </span>
-                                        <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] font-bold" title="Clicked Count">
-                                            Click: {item.clickedCount || 0}
-                                        </span>
-                                        <span className="px-2 py-1 bg-primary/10 text-primary rounded text-[10px] font-bold">
-                                            Read: {item.deliveredCount > 0 ? ((item.readCount || 0) / item.deliveredCount * 100).toFixed(1) : '0.0'}%
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {item.status === 'pending' && (
+                                                    {/* Target Zones Display */}
+                                                    {(!item.targetZones || item.targetZones.length === 0) ? (
+                                                        <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold border border-blue-100">🌍 Global</span>
+                                                    ) : (
+                                                        item.targetZones.map(zone => {
+                                                            const parentChain = [];
+                                                            let curr = zone;
+                                                            while (curr) {
+                                                                parentChain.unshift(curr.name);
+                                                                curr = curr.parentZone;
+                                                            }
+                                                            const fullChainName = parentChain.join(" > ");
+                                                            return (
+                                                                <span key={zone._id || zone} className="text-[9px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-semibold border border-teal-100 capitalize">
+                                                                    📍 {fullChainName}
+                                                                </span>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
                                             <button
-                                                onClick={() => setConfirmModal({ open: true, type: 'cancel', id: item._id, title: 'Cancel Notification?' })}
-                                                className="text-orange-600 hover:text-orange-700 p-1"
-                                                title="Cancel"
+                                                type="button"
+                                                onClick={() => handleResend(item)}
+                                                className="text-primary bg-primary/10 hover:bg-primary hover:text-white px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
+                                                title="Reuse Template"
                                             >
-                                                <FiXCircle size={16} />
+                                                <FiRefreshCw size={12} /> Reuse
                                             </button>
-                                        )}
-                                        <button
-                                            onClick={() => setConfirmModal({ open: true, type: 'delete', id: item._id, title: 'Delete from history?' })}
-                                            className="text-red-600 hover:text-red-700 p-1"
-                                            title="Delete"
-                                        >
-                                            <FiTrash2 size={16} />
-                                        </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditModal({ open: true, item })}
+                                                className="text-gray-650 bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors border"
+                                            >
+                                                <FiEdit2 size={12} /> Edit
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500">
+                                        <div className="flex items-center gap-1.5">
+                                            <FiUsers className="text-primary/70" />
+                                            <span className="capitalize">{item.audience}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 max-w-[120px] truncate">
+                                            <FiLink className="text-primary/70" />
+                                            <span className="truncate">{item.url || '/'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <FiClock className="text-primary/70" />
+                                            <span>{formatDate(item.sentAt || item.createdAt)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 flex items-center justify-between">
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold border" title="Total Sent">
+                                                Sent: {item.totalSent || 0}
+                                            </span>
+                                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold border" title="Delivered/Success">
+                                                Del: {item.deliveredCount || 0}
+                                            </span>
+                                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold border" title="Read Count">
+                                                Read: {item.readCount || 0}
+                                            </span>
+                                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] font-bold border" title="Clicked Count">
+                                                Click: {item.clickedCount || 0}
+                                            </span>
+                                            <span className="px-2 py-1 bg-primary/10 text-primary rounded text-[10px] font-bold border">
+                                                Read: {item.deliveredCount > 0 ? ((item.readCount || 0) / item.deliveredCount * 100).toFixed(1) : '0.0'}%
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {item.status === 'pending' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setConfirmModal({ open: true, type: 'cancel', id: item._id, title: 'Cancel Notification?' })}
+                                                    className="text-orange-650 hover:text-orange-700 p-1"
+                                                    title="Cancel"
+                                                >
+                                                    <FiXCircle size={16} />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfirmModal({ open: true, type: 'delete', id: item._id, title: 'Delete from history?' })}
+                                                className="text-red-650 hover:text-red-700 p-1 border rounded hover:bg-red-50"
+                                                title="Delete"
+                                            >
+                                                <FiTrash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ── Modals ── */}
             <Modal
@@ -1270,6 +1746,220 @@ const AdminNotification = () => {
                 )}
             </Modal>
 
+            {/* Template Modals */}
+            <Modal
+                isOpen={templateModal.open}
+                onClose={() => setTemplateModal({ open: false, item: null, isEdit: false })}
+                title={templateModal.isEdit ? "Edit Event Template" : "Create Event Template"}
+            >
+                <form onSubmit={handleTemplateSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-650 uppercase mb-1">Event Trigger ID *</label>
+                        <select
+                            value={templateForm.eventId}
+                            onChange={(e) => setTemplateForm(prev => ({ ...prev, eventId: e.target.value }))}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all font-semibold text-sm"
+                            required
+                        >
+                            <option value="">-- Select Event ID --</option>
+                            {EVENT_IDS.map(evt => (
+                                <option key={evt.value} value={evt.value}>{evt.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-650 uppercase mb-1">Notification Title *</label>
+                        <input
+                            type="text"
+                            placeholder="e.g. New Booking Request: {{serviceName}}"
+                            value={templateForm.title}
+                            onChange={(e) => setTemplateForm(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-sm font-semibold"
+                            required
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-650 uppercase mb-1">Message Body *</label>
+                        <textarea
+                            rows={3}
+                            placeholder="e.g. You have a new booking request for {{serviceName}} at {{street}}."
+                            value={templateForm.message}
+                            onChange={(e) => setTemplateForm(prev => ({ ...prev, message: e.target.value }))}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-sm resize-y"
+                            required
+                        />
+                        <div className="mt-1 text-[10px] text-gray-500">
+                            Available variables: <span className="font-mono bg-gray-100 px-1 rounded">{"{{customerName}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{providerName}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{bookingId}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{serviceName}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{amount}}"}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-650 uppercase mb-1">FCM Priority</label>
+                            <select
+                                value={templateForm.priority}
+                                onChange={(e) => setTemplateForm(prev => ({ ...prev, priority: e.target.value }))}
+                                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-xs font-semibold"
+                            >
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-650 uppercase mb-1">Icon Identifier</label>
+                            <input
+                                type="text"
+                                placeholder="default_bell"
+                                value={templateForm.icon}
+                                onChange={(e) => setTemplateForm(prev => ({ ...prev, icon: e.target.value }))}
+                                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-xs"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-650 uppercase mb-1">CTA Button Text</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. View Booking"
+                                value={templateForm.ctaText}
+                                onChange={(e) => setTemplateForm(prev => ({ ...prev, ctaText: e.target.value }))}
+                                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-xs"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-650 uppercase mb-1">CTA Direct URL</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. /provider/bookings/{{bookingId}}"
+                                value={templateForm.ctaUrl}
+                                onChange={(e) => setTemplateForm(prev => ({ ...prev, ctaUrl: e.target.value }))}
+                                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-xs font-mono"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="border-t pt-3">
+                        <h4 className="text-xs font-bold text-gray-800 uppercase mb-3">Target Audience Rules</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Audience Role</label>
+                                <select
+                                    value={templateForm.targetAudience.role}
+                                    onChange={(e) => setTemplateForm(prev => ({
+                                        ...prev,
+                                        targetAudience: { ...prev.targetAudience, role: e.target.value }
+                                    }))}
+                                    className="w-full px-3 py-1.5 border rounded-md text-xs font-semibold"
+                                >
+                                    <option value="all">All Roles</option>
+                                    <option value="customer">Customers Only</option>
+                                    <option value="provider">Service Providers Only</option>
+                                    <option value="admin">Admins Only</option>
+                                </select>
+                            </div>
+                            {templateForm.targetAudience.role === 'provider' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Provider Status</label>
+                                    <select
+                                        value={templateForm.targetAudience.providerStatus}
+                                        onChange={(e) => setTemplateForm(prev => ({
+                                            ...prev,
+                                            targetAudience: { ...prev.targetAudience, providerStatus: e.target.value }
+                                        }))}
+                                        className="w-full px-3 py-1.5 border rounded-md text-xs"
+                                    >
+                                        <option value="">Any Status</option>
+                                        <option value="available">Available (Online)</option>
+                                        <option value="active">Active (Verified)</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+                            )}
+                            {templateForm.targetAudience.role === 'provider' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Service Category</label>
+                                    <select
+                                        value={templateForm.targetAudience.serviceCategory}
+                                        onChange={(e) => setTemplateForm(prev => ({
+                                            ...prev,
+                                            targetAudience: { ...prev.targetAudience, serviceCategory: e.target.value }
+                                        }))}
+                                        className="w-full px-3 py-1.5 border rounded-md text-xs"
+                                    >
+                                        <option value="">Any Category</option>
+                                        {categories.map(cat => (
+                                            <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {templateForm.targetAudience.role === 'provider' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Min Rating Required</label>
+                                    <input
+                                        type="number"
+                                        placeholder="e.g. 4.5"
+                                        min="1"
+                                        max="5"
+                                        step="0.1"
+                                        value={templateForm.targetAudience.ratingGte}
+                                        onChange={(e) => setTemplateForm(prev => ({
+                                            ...prev,
+                                            targetAudience: { ...prev.targetAudience, ratingGte: e.target.value }
+                                        }))}
+                                        className="w-full px-3 py-1.5 border rounded-md text-xs"
+                                    />
+                                </div>
+                            )}
+                            {templateForm.targetAudience.role === 'customer' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Subscription Plan</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. gold, pro"
+                                        value={templateForm.targetAudience.subscriptionPlan}
+                                        onChange={(e) => setTemplateForm(prev => ({
+                                            ...prev,
+                                            targetAudience: { ...prev.targetAudience, subscriptionPlan: e.target.value }
+                                        }))}
+                                        className="w-full px-3 py-1.5 border rounded-md text-xs"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                        <input
+                            type="checkbox"
+                            id="tmpl-active"
+                            checked={templateForm.isActive}
+                            onChange={(e) => setTemplateForm(prev => ({ ...prev, isActive: e.target.checked }))}
+                            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <label htmlFor="tmpl-active" className="text-xs font-semibold text-gray-700 cursor-pointer">
+                            Active (automated dispatch enabled)
+                        </label>
+                    </div>
+
+                    <div className="pt-4 flex gap-2 border-t">
+                        <button type="submit" className="flex-1 bg-primary text-white py-2 rounded-md font-bold hover:bg-teal-700 transition-all text-sm">Save Template</button>
+                        <button
+                            type="button"
+                            onClick={() => setTemplateModal({ open: false, item: null, isEdit: false })}
+                            className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md font-bold hover:bg-gray-200 transition-all text-sm"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
             <Modal
                 isOpen={confirmModal.open}
                 onClose={() => setConfirmModal({ open: false, type: '', id: null, title: '' })}
@@ -1285,7 +1975,7 @@ const AdminNotification = () => {
                     <div className="flex gap-3">
                         <button
                             onClick={() => handleAction(confirmModal.type, confirmModal.id)}
-                            className="flex-1 bg-red-600 text-white py-2 rounded-md font-bold hover:bg-red-700 transition-all"
+                            className="flex-1 bg-red-605 text-white py-2 rounded-md font-bold hover:bg-red-700 transition-all"
                         >
                             Yes, Confirm
                         </button>
