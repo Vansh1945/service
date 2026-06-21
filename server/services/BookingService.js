@@ -56,12 +56,7 @@ class BookingService {
       if (!startPin) startPin = Math.floor(1000 + Math.random() * 9000).toString();
       if (!completionPin) completionPin = Math.floor(1000 + Math.random() * 9000).toString();
 
-      const BookingModel = mongoose.model('Booking');
-      const query = BookingModel.findById(bookingId);
-      if (session) {
-        query.session(session);
-      }
-      const dbBooking = await query;
+      const dbBooking = bookingObj;
       if (dbBooking) {
         if (dbBooking.statusHistory && dbBooking.statusHistory.length > 0) {
           const firstEntry = dbBooking.statusHistory[0];
@@ -85,7 +80,9 @@ class BookingService {
             updatedBy: 'system'
           }];
         }
-        await dbBooking.save({ session });
+        if (!session) {
+          await dbBooking.save();
+        }
       }
     }
 

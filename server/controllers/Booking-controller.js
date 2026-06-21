@@ -102,7 +102,7 @@ const addSystemMessageToChat = async (bookingId, content) => {
   try {
     const ChatRoom = require('../models/ChatRoom-model');
     const { getIO } = require('../socket/socketServer');
-    
+
     const room = await ChatRoom.findOne({ bookingId, roomType: 'provider_customer' });
     if (!room) return;
 
@@ -3403,7 +3403,12 @@ const completeBooking = async (req, res) => {
     }
 
     // Reset failures on success
-    await resetPinFailures(booking, session);
+    booking.statusHistory.push({
+      status: booking.status,
+      timestamp: new Date(),
+      note: 'Verification successful. FAILED_ATTEMPTS:0',
+      updatedBy: 'system'
+    });
 
     const afterImages = req.files.map(file => ({
       url: file.path || file.secure_url,
@@ -3614,11 +3619,11 @@ const completeBooking = async (req, res) => {
           providerId,
           'provider',
           'Payout Under Review',
-          `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for 48 hours.`,
+          `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for ${holdPeriodHours} hours.`,
           'payout_hold',
           booking._id
         );
-      } catch (err) { /* ignore */ }
+      } catch (err) { console.error("Error sending payout hold notification:", err); }
     }
 
     provider.wallet.lastUpdated = new Date();

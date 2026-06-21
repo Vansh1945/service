@@ -1032,7 +1032,7 @@ const downloadEarningsReport = async (req, res) => {
           from: "systemconfigs",
           pipeline: [
             { $limit: 1 },
-            { $project: { surgeSplitSettings: 1 } }
+            { $project: { surgeSplitSettings: 1, commissionSettings: 1 } }
           ],
           as: "systemSettings"
         }
@@ -1045,7 +1045,22 @@ const downloadEarningsReport = async (req, res) => {
           paymentMethod: "$bookingInfo.paymentMethod",
           bookingId: "$bookingInfo.bookingId",
           disputeStatus: "$bookingInfo.disputeStatus",
-          holdUntil: { $ifNull: ["$availableAfter", { $add: ["$createdAt", 48 * 60 * 60 * 1000] }] },
+          holdUntil: {
+            $ifNull: [
+              "$availableAfter",
+              {
+                $add: [
+                  "$createdAt",
+                  {
+                    $multiply: [
+                      { $ifNull: ["$systemSettings.commissionSettings.payoutHoldHours", 48] },
+                      60 * 60 * 1000
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
           holdReason: {
             $cond: [
               { $eq: ["$bookingInfo.disputeRaised", true] },
@@ -1053,7 +1068,12 @@ const downloadEarningsReport = async (req, res) => {
               {
                 $cond: [
                   { $in: ["$status", ["held", "under_review", "pending_release"]] },
-                  "48h customer protection window",
+                  {
+                    $concat: [
+                      { $toString: { $ifNull: ["$systemSettings.commissionSettings.payoutHoldHours", 48] } },
+                      "h customer protection window"
+                    ]
+                  },
                   "$holdReason"
                 ]
               }

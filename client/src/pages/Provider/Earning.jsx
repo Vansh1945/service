@@ -819,7 +819,7 @@ const ProviderEarningsDashboard = () => {
                   <div>
                     <p className="text-sm font-bold text-orange-800">Payout Holds</p>
                     <p className="text-xs text-orange-600 mt-0.5">
-                      Earnings are temporarily held for 48 hours for customer protection or during active disputes.
+                      Earnings are temporarily held for {systemSettings?.commissionSettings?.payoutHoldHours ?? 48} hours for customer protection or during active disputes.
                     </p>
                   </div>
                 </div>

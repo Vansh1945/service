@@ -119,6 +119,74 @@ const triggerEventNotification = async (eventId, context = {}, overrideTargetUse
             return null;
         }
 
+        // Enrich context with flat variables if context.booking exists
+        if (context.booking) {
+            let booking = context.booking;
+            
+            // If booking is just an ID, query it
+            if (typeof booking === 'string' || (booking && booking instanceof mongoose.Types.ObjectId)) {
+                const BookingModel = mongoose.model('Booking');
+                booking = await BookingModel.findById(booking);
+            }
+
+            if (booking) {
+                // Ensure customerName is available
+                if (!context.customerName && booking.customer) {
+                    if (typeof booking.customer === 'object' && booking.customer.name) {
+                        context.customerName = booking.customer.name;
+                    } else {
+                        const User = mongoose.model('User');
+                        const customer = await User.findById(booking.customer).select('name');
+                        if (customer) {
+                            context.customerName = customer.name;
+                        }
+                    }
+                }
+
+                // Ensure providerName is available
+                if (!context.providerName && booking.provider) {
+                    if (typeof booking.provider === 'object' && booking.provider.name) {
+                        context.providerName = booking.provider.name;
+                    } else {
+                        const Provider = mongoose.model('Provider');
+                        const provider = await Provider.findById(booking.provider).select('name');
+                        if (provider) {
+                            context.providerName = provider.name;
+                        }
+                    }
+                }
+
+                // Ensure bookingId is available
+                if (!context.bookingId) {
+                    context.bookingId = booking.bookingId || booking._id?.toString() || '';
+                }
+
+                // Ensure serviceName is available
+                if (!context.serviceName) {
+                    const firstService = booking.services?.[0];
+                    let sTitle = firstService?.serviceDetails?.title || firstService?.service?.title;
+                    if ((!sTitle || sTitle === 'service') && firstService?.service) {
+                        try {
+                            const ServiceModel = mongoose.model('Service');
+                            const sRef = await ServiceModel.findById(firstService.service).select('title');
+                            if (sRef) sTitle = sRef.title;
+                        } catch (e) {}
+                    }
+                    context.serviceName = sTitle || 'service';
+                }
+
+                // Ensure street is available
+                if (!context.street) {
+                    context.street = booking.address?.street || booking.address?.formattedAddress || 'your area';
+                }
+
+                // Ensure amount is available
+                if (context.amount === undefined || context.amount === null) {
+                    context.amount = booking.totalAmount || booking.pricing?.total || 0;
+                }
+            }
+        }
+
         const title = renderTemplateString(template.title, context);
         const message = renderTemplateString(template.message, context);
         const type = template.priority === 'high' ? 'system' : 'booking';
