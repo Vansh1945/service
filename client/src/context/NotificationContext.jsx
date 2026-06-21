@@ -3,6 +3,7 @@ import { getToken, onMessage } from 'firebase/messaging';
 import { messaging } from '../../firebase';
 import { useAuth } from './auth';
 import { useNavigate } from 'react-router-dom';
+import { getSocket } from '../socket/socket';
 
 import * as NotificationService from '../services/NotificationService';
 
@@ -332,6 +333,69 @@ export const NotificationProvider = ({ children }) => {
             }
         };
     }, [isAuthenticated, token, userRole, isAdmin]);
+
+    // Socket-based fallback to trigger ringtone for real-time notifications
+    useEffect(() => {
+        if (!token) return;
+
+        const socket = getSocket();
+        if (!socket) return;
+
+        const handleSocketNotification = (payload) => {
+            console.log('[Socket] Notification received in context:', payload);
+            if (payload.isBookingAlert) {
+                const soundUrl = payload.soundUrl;
+                const bookingAlertTone = payload.bookingAlertTone !== false;
+                const bookingVibration = payload.bookingVibration !== false;
+                const bookingAlertDuration = Number(payload.bookingAlertDuration || 30);
+                const bookingRepeatAlert = payload.bookingRepeatAlert === true;
+
+                // Stop any currently playing alert tone
+                if (activeAudioRef.current) {
+                    try {
+                        activeAudioRef.current.pause();
+                        activeAudioRef.current.currentTime = 0;
+                    } catch (audioErr) {
+                        console.error('Error stopping previous audio:', audioErr);
+                    }
+                    activeAudioRef.current = null;
+                }
+
+                if (bookingAlertTone && soundUrl) {
+                    const audio = new Audio(soundUrl);
+                    audio.loop = bookingRepeatAlert;
+                    activeAudioRef.current = audio;
+                    audio.play().catch((playErr) => {
+                        console.warn('[Socket Context] Foreground audio auto-play blocked by browser. Awaiting user interaction.', playErr);
+                    });
+
+                    // Set timeout to auto-stop the alert tone
+                    setTimeout(() => {
+                        if (activeAudioRef.current === audio) {
+                            try {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            } catch (pauseErr) {
+                                console.error('Error auto-stopping alert audio:', pauseErr);
+                            }
+                            if (activeAudioRef.current === audio) {
+                                activeAudioRef.current = null;
+                            }
+                        }
+                    }, bookingAlertDuration * 1000);
+                }
+
+                if (bookingVibration && 'vibrate' in navigator) {
+                    navigator.vibrate([500, 200, 500, 200, 500]);
+                }
+            }
+        };
+
+        socket.on('new_notification', handleSocketNotification);
+        return () => {
+            socket.off('new_notification', handleSocketNotification);
+        };
+    }, [token]);
 
     const contextValue = {
         fcmToken,
