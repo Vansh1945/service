@@ -2998,11 +2998,6 @@ const cancelBookingByAdmin = async (req, res) => {
                 earning.status = 'cancelled';
                 await earning.save({ session });
             }
-
-            const { recalculateProviderPerformance } = require('./Booking-controller');
-            if (recalculateProviderPerformance) {
-                await recalculateProviderPerformance(booking.provider._id, session);
-            }
         }
 
         // Resolve Complaint if linked
@@ -3031,6 +3026,18 @@ const cancelBookingByAdmin = async (req, res) => {
         if (session) {
             await session.commitTransaction();
             session.endSession();
+        }
+
+        // Recalculate provider performance dynamically after transaction commits successfully to avoid write conflicts
+        if (booking.provider) {
+            try {
+                const { recalculateProviderPerformance } = require('./Booking-controller');
+                if (recalculateProviderPerformance) {
+                    await recalculateProviderPerformance(booking.provider._id);
+                }
+            } catch (err) {
+                console.error("Error recalculating provider performance after admin cancellation commit:", err);
+            }
         }
 
         // Dispatch notifications

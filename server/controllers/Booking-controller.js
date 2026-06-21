@@ -1774,11 +1774,18 @@ const cancelBooking = async (req, res) => {
           $inc: { canceledBookings: 1 },
           $set: { activeBooking: null }
         }, { session });
-        await recalculateProviderPerformance(booking.provider, session);
       }
 
       await safeCommit(session);
       safeEnd(session);
+
+      if (booking.provider) {
+        try {
+          await recalculateProviderPerformance(booking.provider);
+        } catch (err) {
+          console.error("Error recalculating provider performance after customer cancellation commit:", err);
+        }
+      }
 
       // Track cancellation fraud in background (non-blocking)
       logCancellationFraud(req, booking, userId, 'customer');
@@ -1998,11 +2005,18 @@ const cancelBooking = async (req, res) => {
           $inc: { canceledBookings: 1 },
           $set: { activeBooking: null }
         }, { session });
-        await recalculateProviderPerformance(booking.provider, session);
       }
 
       await safeCommit(session);
       safeEnd(session);
+
+      if (previousStatus === 'accepted' && booking.provider) {
+        try {
+          await recalculateProviderPerformance(booking.provider);
+        } catch (err) {
+          console.error("Error recalculating provider performance after customer cancellation commit:", err);
+        }
+      }
 
       // Add system message to chat
       await addSystemMessageToChat(booking._id, 'Booking cancelled by customer');
@@ -3137,11 +3151,15 @@ const rejectBooking = async (req, res) => {
     await Provider.findByIdAndUpdate(providerId, { $set: { activeBooking: null } }, { session });
     await booking.save({ session });
 
-    // Recalculate provider stats and trust score dynamically inside the same transaction session
-    await recalculateProviderPerformance(providerId, session);
-
     await safeCommit(session);
     safeEnd(session);
+
+    // Recalculate provider stats and trust score dynamically after transaction commits successfully to avoid write conflicts
+    try {
+      await recalculateProviderPerformance(providerId);
+    } catch (err) {
+      console.error("Error recalculating provider performance after rejectBooking commit:", err);
+    }
 
     // Add system message to chat
     await addSystemMessageToChat(booking._id, 'Booking declined by partner');
@@ -3608,12 +3626,15 @@ const completeBooking = async (req, res) => {
     provider.activeBooking = null;
     await provider.save({ session });
 
-    // Recalculate performance score and trust score
-    await recalculateProviderPerformance(providerId, session);
-
-
     await safeCommit(session);
     safeEnd(session);
+
+    // Recalculate performance score and trust score dynamically after transaction commits successfully to avoid write conflicts
+    try {
+      await recalculateProviderPerformance(providerId);
+    } catch (err) {
+      console.error("Error recalculating provider performance after completeBooking commit:", err);
+    }
 
     // Add system message to chat
     await addSystemMessageToChat(booking._id, 'Service completed by partner');
