@@ -241,11 +241,6 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
       replyTo: replyToMessage ? replyToMessage._id : null
     };
 
-    // Optimistic socket emit
-    if (socket) {
-      socket.emit('chat-send', payload);
-    }
-
     try {
       if (!textToSend) setNewMessage('');
       setReplyToMessage(null);

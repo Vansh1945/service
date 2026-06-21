@@ -26,8 +26,10 @@ export const NotificationProvider = ({ children }) => {
     const savedTokenRef = useRef(null);
     const activeAudioRef = useRef(null);
     const pendingAudioRef = useRef(null);
+    const [isAlertRinging, setIsAlertRinging] = useState(false);
 
     const playAudio = (audio) => {
+        setIsAlertRinging(true);
         pendingAudioRef.current = audio;
         audio.play().then(() => {
             if (pendingAudioRef.current === audio) {
@@ -46,6 +48,7 @@ export const NotificationProvider = ({ children }) => {
     };
 
     const stopBookingAlert = () => {
+        setIsAlertRinging(false);
         if (activeAudioRef.current) {
             try {
                 activeAudioRef.current.pause();
@@ -332,6 +335,7 @@ export const NotificationProvider = ({ children }) => {
                             }
                             if (activeAudioRef.current === audio) {
                                 activeAudioRef.current = null;
+                                setIsAlertRinging(false);
                             }
                         }
                     }, bookingAlertDuration * 1000);
@@ -354,6 +358,7 @@ export const NotificationProvider = ({ children }) => {
                 });
 
                 notif.onclick = () => {
+                    stopBookingAlert();
                     if (payloadData.notificationId) {
                         NotificationService.markClicked(payloadData.notificationId).catch(err => {
                             console.error('[FCM Foreground] Click event tracking failed:', err);
@@ -419,6 +424,7 @@ export const NotificationProvider = ({ children }) => {
                             }
                             if (activeAudioRef.current === audio) {
                                 activeAudioRef.current = null;
+                                setIsAlertRinging(false);
                             }
                         }
                     }, bookingAlertDuration * 1000);
@@ -443,7 +449,8 @@ export const NotificationProvider = ({ children }) => {
         fcmToken,
         notificationPermission,
         requestPermission,
-        stopBookingAlert
+        stopBookingAlert,
+        isAlertRinging
     };
 
     return (

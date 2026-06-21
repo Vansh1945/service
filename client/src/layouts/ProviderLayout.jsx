@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
     FiMenu, FiHome, FiDollarSign,
@@ -11,7 +11,6 @@ import NotificationBell from '../components/NotificationBell';
 import { useSocket } from '../socket/SocketContext';
 import { toast } from 'react-toastify';
 
-import * as SystemService from '../services/SystemService';
 import axiosInstance from '../api/axiosInstance';
 
 const ProviderLayout = () => {
@@ -20,6 +19,7 @@ const ProviderLayout = () => {
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
+    const { isAlertRinging, stopBookingAlert } = useNotification() || {};
     const { user, logoutUser, token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
     const logo = activeBranding?.logo || authSystemSettings?.logo || null;
     const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
@@ -378,8 +378,8 @@ const ProviderLayout = () => {
                 <Link
                     to="/provider/dashboard"
                     className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${(location.pathname === '/provider/dashboard' || location.pathname === '/provider')
-                            ? 'text-primary'
-                            : 'text-slate-400 hover:text-primary'
+                        ? 'text-primary'
+                        : 'text-slate-400 hover:text-primary'
                         }`}
                 >
                     <FiHome className="w-6 h-6" />
@@ -390,8 +390,8 @@ const ProviderLayout = () => {
                 <Link
                     to="/provider/booking-requests"
                     className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${location.pathname === '/provider/booking-requests'
-                            ? 'text-primary'
-                            : 'text-slate-400 hover:text-primary'
+                        ? 'text-primary'
+                        : 'text-slate-400 hover:text-primary'
                         }`}
                 >
                     <FiCheckCircle className="w-6 h-6" />
@@ -402,8 +402,8 @@ const ProviderLayout = () => {
                 <Link
                     to="/provider/earnings"
                     className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${location.pathname === '/provider/earnings'
-                            ? 'text-primary'
-                            : 'text-slate-400 hover:text-primary'
+                        ? 'text-primary'
+                        : 'text-slate-400 hover:text-primary'
                         }`}
                 >
                     <FiDollarSign className="w-6 h-6" />
@@ -522,6 +522,26 @@ const ProviderLayout = () => {
                     </div>
                 </div>
             </div>
+
+            {/* FLOATING MUTE BANNER FOR BOOKING ALERT */}
+            {isAlertRinging && (
+                <div 
+                    onClick={stopBookingAlert}
+                    className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce border border-red-500 cursor-pointer transition-all active:scale-95 select-none"
+                    title="Click to Mute Ringtone"
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="flex h-3 w-3 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                        </span>
+                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider">New Booking Alert! Click to Mute</span>
+                    </div>
+                    <div className="bg-white/20 p-1.5 rounded-xl shadow-inner">
+                        <FiVolumeX className="w-4 h-4 text-white" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

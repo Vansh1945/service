@@ -5,7 +5,7 @@ import {
   FiTrendingUp, FiClock, FiAlertCircle, FiCreditCard,
   FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
 } from 'react-icons/fi';
-import DashboardSkeleton from '../../components/ui-skeleton/DashboardSkeleton';
+import DashboardSkeleton from '../../components/ui-skeletons/DashboardSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
