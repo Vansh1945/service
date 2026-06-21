@@ -115,6 +115,7 @@ export const getStatusConfig = (status) => {
     
     // Booking statuses
     pending: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Pending' },
+    assigned: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Assigned' },
     confirmed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Confirmed' },
     accepted: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCheck, label: 'Accepted' },
     'in-progress': { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'In Progress' },

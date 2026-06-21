@@ -201,7 +201,6 @@ const notificationTemplateSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-notificationTemplateSchema.index({ eventId: 1 });
 notificationTemplateSchema.index({ isActive: 1 });
 
 mongoose.model('NotificationTemplate', notificationTemplateSchema);

@@ -2272,7 +2272,7 @@ const getBookingsByStatus = async (req, res) => {
       status = statusMapping[status];
     }
 
-    const validStatuses = ['pending', 'accepted', 'completed', 'cancelled', 'in-progress', 'scheduled'];
+    const validStatuses = ['pending', 'accepted', 'completed', 'cancelled', 'in-progress', 'scheduled', 'assigned'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -2334,16 +2334,9 @@ const getBookingsByStatus = async (req, res) => {
       query = {
         'services.service': { $in: serviceIds },
         $or: [
-          { status: 'pending' },
-          { status: 'scheduled', paymentMethod: 'cash' }
-        ],
-        $and: [
-          {
-            $or: [
-              { provider: { $exists: false } },
-              { provider: providerId }
-            ]
-          }
+          { status: 'pending', $or: [{ provider: { $exists: false } }, { provider: null }] },
+          { status: 'assigned', provider: providerId },
+          { status: 'scheduled', paymentMethod: 'cash', provider: providerId }
         ]
       };
     } else if (status === 'completed') {
@@ -2535,10 +2528,11 @@ const acceptBooking = async (req, res) => {
         ? await Booking.findOneAndUpdate(
           {
             _id: id,
-            status: { $in: ['pending', 'scheduled'] },
+            status: { $in: ['pending', 'scheduled', 'assigned'] },
             $or: [
               { provider: { $exists: false } },
-              { provider: null }
+              { provider: null },
+              { provider: providerId }
             ]
           },
           {
@@ -2562,10 +2556,11 @@ const acceptBooking = async (req, res) => {
         : await Booking.findOneAndUpdate(
           {
             _id: id,
-            status: { $in: ['pending', 'scheduled'] },
+            status: { $in: ['pending', 'scheduled', 'assigned'] },
             $or: [
               { provider: { $exists: false } },
-              { provider: null }
+              { provider: null },
+              { provider: providerId }
             ]
           },
           {
@@ -2715,7 +2710,7 @@ const startBooking = async (req, res) => {
     const booking = await Booking.findOne({
       _id: id,
       provider: providerId,
-      status: 'accepted'
+      status: { $in: ['accepted', 'assigned'] }
     }).populate('customer', 'name email phone')
       .populate('services.service', 'title description');
 
@@ -2967,7 +2962,7 @@ const rejectBooking = async (req, res) => {
     // Find the booking
     const booking = await Booking.findOne({
       _id: id,
-      status: 'pending',
+      status: { $in: ['pending', 'assigned'] },
       $or: [
         { provider: { $exists: false } },
         { provider: providerId }

@@ -143,9 +143,17 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
     };
 
     const handleStatusChange = (data) => {
-      const isCustomerRole = role === 'customer';
+      const isCustomerRole = userRole === 'customer';
       const otherId = isCustomerRole ? room.providerId?._id : room.customerId?._id;
       if (otherId && (data.providerId === otherId || data.userId === otherId)) {
+        setOtherOnline(data.isOnline);
+      }
+    };
+
+    const handleUserOnline = (data) => {
+      const isCustomerRole = userRole === 'customer';
+      const otherId = isCustomerRole ? room.providerId?._id : room.customerId?._id;
+      if (otherId && data.userId === otherId.toString()) {
         setOtherOnline(data.isOnline);
       }
     };
@@ -154,12 +162,14 @@ const ChatModal = ({ bookingId, userRole, isOpen, onClose, roomType = 'provider_
     socket.on('chat:typing', handleTypingStatus);
     socket.on('chat:seen', handleSeenReceipt);
     socket.on('provider-status-changed', handleStatusChange);
+    socket.on('chat:user-online', handleUserOnline);
 
     return () => {
       socket.off('chat:new-message', handleNewMessage);
       socket.off('chat:typing', handleTypingStatus);
       socket.off('chat:seen', handleSeenReceipt);
       socket.off('provider-status-changed', handleStatusChange);
+      socket.off('chat:user-online', handleUserOnline);
     };
   }, [isOpen, socket, room, user, userRole]);
 

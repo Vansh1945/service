@@ -553,6 +553,8 @@ const initSocket = (httpServer) => {
                     const ns = getRoomNamespace(room);
                     socket.join(ns);
                     console.log(`💬 Socket user ${userId} also joined namespace room: ${ns}`);
+                    // Broadcast online status to the room
+                    io.to(roomId.toString()).emit('chat:user-online', { userId, isOnline: true });
                 }
             } catch (err) {
                 console.error('Error joining namespace room in socket:', err.message);
@@ -744,6 +746,8 @@ const initSocket = (httpServer) => {
         socket.on('disconnect', async (reason) => {
             console.log(`❌ Socket disconnected: ${userId} — ${reason}`);
             removeUser(socket.id);
+            // Broadcast offline status to all rooms
+            io.emit('chat:user-online', { userId, isOnline: false });
         });
     });
 

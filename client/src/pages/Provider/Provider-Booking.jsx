@@ -919,7 +919,7 @@ const ProviderBooking = () => {
 
   // ── Booking card ─────────────────────────────────────────────────────────
   const renderBookingCard = (booking) => {
-    const isPending = booking.status === 'pending';
+    const isPending = booking.status === 'pending' || booking.status === 'assigned';
     const isAccepted = booking.status === 'accepted';
     const isInProgress = booking.status === 'in-progress';
 
@@ -1064,7 +1064,7 @@ const ProviderBooking = () => {
               </button>
 
               {/* Accept Request */}
-              {(!booking.provider || booking.provider === user?._id) && (
+              {(!booking.provider || booking.provider === user?._id || booking.provider?._id === user?._id || (booking.provider?.toString && booking.provider.toString() === user?._id?.toString())) && (
                 <button
                   disabled={actionLoading.id !== null}
                   onClick={() => handleBookingAction(booking._id, 'accept')}
@@ -1116,7 +1116,7 @@ const ProviderBooking = () => {
                 )}
 
                 {/* Navigate to Customer */}
-                {(['accepted', 'in-progress'].includes(booking.status) && booking.status !== 'completed') ? (
+                {(['accepted', 'in-progress', 'assigned'].includes(booking.status) && booking.status !== 'completed') ? (
                   <button
                     onClick={() => navigate(`/provider/track/${booking._id}`)}
                     className="inline-flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] sm:text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 md:flex-1"
@@ -1161,10 +1161,10 @@ const ProviderBooking = () => {
               </div>
 
               {/* Row 2: State-Transition Actions */}
-              {['accepted', 'in-progress'].includes(booking.status) && (
+              {['accepted', 'in-progress', 'assigned'].includes(booking.status) && (
                 <div className="w-full md:w-auto md:flex-1 flex mt-0 md:mt-0">
-                  {/* Accepted: Start Service */}
-                  {booking.status === 'accepted' && (
+                  {/* Accepted/Assigned: Start Service */}
+                  {(booking.status === 'accepted' || booking.status === 'assigned') && (
                     <button
                       disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
                       onClick={() => handleBookingAction(booking._id, 'start')}
@@ -1178,8 +1178,8 @@ const ProviderBooking = () => {
                       {actionLoading.id === booking._id && actionLoading.type === 'start'
                         ? 'Starting...'
                         : (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))
-                          ? 'Payment Pending'
-                          : 'Start Service'}
+                           ? 'Payment Pending'
+                           : 'Start Service'}
                     </button>
                   )}
 
@@ -1664,11 +1664,11 @@ const ProviderBooking = () => {
                           <Shield className="w-3.5 h-3.5" /><span>Customer since: {formatDate(selectedBooking.customer?.createdAt)}</span>
                         </div>
                       </div>
-                    ) : selectedBooking.status === 'pending' ? (
+                    ) : (selectedBooking.status === 'pending' || selectedBooking.status === 'assigned') ? (
                       <div className="text-center py-6 bg-white rounded-xl border border-gray-100">
                         <div className="p-3 bg-primary/10 rounded-full inline-flex mb-3"><Shield className="w-5 h-5 text-primary" /></div>
                         <p className="text-sm text-secondary">Details visible after accepting booking.</p>
-                        <p className="text-xs text-gray-400 mt-1">Customer privacy for pending requests.</p>
+                        <p className="text-xs text-gray-400 mt-1">Customer privacy for pending/assigned requests.</p>
                       </div>
                     ) : (
                       <div className="text-center py-6 bg-white rounded-xl border border-gray-100">
@@ -1981,7 +1981,7 @@ const ProviderBooking = () => {
                       {actionLoading.id === selectedBooking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept Booking'}
                     </button>
                   )}
-                  {selectedBooking.status === 'accepted' && (
+                  {(selectedBooking.status === 'accepted' || selectedBooking.status === 'assigned') && (
                     <div className="flex-1 flex flex-col gap-1">
                       <button
                         disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}

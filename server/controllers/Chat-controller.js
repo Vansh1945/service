@@ -164,7 +164,7 @@ const createRoom = async (req, res) => {
     // Return existing room if already created
     let room = await ChatRoom.findOne(query)
       .populate('customerId', 'name email phone profilePicUrl')
-      .populate('providerId', 'name email phone profilePicUrl providerId');
+      .populate('providerId', 'name email phone profilePicUrl providerId isOnline');
 
     if (room) {
       let isModified = false;
@@ -195,10 +195,19 @@ const createRoom = async (req, res) => {
         await sendChatOpenedAdminNotification(room);
       }
 
+      const { getSocketId } = require('../socket/userSocketMap');
+      const roomObj = room.toObject();
+      if (roomObj.customerId) {
+        roomObj.customerId.isOnline = !!getSocketId(roomObj.customerId._id);
+      }
+      if (roomObj.providerId) {
+        roomObj.providerId.isOnline = !!getSocketId(roomObj.providerId._id) || roomObj.providerId.isOnline;
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Chat room retrieved successfully',
-        data: room
+        data: roomObj
       });
     }
 
@@ -244,7 +253,7 @@ const createRoom = async (req, res) => {
     // Populate profiles
     await room.populate([
       { path: 'customerId', select: 'name email phone profilePicUrl' },
-      { path: 'providerId', select: 'name email phone profilePicUrl providerId' }
+      { path: 'providerId', select: 'name email phone profilePicUrl providerId isOnline' }
     ]);
 
     // Send admin notification if it is a provider_customer room
@@ -252,10 +261,19 @@ const createRoom = async (req, res) => {
       await sendChatOpenedAdminNotification(room);
     }
 
+    const { getSocketId } = require('../socket/userSocketMap');
+    const roomObj = room.toObject();
+    if (roomObj.customerId) {
+      roomObj.customerId.isOnline = !!getSocketId(roomObj.customerId._id);
+    }
+    if (roomObj.providerId) {
+      roomObj.providerId.isOnline = !!getSocketId(roomObj.providerId._id) || roomObj.providerId.isOnline;
+    }
+
     res.status(201).json({
       success: true,
       message: 'Chat room created successfully',
-      data: room
+      data: roomObj
     });
   } catch (error) {
     console.error('Error in createRoom:', error);
