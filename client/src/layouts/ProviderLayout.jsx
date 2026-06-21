@@ -4,11 +4,12 @@ import {
     FiMenu, FiHome, FiDollarSign,
     FiMessageSquare, FiUser, FiChevronDown,
     FiLogOut, FiCheckCircle,
-    FiActivity, FiHeadphones, FiArrowLeft
+    FiActivity, FiHeadphones, FiArrowLeft, FiVolumeX
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
 import { useSocket } from '../socket/SocketContext';
+import { useNotification } from '../context/NotificationContext';
 import { toast } from 'react-toastify';
 
 import axiosInstance from '../api/axiosInstance';
