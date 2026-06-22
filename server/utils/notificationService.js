@@ -83,19 +83,43 @@ const sendPushNotification = async (tokens, payload) => {
             console.error('[NotificationService] Error loading branding logo in sendPushNotification:', e);
         }
 
-        // Build data-only payload to allow Service Worker full control over display, sounds, and requireInteraction
+        // Build message payload with notification fields to ensure background delivery
+        const isBookingAlert = dataPayload.isBookingAlert === 'true';
         const message = {
+            notification: {
+                title: payload.title || '',
+                body: payload.body || ''
+            },
             data: dataPayload,
             tokens: validTokens,
             // Android specific config for better delivery
             android: {
-                priority: 'high'
+                priority: 'high',
+                notification: {
+                    sound: 'default',
+                    priority: 'high'
+                }
             },
-            //  Web push config — data-only to allow SW custom display
+            // Web push config with notification options for background display
             webpush: {
                 headers: {
                     urgency: 'high',
                     TTL: '86400' // 1 day TTL to prevent delivery delay  
+                },
+                notification: {
+                    title: payload.title || '',
+                    body: payload.body || '',
+                    icon: dataPayload.icon || dataPayload.logo || '/icon-192.png',
+                    badge: dataPayload.badge || dataPayload.icon || dataPayload.logo || '/icon-192.png',
+                    tag: dataPayload.bookingId || dataPayload.chatId || dataPayload.type || 'general',
+                    vibrate: isBookingAlert ? [500, 200, 500, 200, 500] : [200, 100, 200],
+                    requireInteraction: isBookingAlert,
+                    actions: [
+                        {
+                            action: 'open',
+                            title: 'Open App'
+                        }
+                    ]
                 }
             }
         };

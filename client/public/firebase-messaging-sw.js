@@ -23,12 +23,35 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
     console.log('[SW] Background message received:', payload);
 
-    // ✅ DO NOT manually show notification if notification key exists and has no custom data
-    if (payload.notification && !payload.data) return;
-
     const data = payload.data || {};
-    const title = data.title || (payload.notification && payload.notification.title) || 'New Notification';
-    const body = data.body || (payload.notification && payload.notification.body) || '';
+    const isBookingAlert = data.isBookingAlert === 'true';
+    const soundUrl = data.soundUrl;
+
+    if (soundUrl) {
+        // Notify open tabs in the background to play the custom audio sound/ringtone
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then((clientList) => {
+                for (const client of clientList) {
+                    client.postMessage({
+                        type: 'PLAY_SOUND',
+                        soundUrl: soundUrl,
+                        isBookingAlert: isBookingAlert
+                    });
+                }
+            })
+            .catch(err => console.error('[SW] Failed to broadcast sound to clients:', err));
+    }
+
+    // ✅ If payload contains a top-level notification, the browser/FCM SDK
+    // will automatically display it. We return early to avoid showing a duplicate notification.
+    if (payload.notification) {
+        console.log('[SW] Notification payload exists, browser displays it automatically.');
+        return;
+    }
+
+    // Fallback logic for data-only messages (silent/foreground-only push notifications)
+    const title = data.title || 'New Notification';
+    const body = data.body || '';
     
     // Resolve dynamic branding company logo/icon or fall back to standard assets
     const icon = data.icon || data.logo || '/icon-192.png';
@@ -51,30 +74,11 @@ messaging.onBackgroundMessage((payload) => {
     };
 
     // Apply custom booking alert ringtone and vibration if configured
-    const isBookingAlert = data.isBookingAlert === 'true';
     const isHighPriority = data.isHighPriority === 'true' || isBookingAlert;
     
     if (isBookingAlert || isHighPriority) {
         notificationOptions.requireInteraction = true;
         notificationOptions.vibrate = [500, 200, 500, 200, 500];
-    }
-
-    const soundUrl = data.soundUrl;
-    if (soundUrl) {
-        notificationOptions.sound = soundUrl;
-        
-        // Notify open tabs in the background to play the custom audio sound/ringtone
-        self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-            .then((clientList) => {
-                for (const client of clientList) {
-                    client.postMessage({
-                        type: 'PLAY_SOUND',
-                        soundUrl: soundUrl,
-                        isBookingAlert: isBookingAlert
-                    });
-                }
-            })
-            .catch(err => console.error('[SW] Failed to broadcast sound to clients:', err));
     }
 
     self.registration.showNotification(title, notificationOptions);
