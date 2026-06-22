@@ -535,19 +535,23 @@ const ProviderLayout = () => {
             {isAlertRinging && (
                 <div 
                     onClick={stopBookingAlert}
-                    className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce border border-red-500 cursor-pointer transition-all active:scale-95 select-none"
+                    className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] bg-white/95 backdrop-blur-sm border border-neutral-100 text-neutral-800 pl-4 pr-3 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] flex items-center justify-between gap-4 w-[92%] max-w-sm cursor-pointer transition-all duration-300 hover:bg-white hover:scale-[1.02] hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)] active:scale-98 select-none"
                     title="Click to Mute Ringtone"
                 >
-                    <div className="flex items-center gap-2">
-                        <span className="flex h-3 w-3 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                    <div className="flex items-center gap-3">
+                        <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-danger"></span>
                         </span>
-                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider">New Booking Alert! Click to Mute</span>
+                        <div className="flex flex-col text-left">
+                            <span className="text-xs font-semibold text-neutral-800 tracking-wide font-inter">Incoming Booking Request</span>
+                            <span className="text-[10px] text-neutral-500 font-medium">Click to mute ringtone</span>
+                        </div>
                     </div>
-                    <div className="bg-white/20 p-1.5 rounded-xl shadow-inner">
-                        <FiVolumeX className="w-4 h-4 text-white" />
-                    </div>
+                    <button className="flex items-center gap-1.5 px-2.5 py-1 bg-danger-light hover:bg-danger/10 text-danger rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors duration-200">
+                        <FiVolumeX className="w-3.5 h-3.5" />
+                        <span>Mute</span>
+                    </button>
                 </div>
             )}
         </div>

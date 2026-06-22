@@ -61,6 +61,25 @@ export const NotificationProvider = ({ children }) => {
         pendingAudioRef.current = null;
     };
 
+    const startBookingAlert = (soundUrl, duration = 60, repeatAlert = true) => {
+        stopBookingAlert();
+
+        const url = soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
+        const audio = new Audio(url);
+        audio.loop = repeatAlert;
+        activeAudioRef.current = audio;
+
+        playAudio(audio);
+
+        if (duration && duration > 0) {
+            setTimeout(() => {
+                if (activeAudioRef.current === audio) {
+                    stopBookingAlert();
+                }
+            }, duration * 1000);
+        }
+    };
+
     // Global listener for interaction to play blocked audio
     useEffect(() => {
         const handleUserInteraction = () => {
@@ -189,16 +208,7 @@ export const NotificationProvider = ({ children }) => {
                 const { soundUrl, isBookingAlert } = event.data;
                 console.log('[SW Message] Play sound request received:', soundUrl);
                 if (isBookingAlert) {
-                    if (activeAudioRef.current) {
-                        try {
-                            activeAudioRef.current.pause();
-                            activeAudioRef.current.currentTime = 0;
-                        } catch (e) {}
-                    }
-                    const audio = new Audio(soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav');
-                    audio.loop = true;
-                    activeAudioRef.current = audio;
-                    playAudio(audio);
+                    startBookingAlert(soundUrl, 60, true);
                 } else {
                     playNormalNotificationSound(soundUrl);
                 }
@@ -330,32 +340,7 @@ export const NotificationProvider = ({ children }) => {
                 const bookingRepeatAlert = true;
 
                 if (bookingAlertTone && soundUrl) {
-                    if (activeAudioRef.current) {
-                        try {
-                            activeAudioRef.current.pause();
-                            activeAudioRef.current.currentTime = 0;
-                        } catch (e) {}
-                    }
-                    const audio = new Audio(soundUrl);
-                    audio.loop = bookingRepeatAlert;
-                    activeAudioRef.current = audio;
-                    playAudio(audio);
-
-                    // Set timeout to auto-stop the alert tone
-                    setTimeout(() => {
-                        if (activeAudioRef.current === audio) {
-                            try {
-                                audio.pause();
-                                audio.currentTime = 0;
-                            } catch (pauseErr) {
-                                console.error('Error auto-stopping alert audio:', pauseErr);
-                            }
-                            if (activeAudioRef.current === audio) {
-                                activeAudioRef.current = null;
-                                setIsAlertRinging(false);
-                            }
-                        }
-                    }, bookingAlertDuration * 1000);
+                    startBookingAlert(soundUrl, bookingAlertDuration, bookingRepeatAlert);
                 }
 
                 if (bookingVibration && 'vibrate' in navigator) {
@@ -413,38 +398,8 @@ export const NotificationProvider = ({ children }) => {
                 const bookingAlertDuration = Number(payload.bookingAlertDuration || 60);
                 const bookingRepeatAlert = true;
 
-                // Stop any currently playing alert tone
-                if (activeAudioRef.current) {
-                    try {
-                        activeAudioRef.current.pause();
-                        activeAudioRef.current.currentTime = 0;
-                    } catch (audioErr) {
-                        console.error('Error stopping previous audio:', audioErr);
-                    }
-                    activeAudioRef.current = null;
-                }
-
                 if (bookingAlertTone && soundUrl) {
-                    const audio = new Audio(soundUrl);
-                    audio.loop = bookingRepeatAlert;
-                    activeAudioRef.current = audio;
-                    playAudio(audio);
-
-                    // Set timeout to auto-stop the alert tone
-                    setTimeout(() => {
-                        if (activeAudioRef.current === audio) {
-                            try {
-                                audio.pause();
-                                audio.currentTime = 0;
-                            } catch (pauseErr) {
-                                console.error('Error auto-stopping alert audio:', pauseErr);
-                            }
-                            if (activeAudioRef.current === audio) {
-                                activeAudioRef.current = null;
-                                setIsAlertRinging(false);
-                            }
-                        }
-                    }, bookingAlertDuration * 1000);
+                    startBookingAlert(soundUrl, bookingAlertDuration, bookingRepeatAlert);
                 }
 
                 if (bookingVibration && 'vibrate' in navigator) {
