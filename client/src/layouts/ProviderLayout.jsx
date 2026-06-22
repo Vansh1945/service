@@ -20,7 +20,7 @@ const ProviderLayout = () => {
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
-    const { isAlertRinging, stopBookingAlert } = useNotification() || {};
+    const { isAlertRinging, stopBookingAlert, initFCMToken } = useNotification() || {};
     const { user, logoutUser, token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
     const logo = activeBranding?.logo || authSystemSettings?.logo || null;
     const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
@@ -119,6 +119,13 @@ const ProviderLayout = () => {
         setIsOnline(nextState); // Optimistic update
 
         try {
+            if (nextState) {
+                // Register active FCM token when going online
+                if (typeof initFCMToken === 'function') {
+                    await initFCMToken(token);
+                }
+            }
+
             if (socket && isConnected) {
                 socket.emit('provider-toggle-online', { isOnline: nextState });
             } else {

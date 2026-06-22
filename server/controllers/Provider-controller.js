@@ -814,6 +814,15 @@ exports.updateProviderProfile = async (req, res) => {
             // Basic Information Updates
             if (isOnline !== undefined) {
                 updates.isOnline = isOnline === 'true' || isOnline === true;
+                if (updates.isOnline) {
+                    updates.notificationPreferences = {
+                        ...currentProvider.notificationPreferences,
+                        bookingAlertTone: true,
+                        bookingVibration: true,
+                        booking: true,
+                        pushEnabled: true
+                    };
+                }
             }
 
             if (name && typeof name === 'string') {

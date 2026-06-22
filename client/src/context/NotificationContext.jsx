@@ -185,6 +185,23 @@ export const NotificationProvider = ({ children }) => {
 
                     navigate(targetRouteWithEntity, { state: { fromNotification: true } });
                 }
+            } else if (event.data && event.data.type === 'PLAY_SOUND') {
+                const { soundUrl, isBookingAlert } = event.data;
+                console.log('[SW Message] Play sound request received:', soundUrl);
+                if (isBookingAlert) {
+                    if (activeAudioRef.current) {
+                        try {
+                            activeAudioRef.current.pause();
+                            activeAudioRef.current.currentTime = 0;
+                        } catch (e) {}
+                    }
+                    const audio = new Audio(soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav');
+                    audio.loop = true;
+                    activeAudioRef.current = audio;
+                    playAudio(audio);
+                } else {
+                    playNormalNotificationSound(soundUrl);
+                }
             }
         };
 
@@ -449,6 +466,7 @@ export const NotificationProvider = ({ children }) => {
         fcmToken,
         notificationPermission,
         requestPermission,
+        initFCMToken,
         stopBookingAlert,
         isAlertRinging
     };

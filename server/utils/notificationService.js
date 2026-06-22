@@ -38,6 +38,10 @@ const sendPushNotification = async (tokens, payload) => {
             });
         }
 
+        // Add standard fields to dataPayload for data-only notifications
+        dataPayload.title = payload.title || '';
+        dataPayload.body = payload.body || '';
+
         // Include deep-link url in data payload for SW click handler
         if (payload.url) {
             dataPayload.url = String(payload.url);
@@ -49,32 +53,49 @@ const sendPushNotification = async (tokens, payload) => {
             dataPayload.role = String(payload.role);
         }
 
+        // Add deep linking parameters if they are not already set
+        if (!dataPayload.targetUrl) dataPayload.targetUrl = payload.url || payload.route || '';
+        if (!dataPayload.role) dataPayload.role = payload.role || '';
+        if (!dataPayload.notificationType) dataPayload.notificationType = payload.data?.type || payload.data?.eventId || '';
+        if (!dataPayload.entityId) dataPayload.entityId = payload.data?.bookingId || payload.data?.chatId || payload.data?.entityId || '';
+
+        // Resolve logo/branding dynamically from SystemConfig
+        try {
+            const { SystemConfig } = require('../models/SystemSetting');
+            const config = await SystemConfig.findOne();
+            if (config) {
+                let logoUrl = config.logo || '';
+                const userRole = payload.role || dataPayload.role;
+                if (userRole === 'provider' && config.providerBranding?.logo) {
+                    logoUrl = config.providerBranding.logo;
+                } else if (userRole === 'admin' && config.adminBranding?.logo) {
+                    logoUrl = config.adminBranding.logo;
+                } else if (userRole === 'customer' && config.customerBranding?.logo) {
+                    logoUrl = config.customerBranding.logo;
+                }
+                if (logoUrl) {
+                    dataPayload.logo = logoUrl;
+                    dataPayload.icon = logoUrl;
+                    dataPayload.badge = logoUrl;
+                }
+            }
+        } catch (e) {
+            console.error('[NotificationService] Error loading branding logo in sendPushNotification:', e);
+        }
+
+        // Build data-only payload to allow Service Worker full control over display, sounds, and requireInteraction
         const message = {
-            notification: {
-                title: payload.title,
-                body: payload.body,
-            },
             data: dataPayload,
             tokens: validTokens,
             // Android specific config for better delivery
             android: {
-                priority: 'high',
-                notification: {
-                    sound: payload.sound || 'booking_ringtone',
-                    channelId: payload.channelId || 'booking_notifications'
-                }
+                priority: 'high'
             },
-            //  Web push config — pass data so SW notificationclick can read url
+            //  Web push config — data-only to allow SW custom display
             webpush: {
                 headers: {
                     urgency: 'high',
                     TTL: '86400' // 1 day TTL to prevent delivery delay  
-                },
-                notification: {
-                    icon: '/icon-192.png',
-                    badge: '/icon-192.png',
-                    requireInteraction: false,
-                    data: dataPayload
                 }
             }
         };

@@ -23,24 +23,25 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
     console.log('[SW] Background message received:', payload);
 
-    // ✅ DO NOT manually show notification if notification key exists
-    // Let Firebase handle the notification automatically to prevent duplicates
-    if (payload.notification) return;
+    // ✅ DO NOT manually show notification if notification key exists and has no custom data
+    if (payload.notification && !payload.data) return;
 
     const data = payload.data || {};
-    const title = data.title || 'New Notification';
-    const body = data.body || '';
-    const icon = '/icon-192.png';
-    const badge = '/icon-192.png';
+    const title = data.title || (payload.notification && payload.notification.title) || 'New Notification';
+    const body = data.body || (payload.notification && payload.notification.body) || '';
+    
+    // Resolve dynamic branding company logo/icon or fall back to standard assets
+    const icon = data.icon || data.logo || '/icon-192.png';
+    const badge = data.badge || data.icon || data.logo || '/icon-192.png';
 
     const notificationOptions = {
         body,
         icon,
         badge,
-        tag: data.type || 'general', // Replaces same-type notifications instead of stacking
+        tag: data.bookingId || data.chatId || data.type || 'general',
         data: data,
         vibrate: [200, 100, 200],
-        requireInteraction: false, // Auto-dismiss on mobile
+        requireInteraction: false,
         actions: [
             {
                 action: 'open',
@@ -51,18 +52,29 @@ messaging.onBackgroundMessage((payload) => {
 
     // Apply custom booking alert ringtone and vibration if configured
     const isBookingAlert = data.isBookingAlert === 'true';
-    if (isBookingAlert) {
-        const bookingAlertTone = data.bookingAlertTone !== 'false';
-        const bookingVibration = data.bookingVibration !== 'false';
-        const soundUrl = data.soundUrl;
-
-        if (bookingAlertTone && soundUrl) {
-            notificationOptions.sound = soundUrl;
-        }
-        if (bookingVibration) {
-            notificationOptions.vibrate = [500, 200, 500, 200, 500];
-        }
+    const isHighPriority = data.isHighPriority === 'true' || isBookingAlert;
+    
+    if (isBookingAlert || isHighPriority) {
         notificationOptions.requireInteraction = true;
+        notificationOptions.vibrate = [500, 200, 500, 200, 500];
+    }
+
+    const soundUrl = data.soundUrl;
+    if (soundUrl) {
+        notificationOptions.sound = soundUrl;
+        
+        // Notify open tabs in the background to play the custom audio sound/ringtone
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then((clientList) => {
+                for (const client of clientList) {
+                    client.postMessage({
+                        type: 'PLAY_SOUND',
+                        soundUrl: soundUrl,
+                        isBookingAlert: isBookingAlert
+                    });
+                }
+            })
+            .catch(err => console.error('[SW] Failed to broadcast sound to clients:', err));
     }
 
     self.registration.showNotification(title, notificationOptions);
@@ -75,9 +87,9 @@ self.addEventListener('notificationclick', (event) => {
 
     // Extract deep-link URL from notification data
     const data = event.notification.data || {};
-    const route = data.route || data.url || '/';
+    const route = data.targetUrl || data.route || data.url || '/';
     const role = data.role || null;
-    const entityId = data.entityId || null;
+    const entityId = data.entityId || data.bookingId || data.chatId || null;
     const notificationId = data.notificationId || null;
 
     const searchParams = new URLSearchParams();
@@ -95,7 +107,7 @@ self.addEventListener('notificationclick', (event) => {
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((clientList) => {
-                // If app is already open, navigate it to the deep-link route
+                // Focus existing tab if open
                 for (const client of clientList) {
                     if (client.url.startsWith(self.location.origin) && 'focus' in client) {
                         client.postMessage({ 

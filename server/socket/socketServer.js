@@ -565,7 +565,22 @@ const initSocket = (httpServer) => {
         socket.on('provider-toggle-online', async ({ isOnline }) => {
             try {
                 if (socket.userRole !== 'provider') return;
-                await Provider.findByIdAndUpdate(userId, { isOnline });
+                
+                const updateFields = { isOnline };
+                if (isOnline) {
+                    const provider = await Provider.findById(userId);
+                    if (provider) {
+                        updateFields.notificationPreferences = {
+                            ...provider.notificationPreferences,
+                            bookingAlertTone: true,
+                            bookingVibration: true,
+                            booking: true,
+                            pushEnabled: true
+                        };
+                    }
+                }
+                
+                await Provider.findByIdAndUpdate(userId, updateFields);
                 io.to('admin_live_room').emit('provider-status-changed', {
                     providerId: userId,
                     isOnline
@@ -716,6 +731,29 @@ const initSocket = (httpServer) => {
                 }
 
                 await room.save();
+                
+                // Send push notification to the recipient of the chat message
+                if (otherPartyId) {
+                    try {
+                        const { sendNotification } = require('../utils/notificationHelper');
+                        const otherRole = socket.userRole === 'customer' ? 'provider' : 'customer';
+                        const targetUrl = otherRole === 'customer' ? `/messages/${room._id}` : `/provider/messages/${room._id}`;
+
+                        await sendNotification(
+                            otherPartyId,
+                            otherRole,
+                            'chat_message',
+                            `${socket.userName}: ${newMessage.content || '[File/Image]'}`,
+                            'booking',
+                            room.bookingId || null,
+                            targetUrl,
+                            'chat_message'
+                        );
+                    } catch (nErr) {
+                        console.error('Error triggering chat push notification in socket chat-send:', nErr);
+                    }
+                }
+                
                 const savedMessage = room.messages[room.messages.length - 1];
 
                 // Broadcast live to both the room _id and the namespace room

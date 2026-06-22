@@ -54,7 +54,82 @@ const setIO = (io) => {
 /**
  * Generate smart routing links for automatic system notifications
  */
-const computeNotificationUrl = (role, type, title, message) => {
+const titleToEventIdMap = {
+    'New Booking Request: {{serviceName}}': 'booking_created',
+    'New Booking Request': 'booking_created',
+    'booking_created': 'booking_created',
+    'Provider Assigned': 'provider_assigned',
+    'provider_assigned': 'provider_assigned',
+    'Booking Accepted': 'provider_accepted',
+    'provider_accepted': 'provider_accepted',
+    'Provider Arrived': 'provider_reached',
+    'provider_reached': 'provider_reached',
+    'provider_arrived': 'provider_reached',
+    'Job Started': 'work_started',
+    'work_started': 'work_started',
+    'Material Approval Needed': 'material_added',
+    'material_added': 'material_added',
+    'Material Approved': 'material_approved',
+    'material_approved': 'material_approved',
+    'Material Rejected': 'material_rejected',
+    'material_rejected': 'material_rejected',
+    'Payment Successful': 'payment_success',
+    'payment_success': 'payment_success',
+    'Booking Completed': 'booking_completed',
+    'booking_completed': 'booking_completed',
+    'New Dispute Registered': 'dispute_created',
+    'dispute_created': 'dispute_created',
+    'Dispute Created': 'dispute_created',
+    'Emergency Booking': 'emergency_booking',
+    'emergency_booking': 'emergency_booking',
+    'chat_message': 'chat_message',
+    'New Message': 'chat_message',
+    'Verification Approved': 'provider_verification_approved',
+    'provider_verification_approved': 'provider_verification_approved',
+    'Verification Rejected': 'provider_verification_rejected',
+    'provider_verification_rejected': 'provider_verification_rejected'
+};
+
+/**
+ * Generate smart routing links for automatic system notifications
+ */
+const computeNotificationUrl = (role, type, title, message, eventId = null, referenceId = null) => {
+    const cleanEventId = eventId || titleToEventIdMap[title] || title || '';
+    const refIdStr = referenceId ? referenceId.toString() : '';
+
+    if (role === 'customer') {
+        if (cleanEventId === 'chat_message') return `/messages/${refIdStr}`;
+        if (cleanEventId === 'material_added') return `/material-approval/${refIdStr}`;
+        if (cleanEventId === 'payment_success') return `/payments`;
+        if (['booking_created', 'provider_assigned', 'provider_accepted', 'provider_reached', 'work_started', 'booking_completed', 'warranty_expiry'].includes(cleanEventId)) {
+            return `/my-bookings/${refIdStr}`;
+        }
+        if (cleanEventId === 'complaint_updated') return `/complaints/${refIdStr}`;
+    }
+
+    if (role === 'provider') {
+        if (cleanEventId === 'chat_message') return `/provider/messages/${refIdStr}`;
+        if (['material_approved', 'material_rejected', 'booking_completed'].includes(cleanEventId)) {
+            return `/provider/bookings/${refIdStr}`;
+        }
+        if (cleanEventId === 'booking_created' || cleanEventId === 'provider_assigned') {
+            return refIdStr ? `/provider/bookings/${refIdStr}` : `/provider/bookings`;
+        }
+        if (cleanEventId === 'payment_released' || cleanEventId === 'payout_success') return `/provider/earnings`;
+        if (['provider_verification_approved', 'provider_verification_rejected'].includes(cleanEventId)) {
+            return `/provider/profile`;
+        }
+    }
+
+    if (role === 'admin') {
+        if (cleanEventId === 'booking_created') return `/admin/bookings`;
+        if (cleanEventId === 'provider_registered' || cleanEventId === 'provider_verification_approved' || cleanEventId === 'provider_verification_rejected') return `/admin/providers/pending`;
+        if (cleanEventId === 'dispute_created') return `/admin/disputes`;
+        if (cleanEventId === 'refund_requested') return `/admin/refunds`;
+        if (cleanEventId === 'fraud_alert') return `/admin/fraud`;
+        if (cleanEventId === 'chat_monitor' || cleanEventId === 'chat_message') return `/admin/chat-monitor`;
+    }
+
     const textContext = `${title} ${message}`.toLowerCase();
 
     if (role === 'admin') {
@@ -337,8 +412,8 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             }
         }
 
-        let notification = null;
-        const generatedUrl = finalUrl !== '/' ? finalUrl : computeNotificationUrl(role, type, finalTitle, finalMessage);
+        const resolvedEventId = eventId || titleToEventIdMap[title] || title || null;
+        const generatedUrl = finalUrl !== '/' ? finalUrl : computeNotificationUrl(role, type, finalTitle, finalMessage, resolvedEventId, referenceId);
 
         if (userId) {
             let Model;
@@ -370,6 +445,41 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 url: generatedUrl
             });
 
+            // Resolve emergency booking check
+            let isEmergency = false;
+            if (referenceId) {
+                try {
+                    const BookingModel = mongoose.model('Booking');
+                    const bookingObj = await BookingModel.findById(referenceId).populate('services.service');
+                    if (bookingObj) {
+                        isEmergency = bookingObj.services?.some(s => s.service?.serviceType === 'emergency' || s.serviceDetails?.serviceType === 'emergency') || false;
+                    }
+                } catch (e) {
+                    console.error('Error resolving emergency booking:', e);
+                }
+            }
+
+            const isBookingAlert = role === 'provider' && (resolvedEventId === 'booking_created' || resolvedEventId === 'provider_assigned' || resolvedEventId === 'emergency_booking');
+            
+            // Resolve correct sound URL
+            let soundUrl = '/assets/sounds/notification.mp3';
+            if (isBookingAlert) {
+                if (isEmergency || resolvedEventId === 'emergency_booking') {
+                    soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2190/2190-84.wav'; // Alarm sound
+                } else {
+                    soundUrl = config ? config.providerBookingRingtone : '';
+                    if (!soundUrl) {
+                        soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav'; // Normal booking chime
+                    }
+                }
+            } else if (resolvedEventId === 'chat_message') {
+                soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2633/2633-84.wav';
+            } else if (['material_added', 'material_approved', 'material_rejected'].includes(resolvedEventId)) {
+                soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-84.wav';
+            } else if (resolvedEventId === 'payment_success') {
+                soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2017/2017-84.wav';
+            }
+
             if (_io) {
                 const room = userId.toString();
                 const socketsInRoom = await _io.in(room).fetchSockets();
@@ -384,15 +494,12 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     referenceId,
                     url: generatedUrl,
                     isRead: false,
-                    createdAt: notification.createdAt
+                    createdAt: notification.createdAt,
+                    soundUrl
                 };
 
-                // Detect booking alert to append socket ringtone metadata
-                const isBookingAlert = role === 'provider' && (eventId === 'booking_created' || eventId === 'provider_assigned');
                 if (isBookingAlert) {
-                    const soundUrl = config ? config.providerBookingRingtone : '';
                     socketPayload.isBookingAlert = true;
-                    socketPayload.soundUrl = soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
                     socketPayload.bookingAlertTone = true;
                     socketPayload.bookingVibration = true;
                     socketPayload.bookingAlertDuration = 60;
@@ -420,8 +527,6 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             if (isPushAllowed) {
                 try {
                     console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
-                    const isBookingAlert = role === 'provider' && (eventId === 'booking_created' || eventId === 'provider_assigned');
-                    const soundUrl = isBookingAlert && config ? config.providerBookingRingtone : '';
                     const bookingAlertTone = true;
                     const bookingVibration = true;
                     const bookingAlertDuration = 60;
@@ -439,9 +544,10 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                             type: type,
                             url: generatedUrl,
                             role: role,
+                            soundUrl: soundUrl || '',
+                            isHighPriority: 'true',
                             ...(isBookingAlert ? {
                                 isBookingAlert: 'true',
-                                soundUrl: soundUrl || '',
                                 bookingAlertTone: bookingAlertTone ? 'true' : 'false',
                                 bookingVibration: bookingVibration ? 'true' : 'false',
                                 bookingAlertDuration: String(bookingAlertDuration),

@@ -86,6 +86,7 @@ router.get('/templates', flexAuth, adminOnly, notificationController.getTemplate
 router.post('/templates', flexAuth, adminOnly, notificationController.createTemplate);
 router.put('/templates/:id', flexAuth, adminOnly, notificationController.updateTemplate);
 router.delete('/templates/:id', flexAuth, adminOnly, notificationController.deleteTemplate);
+router.get('/active-events', flexAuth, adminOnly, notificationController.getActiveEvents);
 
 module.exports = router;
 

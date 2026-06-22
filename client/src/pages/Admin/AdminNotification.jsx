@@ -16,6 +16,7 @@ import * as SystemService from '../../services/SystemService';
 import * as ZoneService from '../../services/ZoneService';
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import AdminSearchBar from '../../components/AdminSearchBar';
+import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 
 // ─── Audience Options ────────────────────────────────────────────────────────
 const AUDIENCE_OPTIONS = [
@@ -57,22 +58,27 @@ const PRESETS = [
     },
 ];
 
-const EVENT_IDS = [
-    { value: 'booking_created', label: 'Booking Created (booking_created)' },
-    { value: 'provider_assigned', label: 'Provider Assigned (provider_assigned)' },
-    { value: 'provider_accepted', label: 'Provider Accepted (provider_accepted)' },
-    { value: 'provider_reached', label: 'Provider Reached (provider_reached)' },
-    { value: 'work_started', label: 'Work Started (work_started)' },
-    { value: 'material_added', label: 'Material Added (material_added)' },
-    { value: 'material_approved', label: 'Material Approved (material_approved)' },
-    { value: 'material_rejected', label: 'Material Rejected (material_rejected)' },
-    { value: 'payment_success', label: 'Payment Success (payment_success)' },
-    { value: 'booking_completed', label: 'Booking Completed (booking_completed)' },
-    { value: 'dispute_created', label: 'Dispute Created (dispute_created)' },
-    { value: 'warranty_expiry', label: 'Warranty Expiry (warranty_expiry)' },
-    { value: 'provider_verification_approved', label: 'Provider Verification Approved (provider_verification_approved)' },
-    { value: 'provider_verification_rejected', label: 'Provider Verification Rejected (provider_verification_rejected)' },
-];
+const STANDARD_EVENT_LABELS = {
+    booking_created: 'Booking Created (booking_created)',
+    provider_assigned: 'Provider Assigned (provider_assigned)',
+    provider_accepted: 'Provider Accepted (provider_accepted)',
+    work_started: 'Work Started (work_started)',
+    booking_completed: 'Booking Completed (booking_completed)',
+    provider_verification_approved: 'Provider Verification Approved (provider_verification_approved)',
+    provider_verification_rejected: 'Provider Verification Rejected (provider_verification_rejected)',
+    payment_success: 'Payment Success (payment_success)'
+};
+
+const EVENT_VARIABLES = {
+    booking_created: ['customerName', 'bookingId', 'serviceName', 'street', 'amount'],
+    provider_assigned: ['customerName', 'providerName', 'bookingId', 'serviceName', 'street', 'amount'],
+    provider_accepted: ['customerName', 'providerName', 'bookingId', 'serviceName', 'street', 'amount'],
+    work_started: ['customerName', 'providerName', 'bookingId', 'serviceName', 'street', 'amount'],
+    booking_completed: ['customerName', 'providerName', 'bookingId', 'serviceName', 'street', 'amount'],
+    payment_success: ['customerName', 'providerName', 'bookingId', 'serviceName', 'street', 'amount'],
+    provider_verification_approved: ['providerName'],
+    provider_verification_rejected: ['providerName', 'reason']
+};
 
 const STATUS_COLORS = {
     sent: 'bg-green-100 text-green-700 border-green-200',
@@ -176,6 +182,19 @@ const AdminNotification = () => {
         });
     };
 
+    const [activeEventIds, setActiveEventIds] = useState([]);
+
+    const fetchActiveEvents = async () => {
+        try {
+            const res = await NotificationService.getActiveEvents();
+            if (res.data && res.data.success) {
+                setActiveEventIds(res.data.data || []);
+            }
+        } catch (error) {
+            console.error('Error fetching active events:', error);
+        }
+    };
+
     const fetchStats = async () => {
         try {
             setLoadingStats(true);
@@ -193,6 +212,7 @@ const AdminNotification = () => {
     useEffect(() => {
         fetchStats();
         fetchSystemSettings();
+        fetchActiveEvents();
     }, []);
 
     useEffect(() => {
@@ -284,6 +304,39 @@ const AdminNotification = () => {
         },
         isActive: true
     });
+
+    // Focus tracking & Refs for Event Template Variable injection
+    const templateTitleRef = useRef(null);
+    const templateMessageRef = useRef(null);
+    const [lastFocusedField, setLastFocusedField] = useState('message');
+
+    const handleInsertVariable = (v) => {
+        const placeholder = `{{${v}}}`;
+        const ref = lastFocusedField === 'title' ? templateTitleRef : templateMessageRef;
+        if (ref.current) {
+            const input = ref.current;
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const text = input.value;
+            const before = text.substring(0, start);
+            const after = text.substring(end, text.length);
+            const newValue = before + placeholder + after;
+
+            if (lastFocusedField === 'title') {
+                setTemplateForm(prev => ({ ...prev, title: newValue }));
+            } else {
+                setTemplateForm(prev => ({ ...prev, message: newValue }));
+            }
+
+            // Restore focus and cursor position
+            setTimeout(() => {
+                input.focus();
+                input.setSelectionRange(start + placeholder.length, start + placeholder.length);
+            }, 0);
+        } else {
+            setTemplateForm(prev => ({ ...prev, message: prev.message + placeholder }));
+        }
+    };
 
     const fetchTemplates = async () => {
         try {
@@ -811,7 +864,7 @@ const AdminNotification = () => {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                 <StatsCard
                     title="Total Active Devices"
-                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : (
+                    value={loadingStats ? 0 : (
                         <div className="flex items-baseline gap-2 mt-2">
                             <span className="text-2xl font-black text-gray-900">{stats.totalActiveDevices}</span>
                             <span className="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">Online</span>
@@ -821,22 +874,22 @@ const AdminNotification = () => {
 
                 <StatsCard
                     title="Customer Devices"
-                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : stats.customerDevices}
+                    value={loadingStats ? 0 : stats.customerDevices}
                 />
 
                 <StatsCard
                     title="Provider Devices"
-                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : stats.providerDevices}
+                    value={loadingStats ? 0 : stats.providerDevices}
                 />
 
                 <StatsCard
                     title="Admin Devices"
-                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : stats.adminDevices}
+                    value={loadingStats ? 0 : stats.adminDevices}
                 />
 
                 <StatsCard
                     title="Cleanup Count"
-                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : (
+                    value={loadingStats ? 0 : (
                         <div className="flex items-baseline gap-1 mt-2">
                             <span className="text-2xl font-black text-red-600">{stats.invalidTokenCleanupCount}</span>
                             <span className="text-[9px] text-gray-400 font-semibold">tokens</span>
@@ -847,7 +900,7 @@ const AdminNotification = () => {
 
                 <StatsCard
                     title="Last Delivery"
-                    value={loadingStats ? <FiLoader className="animate-spin text-primary mt-2" size={16} /> : (
+                    value={loadingStats ? 0 : (
                         <span className="text-sm font-black text-gray-800 break-all">{stats.lastNotificationDeliverySuccess}</span>
                     )}
                     subtext={
@@ -980,65 +1033,13 @@ const AdminNotification = () => {
                                     <HierarchicalZoneSelector
                                         zones={zones}
                                         selectedZoneIds={form.targetZones}
-                                        onChange={(newZoneIds) => {
-                                            if (Array.isArray(newZoneIds)) {
-                                                setForm(prev => ({ ...prev, targetZones: newZoneIds }));
-                                            } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
-                                                const targetId = (newZoneIds._id || newZoneIds.id).toString();
-                                                setForm(prev => ({ ...prev, targetZones: (prev.targetZones || []).filter(id => id.toString() !== targetId) }));
-                                            }
-                                        }}
+                                        onChange={(newZoneIds) => setForm(prev => ({ ...prev, targetZones: newZoneIds }))}
                                         label="Target Zones (State/City/Micro)"
                                     />
                                 </div>
                             )}
 
-                            {/* Audience Filters */}
-                            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                                <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                    <FiFilter className="text-primary" /> Audience Filters (Optional)
-                                </label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Target City</label>
-                                        <input
-                                            type="text"
-                                            name="city"
-                                            value={form.city}
-                                            onChange={handleChange}
-                                            placeholder="e.g. Amritsar"
-                                            className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                        />
-                                    </div>
-                                    {form.audience !== 'customer' && (
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Provider Category</label>
-                                            <select
-                                                name="providerCategory"
-                                                value={form.providerCategory}
-                                                onChange={handleChange}
-                                                className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                            >
-                                                <option value="">All Categories</option>
-                                                {categories.map(cat => (
-                                                    <option key={cat._id} value={cat._id}>{cat.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Min. Bookings</label>
-                                        <input
-                                            type="number"
-                                            name="minBookings"
-                                            value={form.minBookings}
-                                            onChange={handleChange}
-                                            min="0"
-                                            className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+
 
                             <div className="grid grid-cols-1 gap-5">
                                 {/* Title */}
@@ -1705,14 +1706,7 @@ const AdminNotification = () => {
                             <HierarchicalZoneSelector
                                 zones={zones}
                                 selectedZoneIds={(editModal.item.targetZones || []).map(z => z._id || z)}
-                                onChange={(newZoneIds) => {
-                                    if (Array.isArray(newZoneIds)) {
-                                        setEditModal(prev => ({ ...prev, item: { ...prev.item, targetZones: newZoneIds } }));
-                                    } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
-                                        const targetId = (newZoneIds._id || newZoneIds.id).toString();
-                                        setEditModal(prev => ({ ...prev, item: { ...prev.item, targetZones: (prev.item.targetZones || []).filter(id => id.toString() !== targetId) } }));
-                                    }
-                                }}
+                                onChange={(newZoneIds) => setEditModal(prev => ({ ...prev, item: { ...prev.item, targetZones: newZoneIds } }))}
                                 label="Target Zones (Leave empty for Global)"
                             />
                         </div>
@@ -1762,9 +1756,12 @@ const AdminNotification = () => {
                             required
                         >
                             <option value="">-- Select Event ID --</option>
-                            {EVENT_IDS.map(evt => (
-                                <option key={evt.value} value={evt.value}>{evt.label}</option>
-                            ))}
+                            {activeEventIds.map(evtId => {
+                                const label = STANDARD_EVENT_LABELS[evtId] || `${evtId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (${evtId})`;
+                                return (
+                                    <option key={evtId} value={evtId}>{label}</option>
+                                );
+                            })}
                         </select>
                     </div>
 
@@ -1772,6 +1769,8 @@ const AdminNotification = () => {
                         <label className="block text-xs font-bold text-gray-650 uppercase mb-1">Notification Title *</label>
                         <input
                             type="text"
+                            ref={templateTitleRef}
+                            onFocus={() => setLastFocusedField('title')}
                             placeholder="e.g. New Booking Request: {{serviceName}}"
                             value={templateForm.title}
                             onChange={(e) => setTemplateForm(prev => ({ ...prev, title: e.target.value }))}
@@ -1784,15 +1783,42 @@ const AdminNotification = () => {
                         <label className="block text-xs font-bold text-gray-650 uppercase mb-1">Message Body *</label>
                         <textarea
                             rows={3}
+                            ref={templateMessageRef}
+                            onFocus={() => setLastFocusedField('message')}
                             placeholder="e.g. You have a new booking request for {{serviceName}} at {{street}}."
                             value={templateForm.message}
                             onChange={(e) => setTemplateForm(prev => ({ ...prev, message: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-sm resize-y"
                             required
                         />
-                        <div className="mt-1 text-[10px] text-gray-500">
-                            Available variables: <span className="font-mono bg-gray-100 px-1 rounded">{"{{customerName}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{providerName}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{bookingId}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{serviceName}}"}</span>, <span className="font-mono bg-gray-100 px-1 rounded">{"{{amount}}"}</span>
-                        </div>
+                        {(() => {
+                            const variables = EVENT_VARIABLES[templateForm.eventId] || [];
+                            return (
+                                <div className="mt-2 text-xs text-gray-500">
+                                    <span className="font-semibold text-gray-600 block mb-1">Available variables (click to insert):</span>
+                                    {templateForm.eventId ? (
+                                        variables.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                {variables.map(v => (
+                                                    <button
+                                                        key={v}
+                                                        type="button"
+                                                        onClick={() => handleInsertVariable(v)}
+                                                        className="px-2 py-0.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded font-mono text-[11px] font-bold transition-all shadow-sm active:scale-95"
+                                                    >
+                                                        {"{{" + v + "}}"}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-gray-400 italic text-[11px]">No variables defined for this event.</span>
+                                        )
+                                    ) : (
+                                        <span className="text-gray-400 italic text-[11px]">Select an Event Trigger ID to view available variables.</span>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -1988,210 +2014,6 @@ const AdminNotification = () => {
                     </div>
                 </div>
             </Modal>
-        </div>
-    );
-};
-
-const HierarchicalZoneSelector = ({
-    zones,
-    selectedZoneIds,
-    onChange,
-    label = "Applicable Zones"
-}) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [expandedNodes, setExpandedNodes] = useState({});
-    const dropdownRef = useRef(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    const tree = useMemo(() => {
-        const cityZones = zones.filter(z => z.zoneLevel === 'city' || !z.zoneLevel);
-        const serviceZones = zones.filter(z => z.zoneLevel === 'service');
-        const localZones = zones.filter(z => z.zoneLevel === 'local');
-        const microZones = zones.filter(z => z.zoneLevel === 'micro');
-
-        return cityZones.map(city => {
-            const cityServices = serviceZones.filter(s => {
-                const pId = s.parentZone?._id || s.parentZone;
-                return pId?.toString() === (city._id || city.id)?.toString();
-            });
-
-            const serviceNodes = cityServices.map(service => {
-                const serviceLocals = localZones.filter(l => {
-                    const pId = l.parentZone?._id || l.parentZone;
-                    return pId?.toString() === (service._id || service.id)?.toString();
-                });
-
-                const localNodes = serviceLocals.map(local => {
-                    const localMicros = microZones.filter(m => {
-                        const pId = m.parentZone?._id || m.parentZone;
-                        return pId?.toString() === (local._id || local.id)?.toString();
-                    });
-
-                    return { ...local, children: localMicros };
-                });
-
-                return { ...service, children: localNodes };
-            });
-
-            return { ...city, children: serviceNodes };
-        });
-    }, [zones]);
-
-    const filteredTree = useMemo(() => {
-        if (!searchQuery) return tree;
-        const lowerQuery = searchQuery.toLowerCase();
-
-        const filterNodes = (nodes) => {
-            return nodes.map(node => {
-                const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
-                let filteredChildren = [];
-                if (node.children) {
-                    filteredChildren = filterNodes(node.children);
-                }
-                const matchesChildren = filteredChildren.length > 0;
-
-                if (matchesSelf || matchesChildren) {
-                    return {
-                        ...node,
-                        children: filteredChildren,
-                        forceExpanded: true
-                    };
-                }
-                return null;
-            }).filter(Boolean);
-        };
-
-        return filterNodes(tree);
-    }, [tree, searchQuery]);
-
-    const toggleExpand = (id, e) => {
-        e.stopPropagation();
-        setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
-    };
-
-    const isSelected = (id) => (selectedZoneIds || []).map(z => z.toString()).includes(id.toString());
-
-    const renderNode = (node, depth = 0) => {
-        const nodeId = node._id || node.id;
-        const hasChildren = node.children && node.children.length > 0;
-        const isExpanded = !!(expandedNodes[nodeId] || node.forceExpanded);
-        const checked = isSelected(nodeId);
-
-        return (
-            <div key={nodeId} className="select-none">
-                <div
-                    className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors"
-                    style={{ paddingLeft: `${depth * 20 + 8}px` }}
-                    onClick={() => onChange(node)}
-                >
-                    {hasChildren ? (
-                        <button
-                            type="button"
-                            onClick={(e) => toggleExpand(nodeId, e)}
-                            className="p-1 hover:bg-gray-250 rounded mr-1 transition-transform duration-200"
-                        >
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
-                        </button>
-                    ) : (
-                        <span className="w-6 shrink-0" />
-                    )}
-
-                    <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => { }}
-                        className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
-                    />
-
-                    <span className={`text-xs font-semibold text-secondary capitalize ${checked ? 'text-primary font-bold' : ''}`}>
-                        {node.name}
-                    </span>
-                    <span className="text-[9px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
-                        {node.zoneLevel || 'state'}
-                    </span>
-                </div>
-
-                {hasChildren && isExpanded && (
-                    <div className="mt-0.5">
-                        {node.children.map(child => renderNode(child, depth + 1))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    return (
-        <div className="relative w-full" ref={dropdownRef}>
-            <label className="block text-sm font-medium text-secondary mb-1.5">
-                {label}
-            </label>
-            <div
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm shadow-sm hover:border-gray-400 transition-all font-semibold"
-            >
-                <span className="text-gray-700 truncate font-semibold">
-                    {(selectedZoneIds || []).length === 0 ? 'Select Zones (Leave empty for Global)' : `${(selectedZoneIds || []).length} Zones Selected`}
-                </span>
-                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </div>
-
-            {isOpen && (
-                <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
-                    <AdminSearchBar
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search by state, city, or micro zone..."
-                        onClear={() => setSearchQuery('')}
-                        className="mb-2 shrink-0"
-                    />
-
-                    <div className="overflow-y-auto flex-1 space-y-1 pr-1">
-                        {filteredTree.length === 0 ? (
-                            <div className="text-xs text-gray-400 italic text-center py-6">
-                                No matching zones found.
-                            </div>
-                        ) : (
-                            filteredTree.map(node => renderNode(node, 0))
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {(selectedZoneIds || []).length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
-                    {(selectedZoneIds || []).map(id => {
-                        const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
-                        if (!zone) return null;
-
-                        let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
-                        if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
-                        if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
-
-                        return (
-                            <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border shadow-sm capitalize ${badgeColor}`}>
-                                <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
-                                <button
-                                    type="button"
-                                    onClick={() => onChange(zone)}
-                                    className="ml-1 inline-flex items-center justify-center focus:outline-none text-gray-400 hover:text-gray-650"
-                                >
-                                    <X className="w-2.5 h-2.5 ml-0.5" />
-                                </button>
-                            </span>
-                        );
-                    })}
-                </div>
-            )}
         </div>
     );
 };

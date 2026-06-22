@@ -81,3 +81,7 @@ export const updateTemplate = (id, data) => {
 export const deleteTemplate = (id) => {
     return axiosInstance.delete(`/notifications/templates/${id}`);
 };
+
+export const getActiveEvents = () => {
+    return axiosInstance.get("/notifications/active-events");
+};

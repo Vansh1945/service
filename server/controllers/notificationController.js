@@ -980,10 +980,71 @@ const getAdminAnalytics = async (req, res) => {
     }
 };
 
+const fs = require('fs');
+const path = require('path');
+
+let cachedActiveEvents = null;
+
+const getActiveEventsList = () => {
+    if (cachedActiveEvents) return cachedActiveEvents;
+
+    const activeEvents = new Set();
+    const serverDir = path.join(__dirname, '..');
+
+    const scanDir = (dir) => {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+                if (file !== 'node_modules' && file !== '.git') {
+                    scanDir(fullPath);
+                }
+            } else if (stat.isFile() && file.endsWith('.js')) {
+                const content = fs.readFileSync(fullPath, 'utf8');
+                const regex = /triggerEventNotification\s*\(\s*['"`]([a-zA-Z0-9_-]+)['"`]/g;
+                let match;
+                while ((match = regex.exec(content)) !== null) {
+                    activeEvents.add(match[1]);
+                }
+            }
+        }
+    };
+
+    try {
+        scanDir(serverDir);
+        cachedActiveEvents = Array.from(activeEvents);
+    } catch (e) {
+        console.error('Error scanning active events:', e);
+        cachedActiveEvents = [
+            'booking_created',
+            'provider_assigned',
+            'provider_accepted',
+            'work_started',
+            'booking_completed',
+            'provider_verification_approved',
+            'provider_verification_rejected',
+            'payment_success'
+        ];
+    }
+    return cachedActiveEvents;
+};
+
+const getActiveEvents = async (req, res) => {
+    try {
+        const activeEvents = getActiveEventsList();
+        return res.status(200).json({ success: true, data: activeEvents });
+    } catch (error) {
+        console.error('getActiveEvents error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch active events' });
+    }
+};
+
 const getTemplates = async (req, res) => {
     try {
+        const activeEvents = getActiveEventsList();
         const NotificationTemplate = mongoose.model('NotificationTemplate');
-        const templates = await NotificationTemplate.find({}).sort({ eventId: 1 });
+        const templates = await NotificationTemplate.find({ eventId: { $in: activeEvents } }).sort({ eventId: 1 });
         return res.status(200).json({ success: true, data: templates });
     } catch (error) {
         console.error('getTemplates error:', error);
@@ -1034,11 +1095,16 @@ const deleteTemplate = async (req, res) => {
 
 const seedDefaultTemplates = async () => {
     try {
+        const activeEvents = getActiveEventsList();
         const NotificationTemplate = mongoose.model('NotificationTemplate');
+        
+        // Clean up any unimplemented templates from the database
+        await NotificationTemplate.deleteMany({ eventId: { $nin: activeEvents } });
+
         const count = await NotificationTemplate.countDocuments();
         if (count > 0) return;
 
-        const defaults = [
+        const allDefaults = [
             {
                 eventId: 'booking_created',
                 title: 'New Booking Request: {{serviceName}}',
@@ -1058,34 +1124,10 @@ const seedDefaultTemplates = async () => {
                 targetAudience: { role: 'customer' }
             },
             {
-                eventId: 'provider_reached',
-                title: 'Provider Arrived',
-                message: '{{providerName}} has arrived at your location.',
-                targetAudience: { role: 'customer' }
-            },
-            {
                 eventId: 'work_started',
                 title: 'Job Started',
                 message: 'Work on your booking has started.',
                 targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'material_added',
-                title: 'Material Approval Needed',
-                message: 'New materials have been added to your booking. Please approve them.',
-                targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'material_approved',
-                title: 'Material Approved',
-                message: 'The customer has approved the added materials.',
-                targetAudience: { role: 'provider' }
-            },
-            {
-                eventId: 'material_rejected',
-                title: 'Material Rejected',
-                message: 'The customer has rejected the added materials.',
-                targetAudience: { role: 'provider' }
             },
             {
                 eventId: 'payment_success',
@@ -1097,18 +1139,6 @@ const seedDefaultTemplates = async () => {
                 eventId: 'booking_completed',
                 title: 'Booking Completed',
                 message: 'Your booking has been completed successfully. Please leave a review!',
-                targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'dispute_created',
-                title: 'New Dispute Registered',
-                message: 'A dispute has been raised for booking {{bookingId}}. Review required.',
-                targetAudience: { role: 'admin' }
-            },
-            {
-                eventId: 'warranty_expiry',
-                title: 'Warranty Expiring Soon',
-                message: 'Your warranty for booking {{bookingId}} is expiring in {{days}} days.',
                 targetAudience: { role: 'customer' }
             },
             {
@@ -1125,10 +1155,12 @@ const seedDefaultTemplates = async () => {
             }
         ];
 
-        await NotificationTemplate.insertMany(defaults);
+        const filteredDefaults = allDefaults.filter(d => activeEvents.includes(d.eventId));
+
+        await NotificationTemplate.insertMany(filteredDefaults);
         console.log('[NotificationService] Seeded default notification templates successfully.');
     } catch (e) {
-        console.error('[NotificationService] Seeding templates failed:', e);
+        console.error('Error seeding default templates:', e);
     }
 };
 
@@ -1154,6 +1186,7 @@ module.exports = {
     getTemplates,
     createTemplate,
     updateTemplate,
-    deleteTemplate
+    deleteTemplate,
+    getActiveEvents,
+    seedDefaultTemplates
 };
-

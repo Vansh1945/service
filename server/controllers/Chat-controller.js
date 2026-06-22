@@ -368,6 +368,29 @@ const sendMessage = async (req, res) => {
 
     await room.save();
 
+    // Send push notification to the recipient of the chat message
+    if (otherPartyId) {
+      try {
+        const { sendNotification } = require('../utils/notificationHelper');
+        const senderName = req.user?.name || req.provider?.name || req.admin?.name || 'User';
+        const otherRole = senderRole === 'customer' ? 'provider' : 'customer';
+        const targetUrl = otherRole === 'customer' ? `/messages/${room._id}` : `/provider/messages/${room._id}`;
+
+        await sendNotification(
+          otherPartyId,
+          otherRole,
+          'chat_message',
+          `${senderName}: ${newMessage.content || '[File/Image]'}`,
+          'booking',
+          room.bookingId || null,
+          targetUrl,
+          'chat_message'
+        );
+      } catch (nErr) {
+        console.error('Error triggering chat push notification in sendMessage:', nErr);
+      }
+    }
+
     // Send admin notification if they start chatting again after a break (30 minutes of inactivity)
     if (room.roomType === 'provider_customer') {
       try {
