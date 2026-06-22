@@ -2580,7 +2580,7 @@ const acceptBooking = async (req, res) => {
       }
 
       if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
-        throw new Error(`Scheduling conflict: You already have another booking scheduled around this time (considering ${bufferMinutes}-minute buffer).`);
+        throw new Error(`You already have a booking scheduled during this time. Please complete your current booking before accepting a new one. Try again after ${bufferMinutes} minutes.`);
       }
 
       /* BACKUP COMMENT: Original acceptBooking saved non-atomically, triggering race conditions. Replacing with atomic findOneAndUpdate. */
@@ -4450,7 +4450,7 @@ const assignProvider = async (req, res) => {
     if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
       return res.status(400).json({
         success: false,
-        message: `Scheduling conflict: This provider already has another booking scheduled around this time (considering ${bufferMinutes}-minute buffer).`
+        message: `Scheduling conflict: This provider already has another booking scheduled around this time. Please complete their current booking first. You can assign a new booking after some time (considering the ${bufferMinutes}-minute buffer).`
       });
     }
 

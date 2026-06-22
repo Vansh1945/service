@@ -24,7 +24,9 @@ const SystemSetting = lazy(() => import("../pages/Admin/System-Setting"));
 const Branding = lazy(() => import("../pages/Admin/Branding"));
 const EmailTemplate = lazy(() => import("../pages/Admin/EmailTemplate"));
 const UserContacts = lazy(() => import("../pages/Admin/User-Contacts"));
-const AdminNotification = lazy(() => import("../pages/Admin/AdminNotification"));
+const ComposeNotification = lazy(() => import("../pages/Admin/ComposeNotification"));
+const RuleBasedTemplates = lazy(() => import("../pages/Admin/RuleBasedTemplates"));
+const BroadcastHistory = lazy(() => import("../pages/Admin/BroadcastHistory"));
 const AdminTransactions = lazy(() => import("../pages/Admin/Transactions"));
 const AdminFraud = lazy(() => import("../pages/Admin/fraud"));
 const SystemLogs = lazy(() => import("../pages/Admin/SystemLogs"));
@@ -65,7 +67,9 @@ const AdminRoutes = () => {
                             <Route path="branding" element={<Branding />} />
                             <Route path="email-templates" element={<EmailTemplate />} />
                             <Route path="user-contacts" element={<UserContacts />} />
-                            <Route path="notifications" element={<AdminNotification />} />
+                            <Route path="compose-notification" element={<ComposeNotification />} />
+                            <Route path="event-templates" element={<RuleBasedTemplates />} />
+                            <Route path="broadcast-history" element={<BroadcastHistory />} />
                             <Route path="transactions" element={<AdminTransactions />} />
                             <Route path="fraud" element={<AdminFraud />} />
                             <Route path="system-logs" element={<SystemLogs />} />

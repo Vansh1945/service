@@ -5,7 +5,7 @@ import {
   FiDollarSign, FiTag, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
-  FiMapPin, FiMail
+  FiMapPin, FiMail, FiSend, FiClock
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -30,6 +30,7 @@ const AdminLayout = () => {
     bookings: false,
     financials: false,
     support: false,
+    notifications: false,
     system: false,
     setup: false,
   });
@@ -90,7 +91,15 @@ const AdminLayout = () => {
         { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageSquare className="w-5 h-5" /> },
         { name: 'User Contacts', path: '/admin/user-contacts', icon: <FiPhoneCall className="w-5 h-5" /> },
         { name: 'Chat Monitor', path: '/admin/chat-monitor', icon: <FiMessageSquare className="w-5 h-5" /> },
-        { name: 'Send Notifications', path: '/admin/notifications', icon: <FiBell className="w-5 h-5" /> },
+      ]
+    },
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      items: [
+        { name: 'Compose Notification', path: '/admin/compose-notification', icon: <FiSend className="w-5 h-5" /> },
+        { name: 'Rule-Based Event Templates', path: '/admin/event-templates', icon: <FiLayers className="w-5 h-5" /> },
+        { name: 'Broadcast History', path: '/admin/broadcast-history', icon: <FiClock className="w-5 h-5" /> },
       ]
     },
     {
