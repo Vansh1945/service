@@ -36,7 +36,9 @@ const updateSystemSetting = async (req, res) => {
       'maintenanceMode',
       'featureFlags',
       'securitySettings',
-      'uploadSettings'
+      'uploadSettings',
+      'surgeSplitSettings',
+      'referralSettings'
     ];
 
     jsonFields.forEach(field => {
@@ -62,6 +64,13 @@ const updateSystemSetting = async (req, res) => {
     // Handle providerBookingRingtone upload
     if (req.files && req.files.providerBookingRingtone && req.files.providerBookingRingtone[0]) {
       updateData.providerBookingRingtone = req.files.providerBookingRingtone[0].path; // Cloudinary URL
+    }
+
+    // Sanitize empty ObjectId strings to prevent CastError
+    if (updateData.referralSettings) {
+      if (updateData.referralSettings.systemReferralOwner === "") {
+        updateData.referralSettings.systemReferralOwner = null;
+      }
     }
 
     const config = await SystemConfig.findOneAndUpdate(

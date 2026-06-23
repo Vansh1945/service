@@ -1244,6 +1244,21 @@ const payBooking = async (req, res) => {
 
     let paymentResult;
     if (paymentDetails?.paymentMethod === 'wallet') {
+      const { SystemConfig } = require('../models/SystemSetting');
+      const settings = session
+        ? await SystemConfig.findOne().session(session)
+        : await SystemConfig.findOne();
+      const usagePercentage = settings?.referralSettings?.walletUsagePercentage ?? 20;
+
+      if (usagePercentage < 100) {
+        await safeAbort(session);
+        if (session) safeEnd(session);
+        return res.status(400).json({
+          success: false,
+          message: `Wallet usage is limited to ${usagePercentage}% of booking value. Please use mixed payment instead.`
+        });
+      }
+
       const userWallet = await User.findById(userId).session(session);
       if (!userWallet.wallet) {
         userWallet.wallet = { availableBalance: 0, walletTransactions: [], totalRefunded: 0, lastUpdated: new Date() };
@@ -1251,7 +1266,7 @@ const payBooking = async (req, res) => {
       const bal = userWallet.wallet.availableBalance || 0;
       if (bal < booking.totalAmount || booking.totalAmount <= 0) {
         await safeAbort(session);
-        safeEnd(session);
+        if (session) safeEnd(session);
         return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
       }
       userWallet.wallet.availableBalance -= booking.totalAmount;
@@ -1274,7 +1289,7 @@ const payBooking = async (req, res) => {
       const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = paymentDetails;
       if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
         await safeAbort(session);
-        safeEnd(session);
+        if (session) safeEnd(session);
         return res.status(400).json({ success: false, message: 'Razorpay payment details are required' });
       }
 
@@ -1287,13 +1302,21 @@ const payBooking = async (req, res) => {
 
       if (generatedSignature !== razorpay_signature) {
         await safeAbort(session);
-        safeEnd(session);
+        if (session) safeEnd(session);
         return res.status(400).json({ success: false, message: 'Invalid payment signature' });
       }
 
       const userMixed = await User.findById(userId).session(session);
       const walletBal = userMixed.wallet?.availableBalance || 0;
-      const walletDeduction = Math.min(walletBal, booking.totalAmount);
+
+      const { SystemConfig } = require('../models/SystemSetting');
+      const settings = session
+        ? await SystemConfig.findOne().session(session)
+        : await SystemConfig.findOne();
+      const usagePercentage = settings?.referralSettings?.walletUsagePercentage ?? 20;
+      const maxAllowedDeduction = (booking.totalAmount * usagePercentage) / 100;
+
+      const walletDeduction = Math.min(walletBal, booking.totalAmount, maxAllowedDeduction);
 
       if (walletDeduction > 0) {
         userMixed.wallet.availableBalance -= walletDeduction;
@@ -3417,9 +3440,14 @@ const completeBooking = async (req, res) => {
 
     // Commission & Surcharge Splits Calculation
     const baseForCommission = Math.max(0, booking.subtotal - booking.totalDiscount);
+    let activeCommissionRule = commissionRule;
+    if (provider.referralBenefit && provider.referralBenefit.validTill > new Date() && provider.referralBenefit.commissionDiscountPercent > 0) {
+      activeCommissionRule = commissionRule.toObject ? commissionRule.toObject() : { ...commissionRule };
+      activeCommissionRule.value = Math.max(0, activeCommissionRule.value - provider.referralBenefit.commissionDiscountPercent);
+    }
     const { commission, netAmount } = CommissionRule.calculateCommission(
       baseForCommission,
-      commissionRule
+      activeCommissionRule
     );
 
     const { SystemConfig } = require('../models/SystemSetting');
@@ -3633,6 +3661,17 @@ const completeBooking = async (req, res) => {
 
     await safeCommit(session);
     safeEnd(session);
+
+    // Trigger Referral & Rewards System
+    try {
+      const referralController = require('./Referral-controller');
+      await referralController.triggerCustomerReferralReward(booking);
+      if (booking.provider) {
+        await referralController.triggerProviderReferralReward(booking.provider);
+      }
+    } catch (refRewardErr) {
+      console.error('Error triggering referral rewards on booking completion:', refRewardErr);
+    }
 
     // Recalculate performance score and trust score dynamically after transaction commits successfully to avoid write conflicts
     try {

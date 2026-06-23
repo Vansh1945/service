@@ -278,6 +278,7 @@ const ProviderRegistration = () => {
     ifsc: '',
     passbookImage: null,
     profilePic: null,
+    referralCode: '',
   });
 
 
@@ -290,6 +291,56 @@ const ProviderRegistration = () => {
   const [selectedServices, setSelectedServices] = useState([]);
   const { categories: providerServices, loading: providerServicesLoading, error: providerServicesError } = useCategory();
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+
+  const [referralCode, setReferralCode] = useState('');
+  const [referralValidating, setReferralValidating] = useState(false);
+  const [referralFeedback, setReferralFeedback] = useState('');
+  const [isReferralValid, setIsReferralValid] = useState(null);
+
+  // Prefill referral code from URL query parameter or session storage
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref') || sessionStorage.getItem('referralCode');
+    if (ref) {
+      setReferralCode(ref);
+      setFormData(prev => ({ ...prev, referralCode: ref }));
+    }
+  }, []);
+
+  // Debounced/instant verification on referral code change
+  useEffect(() => {
+    if (!referralCode.trim()) {
+      setReferralFeedback('');
+      setIsReferralValid(null);
+      return;
+    }
+
+    const verifyCode = async () => {
+      setReferralValidating(true);
+      try {
+        const response = await fetch(`${API}/referral/verify?code=${encodeURIComponent(referralCode.trim())}&role=provider`);
+        const data = await response.json();
+        if (data.success) {
+          setReferralFeedback(data.message);
+          setIsReferralValid(true);
+        } else {
+          setReferralFeedback('Invalid Referral Code');
+          setIsReferralValid(false);
+        }
+      } catch (err) {
+        setReferralFeedback('Error validating code');
+        setIsReferralValid(false);
+      } finally {
+        setReferralValidating(false);
+      }
+    };
+
+    const delayDebounceFn = setTimeout(() => {
+      verifyCode();
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [referralCode, API]);
 
   useEffect(() => {
     if (localStorage.getItem("installRole") === "customer") {
@@ -420,6 +471,7 @@ const ProviderRegistration = () => {
           name: formData.name,
           phone: formData.phone,
           dateOfBirth: formData.dateOfBirth,
+          referralCode: formData.referralCode,
         });
         const data = response.data;
 
@@ -751,6 +803,34 @@ const ProviderRegistration = () => {
                   />
                 </Field>
               </div>
+            </Section>
+
+            {/* Referral Section */}
+            <Section title="Referral" icon={Award}>
+              <Field label="Referral Code (Optional)">
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="referralCode"
+                    name="referralCode"
+                    value={referralCode}
+                    onChange={(e) => {
+                      setReferralCode(e.target.value);
+                      setFormData(prev => ({ ...prev, referralCode: e.target.value }));
+                    }}
+                    placeholder="Enter referral code"
+                    className={inputCls}
+                  />
+                  {referralValidating && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Verifying...</div>
+                  )}
+                </div>
+                {referralFeedback && (
+                  <p className={`text-xs mt-1 font-bold ${isReferralValid ? 'text-green-600' : 'text-red-500'}`}>
+                    {referralFeedback}
+                  </p>
+                )}
+              </Field>
             </Section>
           </div>
         );

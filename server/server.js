@@ -184,6 +184,7 @@ const notificationRoutes = require('./routes/notification-routes');
 const chatRoutes = require('./routes/Chat-route');
 const zoneRoutes = require('./routes/Zone-routes');
 const surgeRoutes = require('./routes/Surge-routes');
+const referralRoutes = require('./routes/Referral-routes');
 
 // Maintenance Mode Middleware
 app.use(async (req, res, next) => {
@@ -285,6 +286,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/surge', surgeRoutes);
+app.use('/api/referral', referralRoutes);
 
 // Health check endpoint
 

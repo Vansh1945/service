@@ -346,6 +346,49 @@ const systemConfigSchema = new mongoose.Schema(
       adminBookingCancelledCustomer: { type: emailTemplateSchema },
       adminBookingCancelledProvider: { type: emailTemplateSchema }
     },
+    referralSettings: {
+      referralProgramPaused: { type: Boolean, default: false },
+      referralExpiryDays: { type: Number, default: 90 },
+      welcomeRewardEnabled: { type: Boolean, default: false },
+      welcomeRewardType: { type: String, enum: ['wallet', 'coupon', 'both'], default: 'wallet' },
+      welcomeRewardValue: { type: Number, default: 0 },
+      maxWelcomeRewardValue: { type: Number, default: 500 },
+      dailyQualifiedReferralLimit: { type: Number, default: 5 },
+      monthlyQualifiedReferralLimit: { type: Number, default: 20 },
+      customerProgramEnabled: { type: Boolean, default: true },
+      providerProgramEnabled: { type: Boolean, default: true },
+      minBookingAmount: { type: Number, default: 0 },
+      commissionPercentage: { type: Number, default: 10 },
+      payoutHoldHours: { type: Number, default: 48 },
+      monthlyBudget: { type: Number, default: 50000 },
+      monthlyCapPerUser: { type: Number, default: 5000 },
+      dailyCapPerUser: { type: Number, default: 500 },
+      expiryDays: { type: Number, default: 30 },
+      fraudScoreThreshold: { type: Number, default: 50 },
+      programVersion: { type: Number, default: 1 },
+      walletUsagePercentage: { type: Number, default: 20 },
+      rewardCalculationMode: { type: String, enum: ['commission', 'conditional', 'fixed'], default: 'commission' },
+      rewardThresholdAmount: { type: Number, default: 1000 },
+      fixedRewardAmount: { type: Number, default: 50 },
+      customerReferralEligibilityBookings: { type: Number, default: 1 },
+      providerReferralEligibilityBookings: { type: Number, default: 1 },
+      dailyReferralLimitPerUser: { type: Number, default: 5 },
+      monthlyReferralLimitPerUser: { type: Number, default: 20 },
+      systemReferralOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+      providerMilestones: {
+        type: [
+          {
+            bookingsCount: { type: Number, required: true },
+            rewardAmount: { type: Number, required: true },
+            description: { type: String, required: true }
+          }
+        ],
+        default: [
+          { bookingsCount: 5, rewardAmount: 250, description: "5 Completed Bookings" },
+          { bookingsCount: 10, rewardAmount: 500, description: "10 Completed Bookings" }
+        ]
+      }
+    },
     metadata: {
       updatedBy: { type: String },
       updatedAt: { type: Date }

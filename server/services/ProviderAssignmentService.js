@@ -269,6 +269,12 @@ class ProviderAssignmentService {
             if (a.workload !== b.workload) {
               return a.workload - b.workload;
             }
+            // Onboarding priority listing boost
+            const priorityA = (a.provider.onboardingPriorityExpiresAt && new Date(a.provider.onboardingPriorityExpiresAt) > new Date()) ? 1 : 0;
+            const priorityB = (b.provider.onboardingPriorityExpiresAt && new Date(b.provider.onboardingPriorityExpiresAt) > new Date()) ? 1 : 0;
+            if (priorityB !== priorityA) {
+              return priorityB - priorityA;
+            }
             const ratingA = a.provider.performanceScore?.rating || 0;
             const ratingB = b.provider.performanceScore?.rating || 0;
             if (ratingB !== ratingA) {
@@ -308,15 +314,15 @@ class ProviderAssignmentService {
 
       booking.provider = nearestProvider._id;
       booking.assignmentSource = selectedSource;
-      booking.status = 'assigned';
+      booking.status = 'accepted';
       booking.updatedAt = new Date();
       if (!booking.metadata) booking.metadata = {};
       booking.metadata.assignedAt = new Date();
 
       booking.statusHistory.push({
-        status: 'assigned',
+        status: 'accepted',
         timestamp: new Date(),
-        note: `Booking assigned to nearest provider: ${nearestProvider.name}. Awaiting provider acceptance.`,
+        note: `Booking assigned to nearest provider: ${nearestProvider.name}.`,
         updatedBy: 'system'
       });
 

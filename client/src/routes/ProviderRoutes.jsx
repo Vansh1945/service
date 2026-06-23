@@ -18,6 +18,7 @@ const ProviderTestPage = lazyWithPreload(() => import("../pages/Provider/Test"))
 const ProviderEarning = lazyWithPreload(() => import("../pages/Provider/Earning"));
 const ProviderFeedback = lazyWithPreload(() => import("../pages/Provider/Feedback"));
 const ProviderSupport = lazyWithPreload(() => import("../pages/Provider/Support"));
+const ReferProviders = lazyWithPreload(() => import("../pages/Provider/ReferProviders"));
 const ProviderTrackingPage = lazyWithPreload(() => import("../pages/Shared/LiveTrackingPage"));
 
 const ProviderRoutes = () => {
@@ -40,6 +41,7 @@ const ProviderRoutes = () => {
                         <Route path="earnings" element={<ProviderEarning />} />
                         <Route path="feedbacks" element={<ProviderFeedback />} />
                         <Route path="support" element={<ProviderSupport />} />
+                        <Route path="refer-providers" element={<ReferProviders />} />
                     </Route>
                     <Route path="track/:bookingId" element={<ProviderTrackingPage />} />
                 </Route>

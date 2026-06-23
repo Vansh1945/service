@@ -4,7 +4,7 @@ import {
     FiMenu, FiHome, FiDollarSign,
     FiMessageSquare, FiUser, FiChevronDown,
     FiLogOut, FiCheckCircle,
-    FiActivity, FiHeadphones, FiArrowLeft, FiVolumeX
+    FiActivity, FiHeadphones, FiArrowLeft, FiVolumeX, FiAward
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -159,6 +159,7 @@ const ProviderLayout = () => {
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" />, requireTest: false },
         { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-5 h-5" />, requireTest: true },
         { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-5 h-5" />, requireTest: true },
+        { name: 'Refer Partners', path: '/provider/refer-providers', icon: <FiAward className="w-5 h-5" />, requireTest: true },
         { name: 'Feedback Viewer', path: '/provider/feedbacks', icon: <FiMessageSquare className="w-5 h-5" />, requireTest: true },
         { name: 'Support & Help', path: '/provider/support', icon: <FiHeadphones className="w-5 h-5" />, requireTest: false },
         { name: 'Test', path: '/provider/test', icon: <FiActivity className="w-5 h-5" />, requireTest: false }
@@ -504,6 +505,15 @@ const ProviderLayout = () => {
                         >
                             <FiHeadphones className="w-5 h-5 mr-3 text-primary" />
                             Support & Help
+                        </Link>
+
+                        <Link
+                            to="/provider/refer-providers"
+                            className="flex items-center px-4 py-3.5 text-sm font-semibold text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
+                            onClick={() => setMoreMenuOpen(false)}
+                        >
+                            <FiAward className="w-5 h-5 mr-3 text-primary" />
+                            Refer Partners
                         </Link>
 
                         <Link

@@ -265,6 +265,17 @@ const register = async (req, res) => {
 
     const user = await User.create(userData);
 
+    // Process referral code if provided
+    const referralCode = req.body.referralCode || req.body.referredByCode;
+    if (referralCode) {
+      try {
+        const referralController = require('./Referral-controller');
+        await referralController.processReferralRegistration(user, 'customer', referralCode, req);
+      } catch (refErr) {
+        console.error('Error handling referral during registration:', refErr);
+      }
+    }
+
     // Track registration event with threshold check (>3 accounts in 24h)
     const FraudLog = require('../models/FraudLog-model');
     const recentRegistrations = await FraudLog.countDocuments({

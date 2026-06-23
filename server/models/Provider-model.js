@@ -38,6 +38,30 @@ const providerSchema = new mongoose.Schema({
         lowercase: true,
         match: [/\S+@\S+\.\S+/, 'Please enter a valid email']
     },
+    referralCode: {
+        type: String,
+        unique: true,
+        sparse: true,
+        trim: true
+    },
+    referredBy: {
+        type: String,
+        trim: true
+    },
+    referralBenefit: {
+        commissionDiscountPercent: {
+            type: Number,
+            default: 0
+        },
+        validTill: {
+            type: Date,
+            default: null
+        }
+    },
+    onboardingPriorityExpiresAt: {
+        type: Date,
+        default: null
+    },
     phone: {
         type: String,
         required: [true, 'Mobile number is required'],

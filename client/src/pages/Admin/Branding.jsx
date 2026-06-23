@@ -423,7 +423,7 @@ const Branding = () => {
                   placeholder="Short launcher name (max 12 chars)"
                 />
                 <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
-                  <span className="text-teal-500 font-bold">Shows on:</span> Phone home screen icon ke neeche
+                  <span className="text-teal-500 font-bold">Shows on:</span> Below the phone home screen icon
                 </p>
               </div>
             </div>
@@ -442,7 +442,7 @@ const Branding = () => {
               />
               <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
                 <span className="text-teal-500 font-bold">Shows on:</span>
-                {activeTab === 'admin' ? 'Admin panel browser tab' : 'Browser tab (ऊपर) aur Google search result heading mein'}
+                {activeTab === 'admin' ? 'Admin panel browser tab' : 'Browser tab (top) and Google search result heading'}
               </p>
             </div>
 
@@ -458,7 +458,7 @@ const Branding = () => {
                   placeholder="Enter high-ranking electrician search keywords description..."
                 />
                 <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
-                  <span className="text-teal-500 font-bold">Shows on:</span> Google search result mein title ke neeche, WhatsApp/Facebook link preview mein
+                  <span className="text-teal-500 font-bold">Shows on:</span> Below the title in Google search results, and in WhatsApp/Facebook link previews
                 </p>
               </div>
             )}
@@ -515,7 +515,7 @@ const Branding = () => {
               {(activeTab === 'customer' || activeTab === 'provider') && (
                 <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group animate-in zoom-in-95 duration-200">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">PWA Icon (Launcher)</span>
-                  <span className="text-[9px] text-gray-400 mb-2">Phone home screen par app icon (512×512 PNG)</span>
+                  <span className="text-[9px] text-gray-400 mb-2">App icon on phone home screen (512x512 PNG)</span>
                   {currentBranding.icon ? (
                     <div className="space-y-3 w-full px-2">
                       <div className="h-16 w-full flex items-center justify-center">
@@ -556,7 +556,7 @@ const Branding = () => {
               {(activeTab === 'customer' || activeTab === 'provider') && (
                 <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in zoom-in-95 duration-200">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Splash Screen Overlay</span>
-                  <span className="text-[9px] text-gray-400 mb-2">App open hote waqt 1-2 sec ke liye dikhe wali full-screen image</span>
+                  <span className="text-[9px] text-gray-400 mb-2">Full-screen image displayed for 1-2 seconds when the app is opening</span>
                   {currentBranding.splashScreen ? (
                     <div className="space-y-3 w-full px-2">
                       <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shadow-sm">
@@ -597,7 +597,7 @@ const Branding = () => {
               {activeTab === 'admin' && (
                 <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in slide-in-from-top-4 duration-300">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Browser Favicon</span>
-                  <span className="text-[9px] text-gray-400 mb-2">Browser tab mein left side wala chota icon (32×32)</span>
+                  <span className="text-[9px] text-gray-400 mb-2">Small icon on the left side of the browser tab (32x32)</span>
                   {currentBranding.favicon ? (
                     <div className="space-y-3 w-full px-2">
                       <div className="h-16 w-full flex items-center justify-center">

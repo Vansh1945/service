@@ -8,7 +8,7 @@ import {
   Settings, Calendar, Wallet, Percent, Bell, Shield, Flag, AlertTriangle,
   Save, Upload, Sparkles, DollarSign, Globe, ShieldAlert, Coins, HelpCircle,
   Smartphone, Monitor, MessageSquare, User, Zap, Plus, Trash2, Check, X,
-  ChevronDown
+  ChevronDown, Gift
 } from 'lucide-react';
 
 const ToggleSwitch = ({ label, description, checked, onChange }) => (
@@ -113,6 +113,34 @@ const SystemSetting = () => {
     uploadSettings: {
       maxImageSizeMB: 5,
       allowedImageFormats: ['jpg', 'jpeg', 'png', 'gif']
+    },
+    referralSettings: {
+      referralProgramPaused: false,
+      welcomeRewardEnabled: false,
+      welcomeRewardType: 'wallet',
+      welcomeRewardValue: 0,
+      maxWelcomeRewardValue: 0,
+      customerProgramEnabled: true,
+      providerProgramEnabled: true,
+      minBookingAmount: 0,
+      commissionPercentage: 10,
+      payoutHoldHours: 48,
+      monthlyBudget: 50000,
+      monthlyCapPerUser: 5000,
+      dailyCapPerUser: 500,
+      expiryDays: 30,
+      referralExpiryDays: 90,
+      fraudScoreThreshold: 50,
+      walletUsagePercentage: 20,
+      rewardCalculationMode: 'commission',
+      rewardThresholdAmount: 1000,
+      fixedRewardAmount: 50,
+      customerReferralEligibilityBookings: 1,
+      providerReferralEligibilityBookings: 1,
+      dailyReferralLimitPerUser: 5,
+      monthlyReferralLimitPerUser: 20,
+      systemReferralOwner: '',
+      providerMilestones: []
     }
   });
 
@@ -254,6 +282,34 @@ const SystemSetting = () => {
           uploadSettings: {
             maxImageSizeMB: settingsData.data.uploadSettings?.maxImageSizeMB ?? 5,
             allowedImageFormats: settingsData.data.uploadSettings?.allowedImageFormats || ['jpg', 'jpeg', 'png', 'gif'],
+          },
+          referralSettings: {
+            referralProgramPaused: settingsData.data.referralSettings?.referralProgramPaused ?? false,
+            welcomeRewardEnabled: settingsData.data.referralSettings?.welcomeRewardEnabled ?? false,
+            welcomeRewardType: settingsData.data.referralSettings?.welcomeRewardType || 'wallet',
+            welcomeRewardValue: settingsData.data.referralSettings?.welcomeRewardValue ?? 0,
+            maxWelcomeRewardValue: settingsData.data.referralSettings?.maxWelcomeRewardValue ?? 0,
+            customerProgramEnabled: settingsData.data.referralSettings?.customerProgramEnabled ?? true,
+            providerProgramEnabled: settingsData.data.referralSettings?.providerProgramEnabled ?? true,
+            minBookingAmount: settingsData.data.referralSettings?.minBookingAmount ?? 0,
+            commissionPercentage: settingsData.data.referralSettings?.commissionPercentage ?? 10,
+            payoutHoldHours: settingsData.data.referralSettings?.payoutHoldHours ?? 48,
+            monthlyBudget: settingsData.data.referralSettings?.monthlyBudget ?? 50000,
+            monthlyCapPerUser: settingsData.data.referralSettings?.monthlyCapPerUser ?? 5000,
+            dailyCapPerUser: settingsData.data.referralSettings?.dailyCapPerUser ?? 500,
+            expiryDays: settingsData.data.referralSettings?.expiryDays ?? 30,
+            referralExpiryDays: settingsData.data.referralSettings?.referralExpiryDays ?? 90,
+            fraudScoreThreshold: settingsData.data.referralSettings?.fraudScoreThreshold ?? 50,
+            walletUsagePercentage: settingsData.data.referralSettings?.walletUsagePercentage ?? 20,
+            rewardCalculationMode: settingsData.data.referralSettings?.rewardCalculationMode ?? 'commission',
+            rewardThresholdAmount: settingsData.data.referralSettings?.rewardThresholdAmount ?? 1000,
+            fixedRewardAmount: settingsData.data.referralSettings?.fixedRewardAmount ?? 50,
+            customerReferralEligibilityBookings: settingsData.data.referralSettings?.customerReferralEligibilityBookings ?? 1,
+            providerReferralEligibilityBookings: settingsData.data.referralSettings?.providerReferralEligibilityBookings ?? 1,
+            dailyReferralLimitPerUser: settingsData.data.referralSettings?.dailyReferralLimitPerUser ?? 5,
+            monthlyReferralLimitPerUser: settingsData.data.referralSettings?.monthlyReferralLimitPerUser ?? 20,
+            systemReferralOwner: settingsData.data.referralSettings?.systemReferralOwner ?? '',
+            providerMilestones: settingsData.data.referralSettings?.providerMilestones || []
           }
         });
 
@@ -278,6 +334,19 @@ const SystemSetting = () => {
       [group]: {
         ...prev[group],
         [key]: value
+      }
+    }));
+  };
+
+  const handleTripleNestedChange = (group, subGroup, key, value) => {
+    setSystemSettings(prev => ({
+      ...prev,
+      [group]: {
+        ...prev[group],
+        [subGroup]: {
+          ...(prev[group]?.[subGroup] || {}),
+          [key]: value
+        }
       }
     }));
   };
@@ -376,6 +445,7 @@ const SystemSetting = () => {
       formData.append('featureFlags', JSON.stringify(systemSettings.featureFlags));
       formData.append('securitySettings', JSON.stringify(systemSettings.securitySettings));
       formData.append('uploadSettings', JSON.stringify(systemSettings.uploadSettings));
+      formData.append('referralSettings', JSON.stringify(systemSettings.referralSettings));
 
       if (logoFile) {
         formData.append('logo', logoFile);
@@ -449,6 +519,7 @@ const SystemSetting = () => {
     { id: 'notifications', name: 'Notifications', icon: Bell, desc: 'Toggle alerts for push notifications, emails, and SMS integrations' },
     { id: 'security', name: 'Security', icon: Shield, desc: 'Lockouts, authentication expirations, and OTP active times' },
     { id: 'features', name: 'Features', icon: Flag, desc: 'Unlock or restrict core platform features and capabilities' },
+    { id: 'referral', name: 'Referral & Rewards', icon: Gift, desc: 'Configure customer & provider referral programs, budgets, caps, and safety limits' },
     { id: 'maintenance', name: 'Maintenance', icon: AlertTriangle, desc: 'Put site offline for general maintenance with role overrides' }
   ];
 
@@ -1308,6 +1379,362 @@ const SystemSetting = () => {
                     placeholder="System is under maintenance."
                   />
                   <p className="text-xs text-gray-400 font-inter">This message will act as a generic fallback if role-specific messages are empty.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* REFERRAL TAB */}
+          {activeTab === 'referral' && (
+            <div className="space-y-8 animate-fade-in text-left">
+              {/* Section 1: Customer Referral Settings */}
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-secondary font-poppins text-base">Customer Referral Settings</h4>
+                    <p className="text-xs text-gray-400 font-inter">Rules for customers referring other customers. Rewards are calculated dynamically from order commissions.</p>
+                  </div>
+                </div>
+
+                {/* Emergency Pause Toggle */}
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-bold text-red-800 block">Emergency Program Pause</span>
+                    <span className="text-xs text-red-600">Instantly pauses all validation, registrations, and reward generation.</span>
+                  </div>
+                  <select
+                    value={systemSettings.referralSettings.referralProgramPaused}
+                    onChange={(e) => handleNestedChange('referralSettings', 'referralProgramPaused', e.target.value === 'true')}
+                    className="bg-white border border-red-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-red-500 text-red-800 font-semibold"
+                  >
+                    <option value="false">Active / Running</option>
+                    <option value="true">PAUSED</option>
+                  </select>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Customer Program Switch */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Customer Referral Program</label>
+                    <select 
+                      value={systemSettings.referralSettings.customerProgramEnabled} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'customerProgramEnabled', e.target.value === 'true')}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                    >
+                      <option value="true">Active / Enabled</option>
+                      <option value="false">Inactive / Disabled</option>
+                    </select>
+                    <p className="text-[11px] text-gray-500 font-inter">Enable or disable the entire referral system for customers.</p>
+                  </div>
+
+                  {/* Min Booking Amount */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Min Friend Booking Amount (₹)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.minBookingAmount} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'minBookingAmount', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">The referred friend's first booking bill must be at least this amount to trigger referral rewards.</p>
+                  </div>
+
+                  {/* Reward Type / Calculation Mode */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Referral Reward Calculation Method</label>
+                    <select 
+                      value={systemSettings.referralSettings.rewardCalculationMode || 'commission'} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'rewardCalculationMode', e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter font-semibold"
+                    >
+                      <option value="commission">Commission Based (Recommended)</option>
+                      <option value="fixed">Fixed Reward Amount</option>
+                    </select>
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700 font-inter">
+                      {systemSettings.referralSettings.rewardCalculationMode === 'commission' ? (
+                        <div>
+                          <strong>Live Example:</strong> If our platform takes ₹100 commission from a job, a {systemSettings.referralSettings.commissionPercentage || 0}% reward share earns the referrer <strong>₹{((100 * (systemSettings.referralSettings.commissionPercentage || 0)) / 100).toFixed(2)}</strong> in wallet balance.
+                        </div>
+                      ) : (
+                        <div>
+                          <strong>Live Example:</strong> The referrer earns a flat <strong>₹{systemSettings.referralSettings.fixedRewardAmount || 0}</strong> directly to their wallet for every qualified booking made by the referred friend, regardless of the job value.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reward Percentage - conditional */}
+                  {systemSettings.referralSettings.rewardCalculationMode === 'commission' && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Referrer Reward Share (%)</label>
+                      <input 
+                        type="number" 
+                        value={systemSettings.referralSettings.commissionPercentage} 
+                        onChange={(e) => handleNestedChange('referralSettings', 'commissionPercentage', Number(e.target.value))}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                        min="0"
+                        max="100"
+                      />
+                      <p className="text-[11px] text-gray-500 font-inter">Percentage of our platform earnings given to the person who shared the referral code.</p>
+                    </div>
+                  )}
+
+                  {/* Fixed Reward Amount — conditional */}
+                  {systemSettings.referralSettings.rewardCalculationMode === 'fixed' && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Referrer Flat Reward (₹)</label>
+                      <input 
+                        type="number" 
+                        value={systemSettings.referralSettings.fixedRewardAmount || 50} 
+                        onChange={(e) => handleNestedChange('referralSettings', 'fixedRewardAmount', Number(e.target.value))}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                        min="0"
+                      />
+                      <p className="text-[11px] text-gray-500 font-inter">The fixed rupees amount paid to the referrer's wallet when a friend completes their booking.</p>
+                    </div>
+                  )}
+                  
+                  {/* Customer Eligibility Bookings */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Min Completed Bookings required to Refer</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.customerReferralEligibilityBookings} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'customerReferralEligibilityBookings', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Number of successful bookings a customer must complete themselves before they can share their code.</p>
+                  </div>
+
+                  {/* Welcome Reward Enabled Toggle */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Customer Welcome Reward</label>
+                    <select
+                      value={systemSettings.referralSettings.welcomeRewardEnabled}
+                      onChange={(e) => handleNestedChange('referralSettings', 'welcomeRewardEnabled', e.target.value === 'true')}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                    >
+                      <option value="true">Active / Enabled</option>
+                      <option value="false">Inactive / Disabled</option>
+                    </select>
+                    <p className="text-[11px] text-gray-500 font-inter">Give a special bonus/discount to the referred friend when they complete their first booking.</p>
+                  </div>
+
+                  {/* Welcome Reward Type */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Welcome Reward Format</label>
+                    <select
+                      value={systemSettings.referralSettings.welcomeRewardType || 'wallet'}
+                      onChange={(e) => handleNestedChange('referralSettings', 'welcomeRewardType', e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      disabled={!systemSettings.referralSettings.welcomeRewardEnabled}
+                    >
+                      <option value="wallet">Wallet Cash Balance</option>
+                      <option value="coupon">Discount Coupon</option>
+                      <option value="both">Both Wallet & Coupon</option>
+                    </select>
+                    <p className="text-[11px] text-gray-500 font-inter">Format of the welcome reward: Wallet Credit, Coupon Code, or both.</p>
+                  </div>
+
+                  {/* Welcome Reward Value */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Welcome Reward Value (₹)</label>
+                    <input
+                      type="number"
+                      value={systemSettings.referralSettings.welcomeRewardValue || 0}
+                      onChange={(e) => handleNestedChange('referralSettings', 'welcomeRewardValue', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                      disabled={!systemSettings.referralSettings.welcomeRewardEnabled}
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Rupees value of the welcome wallet cash or coupon discount value.</p>
+                  </div>
+
+                  {/* Welcome Reward Cap */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Maximum Welcome Reward Cap (₹)</label>
+                    <input
+                      type="number"
+                      value={systemSettings.referralSettings.maxWelcomeRewardValue || 0}
+                      onChange={(e) => handleNestedChange('referralSettings', 'maxWelcomeRewardValue', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                      disabled={!systemSettings.referralSettings.welcomeRewardEnabled}
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">The absolute maximum welcome reward cash/discount value that can ever be awarded.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Provider Program Settings */}
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50/50 border border-indigo-100 rounded-xl text-indigo-600">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-secondary font-poppins text-base">Provider Referral Settings</h4>
+                    <p className="text-xs text-gray-400 font-inter">Rules for partner electricians referring other providers. Rewards are based on milestone booking targets.</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Provider Program Switch */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Provider Referral Program</label>
+                    <select 
+                      value={systemSettings.referralSettings.providerProgramEnabled} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'providerProgramEnabled', e.target.value === 'true')}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                    >
+                      <option value="true">Active / Enabled</option>
+                      <option value="false">Inactive / Disabled</option>
+                    </select>
+                    <p className="text-[11px] text-gray-500 font-inter">Enable or disable the referral program for electricians/service providers.</p>
+                  </div>
+                  
+                  {/* Provider Eligibility Bookings */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Min Completed Jobs required to Refer</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.providerReferralEligibilityBookings} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'providerReferralEligibilityBookings', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Number of bookings a provider must successfully complete themselves before unlocking their referral code.</p>
+                  </div>
+
+                  <div className="flex items-center bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-xs text-blue-700 md:col-span-2">
+                    <p>💡 <strong>Milestone Config Note:</strong> Provider milestone rewards (e.g. ₹500 on 5 bookings completed) are configured separately under the <strong>Referral & Rewards &rarr; Milestones</strong> page in the Admin Sidebar menu.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: General Rules & Safety Controls */}
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-600">
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-secondary font-poppins text-base">Global Program Limits & Safety Settings</h4>
+                    <p className="text-xs text-gray-400 font-inter">Apply overall budget caps, hold periods, wallet usage limits, and fraud safety checks.</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Monthly Budget */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Monthly Campaign Budget Cap (₹)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.monthlyBudget} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'monthlyBudget', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="100"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Maximum budget allowed for all combined referral rewards in a single month. If reached, payouts pause.</p>
+                  </div>
+
+                  {/* Wallet Usage Percentage */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Wallet Balance Booking Discount Limit (%)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.walletUsagePercentage !== undefined ? systemSettings.referralSettings.walletUsagePercentage : 20} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'walletUsagePercentage', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                      max="100"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Maximum percentage of a booking's bill that can be paid using referral cashback wallet balance.</p>
+                  </div>
+
+                  {/* Monthly Cap */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Monthly Earning Cap Per User (₹)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.monthlyCapPerUser} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'monthlyCapPerUser', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="1"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Maximum reward amount a single customer or partner provider is allowed to earn per month.</p>
+                  </div>
+
+                  {/* Daily Cap */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Daily Earning Cap Per User (₹)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.dailyCapPerUser} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'dailyCapPerUser', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="1"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Maximum reward amount a single customer or partner provider is allowed to earn per day.</p>
+                  </div>
+
+                  {/* Payout Hold Hours */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Verification Cooling/Hold Time (Hours)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.payoutHoldHours} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'payoutHoldHours', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Hours to hold the reward before releasing to the user's wallet (payout fraud protection hold).</p>
+                  </div>
+
+                  {/* Expiry Days */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Friend Booking Deadline (Days)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.expiryDays} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'expiryDays', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="1"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">The referred friend must complete their first booking within this many days of registering to unlock rewards.</p>
+                  </div>
+
+                  {/* Referral Expiry Days */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Referral Expiry Duration (Days)</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.referralExpiryDays !== undefined ? systemSettings.referralSettings.referralExpiryDays : 90} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'referralExpiryDays', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="1"
+                    />
+                    <p className="text-[11px] text-gray-500 font-inter">Overall validity duration in days of a referral registration before it expires.</p>
+                  </div>
+
+                  {/* Fraud Score Threshold */}
+                  <div className="space-y-2 text-left">
+                    <label className="block text-xs font-bold uppercase text-gray-700 font-inter">Security Guard Sensitivity Threshold</label>
+                    <input 
+                      type="number" 
+                      value={systemSettings.referralSettings.fraudScoreThreshold} 
+                      onChange={(e) => handleNestedChange('referralSettings', 'fraudScoreThreshold', Number(e.target.value))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary text-secondary font-inter"
+                      min="0"
+                      max="100"
+                    />
+                    <p className="text-[11px] text-gray-400 font-inter">Safety limit; if abuse checks score above this, reward is held for manual review.</p>
+                  </div>
                 </div>
               </div>
             </div>

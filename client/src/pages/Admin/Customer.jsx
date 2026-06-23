@@ -614,9 +614,17 @@ const AdminCustomersDashboard = () => {
                             <div className="bg-white p-5 rounded-xl border border-gray-200">
                                 <h4 className="text-lg font-semibold text-secondary mb-4">Account Information</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
+                                                                    <div>
                                         <p className="text-sm font-medium text-gray-700 mb-2">First Booking Status</p>
                                         {getFirstBookingBadge(selectedCustomer.firstBookingUsed)}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Referral Code</p>
+                                        <p className="text-sm text-gray-900 font-mono font-bold bg-gray-100 inline-block px-2.5 py-1 rounded-md">{selectedCustomer.referralCode || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Referred By Code</p>
+                                        <p className="text-sm text-gray-900 font-mono font-bold bg-gray-100 inline-block px-2.5 py-1 rounded-md">{selectedCustomer.referredBy || 'Direct Signup'}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium text-gray-700 mb-2">Last Active</p>

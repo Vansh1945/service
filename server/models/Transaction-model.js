@@ -68,7 +68,7 @@ const transactionSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['payment', 'refund'],
+    enum: ['payment', 'refund', 'referral_reward'],
     default: 'payment'
   },
   razorpayOrderId: String,

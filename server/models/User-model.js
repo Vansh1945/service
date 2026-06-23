@@ -16,6 +16,16 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     match: [/\S+@\S+\.\S+/, 'Please enter a valid email']
   },
+  referralCode: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
+  referredBy: {
+    type: String,
+    trim: true
+  },
   phone: {
     type: String,
     required: function () { return !this.authProvider || this.authProvider === 'email'; }

@@ -13,6 +13,7 @@ const CustomerBookingsPage = lazy(() => import("../pages/Customer/CustomerBookin
 const BookingConfirmation = lazy(() => import("../pages/Customer/BookingConfirmation"));
 const FeedbackManagement = lazy(() => import("../pages/Customer/Feedback"));
 const ComplaintsPage = lazy(() => import("../pages/Customer/Complaint"));
+const ReferEarn = lazy(() => import("../pages/Customer/ReferEarn"));
 const LiveTrackingPage = lazy(() => import("../pages/Shared/LiveTrackingPage"));
 
 const CustomerRoutes = () => {
@@ -31,6 +32,7 @@ const CustomerRoutes = () => {
                         <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />} />
                         <Route path="feedback" element={<FeedbackManagement />} />
                         <Route path="complaints" element={<ComplaintsPage />} />
+                        <Route path="refer-earn" element={<ReferEarn />} />
                     </Route>
                     <Route path="track/:bookingId" element={<LiveTrackingPage />} />
                 </Route>

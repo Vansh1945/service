@@ -33,6 +33,7 @@ const SystemLogs = lazy(() => import("../pages/Admin/SystemLogs"));
 const LiveTrackingPage = lazy(() => import("../pages/Admin/LiveTrackingPage"));
 const ZoneManagement = lazy(() => import("../pages/Admin/ZoneManagement"));
 const AdminChatMonitor = lazy(() => import("../pages/Admin/AdminChatMonitor"));
+const ReferralManagement = lazy(() => import("../pages/Admin/ReferralManagement"));
 const SurgeManagement = lazy(() => import("../pages/Admin/SurgeManagement"));
 
 import { AdminFilterProvider } from "../context/AdminFilterContext";
@@ -77,6 +78,7 @@ const AdminRoutes = () => {
                             <Route path="zone-management" element={<ZoneManagement />} />
                             <Route path="chat-monitor" element={<AdminChatMonitor />} />
                             <Route path="surge-management" element={<SurgeManagement />} />
+                            <Route path="referrals" element={<ReferralManagement />} />
                         </Route>
                     </Route>
                 </Routes>

@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
     FiHome, FiCalendar, FiCreditCard, FiMessageSquare,
     FiBell, FiUser, FiAlertCircle, FiLogOut,
-    FiShoppingBag, FiMenu, FiX, FiChevronDown, FiMapPin
+    FiShoppingBag, FiMenu, FiX, FiChevronDown, FiMapPin, FiGift
 } from 'react-icons/fi';
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
@@ -30,6 +30,7 @@ const CustomerLayout = () => {
         { name: 'Bookings', path: '/customer/bookings', icon: <FiCalendar className="w-5 h-5" /> },
         { name: 'Feedback', path: '/customer/feedback', icon: <FiMessageSquare className="w-5 h-5" /> },
         { name: 'Complaints', path: '/customer/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
+        { name: 'Refer & Earn', path: '/customer/refer-earn', icon: <FiGift className="w-5 h-5" /> },
         { name: 'Profile', path: '/customer/profile', icon: <FiUser className="w-5 h-5" /> },
     ];
 

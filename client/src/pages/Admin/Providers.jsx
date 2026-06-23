@@ -929,7 +929,7 @@ const ProviderDetailsModal = ({
                     {formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-2">
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
                   <span className="text-sm text-gray-600">Profile Complete</span>
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.profileComplete
                     ? 'bg-green-100 text-green-800'
@@ -937,6 +937,14 @@ const ProviderDetailsModal = ({
                     }`}>
                     {selectedProvider.profileComplete ? 'Yes' : 'No'}
                   </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                  <span className="text-sm text-gray-600">Referral Code</span>
+                  <span className="font-bold text-secondary font-mono bg-gray-200/50 px-2 py-0.5 rounded">{selectedProvider.referralCode || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Referred By Code</span>
+                  <span className="font-bold text-secondary font-mono bg-gray-200/50 px-2 py-0.5 rounded">{selectedProvider.referredBy || 'Direct Signup'}</span>
                 </div>
               </div>
             </div>

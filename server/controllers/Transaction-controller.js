@@ -128,7 +128,9 @@ const createOrder = async (req, res) => {
     if (paymentMethod === 'mixed') {
       const user = await User.findById(userId).session(session);
       const walletBalance = user.wallet?.availableBalance || 0;
-      walletDeduction = Math.min(walletBalance, booking.totalAmount);
+      const usagePercentage = settings?.referralSettings?.walletUsagePercentage ?? 20;
+      const maxAllowedDeduction = (booking.totalAmount * usagePercentage) / 100;
+      walletDeduction = Math.min(walletBalance, booking.totalAmount, maxAllowedDeduction);
       expectedAmountPaise = Math.round((booking.totalAmount - walletDeduction) * 100);
 
       if (expectedAmountPaise <= 0) {
@@ -594,26 +596,10 @@ const handleSuccessfulPayment = async (payment, session) => {
 
   // Handle Wallet Deduction for Mixed Payments (Webhook Path)
   if (transaction.paymentMethod === 'mixed') {
-    const user = await User.findById(transaction.user).session(session);
-    if (user) {
-      const walletBalance = user.wallet?.availableBalance || 0;
-      const walletDeduction = Math.min(walletBalance, booking.totalAmount);
-
-      if (walletDeduction > 0) {
-        user.wallet.availableBalance -= walletDeduction;
-        user.wallet.walletTransactions.push({
-          type: 'debit',
-          amount: walletDeduction,
-          reason: 'Booking Payment',
-          booking: booking._id
-        });
-        user.wallet.lastUpdated = new Date();
-        await user.save({ session });
-
-        transaction.description = `Mixed Payment: Razorpay + Wallet (₹${walletDeduction})`;
-        await transaction.save({ session });
-      }
-    }
+    const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
+    const walletDeduction = match ? parseFloat(match[1]) : 0;
+    transaction.description = `Mixed Payment: Razorpay + Wallet (₹${walletDeduction})`;
+    await transaction.save({ session });
   }
 
   booking.paymentStatus = 'escrow_hold';

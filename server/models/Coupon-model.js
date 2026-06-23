@@ -49,6 +49,14 @@ const couponSchema = new Schema({
     type: Boolean,
     default: false
   },
+  isReferralCoupon: {
+    type: Boolean,
+    default: false
+  },
+  stackable: {
+    type: Boolean,
+    default: false
+  },
   assignedTo: {
     type: Schema.Types.ObjectId,
     ref: 'User',

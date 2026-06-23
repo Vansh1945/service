@@ -252,6 +252,17 @@ exports.completeRegistration = async (req, res) => {
             await provider.save();
         }
 
+        // Process referral code if provided
+        const referralCode = req.body.referralCode || req.body.referredByCode;
+        if (referralCode) {
+            try {
+                const referralController = require('./Referral-controller');
+                await referralController.processReferralRegistration(provider, 'provider', referralCode, req);
+            } catch (refErr) {
+                console.error('Error handling referral during provider registration:', refErr);
+            }
+        }
+
         // Capture IP & Device in provider metadata
         provider.metadata = {
             ip: req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
@@ -679,6 +690,20 @@ exports.completeProfile = async (req, res) => {
  */
 exports.getProfile = async (req, res) => {
     try {
+
+        let providerObj = await Provider.findById(req.providerId);
+        if (!providerObj) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        // Lazy cleanup of expired referral benefits
+        if (providerObj.referralBenefit && providerObj.referralBenefit.validTill && new Date(providerObj.referralBenefit.validTill) < new Date()) {
+            providerObj.referralBenefit = undefined;
+            await providerObj.save();
+        }
 
         const provider = await Provider.findById(req.providerId)
             .select('-password -__v')

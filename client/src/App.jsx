@@ -423,6 +423,21 @@ const App = () => {
     }
   }, [isAuthenticated, userRole, user, loc.pathname, navigate_fn]);
 
+  // Handle shared referral links (/ref/:code)
+  useEffect(() => {
+    if (loc.pathname.startsWith("/ref/")) {
+      const code = loc.pathname.split("/ref/")[1]?.split("?")[0];
+      if (code) {
+        sessionStorage.setItem("referralCode", code);
+        if (code.startsWith("PROV-")) {
+          navigate_fn(`/register-provider?ref=${code}`, { replace: true });
+        } else {
+          navigate_fn(`/register?ref=${code}`, { replace: true });
+        }
+      }
+    }
+  }, [loc.pathname, navigate_fn]);
+
   // 🔔 Handle Cold Start Deep Linking & PWA Update Redirects
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

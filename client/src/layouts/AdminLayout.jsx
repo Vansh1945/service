@@ -5,7 +5,7 @@ import {
   FiDollarSign, FiTag, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
-  FiMapPin, FiMail, FiSend, FiClock
+  FiMapPin, FiMail, FiSend, FiClock, FiAward
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -81,6 +81,7 @@ const AdminLayout = () => {
         { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
         { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
         { name: 'Surge Surcharges', path: '/admin/surge', icon: <FiAlertCircle className="w-5 h-5" /> },
+        { name: 'Referrals & Rewards', path: '/admin/referrals', icon: <FiAward className="w-5 h-5" /> },
       ]
     },
     {
