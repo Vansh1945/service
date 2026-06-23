@@ -115,6 +115,14 @@ const systemConfigSchema = new mongoose.Schema(
         type: Number,
         default: 48
       },
+      providerResponseSlaHours: {
+        type: Number,
+        default: 24
+      },
+      refundProcessingSlaHours: {
+        type: Number,
+        default: 72
+      },
       maxBookingsPerProvider: {
         type: Number,
         default: 10

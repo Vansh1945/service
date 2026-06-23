@@ -109,8 +109,10 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
   const previouslyRefunded = booking?.cancellationProgress?.refundAmount || 0;
   const isFullyRefunded = booking?.paymentStatus === 'refunded' || booking?.adminRefundDecision === 'approved' || previouslyRefunded >= booking?.totalAmount;
+  const complaintDetails = booking.fullData?.complaint || booking.complaint;
+  const isEligible = complaintDetails ? (complaintDetails.isRefundEligible !== false) : true;
 
-  const handleAction = async (action, type) => {
+  const handleAction = async (action, type, extraOptions = {}) => {
     setUpdating(true);
     try {
       let res;
@@ -119,7 +121,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
           type,
           amount: type === 'partial' ? refundAmount : undefined,
           reason: resolutionNotes,
-          absorption
+          absorption,
+          ...extraOptions
         });
       } else if (action === 'reject') {
         res = await AdminService.rejectRefund(booking._id, { reason: resolutionNotes });
@@ -181,6 +184,102 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
           {/* Left Area (60% width) - Detailed Info & Evidence Locker */}
           <div className="lg:w-7/12 flex-1 overflow-y-auto p-5 space-y-5 border-r border-gray-100">
+
+            {/* SLA & AI Recommendation Advisory Panel */}
+            {(() => {
+              const complaintDetails = booking.fullData?.complaint || booking.complaint;
+              if (!complaintDetails) return null;
+              return (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-blue-900 flex items-center gap-1.5 uppercase tracking-wider">
+                      <AlertCircle size={14} className="text-blue-600" /> SLA Tracking &amp; AI Advisory
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      {complaintDetails.slaTracking && (
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
+                          complaintDetails.slaTracking.slaStatus === 'breached' 
+                            ? 'bg-red-100 text-red-700 border-red-200' 
+                            : complaintDetails.slaTracking.slaStatus === 'warning' 
+                              ? 'bg-amber-100 text-amber-700 border-amber-200' 
+                              : 'bg-green-100 text-green-700 border-green-200'
+                        }`}>
+                          {complaintDetails.slaTracking.slaStatus === 'breached' ? '⚠️ BREACHED' : 'WITHIN SLA'}
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase border bg-amber-100 text-amber-700 border-amber-200">
+                        Advisory Only
+                      </span>
+                    </div>
+                  </div>
+                  {/* Advisory Disclaimer */}
+                  <p className="text-[10px] text-amber-700 font-semibold bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
+                    ⚠️ Recommendations are advisory only. Final decision requires explicit admin approval. No automatic actions are performed.
+                  </p>
+
+                  {complaintDetails.slaTracking && (
+                    <div className="space-y-1 bg-white p-2.5 rounded border border-blue-100/50">
+                      <div className="flex justify-between text-[10px] text-gray-500 font-semibold">
+                        <span>Stage: <span className="uppercase text-blue-800 font-bold">{complaintDetails.slaTracking.stage}</span></span>
+                        <span>{complaintDetails.slaTracking.hoursElapsed}h elapsed / {complaintDetails.slaTracking.slaThresholdHours}h limit</span>
+                      </div>
+                      <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            complaintDetails.slaTracking.slaStatus === 'breached' ? 'bg-red-500' :
+                            complaintDetails.slaTracking.slaStatus === 'warning' ? 'bg-amber-500' :
+                            'bg-green-500'
+                          }`}
+                          style={{ width: `${complaintDetails.slaTracking.percentageUsed}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {complaintDetails.recommendation && (
+                    <div className="bg-white p-3 rounded-lg border border-blue-100 space-y-2 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-gray-105 pb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Suggested Action:</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                            ['approve_refund', 'refund', 'full_refund', 'partial_refund'].includes(complaintDetails.recommendation.action) ? 'bg-green-50 text-green-700 border border-green-200' :
+                            ['reject_refund', 'reject'].includes(complaintDetails.recommendation.action) ? 'bg-red-50 text-red-700 border border-red-200' :
+                            'bg-blue-50 text-blue-700 border border-blue-200'
+                          }`}>
+                            {complaintDetails.recommendation.action.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-gray-500">
+                          Confidence: <span className="text-blue-600 font-extrabold">{complaintDetails.recommendation.confidenceLevel} ({complaintDetails.recommendation.confidence}%)</span>
+                        </span>
+                      </div>
+
+                      {complaintDetails.recommendation.reasons?.length > 0 && (
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Reasons:</span>
+                          <ul className="list-disc pl-4 text-[11px] text-gray-650 space-y-0.5">
+                            {complaintDetails.recommendation.reasons.map((r, i) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {complaintDetails.recommendation.contraIndicators?.length > 0 && (
+                        <div className="space-y-0.5 border-t border-dashed border-gray-150 pt-1.5">
+                          <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider block">Contra Indicators:</span>
+                          <ul className="list-disc pl-4 text-[11px] text-red-650 space-y-0.5">
+                            {complaintDetails.recommendation.contraIndicators.map((ci, i) => (
+                              <li key={i}>{ci}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* User Profile Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -496,47 +595,33 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 <p className="text-xs text-gray-450 mt-0.5">Determine the refund eligibility and update status instantly.</p>
               </div>
 
-              {/* Status Spec Grid */}
-              <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm space-y-3 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-455 font-semibold">Payment Status:</span>
+              {/* Status Spec Grid (FIX 7 Consolidated) */}
+              <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm grid grid-cols-3 gap-4 text-center text-xs">
+                <div className="space-y-1">
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Booking Status</span>
                   <RefundStatusBadge status={booking.paymentStatus} />
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-455 font-semibold">Refund Type:</span>
-                  <RefundCaseTypeBadge booking={booking} />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-455 font-semibold">Dispute Claim:</span>
-                  <DisputeStatusBadge status={booking.disputeStatus} />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-455 font-semibold">Escrow Earnings:</span>
-                  <span className={`font-mono text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${booking.earningHoldStatus === 'cancelled' || booking.payoutStatus === 'Refund Adjusted'
+                <div className="space-y-1 border-x border-gray-100">
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Payout Escrow</span>
+                  <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${booking.earningHoldStatus === 'cancelled' || booking.payoutStatus === 'Refund Adjusted'
                     ? 'bg-red-50 text-red-700 border-red-100'
                     : booking.earningHoldStatus === 'available' || booking.payoutStatus === 'Payout Ready'
-                      ? 'bg-green-50 text-green-700 border-green-150'
-                      : 'bg-yellow-50 text-yellow-705 border-yellow-150'
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                     }`}>
-                    {booking.payoutStatus || 'Not Adjusted'}
+                    {booking.payoutStatus || 'Pending Hold'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                  <span className="text-gray-455 font-semibold">Refund Channel:</span>
-                  <span className="font-bold text-purple-650">
-                    {booking.refundMode === 'wallet' || booking.paymentStatus === 'refunded' ? 'Wallet System' : 'None / Razorpay Disabled'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-455 font-semibold">System Decision:</span>
-                  <span className="font-bold text-primary">
+                <div className="space-y-1">
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Refund Judgment</span>
+                  <span className="font-extrabold text-primary text-[10px] uppercase block mt-0.5">
                     {booking.adminRefundDecision === 'approved'
                       ? 'Full Approved'
                       : booking.adminRefundDecision === 'partial'
                         ? 'Partial Approved'
                         : booking.adminRefundDecision === 'rejected'
-                          ? 'Dispute Denied'
-                          : 'Awaiting Judgment'}
+                          ? 'Denied'
+                          : 'Awaiting Decision'}
                   </span>
                 </div>
               </div>
@@ -547,6 +632,11 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 {/* Decision Type Buttons Cards */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Judgment Option</label>
+                  {!isEligible && (
+                    <div className="bg-red-50 border border-red-150 text-red-700 p-2.5 rounded-lg text-xs font-semibold">
+                      ⚠️ Refund Blocked: Category classified as Non-Refund Support Ticket.
+                    </div>
+                  )}
                   {isFullyRefunded ? (
                     <div className="bg-green-50 border border-green-100 p-3 rounded-lg text-center text-xs font-semibold text-green-700">
                       This case has already been resolved and refunded. No additional decisions can be made.
@@ -557,7 +647,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                         { id: 'refund_full', label: 'Full Refund', color: 'border-green-200 text-green-600 hover:bg-green-50/50', activeColor: 'bg-green-50 border-green-500 text-green-700' },
                         { id: 'refund_partial', label: 'Partial', color: 'border-primary/20 text-primary hover:bg-primary/5', activeColor: 'bg-primary/10 border-primary text-primary' },
                         { id: 'reject', label: 'Reject Claim', color: 'border-red-200 text-red-600 hover:bg-red-50/50', activeColor: 'bg-red-50 border-red-500 text-red-700' }
-                      ].map(opt => (
+                      ].filter(opt => isEligible || opt.id === 'reject').map(opt => (
                         <button
                           key={opt.id}
                           type="button"
@@ -620,8 +710,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                           type="button"
                           onClick={() => setAbsorption(opt.id)}
                           className={`p-2 rounded-lg border text-left cursor-pointer transition-all duration-200 ${absorption === opt.id
-                              ? 'bg-purple-50 border-purple-500 text-purple-700 ring-1 ring-purple-500'
-                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                            ? 'bg-purple-50 border-purple-500 text-purple-700 ring-1 ring-purple-500'
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                             }`}
                         >
                           <p className="text-xs font-bold">{opt.label}</p>
@@ -629,6 +719,16 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                         </button>
                       ))}
                     </div>
+
+                    {/* Negative Balance Warning Banner (FIX 4) */}
+                    {absorption === 'provider' && booking.provider?.wallet?.availableBalance < refundAmount && (
+                      <div className="bg-red-50 border border-red-200 text-red-700 p-2.5 rounded-lg text-xs font-medium mt-2 flex items-start gap-1.5 animate-pulse">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          <strong>Warning:</strong> Refunding ₹{refundAmount} fully from the provider will push their wallet into a negative balance (Current: ₹{booking.provider?.wallet?.availableBalance || 0}).
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -654,44 +754,84 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                     platformLoss = parseFloat((refundAmount - providerLoss).toFixed(2));
                   }
 
+                  const statusLower = (booking.fullData?.earningHoldStatus || booking.payoutStatus || '').toLowerCase();
+                  const isHeld = ['held', 'under_review', 'payout on hold', 'dispute hold'].some(s => statusLower.includes(s));
+                  const isEscrow = ['available', 'pending_release', 'payout ready'].some(s => statusLower.includes(s));
+                  const isPaid = ['paid', 'withdrawn', 'payout released', 'released'].some(s => statusLower.includes(s));
+
+                  let heldEarningsRecovered = 0;
+                  let pendingReleaseRecovered = 0;
+                  let availableRecovered = 0;
+                  let providerWalletRecovered = 0;
+                  let platformAbsorptionAmt = platformLoss;
+
+                  if (isHeld) {
+                    heldEarningsRecovered = providerLoss;
+                  } else if (statusLower.includes('pending')) {
+                    pendingReleaseRecovered = providerLoss;
+                  } else if (isEscrow) {
+                    availableRecovered = providerLoss;
+                  } else if (isPaid) {
+                    providerWalletRecovered = providerLoss;
+                  } else {
+                    providerWalletRecovered = providerLoss;
+                  }
+
                   return (
-                    <details className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs animate-slide-up group">
+                    <details className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs animate-slide-up group" open>
                       <summary className="font-bold text-secondary uppercase tracking-wider text-[9px] cursor-pointer select-none outline-none flex justify-between items-center">
-                        <span>Financial Loss Breakdown</span>
+                        <span>Financial Loss Recovery Path Preview</span>
                         <span className="text-primary group-open:hidden text-[10px]">Show Details</span>
                         <span className="text-primary hidden group-open:inline text-[10px]">Hide Details</span>
                       </summary>
                       <div className="mt-3 space-y-3">
-                        {/* Original Details */}
-                        <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Original Booking Values</p>
-                          <div className="flex justify-between text-[11px]">
-                            <span className="text-gray-500 font-medium">Gross Billed to Customer</span>
-                            <PriceDisplay amount={grossBilled} type="bold-secondary" />
+                        {/* Simulation panel */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center border-b border-gray-100 pb-2">
+                          <div className="bg-green-50 p-2 rounded">
+                            <p className="text-[9px] text-green-700 font-bold uppercase">Customer Receives</p>
+                            <p className="font-extrabold text-sm text-green-800">₹{refundAmount.toFixed(2)}</p>
                           </div>
-                          <div className="flex justify-between text-[11px] mt-0.5">
-                            <span className="text-gray-500 font-medium">Provider Earnings</span>
-                            <PriceDisplay amount={originalProvider} type="gray-bold" />
+                          <div className="bg-red-50 p-2 rounded">
+                            <p className="text-[9px] text-red-700 font-bold uppercase">Provider Recovery</p>
+                            <p className="font-extrabold text-sm text-red-800">₹{providerLoss.toFixed(2)}</p>
                           </div>
-                          <div className="flex justify-between text-[11px] mt-0.5">
-                            <span className="text-gray-500 font-medium">Platform Net Revenue</span>
-                            <PriceDisplay amount={originalPlatform} type="gray-bold" />
+                          <div className="bg-purple-50 p-2 rounded">
+                            <p className="text-[9px] text-purple-700 font-bold uppercase">Platform Absorbs</p>
+                            <p className="font-extrabold text-sm text-purple-800">₹{platformAbsorptionAmt.toFixed(2)}</p>
+                          </div>
+                          <div className="bg-blue-50 p-2 rounded">
+                            <p className="text-[9px] text-blue-700 font-bold uppercase">Total Refund</p>
+                            <p className="font-extrabold text-sm text-blue-800">₹{refundAmount.toFixed(2)}</p>
                           </div>
                         </div>
 
-                        {/* Refund Loss & Allocation splits */}
-                        <div className="space-y-1.5 pt-1">
-                          <div className="flex justify-between font-bold text-secondary text-[13px] border-b border-dashed border-gray-200 pb-1.5">
-                            <span>Total Refund Loss</span>
-                            <PriceDisplay amount={refundAmount || 0} type="red-bold" />
+                        {/* Recovery Source Breakdown */}
+                        <div className="bg-white p-2 rounded border border-gray-100 space-y-1.5">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Recovery Source Allocations</p>
+                          
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-500 font-medium">Held Earnings:</span>
+                            <span className={`font-bold ${heldEarningsRecovered > 0 ? 'text-green-600' : 'text-gray-400'}`}>₹{heldEarningsRecovered.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between font-medium">
-                            <span className="text-gray-500">Deducted from Provider Earning</span>
-                            <PriceDisplay amount={providerLoss} type="red-bold" prefix="-" />
+
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-500 font-medium">Pending Release Escrow:</span>
+                            <span className={`font-bold ${pendingReleaseRecovered > 0 ? 'text-green-600' : 'text-gray-400'}`}>₹{pendingReleaseRecovered.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between font-medium">
-                            <span className="text-gray-500">Absorbed by Platform (Net Loss)</span>
-                            <PriceDisplay amount={platformLoss} type="purple-loss" prefix="-" />
+
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-500 font-medium">Available Escrow:</span>
+                            <span className={`font-bold ${availableRecovered > 0 ? 'text-green-600' : 'text-gray-400'}`}>₹{availableRecovered.toFixed(2)}</span>
+                          </div>
+
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-500 font-medium">Paid/Withdrawn (Provider Wallet):</span>
+                            <span className={`font-bold ${providerWalletRecovered > 0 ? 'text-red-650' : 'text-gray-400'}`}>₹{providerWalletRecovered.toFixed(2)}</span>
+                          </div>
+
+                          <div className="flex justify-between text-[11px] border-t border-dashed border-gray-150 pt-1">
+                            <span className="text-gray-500 font-medium">Platform Absorption:</span>
+                            <span className={`font-bold ${platformAbsorptionAmt > 0 ? 'text-purple-600' : 'text-gray-400'}`}>₹{platformAbsorptionAmt.toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -721,8 +861,9 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
               {/* Submit Main Action button */}
               <button
                 onClick={() => {
-                  if (decisionType === 'refund_full') handleAction('refund', 'full');
-                  else if (decisionType === 'refund_partial') handleAction('refund', 'partial');
+                  const payloadOptions = absorption === 'platform' ? { absorbPlatformCommission: true } : {};
+                  if (decisionType === 'refund_full') handleAction('refund', 'full', payloadOptions);
+                  else if (decisionType === 'refund_partial') handleAction('refund', 'partial', payloadOptions);
                   else if (decisionType === 'reject') handleAction('reject');
                 }}
                 disabled={updating || !decisionType || isFullyRefunded}
@@ -921,7 +1062,7 @@ const RefundPage = () => {
                 <tr>
                   {[
                     'Booking ID', 'Refund Type', 'Service', 'Customer', 'Provider', 'Amount',
-                    'Status', 'Date', 'Action'
+                    'Status', 'SLA Status', 'Recommendation', 'Date', 'Action'
                   ].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       {h}
@@ -932,7 +1073,7 @@ const RefundPage = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-4">
+                    <td colSpan="11" className="px-6 py-4">
                       <div className="space-y-4 p-4 animate-pulse">
                         {[1, 2, 3].map(i => (
                           <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
@@ -999,6 +1140,41 @@ const RefundPage = () => {
                       {/* Payment / Refund Status */}
                       <td className="px-4 py-3.5">
                         <RefundStatusBadge status={b.paymentStatus} />
+                      </td>
+
+                      {/* SLA Status Column */}
+                      <td className="px-4 py-3.5">
+                        {b.complaint?.slaTracking ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                            b.complaint.slaTracking.slaStatus === 'breached' 
+                              ? 'bg-red-50 text-red-800 border-red-200' 
+                              : b.complaint.slaTracking.slaStatus === 'warning'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-green-50 text-green-800 border-green-200'
+                          }`}>
+                            {b.complaint.slaTracking.slaStatus === 'breached' ? 'Breached' : 'Within SLA'}
+                          </span>
+                        ) : (
+                          <span className="text-gray-350 italic text-[10px]">—</span>
+                        )}
+                      </td>
+
+                      {/* Recommendation Column */}
+                      <td className="px-4 py-3.5">
+                        {b.complaint?.recommendation ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                              ['approve_refund', 'refund', 'full_refund', 'partial_refund'].includes(b.complaint.recommendation.action) ? 'bg-green-50 text-green-850 border-green-200' :
+                              ['reject_refund', 'reject'].includes(b.complaint.recommendation.action) ? 'bg-red-50 text-red-850 border-red-200' :
+                              'bg-blue-50 text-blue-850 border-blue-200'
+                            }`}>
+                              {b.complaint.recommendation.action.replace('_', ' ')}
+                            </span>
+                            <span className="text-[9px] text-amber-600 font-semibold">Advisory Only</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-350 italic text-[10px]">—</span>
+                        )}
                       </td>
 
                       {/* Date */}

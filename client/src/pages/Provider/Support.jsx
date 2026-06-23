@@ -567,11 +567,14 @@ const ProviderSupportPage = () => {
                     <div className="space-y-4">
                       {selectedComplaint.resolutionHistory.map((step, i) => (
                         <div key={i} className="relative">
-                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${step.event.includes('Resolved') ? 'border-success' :
-                            step.event.includes('Replied') ? 'border-primary' : 'border-neutral-300'
-                            }`} />
+                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
+                            ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'border-green-500' :
+                            step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit') ? 'border-primary' : 'border-neutral-300'
+                          }`} />
                           <div className="flex justify-between items-start">
-                            <p className="text-[11px] font-bold text-secondary">{step.event}</p>
+                            <p className={`text-[11px] font-bold ${
+                              ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'text-green-600' : 'text-secondary'
+                            }`}>{step.event}</p>
                             <span className="text-[9px] text-neutral-400">{formatDateTime(step.timestamp)}</span>
                           </div>
                           {step.note && <p className="text-[10px] text-neutral-500 italic mt-0.5">"{step.note}"</p>}

@@ -3970,6 +3970,20 @@ const getAllBookings = async (req, res) => {
       },
       {
         $lookup: {
+          from: 'complaints',
+          localField: 'complaint',
+          foreignField: '_id',
+          as: 'complaint'
+        }
+      },
+      {
+        $unwind: {
+          path: '$complaint',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
           from: 'services',
           localField: 'services.service',
           foreignField: '_id',
@@ -4206,6 +4220,19 @@ const getAllBookings = async (req, res) => {
       refundStatsPromise
     ]);
 
+    if (req.query.forRefunds === 'true') {
+      const { enrichComplaintData } = require('./Complaint-controller');
+      for (const b of bookings) {
+        if (b.complaint) {
+          try {
+            b.complaint = await enrichComplaintData(b.complaint, req);
+          } catch (e) {
+            console.error("Error enriching complaint in bookings list:", e);
+          }
+        }
+      }
+    }
+
     const total = totalResult.length > 0 ? totalResult[0].total : 0;
     const pages = Math.ceil(total / limit);
     const stats = statsResult.length > 0 ? statsResult[0] : {
@@ -4380,6 +4407,15 @@ const getBookingDetails = async (req, res) => {
       transactions: formattedTransactions,
       refundData: refundData
     };
+
+    if (response.complaint) {
+      try {
+        const { enrichComplaintData } = require('./Complaint-controller');
+        response.complaint = await enrichComplaintData(response.complaint, req);
+      } catch (e) {
+        console.error("Error enriching complaint in getBookingDetails response:", e);
+      }
+    }
 
     res.json({
       success: true,

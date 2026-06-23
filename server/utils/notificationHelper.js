@@ -67,12 +67,6 @@ const titleToEventIdMap = {
     'provider_arrived': 'provider_reached',
     'Job Started': 'work_started',
     'work_started': 'work_started',
-    'Material Approval Needed': 'material_added',
-    'material_added': 'material_added',
-    'Material Approved': 'material_approved',
-    'material_approved': 'material_approved',
-    'Material Rejected': 'material_rejected',
-    'material_rejected': 'material_rejected',
     'Payment Successful': 'payment_success',
     'payment_success': 'payment_success',
     'Booking Completed': 'booking_completed',
@@ -99,7 +93,6 @@ const computeNotificationUrl = (role, type, title, message, eventId = null, refe
 
     if (role === 'customer') {
         if (cleanEventId === 'chat_message') return `/messages/${refIdStr}`;
-        if (cleanEventId === 'material_added') return `/material-approval/${refIdStr}`;
         if (cleanEventId === 'payment_success') return `/payments`;
         if (['booking_created', 'provider_assigned', 'provider_accepted', 'provider_reached', 'work_started', 'booking_completed', 'warranty_expiry'].includes(cleanEventId)) {
             return `/my-bookings/${refIdStr}`;
@@ -109,7 +102,7 @@ const computeNotificationUrl = (role, type, title, message, eventId = null, refe
 
     if (role === 'provider') {
         if (cleanEventId === 'chat_message') return `/provider/messages/${refIdStr}`;
-        if (['material_approved', 'material_rejected', 'booking_completed'].includes(cleanEventId)) {
+        if (cleanEventId === 'booking_completed') {
             return `/provider/bookings/${refIdStr}`;
         }
         if (cleanEventId === 'booking_created' || cleanEventId === 'provider_assigned') {
@@ -474,8 +467,6 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 }
             } else if (resolvedEventId === 'chat_message') {
                 soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2633/2633-84.wav';
-            } else if (['material_added', 'material_approved', 'material_rejected'].includes(resolvedEventId)) {
-                soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-84.wav';
             } else if (resolvedEventId === 'payment_success') {
                 soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2017/2017-84.wav';
             }

@@ -54,6 +54,8 @@ const SystemSetting = () => {
       autoAssignProvider: false,
       cancellationWindowMinutes: 60,
       refundReviewHours: 48,
+      providerResponseSlaHours: 24,
+      refundProcessingSlaHours: 72,
       maxBookingsPerProvider: 10,
       allowCOD: true,
       bookingBufferTime: 30,
@@ -193,6 +195,8 @@ const SystemSetting = () => {
             autoAssignProvider: settingsData.data.bookingSettings?.autoAssignProvider ?? false,
             cancellationWindowMinutes: settingsData.data.bookingSettings?.cancellationWindowMinutes ?? 60,
             refundReviewHours: settingsData.data.bookingSettings?.refundReviewHours ?? 48,
+            providerResponseSlaHours: settingsData.data.bookingSettings?.providerResponseSlaHours ?? 24,
+            refundProcessingSlaHours: settingsData.data.bookingSettings?.refundProcessingSlaHours ?? 72,
             maxBookingsPerProvider: settingsData.data.bookingSettings?.maxBookingsPerProvider ?? 10,
             allowCOD: settingsData.data.bookingSettings?.allowCOD ?? true,
             bookingBufferTime: settingsData.data.bookingSettings?.bookingBufferTime ?? 30,
@@ -307,6 +311,8 @@ const SystemSetting = () => {
       // Numbers checks
       if (systemSettings.bookingSettings.cancellationWindowMinutes < 0 ||
         systemSettings.bookingSettings.refundReviewHours < 0 ||
+        (systemSettings.bookingSettings.providerResponseSlaHours !== undefined && systemSettings.bookingSettings.providerResponseSlaHours < 0) ||
+        (systemSettings.bookingSettings.refundProcessingSlaHours !== undefined && systemSettings.bookingSettings.refundProcessingSlaHours < 0) ||
         systemSettings.bookingSettings.bookingBufferTime < 0 ||
         systemSettings.bookingSettings.maxBookingsPerProvider < 1 ||
         systemSettings.bookingSettings.maxBookingDays < 1 ||
@@ -892,6 +898,30 @@ const SystemSetting = () => {
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
                   />
                   <p className="text-xs text-gray-500 mt-1.5 font-inter">Maximum hours after which a disputed refund request is automatically reviewed.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Provider Response SLA (Hours)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings.providerResponseSlaHours ?? 24}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'providerResponseSlaHours', Number(e.target.value))}
+                    min="0"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Hours within which provider must respond to a complaint.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Refund Processing SLA (Hours)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings.refundProcessingSlaHours ?? 72}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'refundProcessingSlaHours', Number(e.target.value))}
+                    min="0"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Hours within which resolved refund must be processed.</p>
                 </div>
 
                 <div>

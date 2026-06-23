@@ -26,6 +26,85 @@ const checkAndAutoEscalate = async (complaintId) => {
   }
 };
 
+const calculateRecoverySplits = async (booking, refundAmount, absorption, absorbPlatformCommission) => {
+  const ProviderEarning = mongoose.model('ProviderEarning');
+  const earningDoc = await ProviderEarning.findOne({ booking: booking._id || booking }).lean();
+
+  const grossBilled = booking.totalAmount || 0;
+  const originalProvider = booking.providerEarnings || 0;
+  const originalPlatform = (booking.commissionAmount || 0) + (booking.companySurgeShare || 0);
+
+  let providerLoss = 0;
+  let platformLoss = 0;
+
+  if (absorption === 'platform') {
+    providerLoss = 0;
+    platformLoss = refundAmount;
+  } else if (absorption === 'provider') {
+    providerLoss = Math.min(originalProvider, refundAmount);
+    platformLoss = Math.max(0, refundAmount - providerLoss);
+  } else {
+    // Proportional split
+    const ratio = refundAmount / (grossBilled || 1);
+    providerLoss = parseFloat((originalProvider * ratio).toFixed(2));
+    platformLoss = parseFloat((refundAmount - providerLoss).toFixed(2));
+  }
+
+  let commissionRate = 10;
+  let providerEarningsReversal = providerLoss;
+  let adminRevenueReversal = platformLoss;
+
+  if (earningDoc) {
+    if (earningDoc.commissionRate > 0) {
+      commissionRate = earningDoc.commissionRate;
+    } else if (booking.totalAmount > 0) {
+      commissionRate = ((booking.commissionAmount || 0) / booking.totalAmount) * 100;
+    }
+    const ratio = refundAmount / (booking.totalAmount || 1);
+    providerEarningsReversal = (booking.totalAmount - (booking.totalAmount * (commissionRate / 100))) * ratio;
+    adminRevenueReversal = (booking.totalAmount * (commissionRate / 100)) * ratio;
+  }
+
+  let held = 0;
+  let pendingRelease = 0;
+  let available = 0;
+  let paidWithdrawn = 0;
+  let platformAbsorption = platformLoss;
+
+  const earningStatus = earningDoc ? earningDoc.status : 'paid';
+
+  if (earningStatus === 'held') {
+    held = providerLoss;
+  } else if (earningStatus === 'under_review') {
+    held = providerLoss;
+  } else if (earningStatus === 'pending_release') {
+    pendingRelease = providerLoss;
+  } else if (earningStatus === 'available') {
+    available = providerLoss;
+  } else if (earningStatus === 'paid' || earningStatus === 'withdrawn') {
+    const platformAbsorbedShare = absorbPlatformCommission ? adminRevenueReversal : 0;
+    paidWithdrawn = Math.max(0, providerEarningsReversal - platformAbsorbedShare);
+    platformAbsorption = platformLoss + platformAbsorbedShare;
+  } else {
+    paidWithdrawn = providerLoss;
+  }
+
+  return {
+    customerReceives: refundAmount,
+    providerLoss,
+    platformLoss,
+    providerEarningsReversal,
+    adminRevenueReversal,
+    splits: {
+      held,
+      pendingRelease,
+      available,
+      paidWithdrawn,
+      platformAbsorption
+    }
+  };
+};
+
 
 // @desc    Submit a new complaint
 // @route   POST /api/complaints
@@ -46,7 +125,9 @@ const submitComplaint = async (req, res) => {
     }
 
     // Validate Complaint Type if provided
-    const validTypes = ['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge', 'wrong_service', 'fraud'];
+    const validTypes = [
+      'poor_quality', 'incomplete_work', 'provider_late', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'other'
+    ];
     if (complaintType && !validTypes.includes(complaintType)) {
       await session.abortTransaction();
       session.endSession();
@@ -146,7 +227,7 @@ const submitComplaint = async (req, res) => {
       }
 
       // Instant fake refund requests check: block service issues on unstarted bookings
-      const qualityIssues = ['bad_work', 'incomplete_work', 'wrong_service', 'fraud'];
+      const qualityIssues = ['poor_quality', 'incomplete_work'];
       if (complaintType && qualityIssues.includes(complaintType)) {
         const notStarted = !booking.status || ['pending', 'unassigned', 'accepted'].includes(booking.status.toLowerCase());
         if (notStarted) {
@@ -200,7 +281,7 @@ const submitComplaint = async (req, res) => {
     }
 
     // Proof image requirements check
-    const proofRequiredTypes = ['bad_work', 'incomplete_work', 'wrong_service', 'fraud'];
+    const proofRequiredTypes = ['poor_quality', 'incomplete_work'];
     if (category === 'Service issue' && userRole === 'customer' && complaintType && proofRequiredTypes.includes(complaintType)) {
       if (images.length === 0) {
         await session.abortTransaction();
@@ -215,9 +296,39 @@ const submitComplaint = async (req, res) => {
     // 3. Prepare Description with Complaint Type
     const formattedDescription = complaintType ? `[${complaintType}]\n${description}` : description;
 
-    // Set provider response deadline
-    const responseDeadline = (category === 'Service issue' && userRole === 'customer')
-      ? new Date(Date.now() + 24 * 60 * 60 * 1000)
+    // Retrieve provider response SLA from SystemConfig dynamically
+    const { SystemConfig } = require('../models/SystemSetting');
+    const systemConfigDoc = await SystemConfig.findOne().session(session).lean();
+    const providerSla = systemConfigDoc?.bookingSettings?.providerResponseSlaHours || 24;
+
+    // Refund Eligible Classification
+    let isRefundEligible = false;
+    const refundEligibleCategories = [
+      'Poor Quality',
+      'Incomplete Work',
+      'Service Not Delivered',
+      'Overcharged Service',
+      'Provider No Show',
+      'poor_quality',
+      'incomplete_work',
+      'provider_late',
+      'payment_issue',
+      'overcharged_service'
+    ];
+
+    const matchedCategory = refundEligibleCategories.some(c => 
+      c.toLowerCase().replace(/[\s_-]/g, '') === category.toLowerCase().replace(/[\s_-]/g, '')
+    ) || (complaintType && refundEligibleCategories.some(c => 
+      c.toLowerCase().replace(/[\s_-]/g, '') === complaintType.toLowerCase().replace(/[\s_-]/g, '')
+    ));
+
+    if (matchedCategory) {
+      isRefundEligible = true;
+    }
+
+    // Set provider response deadline only for refund eligible service issues
+    const responseDeadline = (category === 'Service issue' && userRole === 'customer' && isRefundEligible)
+      ? new Date(Date.now() + providerSla * 60 * 60 * 1000)
       : null;
 
     // 4. Create Complaint within transaction
@@ -253,8 +364,8 @@ const submitComplaint = async (req, res) => {
         }
       };
 
-      // If customer raises service issue, mark as dispute
-      if (category === 'Service issue' && userRole === 'customer') {
+      // If customer raises service issue, mark as dispute ONLY if refund eligible
+      if (category === 'Service issue' && userRole === 'customer' && isRefundEligible) {
         updateData.disputeRaised = true;
         updateData.disputeStatus = 'under_review';
 
@@ -407,15 +518,17 @@ const getAllComplaints = async (req, res) => {
       }
     });
 
-    const complaintsWithStats = complaints.map(c => {
-      const pId = c.provider?._id || c.provider;
-      const providerComplaintsCount = pId ? (countMap[pId.toString()] || 0) : 0;
-      return { ...c, providerComplaintsCount };
-    });
+    const enrichedComplaints = await Promise.all(
+      complaints.map(async (c) => {
+        const pId = c.provider?._id || c.provider;
+        const providerComplaintsCount = pId ? (countMap[pId.toString()] || 0) : 0;
+        return await enrichComplaintData({ ...c, providerComplaintsCount });
+      })
+    );
 
     res.json({
       success: true,
-      data: complaintsWithStats,
+      data: enrichedComplaints,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / limit),
@@ -490,8 +603,18 @@ const enrichComplaintData = async (complaint) => {
   let providerComplaintsCount = 0;
   const ComplaintModel = mongoose.model('Complaint');
   const providerId = complaint.providerId?._id || complaint.providerId || complaint.provider?._id || complaint.provider;
+  
+  const calculateAgeWeight = (date) => {
+    if (!date) return 0.1;
+    const daysElapsed = (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysElapsed <= 30) return 1.0;
+    if (daysElapsed <= 90) return 0.5;
+    return 0.1;
+  };
+
   if (providerId) {
-    providerComplaintsCount = await ComplaintModel.countDocuments({ provider: providerId });
+    const providerComplaintsDocs = await ComplaintModel.find({ provider: providerId }).select('createdAt').lean();
+    providerComplaintsCount = providerComplaintsDocs.reduce((sum, doc) => sum + calculateAgeWeight(doc.createdAt), 0);
   }
 
   // ─── Transaction / Payout / Evidence ───────────────────────
@@ -525,12 +648,37 @@ const enrichComplaintData = async (complaint) => {
   }
 
   const resolutionHistory = [
-    { event: 'Complaint Created', timestamp: complaint.createdAt, by: complaint.userType === 'customer' ? 'Customer' : 'Provider', note: complaint.title },
-    ...(complaint.statusHistory || []).map(h => ({ event: `Status changed to ${h.status}`, timestamp: h.updatedAt || h.timestamp, by: 'Support Team' }))
+    { event: 'Complaint Created', timestamp: complaint.createdAt, by: complaint.userType === 'customer' ? 'Customer' : 'Provider', note: complaint.title }
   ];
+  if (complaint.statusHistory && complaint.statusHistory.length > 0) {
+    complaint.statusHistory.forEach((h, index) => {
+      if (h.status === 'submitted' && index === 0) {
+        return;
+      }
+      const isFinalStatus = ['resolved', 'Solved', 'rejected', 'refunded', 'Closed'].includes(h.status);
+      const isLatest = index === (complaint.statusHistory.length - 1);
+      
+      let note = undefined;
+      let by = 'Support Team';
+      
+      if (isFinalStatus && (isLatest || h.status === complaint.status)) {
+        note = complaint.resolutionNotes;
+        by = complaint.resolvedBy?.name || 'Support Admin';
+      } else if (h.status === 'Reopened' && complaint.reopenHistory?.length > 0) {
+        note = complaint.reopenHistory[complaint.reopenHistory.length - 1]?.reason;
+        by = complaint.userType === 'customer' ? 'Customer' : 'Provider';
+      }
+
+      resolutionHistory.push({
+        event: `Status updated to ${h.status.replace(/_/g, ' ')}`,
+        timestamp: h.updatedAt || h.timestamp,
+        by: by,
+        note: note
+      });
+    });
+  }
   if (complaint.booking?.complaintProofs) {
     complaint.booking.complaintProofs.forEach(proof => {
-      // Deduplicate the initial submission proof which is already represented by "Complaint Created"
       const proofTime = new Date(proof.createdAt).getTime();
       const complaintTime = new Date(complaint.createdAt).getTime();
       const timeDiffSeconds = Math.abs(proofTime - complaintTime) / 1000;
@@ -539,13 +687,15 @@ const enrichComplaintData = async (complaint) => {
       const normalizedMsg = (proof.message || '').trim();
 
       if (timeDiffSeconds < 15 && (normalizedDesc === normalizedMsg || normalizedDesc.includes(normalizedMsg) || normalizedMsg.includes(normalizedDesc))) {
-        // This is the initial complaint submission proof, skip it to prevent duplication
         return;
       }
 
+      const isAudit = proof.message && proof.message.startsWith('[Audit Trail]');
       resolutionHistory.push({
-        event: `${proof.uploadedBy.charAt(0).toUpperCase() + proof.uploadedBy.slice(1)} Replied`,
-        timestamp: proof.createdAt, by: proof.uploadedBy, note: proof.message,
+        event: isAudit ? 'Audit Trail Log' : `${proof.uploadedBy.charAt(0).toUpperCase() + proof.uploadedBy.slice(1)} Replied`,
+        timestamp: proof.createdAt,
+        by: isAudit ? 'System Audit' : (proof.uploadedBy === 'admin' ? 'Support Admin' : proof.uploadedBy.charAt(0).toUpperCase() + proof.uploadedBy.slice(1)),
+        note: proof.message,
         images: proof.images?.map(img => img.url)
       });
     });
@@ -570,160 +720,460 @@ const enrichComplaintData = async (complaint) => {
   complaintScore += Math.min(priorComplaints * 5, 15);        // repeated complaints (max 15)
   complaintScore = Math.min(Math.round(complaintScore), 100);
 
-  // ─── 2. Provider Metrics (avgRating, ratios) ─
-  let providerHistory = { completedBookings: 0, avgRating: 0, complaintRatio: 0, cancellationRatio: 0 };
-  if (providerId) {
-    const providerDoc = await Provider.findById(providerId)
-      .select('completedBookings canceledBookings performanceScore')
-      .lean();
-    if (providerDoc) {
-      const completed = providerDoc.completedBookings || 0;
-      const cancelled = providerDoc.canceledBookings || 0;
-      const avgRating = providerDoc.performanceScore?.rating || 0;
-      const totalJobs = completed + cancelled;
-      const cancelRatio = totalJobs > 0 ? cancelled / totalJobs : 0;
-      const complaintRatio = completed > 0 ? providerComplaintsCount / completed : 0;
+    // ─── 2. Provider Metrics (avgRating, ratios, trust score) ─
+    let providerHistory = { completedBookings: 0, avgRating: 0, complaintRatio: 0, cancellationRatio: 0, trustContributors: [] };
+    let providerTrustScore = 100;
+    const trustContributors = [];
+    if (providerId) {
+      const providerDoc = await Provider.findById(providerId)
+        .select('completedBookings canceledBookings performanceScore')
+        .lean();
+      if (providerDoc) {
+        const completed = providerDoc.completedBookings || 0;
+        const cancelled = providerDoc.canceledBookings || 0;
+        const avgRating = providerDoc.performanceScore?.rating || 0;
+        const totalJobs = completed + cancelled;
+        const cancelRatio = totalJobs > 0 ? cancelled / totalJobs : 0;
+        const complaintRatio = completed > 0 ? providerComplaintsCount / completed : 0;
 
-      providerHistory = {
-        completedBookings: completed,
-        avgRating: parseFloat(avgRating.toFixed(1)),
-        complaintRatio: parseFloat((complaintRatio * 100).toFixed(1)),
-        cancellationRatio: parseFloat((cancelRatio * 100).toFixed(1))
-      };
-    }
-  }
+        providerHistory = {
+          completedBookings: completed,
+          avgRating: parseFloat(avgRating.toFixed(1)),
+          complaintRatio: parseFloat((complaintRatio * 100).toFixed(1)),
+          cancellationRatio: parseFloat((cancelRatio * 100).toFixed(1))
+        };
 
-  // ─── 3. Customer Fraud Score (0–100, higher = more suspicious) ─
-  let customerFraudScore = 0;
-  const warnings = [];
-  let customerHistory = { totalBookings: 0, refundRequests: 0, complaintCount: 0, accountAgeMonths: 0 };
-  const customerUserId = complaint.userId?._id || complaint.userId || complaint.customer?._id || complaint.customer;
-  if (customerUserId) {
-    const User = require('../models/User-model');
-    const userDoc = await User.findById(customerUserId).select('createdAt totalBookings').lean();
-    const [totalBookings, refundedTx, customerComplaints] = await Promise.all([
-      Booking.countDocuments({ customer: customerUserId }),
-      Transaction.countDocuments({ user: customerUserId, $or: [{ refundStatus: 'completed' }, { paymentStatus: 'refunded' }] }),
-      ComplaintModel.countDocuments({ $or: [{ userId: customerUserId }, { customer: customerUserId }] })
-    ]);
-
-    const cancelled = await Booking.countDocuments({ customer: customerUserId, status: 'cancelled' });
-    const cancelRate = totalBookings > 0 ? cancelled / totalBookings : 0;
-    const ageMs = userDoc ? Date.now() - new Date(userDoc.createdAt).getTime() : 0;
-    const ageMonths = Math.floor(ageMs / (1000 * 60 * 60 * 24 * 30));
-
-    customerHistory = {
-      totalBookings,
-      refundRequests: refundedTx,
-      complaintCount: customerComplaints,
-      accountAgeMonths: ageMonths
-    };
-
-    customerFraudScore += Math.min(refundedTx * 15, 40);              // refund abuse (max 40)
-    customerFraudScore += Math.min(cancelRate * 30, 25);              // cancellation rate (max 25)
-    customerFraudScore += Math.min(customerComplaints * 5, 20);       // repeated complaints (max 20)
-    if (ageMonths < 3) customerFraudScore += 15;                      // new account penalty (max 15)
-
-    // Copy-paste and complaint frequency check
-    const identicalComplaints = await ComplaintModel.countDocuments({
-      customer: customerUserId,
-      description: complaint.description,
-      _id: { $ne: complaint._id }
-    });
-    if (identicalComplaints > 0) {
-      customerFraudScore += 30; // Highly suspicious of copy-paste spam
-      warnings.push('Duplicate or copy-paste complaint text detected');
-    }
-
-    // Suspicious frequency check (more than 2 complaints in the last 24 hours)
-    const recentComplaintsCount = await ComplaintModel.countDocuments({
-      customer: customerUserId,
-      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-    });
-    if (recentComplaintsCount > 2) {
-      customerFraudScore += 25; // Repeated complaint spam
-      warnings.push('Suspiciously high complaint frequency in 24 hours');
-    }
-
-    // Same-image reuse checks: scan other complaints for identical Cloudinary secure_url paths
-    if (complaint.images && complaint.images.length > 0) {
-      const secureUrls = complaint.images.map(img => img.secure_url).filter(Boolean);
-      if (secureUrls.length > 0) {
-        const duplicateImageComplaint = await ComplaintModel.findOne({
-          _id: { $ne: complaint._id },
-          'images.secure_url': { $in: secureUrls }
-        });
-        if (duplicateImageComplaint) {
-          customerFraudScore += 35;
-          warnings.push('Same proof image reuse across different complaints detected!');
+        if (providerComplaintsCount > 0) {
+          const penalty = Math.min(providerComplaintsCount * 8, 40);
+          providerTrustScore -= penalty;
+          trustContributors.push({ label: 'Multiple Complaints (Aged)', value: -Math.round(penalty) });
         }
+        
+        const compPct = providerHistory.complaintRatio;
+        if (compPct > 20) {
+          providerTrustScore -= 20;
+          trustContributors.push({ label: 'High Complaint Ratio', value: -20 });
+        } else if (compPct > 10) {
+          providerTrustScore -= 10;
+          trustContributors.push({ label: 'Moderate Complaint Ratio', value: -10 });
+        }
+
+        const cancelPct = providerHistory.cancellationRatio;
+        if (cancelPct > 30) {
+          providerTrustScore -= 20;
+          trustContributors.push({ label: 'High Cancellation Ratio', value: -20 });
+        } else if (cancelPct > 15) {
+          providerTrustScore -= 10;
+          trustContributors.push({ label: 'Moderate Cancellation Ratio', value: -10 });
+        }
+
+        if (avgRating < 3.0) {
+          providerTrustScore -= 30;
+          trustContributors.push({ label: 'Critical Rating (< 3.0)', value: -30 });
+        } else if (avgRating < 4.0) {
+          providerTrustScore -= 20;
+          trustContributors.push({ label: 'Low Rating (< 4.0)', value: -20 });
+        }
+
+        providerTrustScore = Math.max(0, providerTrustScore);
+        providerHistory.trustContributors = trustContributors;
       }
     }
 
-    customerFraudScore = Math.max(0, Math.min(Math.round(customerFraudScore), 100));
+    // ─── 3. Customer Fraud Score (0–100, higher = more suspicious) ─
+    let customerFraudScore = 0;
+    const warnings = [];
+    const riskContributors = [];
+    let customerHistory = { totalBookings: 0, refundRequests: 0, complaintCount: 0, accountAgeMonths: 0, riskContributors: [] };
+    const customerUserId = complaint.userId?._id || complaint.userId || complaint.customer?._id || complaint.customer;
+    if (customerUserId) {
+      const User = require('../models/User-model');
+      const FraudLog = require('../models/FraudLog-model');
+      const userDoc = await User.findById(customerUserId).select('createdAt totalBookings').lean();
+      
+      const [totalBookingsDocs, refundedTxDocs, customerComplaintsDocs, flaggedLogsDocs] = await Promise.all([
+        Booking.find({ customer: customerUserId }).select('createdAt status').lean(),
+        Transaction.find({ user: customerUserId, $or: [{ refundStatus: 'completed' }, { paymentStatus: 'refunded' }] }).select('createdAt').lean(),
+        ComplaintModel.find({ $or: [{ userId: customerUserId }, { customer: customerUserId }] }).select('createdAt').lean(),
+        FraudLog.find({ userId: customerUserId, $or: [{ isFlagged: true }, { riskLevel: { $in: ['HIGH', 'CRITICAL'] } }] }).select('createdAt').lean()
+      ]);
 
-    // Dynamic riskScore calculation based on fraud score
-    let riskScore = 'low';
-    if (customerFraudScore >= 65) {
-      riskScore = 'high';
-    } else if (customerFraudScore >= 35) {
-      riskScore = 'medium';
+      const totalBookings = totalBookingsDocs.length;
+      const weightedRefundedTx = refundedTxDocs.reduce((sum, doc) => sum + calculateAgeWeight(doc.createdAt), 0);
+      const weightedCustomerComplaints = customerComplaintsDocs.reduce((sum, doc) => sum + calculateAgeWeight(doc.createdAt), 0);
+      const weightedFlaggedLogs = flaggedLogsDocs.reduce((sum, doc) => sum + calculateAgeWeight(doc.createdAt), 0);
+
+      const cancelledDocs = totalBookingsDocs.filter(b => b.status === 'cancelled');
+      const weightedCancellations = cancelledDocs.reduce((sum, doc) => sum + calculateAgeWeight(doc.createdAt), 0);
+      const cancelRate = totalBookings > 0 ? weightedCancellations / totalBookings : 0;
+      
+      const ageMs = userDoc ? Date.now() - new Date(userDoc.createdAt).getTime() : 0;
+      const ageMonths = Math.floor(ageMs / (1000 * 60 * 60 * 24 * 30));
+
+      customerHistory = {
+        totalBookings,
+        refundRequests: refundedTxDocs.length,
+        complaintCount: customerComplaintsDocs.length,
+        accountAgeMonths: ageMonths
+      };
+
+      if (weightedRefundedTx > 0) {
+        const score = Math.min(weightedRefundedTx * 8, 24);
+        customerFraudScore += score;
+        riskContributors.push({ label: 'Refund History (Aged)', value: Math.round(score) });
+      }
+      if (cancelRate > 0) {
+        const score = Math.min(cancelRate * 20, 15);
+        customerFraudScore += score;
+        riskContributors.push({ label: 'Cancellation History (Aged)', value: Math.round(score) });
+      }
+      if (weightedCustomerComplaints > 0) {
+        const score = Math.min(weightedCustomerComplaints * 3, 12);
+        customerFraudScore += score;
+        riskContributors.push({ label: 'Repeated Complaints (Aged)', value: Math.round(score) });
+      }
+      if (ageMonths < 3) {
+        customerFraudScore += 8;
+        riskContributors.push({ label: 'New Account Penalty', value: 8 });
+      }
+
+      const identicalComplaints = await ComplaintModel.countDocuments({
+        customer: customerUserId,
+        description: complaint.description,
+        _id: { $ne: complaint._id }
+      });
+      if (identicalComplaints > 0) {
+        customerFraudScore += 35;
+        riskContributors.push({ label: 'Duplicate Description', value: 35 });
+        warnings.push('Duplicate or copy-paste complaint text detected');
+      }
+
+      const recentComplaintsCount = await ComplaintModel.countDocuments({
+        customer: customerUserId,
+        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      });
+      if (recentComplaintsCount > 2) {
+        customerFraudScore += 30;
+        riskContributors.push({ label: 'Complaint Burst', value: 30 });
+        warnings.push('Suspiciously high complaint frequency in 24 hours');
+      }
+
+      if (complaint.images && complaint.images.length > 0) {
+        const secureUrls = complaint.images.map(img => img.secure_url).filter(Boolean);
+        if (secureUrls.length > 0) {
+          const duplicateImageComplaint = await ComplaintModel.findOne({
+            _id: { $ne: complaint._id },
+            'images.secure_url': { $in: secureUrls }
+          });
+          if (duplicateImageComplaint) {
+            customerFraudScore += 40;
+            riskContributors.push({ label: 'Duplicate Images', value: 40 });
+            warnings.push('Same proof image reuse across different complaints detected!');
+          }
+        }
+      }
+
+      if (weightedFlaggedLogs > 0) {
+        const score = Math.min(weightedFlaggedLogs * 25, 50);
+        customerFraudScore += score;
+        riskContributors.push({ label: 'Flagged Abuse History (Aged)', value: Math.round(score) });
+        warnings.push('User is flagged in Fraud logs for suspicious activities');
+      }
+
+      customerFraudScore = Math.max(0, Math.min(Math.round(customerFraudScore), 100));
+      customerHistory.riskContributors = riskContributors;
     }
-  }
 
-  // ─── 4. Evidence Strength (0–100) ──────────────────────────
-  let evidenceStrength = 0;
-  const hasBefore = evidenceComparison.beforeWorkImages.length > 0;
-  const hasAfter = evidenceComparison.afterWorkImages.length > 0;
-  const hasCustomer = evidenceComparison.complaintImages.length > 0;
-  if (hasCustomer) evidenceStrength += 35;  // customer uploaded proof
-  if (hasBefore) evidenceStrength += 20;  // provider before proof
-  if (hasAfter) evidenceStrength += 20;  // provider after proof
-  if (!hasBefore && !hasAfter) evidenceStrength += 25; // provider missing proof → boosts claim
-  evidenceStrength = Math.min(evidenceStrength, 100);
+    // ─── 4. Evidence Strength (0–100) ──────────────────────────
+    let evidenceStrength = 0;
+    const hasBefore = evidenceComparison.beforeWorkImages.length > 0;
+    const hasAfter = evidenceComparison.afterWorkImages.length > 0;
+    const hasCustomer = evidenceComparison.complaintImages.length > 0;
+    if (hasCustomer) evidenceStrength += 35;  // customer uploaded proof
+    if (hasBefore) evidenceStrength += 20;  // provider before proof
+    if (hasAfter) evidenceStrength += 20;  // provider after proof
+    if (!hasBefore && !hasAfter) evidenceStrength += 25; // provider missing proof → boosts claim
+    evidenceStrength = Math.min(evidenceStrength, 100);
 
-  // ─── 5. Suggested Decision ─────────────────────────────────
-  let suggestedDecision = 'manual_review';
-  if (customerFraudScore >= 60 && providerHistory.avgRating >= 4.0) {
-    suggestedDecision = 'reject_refund';
-  } else if (evidenceStrength >= 55 && providerComplaintsCount >= 2) {
-    suggestedDecision = 'approve_refund';
-  } else if (complaintScore >= 65 && providerHistory.avgRating < 3.5) {
-    suggestedDecision = 'approve_refund';
-  } else if (customerFraudScore >= 70) {
-    suggestedDecision = 'reject_refund';
-  } else {
-    suggestedDecision = 'manual_review';
-  }
+    // ─── 5. Decision Assistant (FIX 2 & FIX 6) ──────────────────────────
+    let suggestedDecision = 'manual_review';
+    let confidence = 50;
+    let confidenceLevel = 'Moderate';
+    const reasons = [];
+    const contraIndicators = [];
 
-  // ─── Warnings ───────────────────────────────────────────────
-  if (customerFraudScore >= 60 && !warnings.includes('High refund abuse risk detected')) warnings.push('High refund abuse risk detected');
-  if (providerHistory.avgRating <= 3.0 && !warnings.includes('Provider has low average rating')) warnings.push('Provider has low average rating');
-  if (!hasBefore && !hasAfter && !warnings.includes('Provider uploaded no work proof')) warnings.push('Provider uploaded no work proof');
+    // Evaluate evidence first:
+    const providerMissingProof = !hasBefore && !hasAfter;
+    
+    if (hasCustomer && providerMissingProof) {
+      reasons.push('Customer provided photo evidence while provider failed to upload work proofs');
+      if (customerFraudScore < 30) {
+        suggestedDecision = 'approve_refund';
+        confidence = 90;
+        confidenceLevel = 'High';
+      } else if (customerFraudScore < 55) {
+        suggestedDecision = 'approve_refund';
+        confidence = 70;
+        confidenceLevel = 'Moderate';
+        reasons.push('Customer has moderate risk score, but evidence points to provider fault');
+      } else {
+        suggestedDecision = 'manual_review';
+        confidence = 60;
+        confidenceLevel = 'Moderate';
+        contraIndicators.push('High customer fraud/suspicious score overrides auto-approval');
+      }
+    } else if (hasCustomer && (hasBefore || hasAfter)) {
+      // Both parties submitted evidence
+      suggestedDecision = 'manual_review';
+      confidence = 65;
+      confidenceLevel = 'Moderate';
+      reasons.push('Both customer and provider submitted photo evidence. Requires visual validation.');
+      if (customerFraudScore >= 55) {
+        contraIndicators.push('Customer has a high risk profile');
+      }
+    } else if (!hasCustomer) {
+      suggestedDecision = 'reject_refund';
+      confidence = 85;
+      confidenceLevel = 'High';
+      reasons.push('Customer failed to submit any supporting evidence for the complaint');
+      if (hasBefore || hasAfter) {
+        reasons.push('Provider successfully uploaded service work proofs');
+      }
+    }
 
-  // Dynamic riskScore calculation for non-customers
-  const finalRiskScore = customerUserId ? (customerFraudScore >= 65 ? 'high' : customerFraudScore >= 35 ? 'medium' : 'low') : 'low';
+    // Trust factors adjustments
+    if (customerFraudScore >= 55) {
+      if (suggestedDecision === 'approve_refund') {
+        suggestedDecision = 'manual_review';
+        confidence = 55;
+        confidenceLevel = 'Moderate';
+      } else if (suggestedDecision === 'manual_review') {
+        suggestedDecision = 'reject_refund';
+        confidence = 70;
+        confidenceLevel = 'Moderate';
+      }
+      reasons.push('Suspicious customer behavior metrics or repeated refund requests');
+    }
 
-  return {
-    ...complaint,
-    complaintType,
-    providerComplaintsCount,
-    transaction: transactionData,
-    providerPayoutStatus,
-    refundStatus,
-    evidenceComparison,
-    resolutionHistory,
-    // ── Smart AI Scores (runtime only) ──
-    complaintScore,
-    customerFraudScore,
-    riskScore: finalRiskScore,
-    evidenceStrength,
-    suggestedDecision,
-    warnings,
-    providerHistory,
-    customerHistory
+    if (providerHistory && providerHistory.avgRating < 3.5) {
+      reasons.push('Provider has a critically low rating (< 3.5 ★)');
+      if (suggestedDecision === 'reject_refund') {
+        suggestedDecision = 'manual_review';
+        confidence = 60;
+        confidenceLevel = 'Moderate';
+        contraIndicators.push('Provider has poor service history, rejection may be premature');
+      } else if (suggestedDecision === 'manual_review') {
+        confidence = 75;
+        confidenceLevel = 'Moderate';
+      }
+    }
+
+    // Refund Eligible Classification
+    let isRefundEligible = false;
+    let eligibilityReason = "Technical Support Ticket";
+
+    const refundEligibleCategories = [
+      'Poor Quality',
+      'Incomplete Work',
+      'Service Not Delivered',
+      'Overcharged Service',
+      'Provider No Show',
+      'poor_quality',
+      'incomplete_work',
+      'provider_late',
+      'payment_issue',
+      'overcharged_service'
+    ];
+
+    const category = complaint.category || '';
+    const matchedCategory = refundEligibleCategories.some(c => 
+      c.toLowerCase().replace(/[\s_-]/g, '') === category.toLowerCase().replace(/[\s_-]/g, '')
+    ) || (complaintType && refundEligibleCategories.some(c => 
+      c.toLowerCase().replace(/[\s_-]/g, '') === complaintType.toLowerCase().replace(/[\s_-]/g, '')
+    ));
+
+    if (matchedCategory) {
+      isRefundEligible = true;
+      eligibilityReason = "Service Quality Issue";
+    } else {
+      isRefundEligible = false;
+      const lowerCat = category.toLowerCase();
+      if (lowerCat.includes('account') || lowerCat.includes('login') || lowerCat.includes('otp') || lowerCat.includes('verification') || lowerCat.includes('profile')) {
+        eligibilityReason = "Account Verification Issue";
+      } else if (lowerCat.includes('bug') || lowerCat.includes('error') || lowerCat.includes('technical')) {
+        eligibilityReason = "Technical Support Ticket";
+      } else if (lowerCat.includes('suggestion') || lowerCat.includes('feedback')) {
+        eligibilityReason = "Feedback/Suggestion";
+      } else {
+        eligibilityReason = "General Inquiry";
+      }
+    }
+
+    // ── Advisory-Only Recommendation (platform_credit is NEVER auto-suggested) ──
+    // The system may only recommend — never auto-execute. Admin holds final control.
+    let advisoryAction = isRefundEligible ? suggestedDecision : 'support_resolution';
+    // Override: platform_credit must never be auto-recommended (admin-only manual action)
+    if (advisoryAction === 'platform_credit') {
+      advisoryAction = 'manual_review';
+    }
+    const recommendation = {
+      action: advisoryAction,
+      confidence: isRefundEligible ? confidence : 100,
+      confidenceLevel: isRefundEligible ? confidenceLevel : 'High',
+      reasons: isRefundEligible ? reasons : ['Non-refund complaint category routed to Support Resolution Flow.'],
+      contraIndicators: isRefundEligible ? contraIndicators : [],
+      isAdvisoryOnly: true,
+      advisoryDisclaimer: 'Recommendation Only — Final decision requires explicit admin approval.'
+    };
+
+    // ─── 6. SLA Tracking (FIX 5) ──────────────────────────
+    const now = new Date();
+    const createdAtTime = new Date(complaint.createdAt);
+    const hoursElapsed = Math.abs(now - createdAtTime) / 36e5;
+    
+    // Retrieve configuration dynamically where possible (SLA timing overrides) (Fix 1)
+    const { SystemConfig } = require('../models/SystemSetting');
+    const systemConfigDoc = await SystemConfig.findOne().lean();
+    const configHours = systemConfigDoc?.bookingSettings?.refundReviewHours || 48;
+    const providerSlaHours = systemConfigDoc?.bookingSettings?.providerResponseSlaHours || 24;
+    const refundSlaHours = systemConfigDoc?.bookingSettings?.refundProcessingSlaHours || 72;
+
+    let slaThreshold = configHours; // Admin Review SLA dynamically loaded from System Settings
+    let stage = 'admin_review';
+    if (complaint.status === 'submitted' || complaint.status === 'under_review') {
+      slaThreshold = providerSlaHours; // Provider Response SLA
+      stage = 'provider_response';
+    } else if (complaint.status === 'resolved' || complaint.status === 'refunded') {
+      slaThreshold = refundSlaHours; // Refund Processing SLA
+      stage = 'refund_processing';
+    }
+
+    let slaStatus = 'within_sla';
+    const thresholdPercentage = (hoursElapsed / slaThreshold) * 100;
+    if (hoursElapsed >= slaThreshold) {
+      slaStatus = 'breached';
+    } else if (hoursElapsed >= slaThreshold * 0.8) {
+      slaStatus = 'warning';
+    }
+
+    const slaTracking = {
+      stage,
+      slaThresholdHours: slaThreshold,
+      hoursElapsed: parseFloat(hoursElapsed.toFixed(1)),
+      slaStatus,
+      percentageUsed: Math.min(Math.round(thresholdPercentage), 100),
+      deadline: new Date(createdAtTime.getTime() + slaThreshold * 60 * 60 * 1000)
+    };
+
+    // ─── 7. Refund Recovery Path Preview (FIX 3 & 4) ──────────────────────────
+    let refundRecoveryPath = [];
+    let refundSimulation = null;
+    const booking = complaint.booking;
+    if (isRefundEligible && booking && (booking.totalAmount || 0) > 0) {
+      const sim = await calculateRecoverySplits(booking, booking.totalAmount, 'shared', false);
+      refundSimulation = sim;
+
+      refundRecoveryPath = [
+        {
+          source: 'held_earnings',
+          label: 'Held Earnings',
+          amount: sim.splits.held,
+          description: 'Funds currently locked in pending held state.'
+        },
+        {
+          source: 'pending_release',
+          label: 'Pending Release',
+          amount: sim.splits.pendingRelease,
+          description: 'Escrow earnings awaiting final release window.'
+        },
+        {
+          source: 'available',
+          label: 'Available',
+          amount: sim.splits.available,
+          description: 'Escrow earnings already settled and available.'
+        },
+        {
+          source: 'provider_wallet',
+          label: 'Provider Wallet',
+          amount: sim.splits.paidWithdrawn,
+          description: 'Payout already processed; will be recovered from wallet balance.',
+          requiresWarning: sim.splits.paidWithdrawn > 0
+        },
+        {
+          source: 'platform_commission',
+          label: 'Platform Absorption',
+          amount: sim.splits.platformAbsorption,
+          description: 'Absorbed charges from platform commission fees.'
+        }
+      ];
+    }
+
+    // ─── Warnings ───────────────────────────────────────────────
+    if (customerFraudScore >= 55 && !warnings.includes('High refund abuse risk detected')) warnings.push('High refund abuse risk detected');
+    if (providerHistory && providerHistory.avgRating <= 3.0 && !warnings.includes('Provider has low average rating')) warnings.push('Provider has low average rating');
+    if (!hasBefore && !hasAfter && !warnings.includes('Provider uploaded no work proof')) warnings.push('Provider uploaded no work proof');
+
+    // Dynamic riskScore calculation for non-customers
+    const finalRiskScore = customerUserId ? (customerFraudScore >= 55 ? 'high' : customerFraudScore >= 30 ? 'medium' : 'low') : 'low';
+
+    // ─── 8. Case Age (hoursOpen / daysOpen) ────────────────────
+    const ageMs = Date.now() - new Date(complaint.createdAt).getTime();
+    const hoursOpen = Math.floor(ageMs / 36e5);
+    const daysOpen = Math.floor(hoursOpen / 24);
+
+    // ─── 9. Dynamic Priority Classification ────────────────────
+    const bookingAmount = (complaint.booking?.totalAmount || 0);
+    const criticalCategories = [
+      'Service Not Delivered', 'Provider No Show',
+      'service_not_delivered', 'provider_no_show'
+    ];
+    const isCriticalCategory = criticalCategories.some(c =>
+      (complaint.category || '').toLowerCase().replace(/[\s_-]/g, '') === c.toLowerCase().replace(/[\s_-]/g, '') ||
+      (complaintType || '').toLowerCase().replace(/[\s_-]/g, '') === c.toLowerCase().replace(/[\s_-]/g, '')
+    );
+
+    let priority = 'Low';
+    if ((isCriticalCategory && bookingAmount >= 2000) || (evidenceStrength >= 75 && customerFraudScore < 30 && bookingAmount >= 1500)) {
+      priority = 'Critical';
+    } else if (isCriticalCategory || bookingAmount >= 1000 || evidenceStrength >= 60) {
+      priority = 'High';
+    } else if (bookingAmount >= 500 || evidenceStrength >= 30) {
+      priority = 'Medium';
+    }
+
+    return {
+      ...complaint,
+      complaintType,
+      providerComplaintsCount,
+      transaction: transactionData,
+      providerPayoutStatus,
+      refundStatus,
+      evidenceComparison,
+      resolutionHistory,
+      // ── Smart AI Scores (runtime only) ──
+      complaintScore,
+      customerFraudScore,
+      providerTrustScore,
+      riskScore: finalRiskScore,
+      evidenceStrength,
+      suggestedDecision,
+      recommendation,
+      slaTracking,
+      refundRecoveryPath,
+      refundSimulation,
+      isRefundEligible,
+      eligibilityReason,
+      isAppealOpen: !!(complaint.responseDeadline && new Date() < new Date(complaint.responseDeadline) && !(complaint.booking?.complaintProofs?.some(p => p.uploadedBy === 'provider'))),
+      warnings,
+      providerHistory,
+      customerHistory,
+      // ── Case Age ──
+      hoursOpen,
+      daysOpen,
+      // ── Dynamic Priority ──
+      priority
+    };
   };
-};
 
 
 // @desc    Get a single complaint by ID
@@ -738,6 +1188,7 @@ const getComplaint = async (req, res) => {
       .populate('provider', 'name email phone')
       .populate('userId', 'name email phone')
       .populate('providerId', 'name email phone')
+      .populate('resolvedBy', 'name email')
       .populate({
         path: 'booking',
         select: 'date services bookingId customer provider complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory payoutHoldUntil totalAmount cancellationProgress',
@@ -778,7 +1229,7 @@ const getComplaint = async (req, res) => {
       }
     }
 
-    const enrichedData = await enrichComplaintData(complaint);
+    const enrichedData = await enrichComplaintData(complaint, req);
 
     res.json({
       success: true,
@@ -800,7 +1251,7 @@ const resolveComplaint = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { resolutionNotes, decision } = req.body; // decision: 'approve_refund' | 'reject_refund' | 'manual_review'
+    const { resolutionNotes, decision, absorption = 'shared' } = req.body; // decision: 'approve_refund' | 'reject_refund' | 'manual_review'
     if (!resolutionNotes) {
       await session.abortTransaction();
       session.endSession();
@@ -820,28 +1271,47 @@ const resolveComplaint = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Complaint not found' });
     }
 
-    const resolvedStatus = decision === 'approve_refund' ? 'refunded' : decision === 'reject_refund' ? 'rejected' : 'resolved';
+    let resolvedStatus = complaint.status || 'submitted';
+    if (['approve_refund', 'full_refund', 'partial_refund', 'platform_credit'].includes(decision)) {
+      resolvedStatus = 'refunded';
+    } else if (['reject_refund', 'reject'].includes(decision)) {
+      resolvedStatus = 'rejected';
+    } else if (decision === 'request_more_evidence') {
+      resolvedStatus = 'request_more_evidence';
+    } else if (decision === 'close' || decision === 'Close' || decision === 'Closed') {
+      resolvedStatus = 'Closed';
+    } else if (decision === 'escalate') {
+      resolvedStatus = 'admin_review';
+    } else if (decision === 'resolve' || decision === 'Solved') {
+      resolvedStatus = 'resolved';
+    } else if (decision === 'reply') {
+      // reply action maintains the current status
+      resolvedStatus = complaint.status;
+    } else {
+      resolvedStatus = 'resolved';
+    }
 
     // --- STATE MACHINE VALIDATION ---
     const VALID_TRANSITIONS = {
-      'submitted': ['under_review', 'Closed'],
-      'under_review': ['provider_responded', 'admin_review', 'Closed'],
-      'provider_responded': ['admin_review', 'Closed'],
-      'admin_review': ['resolved', 'rejected', 'refunded', 'Closed'],
-      'resolved': ['Reopened'],
-      'rejected': ['Reopened'],
+      'submitted': ['under_review', 'Closed', 'request_more_evidence', 'admin_review', 'resolved', 'rejected', 'refunded'],
+      'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded'],
+      'provider_responded': ['admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded'],
+      'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence'],
+      'resolved': ['Reopened', 'Closed'],
+      'rejected': ['Reopened', 'Closed'],
       'refunded': [],
       'Closed': ['Reopened'],
-      'Reopened': ['under_review', 'Closed'],
+      'Reopened': ['under_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded'],
+      'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded'],
 
-      'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
-      'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
-      'Solved': ['Reopened'],
+      'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
+      'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
+      'Solved': ['Reopened', 'Closed'],
     };
 
     const currentStatus = complaint.status || 'submitted';
     const allowed = VALID_TRANSITIONS[currentStatus] || [];
-    if (!allowed.includes(resolvedStatus) && currentStatus !== resolvedStatus) {
+    if (decision !== 'reply' && !allowed.includes(resolvedStatus) && currentStatus !== resolvedStatus) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({
@@ -850,17 +1320,107 @@ const resolveComplaint = async (req, res) => {
       });
     }
 
+    // --- SAFETY GUARDS (FIX 9) ---
+    const customerUserId = complaint.userId || complaint.customer;
+    if (['approve_refund', 'full_refund', 'partial_refund', 'platform_credit'].includes(decision) && customerUserId) {
+      // 1. Loop Check: Block refund if >= 2 refund transactions processed in the last 30 days
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const recentRefundsCount = await Transaction.countDocuments({
+        user: customerUserId,
+        $or: [{ refundStatus: 'completed' }, { paymentStatus: 'refunded' }],
+        createdAt: { $gte: thirtyDaysAgo }
+      }).session(session);
+
+      if (recentRefundsCount >= 2) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Safety Block: Customer has reached the maximum limit of 2 processed refunds in the last 30 days.'
+        });
+      }
+
+      // 2. Active parallel complaints check
+      const activeComplaintsCount = await ComplaintModel.countDocuments({
+        $or: [{ userId: customerUserId }, { customer: customerUserId }],
+        status: { $in: ['submitted', 'under_review', 'provider_responded', 'admin_review', 'Reopened', 'Open', 'In-Progress'] },
+        _id: { $ne: complaint._id }
+      }).session(session);
+
+      if (activeComplaintsCount > 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Safety Block: Cannot issue a refund while the customer has other active/open complaints.'
+        });
+      }
+    }
+
+    // --- SECURITY REQUIRE PROVIDER RESPONSE CHECK ---
+    const qualityIssues = ['poor_quality', 'incomplete_work'];
+    const descriptionMatch = complaint.description?.match(/^\[(.*?)\]/);
+    const complaintType = descriptionMatch ? descriptionMatch[1] : null;
+
+    if (
+      ['approve_refund', 'full_refund', 'partial_refund'].includes(decision) &&
+      complaint.category === 'Service issue' &&
+      complaintType &&
+      qualityIssues.includes(complaintType)
+    ) {
+      const hasProviderResponded =
+        complaint.status === 'provider_responded' ||
+        (complaint.booking && complaint.booking.complaintProofs?.some(p => p.uploadedBy === 'provider'));
+
+      const isDeadlinePassed = complaint.responseDeadline && new Date() > new Date(complaint.responseDeadline);
+
+      if (!hasProviderResponded && !isDeadlinePassed) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Security Block: A refund cannot be approved for a service quality dispute until the provider has responded or their response deadline has expired.'
+        });
+      }
+    }
+
     complaint.status = resolvedStatus;
     complaint.resolvedBy = req.admin?._id || req.user?._id;
     complaint.resolutionNotes = resolutionNotes;
     await complaint.save({ session });
 
-    // ── Auto payout control based on decision ──────────────────
+    // ── Execute Decision logic ──────────────────
     if (complaint.booking) {
       const ProviderEarning = mongoose.model('ProviderEarning');
+      const Provider = mongoose.model('Provider');
+      const Transaction = mongoose.model('Transaction');
       const bookingId = complaint.booking._id || complaint.booking;
+      const booking = complaint.booking;
 
-      if (decision === 'reject_refund') {
+      const adminName = req.user?.name || req.admin?.name || req.user?.email || 'Support Admin';
+      let auditAmount = 0;
+      if (['approve_refund', 'full_refund', 'partial_refund'].includes(decision)) {
+        const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
+        const remainingRefundable = booking.totalAmount - previouslyRefunded;
+        auditAmount = decision === 'partial_refund' ? (req.body.refundAmount || (booking.totalAmount * 0.5)) : remainingRefundable;
+        auditAmount = Math.min(auditAmount, remainingRefundable);
+      } else if (decision === 'provider_penalty') {
+        auditAmount = req.body.penaltyAmount || 500;
+      }
+      const auditMessage = `[Audit Trail] Admin Name: ${adminName} | Action: ${decision.toUpperCase()} | Amount: ₹${auditAmount} | Reason: ${resolutionNotes} | Timestamp: ${new Date().toISOString()}`;
+
+      await Booking.findByIdAndUpdate(bookingId, {
+        $push: {
+          complaintProofs: {
+            uploadedBy: 'admin',
+            images: [],
+            message: auditMessage,
+            createdAt: new Date()
+          }
+        }
+      }, { session });
+
+      if (['reject_refund', 'reject'].includes(decision)) {
         // Complaint rejected → provider is innocent → release payout
         await ProviderEarning.findOneAndUpdate(
           { booking: bookingId },
@@ -872,22 +1432,197 @@ const resolveComplaint = async (req, res) => {
           disputeStatus: 'resolved',
           adminRefundDecision: 'rejected'
         }, { session });
-      } else if (decision === 'approve_refund') {
-        // ── Refund Safety Checks & Execution ──
-        const booking = complaint.booking;
-        if (!booking) {
-          console.log('Cannot refund: No booking linked to complaint');
-        } else if (booking.paymentStatus === 'refunded' || booking.adminRefundDecision === 'approved') {
+      } else if (decision === 'request_more_evidence') {
+        // Update disputeStatus on booking
+        await Booking.findByIdAndUpdate(bookingId, {
+          disputeStatus: 'under_review'
+        }, { session });
+
+        // Notify customer
+        try {
+          const { sendNotification } = require('../utils/notificationHelper');
+          sendNotification(
+            booking.customer,
+            'customer',
+            'Evidence Requested ⚠️',
+            `Support needs more evidence to resolve your complaint for booking #${bookingId.toString().slice(-6)}.`,
+            'evidence_requested',
+            bookingId
+          );
+        } catch (e) { }
+      } else if (decision === 're_service') {
+        // ── Re-Service Decision (Urban Company workflow) ──
+        // 1. Release payout for the original provider
+        await ProviderEarning.findOneAndUpdate(
+          { booking: bookingId },
+          { status: 'available' },
+          { session }
+        );
+        // 2. Clear dispute status on original booking
+        await Booking.findByIdAndUpdate(bookingId, {
+          disputeStatus: 'resolved',
+          adminRefundDecision: 'none'
+        }, { session });
+
+        // 3. Create a duplicate booking with isRebook: true
+        const rebook = new Booking({
+          customer: booking.customer,
+          provider: booking.provider,
+          services: booking.services,
+          date: new Date(Date.now() + 24 * 60 * 60 * 1000), // Scheduled for tomorrow
+          time: booking.time || '12:00',
+          status: 'pending',
+          paymentMethod: booking.paymentMethod,
+          paymentStatus: 'paid', // Mark as paid since customer already paid for original service
+          subtotal: booking.subtotal,
+          totalAmount: booking.totalAmount,
+          isRebook: true,
+          originalBooking: booking._id,
+          address: booking.address
+        });
+        await rebook.save({ session });
+
+        // Notify customer & provider
+        try {
+          const { sendNotification } = require('../utils/notificationHelper');
+          sendNotification(
+            booking.customer,
+            'customer',
+            'Re-service Scheduled 🛠️',
+            `A free re-service has been scheduled for your booking #${bookingId.toString().slice(-6)}.`,
+            'rebook_scheduled',
+            rebook._id
+          );
+          if (booking.provider) {
+            sendNotification(
+              booking.provider,
+              'provider',
+              'Re-service Assigned 🛠️',
+              `You have been assigned a re-service for booking #${bookingId.toString().slice(-6)}.`,
+              'rebook_assigned',
+              rebook._id
+            );
+          }
+        } catch (e) { }
+      } else if (decision === 'provider_warning') {
+        // ── Provider Warning ──
+        // Release payout, but issue warning record to provider
+        await ProviderEarning.findOneAndUpdate(
+          { booking: bookingId },
+          { status: 'available' },
+          { session }
+        );
+        await Booking.findByIdAndUpdate(bookingId, {
+          disputeStatus: 'resolved',
+          adminRefundDecision: 'none'
+        }, { session });
+
+        if (booking.provider) {
+          const providerDoc = await Provider.findById(booking.provider).session(session);
+          if (providerDoc) {
+            if (!providerDoc.performanceScore) {
+              providerDoc.performanceScore = {};
+            }
+            providerDoc.performanceScore.restrictionsActive = true;
+            providerDoc.performanceScore.restrictionReason = `Warning issued on complaint resolution: ${resolutionNotes}`;
+            await providerDoc.save({ session });
+
+            // Notify provider
+            try {
+              const { sendNotification } = require('../utils/notificationHelper');
+              sendNotification(
+                booking.provider,
+                'provider',
+                'Official Warning Issued ⚠️',
+                `An official warning has been issued due to booking quality dispute #${bookingId.toString().slice(-6)}.`,
+                'provider_warning',
+                bookingId
+              );
+            } catch (e) { }
+          }
+        }
+      } else if (decision === 'provider_penalty') {
+        // ── Provider Penalty ──
+        // Release held payout, but apply wallet deduction penalty
+        await ProviderEarning.findOneAndUpdate(
+          { booking: bookingId },
+          { status: 'available' },
+          { session }
+        );
+        await Booking.findByIdAndUpdate(bookingId, {
+          disputeStatus: 'resolved',
+          adminRefundDecision: 'none'
+        }, { session });
+
+        if (booking.provider) {
+          const providerDoc = await Provider.findById(booking.provider).session(session);
+          if (providerDoc) {
+            const penaltyAmount = req.body.penaltyAmount || 500; // default 500 INR
+            if (!providerDoc.wallet) {
+              providerDoc.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+            }
+            providerDoc.wallet.availableBalance -= penaltyAmount;
+            providerDoc.wallet.lastUpdated = new Date();
+            await providerDoc.save({ session });
+
+            // Log penalty transaction
+            const penaltyTx = new Transaction({
+              booking: booking._id,
+              bookingId: booking.bookingId || booking._id,
+              user: booking.customer,
+              provider: booking.provider,
+              amount: penaltyAmount,
+              paymentStatus: 'completed',
+              paymentMethod: 'wallet',
+              type: 'refund',
+              description: `Penalty deduction of ₹${penaltyAmount} issued. Reason: ${resolutionNotes}`,
+              refundReason: `Penalty: ${resolutionNotes}`
+            });
+            await penaltyTx.save({ session });
+
+            // Notify provider
+            try {
+              const { sendNotification } = require('../utils/notificationHelper');
+              sendNotification(
+                booking.provider,
+                'provider',
+                'Penalty Deduction Notice 📉',
+                `A penalty of ₹${penaltyAmount} has been deducted from your wallet due to dispute #${bookingId.toString().slice(-6)}.`,
+                'provider_penalty',
+                bookingId
+              );
+            } catch (e) { }
+          }
+        }
+      } else if (decision === 'resolve' || decision === 'Solved') {
+        // Release held payout since complaint is resolved without refund/penalty
+        await ProviderEarning.findOneAndUpdate(
+          { booking: bookingId },
+          { status: 'available' },
+          { session }
+        );
+        await Booking.findByIdAndUpdate(bookingId, {
+          disputeStatus: 'resolved',
+          adminRefundDecision: 'none'
+        }, { session });
+      } else if (['approve_refund', 'full_refund', 'partial_refund', 'platform_credit'].includes(decision)) {
+        // ── Refund Action (Full, Partial or Platform Credit) ──
+        if (booking.paymentStatus === 'refunded' || booking.adminRefundDecision === 'approved') {
           console.log('Cannot refund: Booking already refunded');
         } else if (booking.paymentMethod === 'cod') {
           console.log('Cannot refund: Pay after Service (COD) bookings are strictly ineligible for wallet refunds');
         } else {
           const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
-          const refundAmount = booking.totalAmount - previouslyRefunded;
+          const remainingRefundable = booking.totalAmount - previouslyRefunded;
+
+          let refundAmount = remainingRefundable;
+          if (decision === 'partial_refund') {
+            refundAmount = req.body.refundAmount || (booking.totalAmount * 0.5); // default 50%
+          }
+          refundAmount = Math.min(refundAmount, remainingRefundable);
 
           if (refundAmount > 0) {
             // Lock transaction to prevent double refund
-            const Transaction = mongoose.model('Transaction');
             const transaction = await Transaction.findOneAndUpdate(
               { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
               { refundStatus: 'processing' },
@@ -929,59 +1664,55 @@ const resolveComplaint = async (req, res) => {
               });
               await refundTransaction.save({ session });
 
-              // Proportional recovery from provider earnings
-              const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+              // ── REFUND RECOVERY PRIORITY ──
+              let recoveryStatus = 'platform_absorbed';
+              let recoveredAmount = 0;
               let providerEarningsReversal = 0;
               let adminRevenueReversal = 0;
-              let totalToRecover = 0;
-              let recoveryStatus = 'not_required';
-              let recoveredAmount = 0;
 
-              if (earning) {
-                // Default 'shared' split
-                let commissionRate = 10;
-                if (earning.commissionRate > 0) {
-                  commissionRate = earning.commissionRate;
-                } else if (booking.totalAmount > 0) {
-                  commissionRate = ((booking.commissionAmount || 0) / booking.totalAmount) * 100;
-                }
+              if (decision === 'platform_credit') {
+                recoveryStatus = 'platform_credit_reserve';
+              } else {
+                const splitsResult = await calculateRecoverySplits(booking, refundAmount, absorption, req.body.absorbPlatformCommission === true);
+                providerEarningsReversal = splitsResult.providerEarningsReversal;
+                adminRevenueReversal = splitsResult.adminRevenueReversal;
 
-                const originalCommissionAmount = booking.totalAmount * (commissionRate / 100);
-                const originalProviderEarnings = booking.totalAmount - originalCommissionAmount;
+                const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+                if (earning) {
+                  earning.netAmount = Math.max(0, earning.netAmount - providerEarningsReversal);
+                  earning.commissionAmount = Math.max(0, earning.commissionAmount - adminRevenueReversal);
+                  earning.grossAmount = Math.max(0, earning.grossAmount - refundAmount);
 
-                const ratio = refundAmount / (booking.totalAmount || 1);
-                providerEarningsReversal = originalProviderEarnings * ratio;
-                adminRevenueReversal = originalCommissionAmount * ratio;
-
-                totalToRecover = providerEarningsReversal;
-
-                earning.netAmount = Math.max(0, earning.netAmount - providerEarningsReversal);
-                earning.commissionAmount = Math.max(0, earning.commissionAmount - adminRevenueReversal);
-                earning.grossAmount = Math.max(0, earning.grossAmount - refundAmount);
-
-                if (earning.netAmount <= 0) {
-                  earning.status = 'cancelled';
-                }
-
-                if (['held', 'available', 'under_review', 'pending_release'].includes(earning.status)) {
-                  recoveryStatus = 'cancelled_held';
-                  recoveredAmount = providerEarningsReversal;
-                  await earning.save({ session });
-                } else if (['paid', 'withdrawn'].includes(earning.status)) {
-                  await earning.save({ session });
-                  const Provider = mongoose.model('Provider');
-                  const provider = await Provider.findById(booking.provider).session(session);
-                  if (provider && provider.wallet) {
-                    if (provider.wallet.availableBalance === undefined) {
-                      provider.wallet.availableBalance = 0;
+                  if (splitsResult.splits.held > 0) {
+                    recoveryStatus = 'held_earnings';
+                    recoveredAmount = splitsResult.splits.held;
+                    if (earning.netAmount <= 0) {
+                      earning.status = 'cancelled';
                     }
-                    provider.wallet.availableBalance -= totalToRecover;
-                    provider.wallet.lastUpdated = new Date();
-                    await provider.save({ session });
+                  } else if (splitsResult.splits.pendingRelease > 0 || splitsResult.splits.available > 0) {
+                    recoveryStatus = earning.status === 'pending_release' ? 'pending_release' : 'escrow';
+                    recoveredAmount = splitsResult.splits.pendingRelease + splitsResult.splits.available;
+                    if (earning.netAmount <= 0) {
+                      earning.status = 'cancelled';
+                    }
+                  } else if (splitsResult.splits.paidWithdrawn > 0) {
+                    recoveryStatus = 'provider_wallet';
+                    recoveredAmount = splitsResult.splits.paidWithdrawn;
 
-                    recoveredAmount = totalToRecover;
-                    recoveryStatus = 'fully_recovered';
+                    const providerDoc = await Provider.findById(booking.provider).session(session);
+                    if (providerDoc && providerDoc.wallet) {
+                      if (providerDoc.wallet.availableBalance === undefined) {
+                        providerDoc.wallet.availableBalance = 0;
+                      }
+                      providerDoc.wallet.availableBalance -= recoveredAmount;
+                      providerDoc.wallet.lastUpdated = new Date();
+                      await providerDoc.save({ session });
+                    }
+                  } else {
+                    recoveryStatus = 'platform_absorbed';
+                    recoveredAmount = 0;
                   }
+                  await earning.save({ session });
                 }
 
                 booking.providerEarnings = Math.max(0, booking.providerEarnings - providerEarningsReversal);
@@ -991,7 +1722,7 @@ const resolveComplaint = async (req, res) => {
               // Update booking fields
               booking.paymentStatus = 'refunded';
               booking.disputeStatus = 'resolved';
-              booking.adminRefundDecision = 'approved';
+              booking.adminRefundDecision = (refundAmount >= booking.totalAmount) ? 'approved' : 'partial';
               if (!booking.cancellationProgress) {
                 booking.cancellationProgress = {};
               }
@@ -1004,7 +1735,7 @@ const resolveComplaint = async (req, res) => {
               booking.refundProcessed = true;
 
               booking.adminRemark = (booking.adminRemark || '') +
-                ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${totalToRecover.toFixed(2)} recovered from provider)`;
+                ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${providerEarningsReversal.toFixed(2)} recovered from provider)`;
 
               await booking.save({ session });
 
@@ -1015,11 +1746,23 @@ const resolveComplaint = async (req, res) => {
               transaction.paymentStatus = 'refunded';
               transaction.refundedAmount = previouslyRefunded + refundAmount;
               await transaction.save({ session });
+
+              // Notify Customer
+              try {
+                const { sendNotification } = require('../utils/notificationHelper');
+                sendNotification(
+                  booking.customer,
+                  'customer',
+                  'Refund Credited 💰',
+                  `A refund of ₹${refundAmount} has been credited to your wallet.`,
+                  'refund_processed',
+                  booking._id
+                );
+              } catch (err) { }
             }
           }
         }
       }
-      // manual_review → no payout change, admin will act separately
     }
 
     await session.commitTransaction();
@@ -1047,7 +1790,7 @@ const resolveComplaint = async (req, res) => {
 const updateComplaintStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const validStatuses = ["Open", "In-Progress", "Solved", "Reopened", "Closed", "submitted", "under_review", "provider_responded", "admin_review", "resolved", "rejected", "refunded"];
+    const validStatuses = ["Open", "In-Progress", "Solved", "Reopened", "Closed", "submitted", "under_review", "provider_responded", "admin_review", "resolved", "rejected", "refunded", "request_more_evidence"];
 
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
@@ -1066,18 +1809,19 @@ const updateComplaintStatus = async (req, res) => {
 
     // --- STATE MACHINE VALIDATION ---
     const VALID_TRANSITIONS = {
-      'submitted': ['under_review', 'Closed'],
-      'under_review': ['provider_responded', 'admin_review', 'Closed'],
-      'provider_responded': ['admin_review', 'Closed'],
-      'admin_review': ['resolved', 'rejected', 'refunded', 'Closed'],
+      'submitted': ['under_review', 'Closed', 'request_more_evidence'],
+      'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence'],
+      'provider_responded': ['admin_review', 'Closed', 'request_more_evidence'],
+      'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence'],
       'resolved': ['Reopened'],
       'rejected': ['Reopened'],
       'refunded': [],
       'Closed': ['Reopened'],
-      'Reopened': ['under_review', 'Closed'],
+      'Reopened': ['under_review', 'Closed', 'request_more_evidence'],
+      'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded'],
 
-      'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
-      'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
+      'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
+      'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
       'Solved': ['Reopened'],
     };
 
@@ -1120,6 +1864,33 @@ const getComplaintDetails = async (req, res) => {
     const { id } = req.params;
     await checkAndAutoEscalate(id);
 
+    const { takeOverLock } = req.query;
+    const currentAdminId = req.admin?._id || req.user?._id;
+    const now = new Date();
+
+    const lockCheckComplaint = await Complaint.findById(id);
+    if (!lockCheckComplaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found"
+      });
+    }
+
+    const reviewLockActive = lockCheckComplaint.reviewLockExpiresAt && new Date(lockCheckComplaint.reviewLockExpiresAt) > now;
+    const lockOwner = lockCheckComplaint.reviewLockOwner;
+
+    if (reviewLockActive && lockOwner && lockOwner.toString() !== currentAdminId?.toString()) {
+      if (takeOverLock === 'true') {
+        lockCheckComplaint.reviewLockOwner = currentAdminId;
+        lockCheckComplaint.reviewLockExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        await lockCheckComplaint.save();
+      }
+    } else {
+      lockCheckComplaint.reviewLockOwner = currentAdminId;
+      lockCheckComplaint.reviewLockExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      await lockCheckComplaint.save();
+    }
+
     // Find complaint by ID and populate all references deeply
     const complaint = await Complaint.findById(id)
       .populate("customer", "name email phone profilePic")
@@ -1144,7 +1915,7 @@ const getComplaintDetails = async (req, res) => {
       });
     }
 
-    const enrichedData = await enrichComplaintData(complaint);
+    const enrichedData = await enrichComplaintData(complaint, req);
 
     // Build Booking timeline and structured response
     let bookingData = null;
@@ -1358,5 +2129,6 @@ module.exports = {
   updateComplaintStatus,
   reopenComplaint,
   getComplaintDetails,
-  replyToComplaint
+  replyToComplaint,
+  enrichComplaintData
 };

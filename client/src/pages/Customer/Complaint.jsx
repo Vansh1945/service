@@ -488,11 +488,13 @@ const ComplaintsPage = () => {
                     className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20"
                   >
                     <option value="">Select Reason</option>
-                    <option value="bad_work">Bad Work Quality</option>
-                    <option value="late_arrival">Late Arrival</option>
-                    <option value="rude_behavior">Rude Behavior</option>
+                    <option value="poor_quality">Poor Quality</option>
                     <option value="incomplete_work">Incomplete Work</option>
-                    <option value="overcharge">Overcharging</option>
+                    <option value="provider_late">Provider Late</option>
+                    <option value="payment_issue">Payment Issue</option>
+                    <option value="overcharged_service">Overcharged Service</option>
+                    <option value="behaviour_issue">Behaviour Issue</option>
+                    <option value="other">Other</option>
                   </select>
                   {formErrors.complaintType && <p className="text-xs text-red-500 mt-1">{formErrors.complaintType}</p>}
                 </div>
@@ -675,12 +677,14 @@ const ComplaintsPage = () => {
                     <div className="space-y-4">
                       {selectedComplaint.resolutionHistory.map((step, i) => (
                         <div key={i} className="relative">
-                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${step.event.includes('Resolved') || step.event.includes('Solved') ? 'border-green-500' :
-                            step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
-                            }`} />
+                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
+                            ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'border-green-500' :
+                            step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit') ? 'border-primary' : 'border-gray-300'
+                          }`} />
                           <div className="flex justify-between items-start mb-0.5">
-                            <p className={`text-[11px] font-bold ${step.event.includes('Resolved') ? 'text-green-600' : 'text-secondary'
-                              }`}>{step.event}</p>
+                            <p className={`text-[11px] font-bold ${
+                              ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'text-green-600' : 'text-secondary'
+                            }`}>{step.event}</p>
                             <span className="text-[9px] text-gray-400">{formatDateTime(step.timestamp)}</span>
                           </div>
                           {step.note && <p className="text-[10px] text-gray-500 leading-relaxed italic">"{step.note}"</p>}

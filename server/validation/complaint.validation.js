@@ -6,16 +6,21 @@ const submitComplaintSchema = z.object({
   description: z.string().min(1, "Description is required"),
   category: z.string().min(1, "Category is required"),
   bookingId: objectIdSchema.optional().or(z.literal('')),
-  complaintType: z.enum(['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge', 'wrong_service', 'fraud']).optional()
+  complaintType: z.enum([
+    'poor_quality', 'incomplete_work', 'provider_late', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'other'
+  ]).optional()
 });
 
 const resolveComplaintSchema = z.object({
   resolutionNotes: z.string().min(1, "Resolution notes are required"),
-  decision: z.enum(['approve_refund', 'reject_refund', 'manual_review']).optional()
+  decision: z.enum([
+    'approve_refund', 'reject_refund', 'manual_review',
+    'request_more_evidence', 're_service', 'partial_refund', 'full_refund', 'platform_credit', 'provider_warning', 'provider_penalty'
+  ]).optional()
 });
 
 const updateComplaintStatusSchema = z.object({
-  status: z.enum(['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'], {
+  status: z.enum(['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'], {
     errorMap: () => ({ message: "Invalid status" })
   })
 });
