@@ -1,13 +1,33 @@
 const { SystemConfig, Category, Banner } = require('../models/SystemSetting');
 
-// 1. Get System Setting
-const getSystemSetting = async (req, res) => {
-  try {
+// In-memory cache for SystemConfig
+let cachedSystemConfig = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 30 * 1000; // 30 seconds cache TTL
+
+const getCachedConfig = async () => {
+  const now = Date.now();
+  if (!cachedSystemConfig || (now - lastCacheTime > CACHE_TTL)) {
     let config = await SystemConfig.findOne();
     if (!config) {
       config = new SystemConfig({ companyName: 'Default Company' });
       await config.save();
     }
+    cachedSystemConfig = config;
+    lastCacheTime = now;
+  }
+  return cachedSystemConfig;
+};
+
+const clearSystemConfigCache = () => {
+  cachedSystemConfig = null;
+  lastCacheTime = 0;
+};
+
+// 1. Get System Setting
+const getSystemSetting = async (req, res) => {
+  try {
+    const config = await getCachedConfig();
     res.status(200).json({
       success: true,
       data: config
@@ -82,6 +102,8 @@ const updateSystemSetting = async (req, res) => {
         runValidators: true
       }
     );
+
+    clearSystemConfigCache();
 
     res.status(200).json({
       success: true,
@@ -386,7 +408,6 @@ const deleteBanner = async (req, res) => {
   }
 };
 
-
 // 14. Get branding settings for a specific role
 const getBrandingSettings = async (req, res) => {
   try {
@@ -395,12 +416,7 @@ const getBrandingSettings = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid role' });
     }
 
-    let config = await SystemConfig.findOne();
-    if (!config) {
-      config = new SystemConfig({ companyName: 'Raj Electrical Services' });
-      await config.save();
-    }
-
+    const config = await getCachedConfig();
     const brandingKey = `${role}Branding`;
     const brandingData = config[brandingKey] || {};
 
@@ -408,22 +424,24 @@ const getBrandingSettings = async (req, res) => {
     const lastPublished = config.lastPublished?.[role] || config.updatedAt;
     const timezone = config.timezone || 'UTC';
 
-    // Count installed users with at least one active FCM token
+    // Count installed users with at least one active FCM token (only if requested)
     let installedUsersCount = 0;
-    try {
-      const User = require('../models/User-model');
-      const Provider = require('../models/Provider-model');
-      const Admin = require('../models/Admin-model');
+    if (req.query.includeCount === 'true') {
+      try {
+        const User = require('../models/User-model');
+        const Provider = require('../models/Provider-model');
+        const Admin = require('../models/Admin-model');
 
-      if (role === 'customer') {
-        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmDevices.0': { $exists: true } });
-      } else if (role === 'provider') {
-        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmDevices.0': { $exists: true } });
-      } else if (role === 'admin') {
-        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmDevices.0': { $exists: true } });
+        if (role === 'customer') {
+          installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmDevices.0': { $exists: true } });
+        } else if (role === 'provider') {
+          installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmDevices.0': { $exists: true } });
+        } else if (role === 'admin') {
+          installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmDevices.0': { $exists: true } });
+        }
+      } catch (countError) {
+        console.error('Failed to count installed PWA users:', countError);
       }
-    } catch (countError) {
-      console.error('Failed to count installed PWA users:', countError);
     }
 
     res.status(200).json({
@@ -465,10 +483,11 @@ const updateBrandingSettings = async (req, res) => {
 
     const fieldsToUpdate = req.body;
     Object.assign(config[brandingKey], fieldsToUpdate);
-
     // Mark as modified so Mongoose tracks nested changes
     config.markModified(brandingKey);
     await config.save();
+
+    clearSystemConfigCache();
 
     const version = config.appVersions?.[role] || 1;
     const lastPublished = config.lastPublished?.[role] || config.updatedAt;
@@ -524,7 +543,7 @@ const publishBrandingUpdate = async (req, res) => {
       delete fieldsToUpdate.forceRefresh;
       delete fieldsToUpdate.sendNotification;
       delete fieldsToUpdate.broadcastOnly;
-      
+
       Object.assign(config[brandingKey], fieldsToUpdate);
       config.markModified(brandingKey);
     }
@@ -543,6 +562,8 @@ const publishBrandingUpdate = async (req, res) => {
     config.markModified('appVersions');
     config.markModified('lastPublished');
     await config.save();
+
+    clearSystemConfigCache();
 
     const newVersion = config.appVersions[role];
 
@@ -671,10 +692,11 @@ const uploadBrandingAsset = async (req, res) => {
     if (!config[brandingKey]) {
       config[brandingKey] = {};
     }
-
     config[brandingKey][fieldName] = fileUrl;
     config.markModified(brandingKey);
     await config.save();
+
+    clearSystemConfigCache();
 
     res.status(200).json({
       success: true,

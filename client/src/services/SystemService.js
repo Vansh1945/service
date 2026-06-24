@@ -55,11 +55,9 @@ export const updateBanner = (id, data) => {
 export const deleteBanner = (id) => {
     return axiosInstance.delete(`/system-setting/admin/banners/${id}`);
 };
-
-export const getBrandingSettings = (role) => {
-    return axiosInstance.get(`/system-setting/settings/branding/${role}`);
+export const getBrandingSettings = (role, params = {}) => {
+    return axiosInstance.get(`/system-setting/settings/branding/${role}`, { params });
 };
-
 export const updateBrandingSettings = (role, data) => {
     return axiosInstance.put(`/system-setting/settings/branding/${role}`, data);
 };

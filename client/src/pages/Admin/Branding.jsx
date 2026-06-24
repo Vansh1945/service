@@ -68,7 +68,7 @@ const Branding = () => {
       const newFormData = { ...formData };
 
       for (const role of roles) {
-        const response = await SystemService.getBrandingSettings(role);
+        const response = await SystemService.getBrandingSettings(role, { includeCount: true });
         if (response.data?.success && response.data.data) {
           newFormData[role] = {
             ...newFormData[role],
