@@ -18,7 +18,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { login, firebaseLogin } from '../services/AuthService';
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "../../firebase";
 import Processing from '../components/ui-skeletons/Processing';
 
@@ -135,6 +135,30 @@ const LoginPage = () => {
     }
   }, [isAuthenticated, role, user, navigate]);
 
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          setIsLoading(true);
+          const firebaseToken = await result.user.getIdToken();
+          const response = await firebaseLogin({ firebaseToken, role: 'customer' });
+          const data = response.data;
+          if (data.token && data.user) {
+            showToast(data.message || 'Login successful', 'success');
+            loginUser(data.token, data.user.role, data.user, data.refreshToken);
+          }
+        }
+      } catch (err) {
+        console.error("Redirect login error:", err);
+        showToast(err.response?.data?.message || err.message, 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    handleRedirectResult();
+  }, [loginUser, showToast]);
+
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -174,15 +198,24 @@ const LoginPage = () => {
     try {
       setIsLoading(true);
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const firebaseToken = await result.user.getIdToken();
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const firebaseToken = await result.user.getIdToken();
 
-      const response = await firebaseLogin({ firebaseToken, role: 'customer' });
-      const data = response.data;
+        const response = await firebaseLogin({ firebaseToken, role: 'customer' });
+        const data = response.data;
 
-      if (data.token && data.user) {
-        showToast(data.message || 'Login successful', 'success');
-        loginUser(data.token, data.user.role, data.user, data.refreshToken);
+        if (data.token && data.user) {
+          showToast(data.message || 'Login successful', 'success');
+          loginUser(data.token, data.user.role, data.user, data.refreshToken);
+        }
+      } catch (popupErr) {
+        if (popupErr.code === 'auth/popup-blocked' || popupErr.message?.includes('popup-blocked')) {
+          showToast('Popup blocked. Redirecting to Google sign-in...', 'info');
+          await signInWithRedirect(auth, provider);
+        } else {
+          throw popupErr;
+        }
       }
     } catch (err) {
       console.error(err);

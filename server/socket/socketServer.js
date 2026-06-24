@@ -205,14 +205,16 @@ const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
             origin: function (origin, callback) {
-                const allowedOrigins = [
-                    frontendUrl
-                ].filter(Boolean);
                 const isDev = process.env.NODE_ENV !== 'production';
-                if (!origin || allowedOrigins.includes(origin) || (isDev && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')))) {
+                let allowedOrigins = [];
+                if (frontendUrl) {
+                    allowedOrigins = frontendUrl.split(',').map(url => url.trim().replace(/\/$/, ""));
+                }
+                const normalizedOrigin = origin ? origin.trim().replace(/\/$/, "") : '';
+                if (!origin || allowedOrigins.includes(normalizedOrigin) || (isDev && (normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:')))) {
                     callback(null, true);
                 } else {
-                    callback(new Error("Not allowed by CORS"));
+                    callback(null, false);
                 }
             },
             methods: ['GET', 'POST'],

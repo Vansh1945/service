@@ -148,17 +148,22 @@ app.use(parseFraudHeaders);
 // CORS Settings
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-
     const isDev = process.env.NODE_ENV !== 'production';
 
+    // Parse FRONTEND_URL as comma-separated allowed origins
+    let allowedOrigins = [];
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins = process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ""));
+    }
+
+    // Normalized origin (no trailing slash)
+    const normalizedOrigin = origin ? origin.trim().replace(/\/$/, "") : '';
+
     // Allow requests with no origin (mobile apps, postman), allowed origins, or localhost in development
-    if (!origin || allowedOrigins.includes(origin) || (isDev && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')))) {
+    if (!origin || allowedOrigins.includes(normalizedOrigin) || (isDev && (normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:')))) {
       callback(null, true);
     } else {
-      callback(new Error("Not allowed by CORS"));
+      callback(null, false);
     }
   },
   credentials: true,
