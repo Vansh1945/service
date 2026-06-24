@@ -62,6 +62,24 @@ app.use(mongoSanitize({ allowDots: true, replaceWith: '_' }));
 const { parseFraudHeaders } = require('./middlewares/fraud-middleware');
 app.use(parseFraudHeaders);
 
+// Custom response execution time tracking & slow API (>500ms) performance alert
+app.use((req, res, next) => {
+  const start = process.hrtime();
+  res.on('finish', () => {
+    const diff = process.hrtime(start);
+    const durationMs = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+    if (durationMs > 500) {
+      const alertMsg = `[PERFORMANCE WARNING] API ${req.method} ${req.originalUrl} took ${durationMs}ms`;
+      if (global.logger) {
+        global.logger.warn(alertMsg);
+      } else {
+        console.warn(alertMsg);
+      }
+    }
+  });
+  next();
+});
+
 // Morgan API Request Logging
 app.use(morgan((tokens, req, res) => {
   let url = tokens.url(req, res);

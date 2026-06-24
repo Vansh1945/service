@@ -720,6 +720,8 @@ bookingSchema.index({ provider: 1, status: 1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ date: 1 });
 bookingSchema.index({ createdAt: -1 });
+bookingSchema.index({ customer: 1, createdAt: -1 });
+bookingSchema.index({ status: 1, createdAt: -1 });
 
 // Unique partial compound index to prevent duplicate booking creation race conditions
 bookingSchema.index(

@@ -51,24 +51,7 @@ const providerAuthMiddleware = async (req, res, next) => {
 
 
 
-        // Try to populate if models exist
-        try {
-            provider = await Provider.findById(decoded.id)
-                .select('-password')
-                .populate({
-                    path: 'feedbacks',
-                    select: 'rating comment',
-                    options: { limit: 5 } // Safety limit
-                })
-                .populate({
-                    path: 'earningsHistory',
-                    select: 'amount date',
-                    options: { limit: 5 } // Safety limit
-                });
-        } catch (populateError) {
-        }
-
-        // Rest of your middleware checks...
+        // Detached heavy populate logic from auth middleware to optimize API response times
         if (provider.isDeleted) {
             return res.status(403).json({
                 success: false,

@@ -37,7 +37,7 @@ const CDNImage = ({
         }
       },
       {
-        rootMargin: '100px', // Preload images 100px before they enter viewport
+        rootMargin: '150px', // Preload images slightly before they enter the viewport
       }
     );
 
@@ -68,6 +68,17 @@ const CDNImage = ({
   const optimizedUrl = getOptimizedCloudinaryUrl(src, width);
   const lowResUrl = getOptimizedCloudinaryUrl(src, placeholderWidth);
 
+  // Generate responsive srcSet for dynamic client resolution selection
+  let srcSet = undefined;
+  let sizes = undefined;
+  if (src.startsWith('http') && src.includes('res.cloudinary.com')) {
+    const widths = [320, 640, 960, 1280, 1920];
+    srcSet = widths
+      .map((w) => `${getOptimizedCloudinaryUrl(src, w)} ${w}w`)
+      .join(', ');
+    sizes = props.sizes || '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw';
+  }
+
   const handleLoad = () => {
     setIsLoaded(true);
   };
@@ -92,21 +103,20 @@ const CDNImage = ({
         className={`relative overflow-hidden select-none ${previewable ? 'cursor-zoom-in' : ''} ${containerClassName}`}
         onClick={handleContainerClick}
       >
-        {/* Premium Shimmer Loading State */}
+        {/* Shimmer/Blur-up Loading State */}
         {!isLoaded && !hasError && (
-          <div className={`absolute inset-0 z-10 animate-shimmer flex items-center justify-center bg-gray-100 ${className}`}>
-            {/* Blur-up: low-resolution background image loaded instantly */}
+          <div className={`absolute inset-0 z-10 animate-shimmer flex items-center justify-center bg-gray-100/80 backdrop-blur-sm ${className}`}>
             {inView && (
               <img
                 src={lowResUrl}
                 alt=""
-                className="w-full h-full object-cover blur-sm opacity-40"
+                className="w-full h-full object-cover blur-md opacity-50 scale-105 transition-opacity duration-300"
               />
             )}
           </div>
         )}
 
-        {/* Fallback Premium Error State */}
+        {/* Fallback Error State */}
         {hasError && (
           fallback || (
             <div className={`flex flex-col items-center justify-center bg-gray-50 border border-gray-200 rounded-lg text-gray-400 p-4 min-h-[80px] ${className}`}>
@@ -116,13 +126,16 @@ const CDNImage = ({
           )
         )}
 
-        {/* Optimized Main Image */}
+        {/* Optimized Responsive Image */}
         {inView && !hasError && (
           <img
             src={optimizedUrl}
+            srcSet={srcSet}
+            sizes={sizes}
             alt={alt}
             onLoad={handleLoad}
             onError={handleError}
+            loading={lazy ? 'lazy' : 'eager'}
             className={`transition-all duration-500 ease-out ${
               isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-sm'
             } ${className}`}
@@ -131,24 +144,24 @@ const CDNImage = ({
         )}
       </div>
 
-      {/* Fullscreen Lightbox Preview Overlay */}
+      {/* Lightbox Preview */}
       {previewable && showPreview && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-md transition-opacity duration-300"
           onClick={() => setShowPreview(false)}
         >
-          <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-w-[95vw] max-h-[95vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setShowPreview(false)}
-              className="absolute -top-12 right-0 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors active:scale-95 shadow-md border border-white/10"
+              className="absolute -top-14 right-0 p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all active:scale-95 shadow-md border border-white/10"
               title="Close Preview"
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6" />
             </button>
             <img
-              src={src}
+              src={getOptimizedCloudinaryUrl(src, 1920)} // High-res preview
               alt={alt}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/10"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/15"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?w=500&auto=format&fit=crop';
@@ -162,4 +175,3 @@ const CDNImage = ({
 };
 
 export default CDNImage;
-

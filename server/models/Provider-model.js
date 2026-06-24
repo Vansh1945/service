@@ -394,6 +394,7 @@ providerSchema.index({ location: '2dsphere' });
 providerSchema.index({ currentLocation: '2dsphere' });
 providerSchema.index({ currentZone: 1 });
 providerSchema.index({ createdAt: -1 });
+providerSchema.index({ isActive: 1, approved: 1, isDeleted: 1 });
 
 providerSchema.pre('save', async function (next) {
     // Populate S2 cell fields on creation or coordinate modifications
