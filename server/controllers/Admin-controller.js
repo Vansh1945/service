@@ -3679,7 +3679,7 @@ const forceLogoutUser = async (req, res) => {
     }
 };
 
-// System Logs API
+// System Logs API (Optimized to read only the last 1000 lines from the end to prevent server slowdowns)
 const getSystemLogs = async (req, res) => {
     try {
         const fs = require('fs');
@@ -3688,22 +3688,68 @@ const getSystemLogs = async (req, res) => {
         if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [], total: 0 });
 
         const { level, page = 1, limit = 50 } = req.query;
-        const logs = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map(line => {
-            const trimmedLine = line.trim();
-            const match = trimmedLine.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
-            if (match) return { timestamp: match[1], level: match[2], message: match[3] };
-            return { message: trimmedLine };
-        }).reverse();
 
-        let filteredLogs = logs;
+        // Optimized backward reader for the last N lines
+        const maxLinesToFetch = 500;
+        const stat = fs.statSync(logPath);
+        const fd = fs.openSync(logPath, 'r');
+        const bufferSize = 64 * 1024; // 64KB chunk size
+        const buffer = Buffer.alloc(bufferSize);
+
+        let lines = [];
+        let fileOffset = stat.size;
+        let leftover = '';
+
+        while (fileOffset > 0 && lines.length < maxLinesToFetch) {
+            const bytesToRead = Math.min(bufferSize, fileOffset);
+            fileOffset -= bytesToRead;
+
+            fs.readSync(fd, buffer, 0, bytesToRead, fileOffset);
+            const chunk = buffer.toString('utf8', 0, bytesToRead) + leftover;
+            const chunkLines = chunk.split('\n');
+
+            // The first element might be incomplete due to chunk split
+            leftover = chunkLines[0];
+
+            // Add lines in reverse order (from end of file to start)
+            for (let i = chunkLines.length - 1; i >= 1; i--) {
+                const trimmed = chunkLines[i]?.trim();
+                if (trimmed) {
+                    lines.push(trimmed);
+                }
+                if (lines.length >= maxLinesToFetch) break;
+            }
+        }
+
+        if (leftover && lines.length < maxLinesToFetch) {
+            const trimmed = leftover.trim();
+            if (trimmed) lines.push(trimmed);
+        }
+
+        fs.closeSync(fd);
+
+        // Process parsed logs
+        const parsedLogs = lines.map(line => {
+            const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
+            if (match) return { timestamp: match[1], level: match[2], message: match[3] };
+            return { message: line };
+        });
+
+        let filteredLogs = parsedLogs;
         if (level && level !== 'ALL') {
-            filteredLogs = logs.filter(l => l.level === level.toUpperCase());
+            filteredLogs = parsedLogs.filter(l => l.level === level.toUpperCase());
         }
 
         const startIndex = (page - 1) * limit;
         const paginatedLogs = filteredLogs.slice(startIndex, startIndex + Number(limit));
 
-        res.json({ success: true, logs: paginatedLogs, total: filteredLogs.length, page: Number(page), pages: Math.ceil(filteredLogs.length / limit) });
+        res.json({
+            success: true,
+            logs: paginatedLogs,
+            total: filteredLogs.length,
+            page: Number(page),
+            pages: Math.ceil(filteredLogs.length / limit)
+        });
     } catch (error) {
         console.error('Log API Error:', error);
         res.status(500).json({ success: false, message: 'Failed to read logs' });

@@ -366,12 +366,12 @@ const UserProfile = () => {
                                 </div>
 
                                 {/* Mobile Quick Links - Only visible on small screens */}
-                                <div className="grid grid-cols-5 gap-1 mt-6 lg:hidden border-t border-gray-50 pt-4">
+                                <div className="grid grid-cols-4 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
                                     {[
-                                        { id: 'payments', label: 'Wallet', icon: <Wallet className="w-4 h-4 text-primary" /> },
-                                        { id: 'favorites', label: 'Saved', icon: <Heart className="w-4 h-4 text-rose-500" /> },
-                                        { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4 text-accent" /> },
-                                        { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4 text-blue-500" />, action: () => navigate('/customer/complaints') },
+                                        { id: 'payments', label: 'Wallet', icon: <Wallet className="w-5 h-5 text-primary" /> },
+                                        { id: 'favorites', label: 'Saved', icon: <Heart className="w-5 h-5 text-rose-500" /> },
+                                        { id: 'offers', label: 'Offers', icon: <Gift className="w-5 h-5 text-accent" /> },
+                                        { id: 'support', label: 'Support', icon: <Shield className="w-5 h-5 text-blue-500" />, action: () => navigate('/customer/complaints') },
                                     ].map((link, idx) => (
                                         <button
                                             key={idx}
@@ -379,7 +379,7 @@ const UserProfile = () => {
                                                 if (link.action) link.action();
                                                 else { setActiveTab(link.id); setIsEditing(false); }
                                             }}
-                                            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-colors ${activeTab === link.id ? 'bg-primary/10 border border-primary/20' : 'bg-gray-50 hover:bg-gray-100'}`}
+                                            className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-colors ${activeTab === link.id ? 'bg-primary/10 border border-primary/20' : 'bg-gray-50 hover:bg-gray-100'}`}
                                         >
                                             {link.icon}
                                             <span className="text-[10px] font-bold text-gray-600 uppercase tracking-tighter">{link.label}</span>
