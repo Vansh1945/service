@@ -4,7 +4,8 @@ const { objectIdSchema } = require('./common.validation');
 const registerAdminSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Please provide a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters long")
+  password: z.string().min(6, "Password must be at least 6 characters long"),
+  signupSecret: z.string().min(1, "Signup secret is required")
 });
 
 const approveProviderSchema = z.object({

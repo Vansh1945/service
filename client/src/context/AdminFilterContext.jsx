@@ -1,10 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as BookingService from '../services/BookingService';
 import * as ZoneService from '../services/ZoneService';
+import { useAuth } from './auth';
 
 const AdminFilterContext = createContext();
 
 export const AdminFilterProvider = ({ children }) => {
+  const { isAuthenticated, role } = useAuth();
+  const isAdmin = isAuthenticated && role === 'admin';
+
   const [filterType, setFilterType] = useState('calendar'); // 'calendar' | 'financial'
   const [year, setYear] = useState(new Date().getFullYear());
   const [financialYear, setFinancialYear] = useState(() => {
@@ -25,6 +29,8 @@ export const AdminFilterProvider = ({ children }) => {
 
   // Fetch earliest year from bookings & load zones list
   useEffect(() => {
+    if (!isAdmin) return;
+
     const fetchMetadata = async () => {
       try {
         const [bookingsRes, zonesRes] = await Promise.all([
@@ -49,7 +55,7 @@ export const AdminFilterProvider = ({ children }) => {
     };
 
     fetchMetadata();
-  }, []);
+  }, [isAdmin]);
 
   // Compute startDate and endDate based on active global filters
   const getComputedDateRange = useCallback(() => {

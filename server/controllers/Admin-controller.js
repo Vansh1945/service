@@ -37,7 +37,22 @@ const deleteFile = async (publicId) => {
  */
 const registerAdmin = async (req, res) => {
     try {
-        const { name, email, password } = req.body || {};
+        const { name, email, password, signupSecret } = req.body || {};
+
+        // Validate secret
+        if (!process.env.ADMIN_REGISTRATION_SECRET) {
+            return res.status(500).json({
+                success: false,
+                message: 'Admin registration secret is not configured on the server.'
+            });
+        }
+
+        if (signupSecret !== process.env.ADMIN_REGISTRATION_SECRET) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden. Invalid admin registration secret.'
+            });
+        }
 
         // Validate input
         if (!name || !email || !password) {

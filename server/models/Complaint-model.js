@@ -168,6 +168,8 @@ complaintSchema.index({ createdAt: -1 });
 complaintSchema.index({ userId: 1 });
 complaintSchema.index({ providerId: 1 });
 complaintSchema.index({ userType: 1 });
+complaintSchema.index({ booking: 1, status: 1 });
+complaintSchema.index({ providerId: 1, status: 1 });
 
 const Complaint = mongoose.model("Complaint", complaintSchema);
 

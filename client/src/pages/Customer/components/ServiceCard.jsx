@@ -2,7 +2,12 @@ import React from 'react';
 import { Clock, Star } from 'lucide-react';
 
 const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
-  const imageUrl = service.displayImage || service.images?.[0] || service.image || 'https://via.placeholder.com/400x300?text=Service';
+  const backendUrl = import.meta.env.VITE_BACKEND_URL 
+    ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') 
+    : window.location.origin;
+  const defaultServiceImage = `${backendUrl}/assets/Service.png`;
+
+  const imageUrl = service.displayImage || service.images?.[0] || service.image || defaultServiceImage;
   const isAvailable = service.isActive !== false;
   const categoryName = typeof service.category === 'object'
     ? service.category?.name
@@ -21,7 +26,7 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
             src={imageUrl}
             alt={service.title}
             className="w-full h-full object-cover"
-            onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
+            onError={(e) => e.target.src = defaultServiceImage}
           />
           {/* Top-Left Badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">

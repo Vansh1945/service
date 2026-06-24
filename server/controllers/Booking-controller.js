@@ -684,22 +684,27 @@ const confirmBooking = async (req, res) => {
           throw new Error('Direct online processing is deprecated. Please use the secure Razorpay payment flow via /api/transaction/create-order');
 
         case 'wallet': {
-          const userWalletQuery = User.findById(userId);
-          const userWallet = session ? await userWalletQuery.session(session) : await userWalletQuery;
-          const bal = userWallet.wallet?.availableBalance || 0;
-          if (bal < booking.totalAmount) {
-            throw new Error('Insufficient wallet balance');
+          const updatedUser = await User.findOneAndUpdate(
+            { _id: userId, "wallet.availableBalance": { $gte: booking.totalAmount } },
+            { 
+              $inc: { "wallet.availableBalance": -booking.totalAmount },
+              $push: { 
+                "wallet.walletTransactions": {
+                  type: 'debit',
+                  amount: booking.totalAmount,
+                  reason: 'Booking Payment',
+                  booking: booking._id,
+                  createdAt: new Date()
+                }
+              },
+              $set: { "wallet.lastUpdated": new Date() }
+            },
+            { new: true, session }
+          );
+
+          if (!updatedUser) {
+            throw new Error('Insufficient wallet balance or concurrent transaction lock. Please retry.');
           }
-          userWallet.wallet.availableBalance -= booking.totalAmount;
-          userWallet.wallet.walletTransactions.push({
-            type: 'debit',
-            amount: booking.totalAmount,
-            reason: 'Booking Payment',
-            booking: booking._id
-          });
-          userWallet.wallet.lastUpdated = new Date();
-          if (session) await userWallet.save({ session });
-          else await userWallet.save();
 
           paymentResult = {
             success: true,
@@ -730,16 +735,27 @@ const confirmBooking = async (req, res) => {
               }
             };
           } else {
-            userMixed.wallet.availableBalance -= walletDeduction;
-            userMixed.wallet.walletTransactions.push({
-              type: 'debit',
-              amount: walletDeduction,
-              reason: 'Booking Payment',
-              booking: booking._id
-            });
-            userMixed.wallet.lastUpdated = new Date();
-            if (session) await userMixed.save({ session });
-            else await userMixed.save();
+            const updatedUser = await User.findOneAndUpdate(
+              { _id: userId, "wallet.availableBalance": { $gte: walletDeduction } },
+              {
+                $inc: { "wallet.availableBalance": -walletDeduction },
+                $push: {
+                  "wallet.walletTransactions": {
+                    type: 'debit',
+                    amount: walletDeduction,
+                    reason: 'Booking Payment',
+                    booking: booking._id,
+                    createdAt: new Date()
+                  }
+                },
+                $set: { "wallet.lastUpdated": new Date() }
+              },
+              { new: true, session }
+            );
+
+            if (!updatedUser) {
+              throw new Error('Insufficient wallet balance or concurrent transaction lock. Please retry.');
+            }
 
             paymentResult = {
               success: true,
