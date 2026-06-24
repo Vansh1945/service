@@ -499,7 +499,7 @@ exports.completeProfile = async (req, res) => {
             }
 
             const { Category } = require('../models/SystemSetting');
-            const allCategories = await Category.find({ isActive: true });
+            const allCategories = await Category.find({ isActive: true }).lean();
             const categoryMap = new Map();
             allCategories.forEach(c => {
                 categoryMap.set(c.name.toLowerCase(), c);
@@ -914,7 +914,7 @@ exports.updateProviderProfile = async (req, res) => {
                     }
 
                     const { Category } = require('../models/SystemSetting');
-                    const allCategories = await Category.find({ isActive: true });
+                    const allCategories = await Category.find({ isActive: true }).lean();
                     const categoryMap = new Map();
                     allCategories.forEach(c => {
                         categoryMap.set(c.name.toLowerCase(), c);

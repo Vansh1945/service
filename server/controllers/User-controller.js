@@ -383,45 +383,47 @@ const getProfile = async (req, res) => {
     // Enhance favoriteProviders with ratings and other provider details
     let enrichedFavorites = [];
     if (user.favoriteProviders && user.favoriteProviders.length > 0) {
-      for (const fav of user.favoriteProviders) {
-        try {
-          const prov = await Provider.findById(fav.providerId)
-            .select('performanceScore.rating profilePicUrl isOnline isActive approved services completedBookings')
-            .populate('services', 'name')
-            .lean();
-          if (prov) {
-            const categoryNames = prov.services && prov.services.length > 0
-              ? prov.services.map(s => s.name).join(', ')
-              : 'N/A';
+      enrichedFavorites = await Promise.all(
+        user.favoriteProviders.map(async (fav) => {
+          try {
+            const prov = await Provider.findById(fav.providerId)
+              .select('performanceScore.rating profilePicUrl isOnline isActive approved services completedBookings')
+              .populate('services', 'name')
+              .lean();
+            if (prov) {
+              const categoryNames = prov.services && prov.services.length > 0
+                ? prov.services.map(s => s.name).join(', ')
+                : 'N/A';
 
-            enrichedFavorites.push({
-              ...fav,
-              rating: prov.performanceScore?.rating || 0,
-              profilePicUrl: prov.profilePicUrl,
-              isOnline: prov.isOnline,
-              isActive: prov.isActive,
-              approved: prov.approved,
-              category: categoryNames,
-              completedBookings: prov.completedBookings || 0
-            });
-          } else {
-            enrichedFavorites.push({
+              return {
+                ...fav,
+                rating: prov.performanceScore?.rating || 0,
+                profilePicUrl: prov.profilePicUrl,
+                isOnline: prov.isOnline,
+                isActive: prov.isActive,
+                approved: prov.approved,
+                category: categoryNames,
+                completedBookings: prov.completedBookings || 0
+              };
+            } else {
+              return {
+                ...fav,
+                rating: 0,
+                category: fav.category || 'N/A',
+                completedBookings: 0
+              };
+            }
+          } catch (err) {
+            console.error('Error fetching favorite provider details in getProfile:', err);
+            return {
               ...fav,
               rating: 0,
               category: fav.category || 'N/A',
               completedBookings: 0
-            });
+            };
           }
-        } catch (err) {
-          console.error('Error fetching favorite provider details in getProfile:', err);
-          enrichedFavorites.push({
-            ...fav,
-            rating: 0,
-            category: fav.category || 'N/A',
-            completedBookings: 0
-          });
-        }
-      }
+        })
+      );
     }
 
     // Calculate total bookings dynamically

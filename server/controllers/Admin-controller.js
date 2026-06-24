@@ -205,8 +205,10 @@ const getAllCustomers = async (req, res) => {
             { $limit: limit }
         ];
 
-        const customers = await User.aggregate(pipeline);
-        const total = await User.countDocuments({ role: 'customer', ...searchFilter });
+        const [customers, total] = await Promise.all([
+            User.aggregate(pipeline),
+            User.countDocuments({ role: 'customer', ...searchFilter })
+        ]);
 
         res.status(200).json({
             success: true,
@@ -691,8 +693,10 @@ const getPendingProviders = async (req, res) => {
             { $limit: limit }
         ];
 
-        const providers = await Provider.aggregate(providersPipeline);
-        const total = await Provider.countDocuments(filter);
+        const [providers, total] = await Promise.all([
+            Provider.aggregate(providersPipeline),
+            Provider.countDocuments(filter)
+        ]);
 
         // Calculate age and performance badge for each provider
         providers.forEach(provider => {
@@ -797,8 +801,10 @@ const getAllProviders = async (req, res) => {
             { $limit: limit }
         ];
 
-        const providers = await Provider.aggregate(providersPipeline);
-        const total = await Provider.countDocuments(filter);
+        const [providers, total] = await Promise.all([
+            Provider.aggregate(providersPipeline),
+            Provider.countDocuments(filter)
+        ]);
 
         // Calculate age and performance badge for each provider
         providers.forEach(provider => {
@@ -1004,17 +1010,30 @@ const getDashboardStats = async (req, res) => {
             monthlyBookings,
             pendingProviders
         ] = await Promise.all([
-            User.countDocuments().lean(),
-            Provider.countDocuments({ approved: true }).lean(),
-            Booking.countDocuments().lean(),
-            Service.countDocuments({ isActive: true }).lean(),
-            Booking.countDocuments({ createdAt: { $gte: today } }).lean(),
-            Booking.countDocuments({ createdAt: { $gte: currentWeek } }).lean(),
-            Booking.countDocuments({ createdAt: { $gte: currentMonth } }).lean(),
-            Provider.countDocuments({ approved: false }).lean()
+            User.countDocuments(),
+            Provider.countDocuments({ approved: true, isDeleted: false }),
+            Booking.countDocuments(),
+            Service.countDocuments({ isActive: true }),
+            Booking.countDocuments({ createdAt: { $gte: today } }),
+            Booking.countDocuments({ createdAt: { $gte: currentWeek } }),
+            Booking.countDocuments({ createdAt: { $gte: currentMonth } }),
+            Provider.countDocuments({ approved: false, isDeleted: false })
         ]);
 
-        const [revenueStats, paymentMethodStats, withdrawalStats, disputeStats, heldPayoutsStats] = await Promise.all([
+        const [
+            revenueStats,
+            paymentMethodStats,
+            withdrawalStats,
+            disputeStats,
+            heldPayoutsStats,
+            totalDisputes,
+            totalRefundsCount,
+            walletRefundStats,
+            refundedBookingsCount,
+            pendingDisputesCount,
+            resolvedDisputesCount,
+            refundedDisputesCount
+        ] = await Promise.all([
             Booking.aggregate([
                 { $match: { status: 'completed' } },
                 {
@@ -1037,24 +1056,34 @@ const getDashboardStats = async (req, res) => {
                         companySurgeShare: { $sum: { $ifNull: ["$companySurgeShare", 0] } }
                     }
                 }
-            ]).lean(),
+            ]),
             Transaction.aggregate([
                 { $match: { paymentStatus: 'completed' } },
                 { $group: { _id: '$paymentMethod', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
                 { $project: { paymentMethod: '$_id', count: 1, totalAmount: 1, _id: 0 } }
-            ]).lean(),
+            ]),
             Transaction.aggregate([
                 { $match: { type: 'withdrawal', paymentStatus: 'completed' } },
                 { $group: { _id: null, totalWithdrawals: { $sum: '$amount' }, withdrawalCount: { $sum: 1 } } }
-            ]).lean(),
+            ]),
             Booking.aggregate([
                 { $match: { disputeRaised: true } },
                 { $group: { _id: '$disputeStatus', count: { $sum: 1 } } }
-            ]).lean(),
+            ]),
             ProviderEarning.aggregate([
                 { $match: { status: 'held' } },
                 { $group: { _id: null, totalHeld: { $sum: '$netAmount' }, count: { $sum: 1 } } }
-            ]).lean()
+            ]),
+            Booking.countDocuments({ disputeRaised: true }),
+            Booking.countDocuments({ adminRefundDecision: { $in: ['approved', 'partial'] } }),
+            Transaction.aggregate([
+                { $match: { type: 'refund', paymentMethod: 'wallet', paymentStatus: 'completed' } },
+                { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+            ]),
+            Booking.countDocuments({ $or: [{ paymentStatus: 'refunded' }, { refundProcessed: true }] }),
+            Booking.countDocuments({ disputeStatus: 'under_review' }),
+            Booking.countDocuments({ disputeStatus: 'resolved' }),
+            Booking.countDocuments({ disputeStatus: 'refund_approved' })
         ]);
 
         const rStats = revenueStats[0] || {};
@@ -1078,20 +1107,8 @@ const getDashboardStats = async (req, res) => {
 
         const totalWithdrawals = withdrawalStats[0]?.totalWithdrawals || 0;
         const withdrawalCount = withdrawalStats[0]?.withdrawalCount || 0;
-        const totalDisputes = await Booking.countDocuments({ disputeRaised: true }).lean();
-        const totalRefundsCount = await Booking.countDocuments({ adminRefundDecision: { $in: ['approved', 'partial'] } }).lean();
 
-        // Additional metrics for Dispute & Refund Management Sync
-        const walletRefundStats = await Transaction.aggregate([
-            { $match: { type: 'refund', paymentMethod: 'wallet', paymentStatus: 'completed' } },
-            { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
-        ]).lean();
         const walletRefundAmount = walletRefundStats[0]?.totalAmount || 0;
-
-        const refundedBookingsCount = await Booking.countDocuments({ $or: [{ paymentStatus: 'refunded' }, { refundProcessed: true }] }).lean();
-        const pendingDisputesCount = await Booking.countDocuments({ disputeStatus: 'under_review' }).lean();
-        const resolvedDisputesCount = await Booking.countDocuments({ disputeStatus: 'resolved' }).lean();
-        const refundedDisputesCount = await Booking.countDocuments({ disputeStatus: 'refund_approved' }).lean();
 
         const dashboardStats = {
             overview: {
@@ -1411,72 +1428,81 @@ const getDashboardSummary = async (req, res) => {
         if (city) {
             customerMatch['address.city'] = { $regex: city, $options: 'i' };
         }
-        const totalCustomers = await User.countDocuments(customerMatch);
 
         // Total providers - filter by city if provided
         let providerMatch = { approved: true };
         if (city) {
             providerMatch['address.city'] = { $regex: city, $options: 'i' };
         }
-        const totalProviders = await Provider.countDocuments(providerMatch);
-
-        // Combined Revenue stats query
-        const revenueStats = await Booking.aggregate([
-            {
-                $match: {
-                    ...bookingMatchConditions,
-                    status: 'completed',
-                    createdAt: { $gte: currentMonth.toDate() }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
-                    todayRevenue: {
-                        $sum: {
-                            $cond: [{ $gte: ["$createdAt", today.toDate()] }, { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] }, 0]
-                        }
-                    }
-                }
-            }
-        ]).lean();
-
-        const todayRevenue = revenueStats[0]?.todayRevenue || 0;
-        const monthlyRevenue = revenueStats[0]?.monthlyRevenue || 0;
 
         // Pending payout amount (from provider earnings) & held payouts count - filter by city if provided
+        let providerIds = [];
+        if (city) {
+            const providersWithCity = await Provider.find({ 'address.city': { $regex: city, $options: 'i' } }).select('_id').lean();
+            providerIds = providersWithCity.map(p => p._id);
+        }
+
         let payoutMatch = {
             status: { $in: ['pending', 'processing', 'held'] }
         };
         if (city) {
-            const providerIds = await Provider.find({ 'address.city': { $regex: city, $options: 'i' } }).select('_id');
-            payoutMatch.provider = { $in: providerIds.map(p => p._id) };
+            payoutMatch.provider = { $in: providerIds };
         }
-        const payoutStatsResult = await ProviderEarning.aggregate([
-            { $match: payoutMatch },
-            {
-                $group: {
-                    _id: null,
-                    pendingPayoutAmount: {
-                        $sum: {
-                            $cond: [{ $in: ["$status", ["pending", "processing"]] }, '$netAmount', 0]
-                        }
-                    },
-                    totalHeldPayouts: {
-                        $sum: {
-                            $cond: [{ $eq: ["$status", "held"] }, 1, 0]
+
+        const [
+            totalCustomers,
+            totalProviders,
+            revenueStats,
+            payoutStatsResult,
+            duplicateAttempts
+        ] = await Promise.all([
+            User.countDocuments(customerMatch),
+            Provider.countDocuments(providerMatch),
+            Booking.aggregate([
+                {
+                    $match: {
+                        ...bookingMatchConditions,
+                        status: 'completed',
+                        createdAt: { $gte: currentMonth.toDate() }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
+                        todayRevenue: {
+                            $sum: {
+                                $cond: [{ $gte: ["$createdAt", today.toDate()] }, { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] }, 0]
+                            }
                         }
                     }
                 }
-            }
-        ]).lean();
+            ]).lean(),
+            ProviderEarning.aggregate([
+                { $match: payoutMatch },
+                {
+                    $group: {
+                        _id: null,
+                        pendingPayoutAmount: {
+                            $sum: {
+                                $cond: [{ $in: ["$status", ["pending", "processing"]] }, '$netAmount', 0]
+                            }
+                        },
+                        totalHeldPayouts: {
+                            $sum: {
+                                $cond: [{ $eq: ["$status", "held"] }, 1, 0]
+                            }
+                        }
+                    }
+                }
+            ]).lean(),
+            Transaction.countDocuments({ paymentStatus: 'failed', description: /duplicate/i })
+        ]);
 
+        const todayRevenue = revenueStats[0]?.todayRevenue || 0;
+        const monthlyRevenue = revenueStats[0]?.monthlyRevenue || 0;
         const pendingPayoutAmount = payoutStatsResult[0]?.pendingPayoutAmount || 0;
         const totalHeldPayouts = payoutStatsResult[0]?.totalHeldPayouts || 0;
-
-        // Duplicate payment attempts (if any failed transaction with same booking exists)
-        const duplicateAttempts = await Transaction.countDocuments({ paymentStatus: 'failed', description: /duplicate/i });
 
         res.status(200).json({
             success: true,
@@ -1823,26 +1849,17 @@ const getDashboardTopProviders = async (req, res) => {
  */
 const getDashboardPendingActions = async (req, res) => {
     try {
-        // Pending provider verifications
-        const pendingVerifications = await Provider.countDocuments({
-            approved: false,
-            kycStatus: 'pending'
-        });
-
-        // Pending withdrawal requests (from PaymentRecord model)
-        const pendingWithdrawals = await PaymentRecord.countDocuments({
-            status: { $in: ['requested', 'processing'] }
-        });
-
-        // Pending disputes (complaints that are unresolved)
-        const pendingDisputes = await Complaint.countDocuments({
-            status: { $in: ['Open', 'In-Progress'] }
-        });
-
-        // Pending refunds (bookings with refund in progress)
-        const pendingRefunds = await Booking.countDocuments({
-            'cancellationProgress.status': 'processing_refund'
-        });
+        const [
+            pendingVerifications,
+            pendingWithdrawals,
+            pendingDisputes,
+            pendingRefunds
+        ] = await Promise.all([
+            Provider.countDocuments({ approved: false, kycStatus: 'pending' }),
+            PaymentRecord.countDocuments({ status: { $in: ['requested', 'processing'] } }),
+            Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } }),
+            Booking.countDocuments({ 'cancellationProgress.status': 'processing_refund' })
+        ]);
 
         res.status(200).json({
             success: true,
@@ -1868,23 +1885,15 @@ const getDashboardPendingActions = async (req, res) => {
  */
 const getDashboardLiveStats = async (req, res) => {
     try {
-        // Ongoing bookings (in-progress or accepted)
-        const ongoingBookings = await Booking.countDocuments({
-            status: { $in: ['in-progress', 'accepted', 'scheduled'] }
-        });
-
-        // Active providers (approved and not blocked)
-        const activeProviders = await Provider.countDocuments({
-            approved: true,
-            isActive: true,
-            blockedTill: { $lte: new Date() }
-        });
-
-        // Delayed bookings (SLA based - bookings that should have been completed but aren't)
-        const delayedBookings = await Booking.countDocuments({
-            status: { $in: ['scheduled', 'accepted'] },
-            date: { $lt: moment().subtract(1, 'hours').toDate() }
-        });
+        const [
+            ongoingBookings,
+            activeProviders,
+            delayedBookings
+        ] = await Promise.all([
+            Booking.countDocuments({ status: { $in: ['in-progress', 'accepted', 'scheduled'] } }),
+            Provider.countDocuments({ approved: true, isActive: true, blockedTill: { $lte: new Date() } }),
+            Booking.countDocuments({ status: { $in: ['scheduled', 'accepted'] }, date: { $lt: moment().subtract(1, 'hours').toDate() } })
+        ]);
 
         res.status(200).json({
             success: true,
@@ -1911,51 +1920,27 @@ const getDashboardRecentActivity = async (req, res) => {
     try {
         const activities = [];
 
-        // Recent bookings
-        const recentBookings = await Booking.find()
-            .populate('customer', 'name')
-            .populate('provider', 'name')
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .select('status totalAmount createdAt customer provider')
-            .lean();
-
-        recentBookings.forEach(booking => {
-            activities.push({
-                type: 'booking',
-                message: `New booking by ${booking.customer?.name || 'Customer'} ${booking.provider ? `assigned to ${booking.provider.name}` : ''}`,
-                amount: booking.totalAmount,
-                status: booking.status,
-                timestamp: booking.createdAt
-            });
-        });
-
-        // Recent payments
-        const recentPayments = await Transaction.find()
-            .populate('user', 'name')
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .select('paymentMethod paymentStatus amount createdAt user')
-            .lean();
-
-        recentPayments.forEach(payment => {
-            const displayAmount = payment.amount;
-            activities.push({
-                type: 'payment',
-                message: `${payment.paymentMethod} of ₹${displayAmount} by ${payment.user?.name || 'User'}`,
-                amount: displayAmount,
-                status: payment.paymentStatus,
-                timestamp: payment.createdAt
-            });
-        });
-
-        // Recent payouts
-        const recentPayouts = await ProviderEarning.find()
-            .populate('provider', 'name')
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .select('netAmount createdAt provider')
-            .lean();
+        const [recentBookings, recentPayments, recentPayouts] = await Promise.all([
+            Booking.find()
+                .populate('customer', 'name')
+                .populate('provider', 'name')
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select('status totalAmount createdAt customer provider')
+                .lean(),
+            Transaction.find()
+                .populate('user', 'name')
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select('paymentMethod paymentStatus amount createdAt user')
+                .lean(),
+            ProviderEarning.find()
+                .populate('provider', 'name')
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select('netAmount createdAt provider')
+                .lean()
+        ]);
 
         recentPayouts.forEach(payout => {
             activities.push({
@@ -3232,7 +3217,7 @@ async function getSameIPFraud(req, res) {
         let items = result[0]?.data || [];
 
         // Manually populate users and providers & calculate real-time dynamic scores
-        for (let item of items) {
+        await Promise.all(items.map(async (item) => {
             const validUserIds = item.userIds.filter(Boolean);
             const [users, providers] = await Promise.all([
                 User.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.device isSuspended'),
@@ -3276,7 +3261,7 @@ async function getSameIPFraud(req, res) {
                     item.riskLevel = 'LOW';
                 }
             }
-        }
+        }));
 
         res.status(200).json({
             success: true,
@@ -3356,7 +3341,7 @@ async function getDeviceAbuse(req, res) {
         let items = result[0]?.data || [];
 
         // Manually populate users and providers & calculate real-time dynamic scores
-        for (let item of items) {
+        await Promise.all(items.map(async (item) => {
             const validUserIds = item.userIds.filter(Boolean);
             const [users, providers] = await Promise.all([
                 User.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.ip isSuspended'),
@@ -3398,7 +3383,7 @@ async function getDeviceAbuse(req, res) {
                     item.riskLevel = 'LOW';
                 }
             }
-        }
+        }));
 
         res.status(200).json({
             success: true,
@@ -3450,17 +3435,25 @@ async function getCancellationAlerts(req, res) {
         let items = result[0]?.data || [];
 
         // Manually populate customer, provider, and booking details
-        for (let item of items) {
+        await Promise.all(items.map(async (item) => {
+            const promises = [];
             if (item.userId) {
                 const model = item.userModel === 'Provider' ? Provider : User;
-                item.user = await model.findById(item.userId).select('name email phone role isSuspended');
+                promises.push(
+                    model.findById(item.userId).select('name email phone role isSuspended')
+                        .then(user => { item.user = user; })
+                );
             }
             if (item.bookingId) {
-                item.booking = await Booking.findById(item.bookingId)
-                    .select('bookingId services status totalAmount createdAt')
-                    .populate('provider', 'name email phone');
+                promises.push(
+                    Booking.findById(item.bookingId)
+                        .select('bookingId services status totalAmount createdAt')
+                        .populate('provider', 'name email phone')
+                        .then(booking => { item.booking = booking; })
+                );
             }
-        }
+            await Promise.all(promises);
+        }));
 
         res.status(200).json({
             success: true,
@@ -3694,7 +3687,7 @@ const forceLogoutUser = async (req, res) => {
     }
 };
 
-// System Logs API (Optimized to read only the last 1000 lines from the end to prevent server slowdowns)
+// System Logs API (Optimized to read only required records backwards asynchronously to prevent server slowdowns)
 const getSystemLogs = async (req, res) => {
     try {
         const fs = require('fs');
@@ -3703,67 +3696,82 @@ const getSystemLogs = async (req, res) => {
         if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [], total: 0 });
 
         const { level, page = 1, limit = 50 } = req.query;
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 50;
+        const targetLevel = level && level !== 'ALL' ? level.toUpperCase() : null;
 
-        // Optimized backward reader for the last N lines
-        const maxLinesToFetch = 500;
-        const stat = fs.statSync(logPath);
-        const fd = fs.openSync(logPath, 'r');
+        const fileHandle = await fs.promises.open(logPath, 'r');
+        const stat = await fileHandle.stat();
+        let fileOffset = stat.size;
         const bufferSize = 64 * 1024; // 64KB chunk size
         const buffer = Buffer.alloc(bufferSize);
 
-        let lines = [];
-        let fileOffset = stat.size;
+        let linesCollected = [];
         let leftover = '';
+        const targetCount = pageNum * limitNum;
 
-        while (fileOffset > 0 && lines.length < maxLinesToFetch) {
+        while (fileOffset > 0 && linesCollected.length < targetCount) {
             const bytesToRead = Math.min(bufferSize, fileOffset);
             fileOffset -= bytesToRead;
 
-            fs.readSync(fd, buffer, 0, bytesToRead, fileOffset);
-            const chunk = buffer.toString('utf8', 0, bytesToRead) + leftover;
+            const { bytesRead } = await fileHandle.read(buffer, 0, bytesToRead, fileOffset);
+            const chunk = buffer.toString('utf8', 0, bytesRead) + leftover;
             const chunkLines = chunk.split('\n');
 
-            // The first element might be incomplete due to chunk split
             leftover = chunkLines[0];
 
-            // Add lines in reverse order (from end of file to start)
             for (let i = chunkLines.length - 1; i >= 1; i--) {
-                const trimmed = chunkLines[i]?.trim();
-                if (trimmed) {
-                    lines.push(trimmed);
+                const line = chunkLines[i]?.trim();
+                if (!line) continue;
+
+                if (targetLevel) {
+                    if (!line.includes(`[${targetLevel}]:`)) {
+                        continue;
+                    }
                 }
-                if (lines.length >= maxLinesToFetch) break;
+
+                const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
+                if (match) {
+                    linesCollected.push({ timestamp: match[1], level: match[2], message: match[3] });
+                } else {
+                    linesCollected.push({ message: line });
+                }
+
+                if (linesCollected.length >= targetCount) break;
             }
         }
 
-        if (leftover && lines.length < maxLinesToFetch) {
-            const trimmed = leftover.trim();
-            if (trimmed) lines.push(trimmed);
+        if (leftover && linesCollected.length < targetCount) {
+            const line = leftover.trim();
+            if (line) {
+                if (!targetLevel || line.includes(`[${targetLevel}]:`)) {
+                    const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
+                    if (match) {
+                        linesCollected.push({ timestamp: match[1], level: match[2], message: match[3] });
+                    } else {
+                        linesCollected.push({ message: line });
+                    }
+                }
+            }
         }
 
-        fs.closeSync(fd);
+        await fileHandle.close();
 
-        // Process parsed logs
-        const parsedLogs = lines.map(line => {
-            const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
-            if (match) return { timestamp: match[1], level: match[2], message: match[3] };
-            return { message: line };
-        });
+        const hasMore = linesCollected.length >= targetCount;
+        const startIndex = (pageNum - 1) * limitNum;
+        const paginatedLogs = linesCollected.slice(startIndex, startIndex + limitNum);
 
-        let filteredLogs = parsedLogs;
-        if (level && level !== 'ALL') {
-            filteredLogs = parsedLogs.filter(l => l.level === level.toUpperCase());
-        }
-
-        const startIndex = (page - 1) * limit;
-        const paginatedLogs = filteredLogs.slice(startIndex, startIndex + Number(limit));
+        // Calculate/estimate total logs based on file size if level is ALL, else based on targetCount
+        const total = targetLevel
+            ? (hasMore ? targetCount + limitNum : linesCollected.length)
+            : Math.max(linesCollected.length, Math.round(stat.size / 90));
 
         res.json({
             success: true,
             logs: paginatedLogs,
-            total: filteredLogs.length,
-            page: Number(page),
-            pages: Math.ceil(filteredLogs.length / limit)
+            total,
+            page: pageNum,
+            pages: Math.ceil(total / limitNum)
         });
     } catch (error) {
         console.error('Log API Error:', error);

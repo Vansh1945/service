@@ -296,14 +296,7 @@ const saveToken = async (req, res) => {
         else if (role === 'provider') Model = Provider;
         else Model = User;
 
-        // 1. Pull this token from all other users in all collections to avoid duplicate registration
-        await Promise.all([
-            User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
-            Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
-            Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } })
-        ]);
-
-        // Find the user document
+        // Find the user document first
         const user = await Model.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -314,6 +307,7 @@ const saveToken = async (req, res) => {
         }
 
         const deviceIndex = user.fcmDevices.findIndex(d => d.deviceId === deviceId);
+        let isTokenNewOrChanged = true;
 
         if (deviceIndex > -1) {
             const existing = user.fcmDevices[deviceIndex];
@@ -323,6 +317,7 @@ const saveToken = async (req, res) => {
                 existing.isActive = true;
                 if (platform) existing.platform = platform;
                 if (appVersion) existing.appVersion = appVersion;
+                isTokenNewOrChanged = false; // Token is already registered on this device
             } else {
                 // CASE 2: Same deviceId + different token
                 existing.token = cleanToken;
@@ -337,6 +332,7 @@ const saveToken = async (req, res) => {
             const tokenIndex = user.fcmDevices.findIndex(d => d.token === cleanToken);
             if (tokenIndex > -1) {
                 user.fcmDevices.splice(tokenIndex, 1);
+                isTokenNewOrChanged = false; // Already belonged to this user, just on a different slot
             }
 
             user.fcmDevices.push({
@@ -347,6 +343,16 @@ const saveToken = async (req, res) => {
                 lastActive: new Date(),
                 isActive: true
             });
+        }
+
+        // Only clean up duplicates across other users if this token is new or changed
+        if (isTokenNewOrChanged) {
+            // Non-blocking cleanup in the background to keep the API extremely fast
+            Promise.all([
+                User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
+                Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
+                Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } })
+            ]).catch(err => console.error('[FCM Duplicate Cleanup Error]:', err));
         }
 
         // Cap array to last 10 entries (increased from 3 to support multi-device)

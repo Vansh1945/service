@@ -522,7 +522,7 @@ const getAllComplaints = async (req, res) => {
       complaints.map(async (c) => {
         const pId = c.provider?._id || c.provider;
         const providerComplaintsCount = pId ? (countMap[pId.toString()] || 0) : 0;
-        return await enrichComplaintData({ ...c, providerComplaintsCount });
+        return await enrichComplaintData({ ...c, providerComplaintsCount }, null, false);
       })
     );
 
@@ -586,8 +586,32 @@ const getMyComplaints = async (req, res) => {
 // @desc    Get a single complaint by ID
 // @route   GET /api/complaints/:id
 // @access  Private
-const enrichComplaintData = async (complaint) => {
+const enrichComplaintData = async (complaint, req = null, isDetail = false) => {
   if (!complaint) return null;
+
+  if (!isDetail) {
+    let complaintType = 'N/A';
+    const descriptionMatch = complaint.description?.match(/^\[(bad_work|late_arrival|rude_behavior|incomplete_work|overcharge)\]/);
+    if (descriptionMatch) complaintType = descriptionMatch[1];
+    return {
+      ...complaint,
+      complaintType,
+      customerFraudScore: 0,
+      providerTrustScore: 100,
+      evidenceStrength: 0,
+      suggestedDecision: 'manual_review',
+      recommendation: {
+        action: 'manual_review',
+        confidence: 50,
+        confidenceLevel: 'Moderate',
+        reasons: [],
+        contraIndicators: [],
+        isAdvisoryOnly: true,
+        advisoryDisclaimer: 'Recommendation Only — Final decision requires explicit admin approval.'
+      },
+      resolutionHistory: []
+    };
+  }
 
   const Transaction = require('../models/Transaction-model');
   const ProviderEarning = require('../models/ProviderEarning-model');
@@ -1229,7 +1253,7 @@ const getComplaint = async (req, res) => {
       }
     }
 
-    const enrichedData = await enrichComplaintData(complaint, req);
+    const enrichedData = await enrichComplaintData(complaint, req, true);
 
     res.json({
       success: true,
@@ -1915,7 +1939,7 @@ const getComplaintDetails = async (req, res) => {
       });
     }
 
-    const enrichedData = await enrichComplaintData(complaint, req);
+    const enrichedData = await enrichComplaintData(complaint, req, true);
 
     // Build Booking timeline and structured response
     let bookingData = null;

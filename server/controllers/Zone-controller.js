@@ -198,12 +198,17 @@ exports.getAllZones = async (req, res) => {
     if (zoneLevel) query.zoneLevel = zoneLevel;
 
     const skipIndex = (parseInt(page) - 1) * parseInt(limit);
-    const zones = await Zone.find(query)
-      .populate('parentZone adjacentZones')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(skipIndex);
-    const total = await Zone.countDocuments(query);
+    
+    const [zones, total] = await Promise.all([
+      Zone.find(query)
+        .populate('parentZone adjacentZones', 'name city status zoneLevel')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip(skipIndex)
+        .lean(),
+      Zone.countDocuments(query)
+    ]);
+
     return res.status(200).json({ success: true, message: "Zones retrieved successfully", data: zones, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message, data: null });
@@ -293,34 +298,87 @@ exports.getZoneById = async (req, res) => {
     
     const polygonCoords = zone.polygon && zone.polygon.coordinates && zone.polygon.coordinates[0];
 
-    // 1. Fetch & match Providers (Explicit + Geo fallback)
+    // Helper to extract polygon bounding box for pre-filtering query
+    const getPolygonBoundingBox = (coords) => {
+      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+      for (let i = 0; i < coords.length; i++) {
+        const pLng = coords[i][0];
+        const pLat = coords[i][1];
+        if (pLat < minLat) minLat = pLat;
+        if (pLat > maxLat) maxLat = pLat;
+        if (pLng < minLng) minLng = pLng;
+        if (pLng > maxLng) maxLng = pLng;
+      }
+      return { minLat, maxLat, minLng, maxLng };
+    };
+
     let matchedProviders = [];
+    let matchedUsers = [];
+    let matchedBookings = [];
+
     if (polygonCoords) {
-      const providersInZone = await Provider.find({
-        isDeleted: false,
-        $or: [
-          { currentZone: id },
-          {
-            currentLocation: {
-              $geoWithin: {
-                $geometry: {
-                  type: "Polygon",
-                  coordinates: zone.polygon.coordinates
+      const bbox = getPolygonBoundingBox(polygonCoords);
+
+      const [providersInZone, allProviders, usersInZone, allUsers, bookingsInZone, allBookings] = await Promise.all([
+        Provider.find({
+          isDeleted: false,
+          $or: [
+            { currentZone: id },
+            {
+              currentLocation: {
+                $geoWithin: {
+                  $geometry: {
+                    type: "Polygon",
+                    coordinates: zone.polygon.coordinates
+                  }
                 }
               }
             }
-          }
-        ]
-      }).select('_id name email phone profilePicUrl status currentLocation address').lean();
+          ]
+        }).select('_id name email phone profilePicUrl status currentLocation address').lean(),
 
-      const allProviders = await Provider.find({ isDeleted: false }).select('_id name email phone profilePicUrl status currentLocation address').lean();
+        Provider.find({
+          isDeleted: false,
+          'address.lat': { $gte: bbox.minLat, $lte: bbox.maxLat },
+          'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng }
+        }).select('_id name email phone profilePicUrl status currentLocation address').lean(),
+
+        User.find({
+          isSuspended: { $ne: true },
+          $or: [
+            { currentZone: id },
+            {
+              currentLocation: {
+                $geoWithin: {
+                  $geometry: {
+                    type: "Polygon",
+                    coordinates: zone.polygon.coordinates
+                  }
+                }
+              }
+            }
+          ]
+        }).select('_id name email phone profilePicUrl currentLocation address').lean(),
+
+        User.find({
+          isSuspended: { $ne: true },
+          'address.lat': { $gte: bbox.minLat, $lte: bbox.maxLat },
+          'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng }
+        }).select('_id name email phone profilePicUrl currentLocation address').lean(),
+
+        Booking.find({ zoneId: id }).lean(),
+
+        Booking.find({
+          'address.lat': { $gte: bbox.minLat, $lte: bbox.maxLat },
+          'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng }
+        }).lean()
+      ]);
+
+      // Provider matching
       const matchedProvMap = new Map();
-
       providersInZone.forEach(p => matchedProvMap.set(p._id.toString(), p));
-
       allProviders.forEach(p => {
         if (matchedProvMap.has(p._id.toString())) return;
-
         if (p.currentLocation && p.currentLocation.coordinates && p.currentLocation.coordinates.length === 2) {
           const [lng, lat] = p.currentLocation.coordinates;
           if (lat !== 0 || lng !== 0) {
@@ -330,47 +388,19 @@ exports.getZoneById = async (req, res) => {
             }
           }
         }
-
         if (p.address && typeof p.address.lat === 'number' && typeof p.address.lng === 'number' && !isNaN(p.address.lat) && !isNaN(p.address.lng)) {
           if (isPointInPolygon(p.address.lat, p.address.lng, polygonCoords)) {
             matchedProvMap.set(p._id.toString(), p);
           }
         }
       });
-
       matchedProviders = Array.from(matchedProvMap.values());
-    } else {
-      matchedProviders = await Provider.find({ currentZone: id, isDeleted: false }).select('_id name email phone profilePicUrl status').lean();
-    }
 
-    // 2. Fetch & match Users (Explicit + Geo fallback)
-    let matchedUsers = [];
-    if (polygonCoords) {
-      const usersInZone = await User.find({
-        isSuspended: { $ne: true },
-        $or: [
-          { currentZone: id },
-          {
-            currentLocation: {
-              $geoWithin: {
-                $geometry: {
-                  type: "Polygon",
-                  coordinates: zone.polygon.coordinates
-                }
-              }
-            }
-          }
-        ]
-      }).select('_id name email phone profilePicUrl currentLocation address').lean();
-
-      const allUsers = await User.find({ isSuspended: { $ne: true } }).select('_id name email phone profilePicUrl currentLocation address').lean();
+      // User matching
       const matchedUserMap = new Map();
-
       usersInZone.forEach(u => matchedUserMap.set(u._id.toString(), u));
-
       allUsers.forEach(u => {
         if (matchedUserMap.has(u._id.toString())) return;
-
         if (u.currentLocation && u.currentLocation.coordinates && u.currentLocation.coordinates.length === 2) {
           const [lng, lat] = u.currentLocation.coordinates;
           if (lat !== 0 || lng !== 0) {
@@ -380,41 +410,36 @@ exports.getZoneById = async (req, res) => {
             }
           }
         }
-
         if (u.address && typeof u.address.lat === 'number' && typeof u.address.lng === 'number' && !isNaN(u.address.lat) && !isNaN(u.address.lng)) {
           if (isPointInPolygon(u.address.lat, u.address.lng, polygonCoords)) {
             matchedUserMap.set(u._id.toString(), u);
           }
         }
       });
-
       matchedUsers = Array.from(matchedUserMap.values());
-    } else {
-      matchedUsers = await User.find({ currentZone: id, isSuspended: false }).select('_id name email phone profilePicUrl').lean();
-    }
 
-    // 3. Fetch & match Bookings (Explicit + Geo fallback)
-    let matchedBookings = [];
-    if (polygonCoords) {
-      const bookingsInZone = await Booking.find({ zoneId: id }).lean();
-      const allBookings = await Booking.find({}).lean();
+      // Booking matching
       const matchedBookingMap = new Map();
-
       bookingsInZone.forEach(b => matchedBookingMap.set(b._id.toString(), b));
-
       allBookings.forEach(b => {
         if (matchedBookingMap.has(b._id.toString())) return;
-
         if (b.address && typeof b.address.lat === 'number' && typeof b.address.lng === 'number' && !isNaN(b.address.lat) && !isNaN(b.address.lng)) {
           if (isPointInPolygon(b.address.lat, b.address.lng, polygonCoords)) {
             matchedBookingMap.set(b._id.toString(), b);
           }
         }
       });
-
       matchedBookings = Array.from(matchedBookingMap.values());
+
     } else {
-      matchedBookings = await Booking.find({ zoneId: id }).lean();
+      const [providers, users, bookings] = await Promise.all([
+        Provider.find({ currentZone: id, isDeleted: false }).select('_id name email phone profilePicUrl status').lean(),
+        User.find({ currentZone: id, isSuspended: false }).select('_id name email phone profilePicUrl').lean(),
+        Booking.find({ zoneId: id }).lean()
+      ]);
+      matchedProviders = providers;
+      matchedUsers = users;
+      matchedBookings = bookings;
     }
 
     // 4. Calculate Analytics Metrics

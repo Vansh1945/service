@@ -241,10 +241,26 @@ const createBooking = async (req, res) => {
         }
       }
 
-      // Check if service exists
-      const service = session
-        ? await Service.findById(serviceId).session(session)
-        : await Service.findById(serviceId);
+      // Parallelize lookups
+      const ZoneModel = mongoose.model('Zone');
+      const SurgeModel = mongoose.model('Surge');
+
+      const promises = [
+        session ? Service.findById(serviceId).session(session) : Service.findById(serviceId),
+        (address && typeof address.lat === 'number' && typeof address.lng === 'number')
+          ? ZoneModel.findZoneByCoordinates(address.lat, address.lng)
+          : Promise.resolve(null),
+        session ? SurgeModel.find({ active: true }).session(session) : SurgeModel.find({ active: true }),
+        (isRebook && originalBooking)
+          ? (session ? Booking.findById(originalBooking).session(session).lean() : Booking.findById(originalBooking).lean())
+          : Promise.resolve(null),
+        (isFavoriteProviderBooking && preferredProviderId)
+          ? (session ? Provider.findById(preferredProviderId).session(session).lean() : Provider.findById(preferredProviderId).lean())
+          : Promise.resolve(null)
+      ];
+
+      const [service, detectedZone, allActiveSurges, oldBooking, providerDoc] = await Promise.all(promises);
+
       if (!service) {
         throw new Error('Service not found');
       }
@@ -257,9 +273,6 @@ const createBooking = async (req, res) => {
 
       // Smart rules: Rebook validation
       if (isRebook && originalBooking) {
-        const oldBooking = session
-          ? await Booking.findById(originalBooking).session(session)
-          : await Booking.findById(originalBooking);
         if (!oldBooking) {
           throw new Error('Original booking not found');
         }
@@ -273,9 +286,6 @@ const createBooking = async (req, res) => {
       // Smart rules: Favorite provider validation
       let assignedProviderId = null;
       if (isFavoriteProviderBooking && preferredProviderId) {
-        const providerDoc = session
-          ? await Provider.findById(preferredProviderId).session(session)
-          : await Provider.findById(preferredProviderId);
         if (!providerDoc) {
           throw new Error('Preferred provider not found');
         }
@@ -299,14 +309,7 @@ const createBooking = async (req, res) => {
       }
 
       // Resolve booking zone from address coordinates upfront
-      let detectedZoneId = null;
-      if (address && typeof address.lat === 'number' && typeof address.lng === 'number') {
-        const ZoneModel = mongoose.model('Zone');
-        const detectedZone = await ZoneModel.findZoneByCoordinates(address.lat, address.lng);
-        if (detectedZone) {
-          detectedZoneId = detectedZone._id;
-        }
-      }
+      let detectedZoneId = detectedZone ? detectedZone._id : null;
 
       // Calculate amounts
       let subtotal = (service.discountPrice || service.basePrice) * quantity;
@@ -335,25 +338,18 @@ const createBooking = async (req, res) => {
         };
       }
 
-      // Resolve Dynamic Surcharges
-      const SurgeModel = mongoose.model('Surge');
-      const allActiveSurges = session
-        ? await SurgeModel.find({ active: true }).session(session)
-        : await SurgeModel.find({ active: true });
-
       // Resolve ancestry
       const zoneAncestry = [];
       if (detectedZoneId) {
         zoneAncestry.push(detectedZoneId.toString());
-        const ZoneModel = mongoose.model('Zone');
         let curr = session
-          ? await ZoneModel.findById(detectedZoneId).select('parentZone').session(session)
-          : await ZoneModel.findById(detectedZoneId).select('parentZone');
+          ? await ZoneModel.findById(detectedZoneId).select('parentZone').session(session).lean()
+          : await ZoneModel.findById(detectedZoneId).select('parentZone').lean();
         while (curr && curr.parentZone) {
           zoneAncestry.push(curr.parentZone.toString());
           curr = session
-            ? await ZoneModel.findById(curr.parentZone).select('parentZone').session(session)
-            : await ZoneModel.findById(curr.parentZone).select('parentZone');
+            ? await ZoneModel.findById(curr.parentZone).select('parentZone').session(session).lean()
+            : await ZoneModel.findById(curr.parentZone).select('parentZone').lean();
         }
       }
 
@@ -975,28 +971,29 @@ const getUserBookings = async (req, res) => {
       ];
     }
 
-    // Get total count for pagination
-    const totalBookings = await Booking.countDocuments(query);
-
-    const bookings = await Booking.find(query)
-      .populate({
-        path: 'services.service',
-        select: 'title description basePrice category images duration',
-        populate: {
-          path: 'category',
-          select: 'name'
-        },
-        match: searchTerm ? { title: { $regex: searchTerm, $options: 'i' } } : {}
-      })
-      .populate({
-        path: 'provider',
-        select: 'name email phone completedBookings performanceScore providerId profilePicUrl'
-      })
-      .populate('customer', 'name email phone')
-      .sort({ createdAt: -1 })
-      .skip((currentPage - 1) * itemsPerPage)
-      .limit(itemsPerPage)
-      .lean();
+    // Get total count and bookings in parallel
+    const [totalBookings, bookings] = await Promise.all([
+      Booking.countDocuments(query),
+      Booking.find(query)
+        .populate({
+          path: 'services.service',
+          select: 'title description basePrice category images duration',
+          populate: {
+            path: 'category',
+            select: 'name'
+          },
+          match: searchTerm ? { title: { $regex: searchTerm, $options: 'i' } } : {}
+        })
+        .populate({
+          path: 'provider',
+          select: 'name email phone completedBookings performanceScore providerId profilePicUrl'
+        })
+        .populate('customer', 'name email phone')
+        .sort({ createdAt: -1 })
+        .skip((currentPage - 1) * itemsPerPage)
+        .limit(itemsPerPage)
+        .lean()
+    ]);
 
     // Keep bookings where service title matched OR bookingId matched the search term
     const filteredBookings = bookings.filter(b => {
@@ -4277,15 +4274,15 @@ const getAllBookings = async (req, res) => {
 
     if (req.query.forRefunds === 'true') {
       const { enrichComplaintData } = require('./Complaint-controller');
-      for (const b of bookings) {
+      await Promise.all(bookings.map(async (b) => {
         if (b.complaint) {
           try {
-            b.complaint = await enrichComplaintData(b.complaint, req);
+            b.complaint = await enrichComplaintData(b.complaint, req, false);
           } catch (e) {
             console.error("Error enriching complaint in bookings list:", e);
           }
         }
-      }
+      }));
     }
 
     const total = totalResult.length > 0 ? totalResult[0].total : 0;

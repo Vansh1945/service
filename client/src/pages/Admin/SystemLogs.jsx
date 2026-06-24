@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
@@ -31,19 +32,22 @@ const LevelBadge = ({ level }) => {
 
 // Parser engine to split the raw logs into structured data properties
 const parseLogMessage = (message) => {
-  if (!message) return { method: '-', endpoint: '-', status: '-', responseTime: '-', isHttp: false };
+  if (!message) return { method: '-', endpoint: '-', status: '-', responseTime: '-', role: '-', userId: '-', ip: '-', isHttp: false };
 
   const trimmed = message.trim();
-  const match = trimmed.match(/^(GET|POST|PUT|DELETE|PATCH|OPTIONS) ([^ ]+) ([0-9]{3}) ([0-9.]+) ms/);
+  const match = trimmed.match(/^(GET|POST|PUT|DELETE|PATCH|OPTIONS) ([^ ]+) ([0-9]{3}) ([0-9.]+) ms(?: - Role: ([^ ]+) - UserID: ([^ ]+) - IP: ([^ ]+))?/);
 
   if (match) {
-    const [_, method, path, status, time] = match;
+    const [_, method, path, status, time, role, userId, ip] = match;
     const cleanEndpoint = path.split('?')[0];
     return {
       method,
       endpoint: cleanEndpoint,
       status: parseInt(status),
       responseTime: `${Math.round(parseFloat(time))} ms`,
+      role: role || '-',
+      userId: userId || '-',
+      ip: ip || '-',
       isHttp: true
     };
   }
@@ -53,6 +57,9 @@ const parseLogMessage = (message) => {
     endpoint: trimmed,
     status: '-',
     responseTime: '-',
+    role: '-',
+    userId: '-',
+    ip: '-',
     isHttp: false
   };
 };
@@ -67,6 +74,8 @@ const detectModule = (endpoint) => {
   if (lower.includes('/notification')) return 'NOTIFICATION';
   if (lower.includes('/admin')) return 'ADMIN';
   if (lower.includes('/booking')) return 'BOOKING';
+  if (lower.includes('/customer')) return 'CUSTOMER';
+  if (lower.includes('/provider')) return 'PROVIDER';
   return 'SYSTEM';
 };
 
@@ -82,22 +91,39 @@ const getMethodBadgeClass = (method) => {
   }
 };
 
-// Human-readable status mapping and coloring
 const getStatusText = (status) => {
   if (status === '-') return '-';
+  if (status === undefined || status === null || status === '') return 'Unknown Status';
   const code = parseInt(status);
+  if (isNaN(code)) return 'Unknown Status';
   switch (code) {
     case 200: return '200 OK';
     case 201: return '201 Created';
+    case 202: return '202 Accepted';
     case 204: return '204 No Content';
+    case 206: return '206 Partial Content';
+    case 301: return '301 Moved Permanently';
+    case 302: return '302 Found';
     case 304: return '304 Cached';
+    case 307: return '307 Temporary Redirect';
+    case 308: return '308 Permanent Redirect';
     case 400: return '400 Bad Request';
     case 401: return '401 Unauthorized';
     case 403: return '403 Forbidden';
     case 404: return '404 Not Found';
+    case 405: return '405 Method Not Allowed';
+    case 408: return '408 Request Timeout';
+    case 409: return '409 Conflict';
+    case 410: return '410 Gone';
+    case 413: return '413 Payload Too Large';
+    case 415: return '415 Unsupported Media Type';
+    case 422: return '422 Validation Error';
+    case 429: return '429 Too Many Requests';
     case 500: return '500 Server Error';
+    case 502: return '502 Bad Gateway';
     case 503: return '503 Service Unavailable';
-    default: return `${code}`;
+    case 504: return '504 Gateway Timeout';
+    default: return 'Unknown Status';
   }
 };
 
@@ -113,12 +139,31 @@ const getStatusBadgeClass = (status) => {
 
 // Response Speed Badge styling based on thresholds (<200ms green, 200-500ms yellow, >500ms red)
 const getSpeedBadgeClass = (speedStr) => {
-  if (speedStr === '-') return 'text-slate-400';
+  if (speedStr === '-') return 'text-slate-450';
   const speed = parseInt(speedStr);
-  if (isNaN(speed)) return 'text-slate-400';
-  if (speed < 200) return 'bg-emerald-50 text-emerald-600 border-emerald-100 font-extrabold';
-  if (speed >= 200 && speed <= 500) return 'bg-amber-50 text-amber-600 border-amber-100 font-extrabold';
-  return 'bg-rose-50 text-rose-600 border-rose-100 font-extrabold';
+  if (isNaN(speed)) return 'text-slate-450';
+  if (speed < 300) return 'bg-emerald-50 text-emerald-700 border-emerald-200/40';
+  if (speed >= 300 && speed < 500) return 'bg-amber-50 text-amber-700 border-amber-200/40';
+  return 'bg-rose-50 text-rose-700 border-rose-200/40';
+};
+
+const getSpeedDotColor = (speedStr) => {
+  const speed = parseInt(speedStr);
+  if (isNaN(speed)) return 'bg-slate-400';
+  if (speed < 300) return 'bg-emerald-500';
+  if (speed >= 300 && speed < 500) return 'bg-amber-500';
+  return 'bg-rose-500';
+};
+
+const formatUser = (role, userId, ip) => {
+  if (role && role !== '-') {
+    const shortId = userId && userId.length > 10 ? `${userId.substring(0, 5)}...${userId.slice(-4)}` : userId;
+    return `${role} (${shortId})`;
+  }
+  if (ip && ip !== '-') {
+    return ip === '::1' || ip === '127.0.0.1' ? 'Localhost' : ip;
+  }
+  return 'Guest';
 };
 
 
@@ -154,7 +199,8 @@ const SystemLogs = () => {
       const res = await AdminService.getSystemLogs({
         page: pagination.page,
         limit: pagination.limit,
-        level: pagination.level
+        level: pagination.level,
+        t: Date.now()
       });
       if (res.data?.success) {
         setLogs(res.data.logs);
@@ -173,9 +219,7 @@ const SystemLogs = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [fetchLogs]);
 
-  useEffect(() => {
     let interval;
     if (autoRefresh) {
       interval = setInterval(() => {
@@ -290,12 +334,7 @@ const SystemLogs = () => {
               Auto-refresh (10s)
             </label>
 
-            <button
-              onClick={() => fetchLogs()}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-secondary border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all font-bold text-sm"
-            >
-              <FiRefreshCw size={14} className={loading ? "" : ""} /> Refresh
-            </button>
+
             <button
               onClick={handleDownload}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-white border border-primary/10 rounded-xl shadow-sm hover:shadow-md transition-all font-bold text-sm"
@@ -368,13 +407,13 @@ const SystemLogs = () => {
               onChange={(e) => setSelectedModule(e.target.value)}
               className="w-full sm:w-44 px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-200"
             >
-              {['All Modules', 'System', 'Auth', 'Booking', 'Payment', 'Notification', 'Admin'].map(modName => (
+              {['All Modules', 'System', 'Auth', 'Booking', 'Payment', 'Notification', 'Admin', 'Customer', 'Provider'].map(modName => (
                 <option key={modName} value={modName}>{modName}</option>
               ))}
             </select>
 
             {/* Search Input */}
-            
+
           </div>
         </div>
 
@@ -390,14 +429,15 @@ const SystemLogs = () => {
                   <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 w-24">Method</th>
                   <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Endpoint</th>
                   <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 w-44">Status</th>
-                  <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 w-28">Speed</th>
+                  <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 w-32">User</th>
+                  <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 w-32">Speed</th>
                   <th className="sticky top-0 bg-gray-50 z-10 px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 w-16">Action</th>
                 </tr>
               </thead>
               {loading && logs.length === 0 ? (
                 <tbody>
                   <tr>
-                    <td colSpan="8" className="px-6 py-4">
+                    <td colSpan="9" className="px-6 py-4">
                       <div className="space-y-4 p-4 animate-pulse">
                         {[1, 2, 3].map(i => (
                           <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
@@ -410,7 +450,7 @@ const SystemLogs = () => {
                 <tbody className="divide-y divide-gray-50 font-sans text-xs">
                   {filteredLogs.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-6 py-16 text-center">
+                      <td colSpan="9" className="px-6 py-16 text-center">
                         <div className="flex flex-col items-center justify-center space-y-2 text-gray-400">
                           <FiSearch size={32} className="text-gray-300 animate-bounce" />
                           <p className="font-bold text-sm">No logs found for selected filter</p>
@@ -469,12 +509,18 @@ const SystemLogs = () => {
                             )}
                           </td>
 
+                          {/* User column */}
+                          <td className="px-6 py-3.5 whitespace-nowrap font-semibold text-gray-600" title={`Full ID: ${parsed.userId || '-'}`}>
+                            {formatUser(parsed.role, parsed.userId, parsed.ip)}
+                          </td>
+
                           {/* Response time Speed column */}
                           <td className="px-6 py-3.5 whitespace-nowrap">
                             {parsed.responseTime === '-' ? (
                               <span className="text-gray-400 font-semibold font-mono">-</span>
                             ) : (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold border ${getSpeedBadgeClass(parsed.responseTime)}`}>
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${getSpeedBadgeClass(parsed.responseTime)}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getSpeedDotColor(parsed.responseTime)}`}></span>
                                 {parsed.responseTime}
                               </span>
                             )}

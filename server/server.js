@@ -7,7 +7,47 @@ const path = require('path');
 const fs = require('fs');
 const compression = require("compression");
 const helmet = require("helmet");
+const rateLimit = require('express-rate-limit');
+const http = require('http');
 const mongoSanitize = require("./middlewares/mongo-sanitize");
+
+// Database & Socket imports
+const connectDB = require("./config/db");
+const { initSocket } = require('./socket/socketServer');
+
+// Middleware imports
+const { parseFraudHeaders } = require('./middlewares/fraud-middleware');
+
+// Route imports
+const adminRoutes = require("./routes/Admin-Routes");
+const providerRoutes = require("./routes/Provider-Routes");
+const customerRoutes = require("./routes/User-Routes");
+const authRoutes = require("./routes/Auth-routes");
+const questionRoutes = require("./routes/Question-route");
+const testRoutes = require("./routes/Test-route");
+const serviceRoutes = require("./routes/Service-route");
+const couponRoutes = require("./routes/Coupon-route");
+const bookingRoutes = require("./routes/Booking-route");
+const transactionRoutes = require("./routes/Transaction-route");
+const complaintRoutes = require("./routes/complaintRoutes");
+const feedbackRoutes = require("./routes/feedback-routes");
+const commissionRoutes = require('./routes/commissionRoutes');
+const paymentRoutes = require('./routes/payment-routes');
+const systemSettingRoutes = require('./routes/SystemSetting-routes');
+const contactRoutes = require('./routes/Contact-routes');
+const notificationRoutes = require('./routes/notification-routes');
+const chatRoutes = require('./routes/Chat-route');
+const zoneRoutes = require('./routes/Zone-routes');
+const surgeRoutes = require('./routes/Surge-routes');
+const referralRoutes = require('./routes/Referral-routes');
+
+// Initialize express app
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1️⃣ LOGGING CONFIGURATION (WINSTON & MORGAN)
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Ensure logs directory exists
 const logDir = path.join(__dirname, 'logs');
@@ -41,12 +81,54 @@ if (process.env.NODE_ENV !== 'production') {
 
 global.logger = logger;
 
-const connectDB = require("./config/db");
-const frontend = process.env.FRONTEND_URL;
-const PORT = process.env.PORT || 5000;
+// Morgan API Request Logging
+app.use(morgan((tokens, req, res) => {
+  let url = tokens.url(req, res);
+  // Redact sensitive query params
+  if (url) {
+    url = url.replace(/(token|secret|password)=[^&]+/ig, '$1=***');
+  }
+  const method = tokens.method(req, res);
+  const status = tokens.status(req, res);
+  const responseTimeVal = parseFloat(tokens['response-time'](req, res)) || 0;
+  const responseTime = responseTimeVal.toFixed(2);
+  const role = req.role || req.user?.role || req.provider?.role || (req.admin ? 'admin' : '-');
+  const userId = req.userID || req.user?._id || req.provider?._id || req.admin?._id || '-';
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '-';
 
-// Initialize express app
-const app = express();
+  return `${method} ${url} ${status} ${responseTime} ms - Role: ${role} - UserID: ${userId} - IP: ${ip}`;
+}, {
+  stream: {
+    write: message => {
+      const trimmed = message.trim();
+      const timeMatch = trimmed.match(/ (\d+\.\d+) ms/);
+      const time = timeMatch ? parseFloat(timeMatch[1]) : 0;
+
+      let level = 'info';
+      if (time > 1000) {
+        level = 'error'; // Critical > 1000ms
+      } else if (time > 300) {
+        level = 'warn';  // Warning > 300ms
+      }
+
+      if (level === 'error') {
+        logger.error(trimmed);
+      } else if (level === 'warn') {
+        logger.warn(trimmed);
+      } else {
+        logger.info(trimmed);
+      }
+    }
+  },
+  skip: (req, res) => {
+    const url = req.originalUrl || req.url || '';
+    return url.includes('/system-logs');
+  }
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2️⃣ SECURITY & BODY PARSERS MIDDLEWARES
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(compression());
@@ -57,50 +139,13 @@ app.use(express.json({
     req.rawBody = buf;
   }
 }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(mongoSanitize({ allowDots: true, replaceWith: '_' }));
 
-const { parseFraudHeaders } = require('./middlewares/fraud-middleware');
+// Custom Security Headers Parser
 app.use(parseFraudHeaders);
 
-// Custom response execution time tracking & slow API (>500ms) performance alert
-app.use((req, res, next) => {
-  const start = process.hrtime();
-  res.on('finish', () => {
-    const diff = process.hrtime(start);
-    const durationMs = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
-    if (durationMs > 500) {
-      const alertMsg = `[PERFORMANCE WARNING] API ${req.method} ${req.originalUrl} took ${durationMs}ms`;
-      if (global.logger) {
-        global.logger.warn(alertMsg);
-      } else {
-        console.warn(alertMsg);
-      }
-    }
-  });
-  next();
-});
-
-// Morgan API Request Logging
-app.use(morgan((tokens, req, res) => {
-  let url = tokens.url(req, res);
-  // Redact sensitive query params
-  if (url) {
-    url = url.replace(/(token|secret|password)=[^&]+/ig, '$1=***');
-  }
-  return [
-    tokens.method(req, res),
-    url,
-    tokens.status(req, res),
-    tokens['response-time'](req, res), 'ms'
-  ].join(' ');
-}, {
-  stream: { write: message => logger.info(message.trim()) },
-  skip: (req, res) => {
-    const url = req.originalUrl || req.url || '';
-    return url.includes('/system-logs');
-  }
-}));
-
+// CORS Settings
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
@@ -109,7 +154,7 @@ const corsOptions = {
 
     const isDev = process.env.NODE_ENV !== 'production';
 
-    // allow requests with no origin (mobile apps, postman), allowed origins list, or localhost in development mode
+    // Allow requests with no origin (mobile apps, postman), allowed origins, or localhost in development
     if (!origin || allowedOrigins.includes(origin) || (isDev && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')))) {
       callback(null, true);
     } else {
@@ -130,26 +175,19 @@ const corsOptions = {
     'x-device-id'
   ]
 };
-
 app.use(cors(corsOptions));
 
-// Middleware
-
-// Test Route 
-app.get('/api/test-route', (req, res) => {
-  res.send('Raj Electrical Service API is running!');
-});
-
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Static Folders
 app.use("/uploads", express.static("uploads"));
 app.use("/assets", express.static("assets"));
 
-const rateLimit = require('express-rate-limit');
+// ─────────────────────────────────────────────────────────────────────────────
+// 3️⃣ RATE LIMITERS
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Specific Rate Limiters for Authentication
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // standard production settings
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many login attempts. Try again in 15 minutes.' }
@@ -163,48 +201,21 @@ const otpLimiter = rateLimit({
   message: { success: false, message: 'Too many OTP requests. Try again in 10 minutes.' }
 });
 
-// const globalLimiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 300,
-//   standardHeaders: true,
-//   legacyHeaders: false,
-//   message: { success: false, message: 'Too many requests. Please try again later.' }
-// });
-
-// Apply rate limiters directly to auth endpoints
+// Apply rate limiters to auth endpoints
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/firebase-login", loginLimiter);
 app.use("/api/auth/forgot-password", otpLimiter);
 app.use("/api/auth/resend-otp", otpLimiter);
 app.use("/api/auth/verify-otp", otpLimiter);
 
-// Apply global rate limiter to all api endpoints
-// app.use("/api", globalLimiter);
+// ─────────────────────────────────────────────────────────────────────────────
+// 4️⃣ MAINTENANCE MODE MIDDLEWARE
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Route imports
-const adminRoutes = require("./routes/Admin-Routes");
-const providerRoutes = require("./routes/Provider-Routes");
-const customerRoutes = require("./routes/User-Routes");
-const authRoutes = require("./routes/Auth-routes");
-const questionRoutes = require("./routes/Question-route");
-const testRoutes = require("./routes/Test-route");
-const serviceRoutes = require("./routes/Service-route");
-const couponRoutes = require("./routes/Coupon-route");
-const bookingRoutes = require("./routes/Booking-route");
-const transactionRoutes = require("./routes/Transaction-route");
-const complaintRoutes = require("./routes/complaintRoutes");
-const feedbackRoutes = require("./routes/feedback-routes");
-const commissionRoutes = require('./routes/commissionRoutes');
-const paymentRoutes = require('./routes/payment-routes');
-const systemSettingRoutes = require('./routes/SystemSetting-routes');
-const contactRoutes = require('./routes/Contact-routes');
-const notificationRoutes = require('./routes/notification-routes');
-const chatRoutes = require('./routes/Chat-route');
-const zoneRoutes = require('./routes/Zone-routes');
-const surgeRoutes = require('./routes/Surge-routes');
-const referralRoutes = require('./routes/Referral-routes');
+let cachedSystemConfig = null;
+let lastSystemConfigFetchTime = 0;
+const SYSTEM_CONFIG_CACHE_TTL = 30000; // 30 seconds cache TTL
 
-// Maintenance Mode Middleware
 app.use(async (req, res, next) => {
   // Always allow health checks, test-routes, static assets, and uploads
   if (
@@ -220,7 +231,15 @@ app.use(async (req, res, next) => {
     const { SystemConfig } = require('./models/SystemSetting');
     const jwt = require('jsonwebtoken');
 
-    const settings = await SystemConfig.findOne();
+    let settings = cachedSystemConfig;
+    const now = Date.now();
+    if (!settings || now - lastSystemConfigFetchTime > SYSTEM_CONFIG_CACHE_TTL) {
+      settings = await SystemConfig.findOne().lean();
+      if (settings) {
+        cachedSystemConfig = settings;
+        lastSystemConfigFetchTime = now;
+      }
+    }
 
     if (!settings?.maintenanceMode) {
       return next();
@@ -283,7 +302,20 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Routes
+// ─────────────────────────────────────────────────────────────────────────────
+// 5️⃣ ROUTES REGISTRATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Test & Health routes
+app.get('/api/test-route', (req, res) => {
+  res.send('Raj Electrical Service API is running!');
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date() });
+});
+
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/provider", providerRoutes);
@@ -306,14 +338,6 @@ app.use('/api/zones', zoneRoutes);
 app.use('/api/surge', surgeRoutes);
 app.use('/api/referral', referralRoutes);
 
-// Health check endpoint
-
-
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date() });
-});
-
-
 // Catch-all 404 handler for unknown routes
 app.use((req, res, next) => {
   res.status(404).json({
@@ -333,24 +357,21 @@ app.use((err, req, res, next) => {
   });
 });
 
-
-
-
+// ─────────────────────────────────────────────────────────────────────────────
+// 6️⃣ DATABASE CONNECTION & SERVER STARTUP
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Create HTTP server (required for Socket.io)
-const http = require('http');
-const { initSocket } = require('./socket/socketServer');
 const server = http.createServer(app);
 
 // Initialize Socket.io
 initSocket(server);
 
-// Start server after ensuring MongoDB is connected
 const startServer = async () => {
   try {
     await connectDB();
 
-    // Auto-migrate branding from Raj Electrical Services to Raj Electrical Service for instant Google SEO!
+    // Auto-migrate branding defaults
     try {
       const { SystemConfig } = require('./models/SystemSetting');
       const existingConfig = await SystemConfig.findOne();
@@ -397,7 +418,8 @@ const startServer = async () => {
 
     // Initialize background tasks
     const { releaseHeldEarnings } = require('./controllers/paymentController');
-    // Run every hour
+
+    // Run releaseHeldEarnings every hour
     setInterval(async () => {
       console.log('Running background task: releaseHeldEarnings');
       await releaseHeldEarnings();
