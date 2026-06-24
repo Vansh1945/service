@@ -242,6 +242,7 @@ const userSchema = new mongoose.Schema({
 
 // Additional indexes for commonly queried fields
 userSchema.index({ role: 1 });
+userSchema.index({ phone: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ currentLocation: '2dsphere' });
 
