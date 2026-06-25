@@ -105,10 +105,10 @@ app.use(morgan((tokens, req, res) => {
       const time = timeMatch ? parseFloat(timeMatch[1]) : 0;
 
       let level = 'info';
-      if (time > 1000) {
-        level = 'error'; // Critical > 1000ms
-      } else if (time > 300) {
-        level = 'warn';  // Warning > 300ms
+      if (time > 3000) {
+        level = 'error'; // Critical > 3000ms
+      } else if (time > 1500) {
+        level = 'warn';  // Warning > 1500ms
       }
 
       if (level === 'error') {

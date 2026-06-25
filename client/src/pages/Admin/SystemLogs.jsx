@@ -68,12 +68,21 @@ const parseLogMessage = (message) => {
 const detectModule = (endpoint) => {
   if (!endpoint || endpoint === '-') return 'SYSTEM';
   const lower = endpoint.toLowerCase();
+
+  // Prioritize prefix matching for major actor routes
+  if (lower.startsWith('/api/admin') || lower.includes('/admin/')) return 'ADMIN';
+  if (lower.startsWith('/api/customer') || lower.includes('/customer/')) return 'CUSTOMER';
+  if (lower.startsWith('/api/provider') || lower.includes('/provider/')) return 'PROVIDER';
+
   if (lower.includes('/system-setting')) return 'SYSTEM';
   if (lower.includes('/auth') || lower.includes('/login')) return 'AUTH';
   if (lower.includes('/payment') || lower.includes('/transaction')) return 'PAYMENT';
   if (lower.includes('/notification')) return 'NOTIFICATION';
-  if (lower.includes('/admin')) return 'ADMIN';
   if (lower.includes('/booking')) return 'BOOKING';
+  if (lower.includes('/question')) return 'QUESTION';
+  if (lower.includes('/coupon')) return 'COUPON';
+  if (lower.includes('/service')) return 'SERVICE';
+  if (lower.includes('/chat')) return 'CHAT';
   if (lower.includes('/customer')) return 'CUSTOMER';
   if (lower.includes('/provider')) return 'PROVIDER';
   return 'SYSTEM';
@@ -137,21 +146,21 @@ const getStatusBadgeClass = (status) => {
   return 'bg-slate-50 text-slate-500 border-slate-200';
 };
 
-// Response Speed Badge styling based on thresholds (<200ms green, 200-500ms yellow, >500ms red)
+// Response Speed Badge styling based on thresholds (<800ms green, 800-1500ms yellow, >1500ms red)
 const getSpeedBadgeClass = (speedStr) => {
   if (speedStr === '-') return 'text-slate-450';
   const speed = parseInt(speedStr);
   if (isNaN(speed)) return 'text-slate-450';
-  if (speed < 300) return 'bg-emerald-50 text-emerald-700 border-emerald-200/40';
-  if (speed >= 300 && speed < 500) return 'bg-amber-50 text-amber-700 border-amber-200/40';
+  if (speed < 800) return 'bg-emerald-50 text-emerald-700 border-emerald-200/40';
+  if (speed >= 800 && speed < 1500) return 'bg-amber-50 text-amber-700 border-amber-200/40';
   return 'bg-rose-50 text-rose-700 border-rose-200/40';
 };
 
 const getSpeedDotColor = (speedStr) => {
   const speed = parseInt(speedStr);
   if (isNaN(speed)) return 'bg-slate-400';
-  if (speed < 300) return 'bg-emerald-500';
-  if (speed >= 300 && speed < 500) return 'bg-amber-500';
+  if (speed < 800) return 'bg-emerald-500';
+  if (speed >= 800 && speed < 1500) return 'bg-amber-500';
   return 'bg-rose-500';
 };
 
