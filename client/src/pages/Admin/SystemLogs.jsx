@@ -6,6 +6,8 @@ import * as AdminService from '../../services/AdminService';
 import { FiTerminal, FiRefreshCw, FiCopy, FiDownload, FiSearch, FiActivity, FiAlertTriangle, FiClock } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
 import StatsCard from '../../components/ui/StatsCard';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
+import usePagination from '../../hooks/usePagination';
 
 // LevelBadge component to show INFO, WARNING, ERROR beautifully
 const LevelBadge = ({ level }) => {
@@ -193,38 +195,37 @@ const SystemLogs = () => {
   // Custom filter selections
   const [selectedFilter, setSelectedFilter] = useState('ALL');
   const [selectedModule, setSelectedModule] = useState('All Modules');
+  const [backendLevel, setBackendLevel] = useState('ALL');
 
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 100,
-    total: 0,
-    pages: 0,
-    level: 'ALL'
-  });
+  const {
+    currentPage,
+    setCurrentPage,
+    limit,
+    totalItems,
+    setTotalItems,
+    totalPages,
+    onPageChange
+  } = usePagination(1, 100);
 
   const fetchLogs = useCallback(async (isAuto = false) => {
     if (!isAuto) setLoading(true);
     try {
       const res = await AdminService.getSystemLogs({
-        page: pagination.page,
-        limit: pagination.limit,
-        level: pagination.level,
+        page: currentPage,
+        limit: limit,
+        level: backendLevel,
         t: Date.now()
       });
       if (res.data?.success) {
         setLogs(res.data.logs);
-        setPagination(prev => ({
-          ...prev,
-          total: res.data.total,
-          pages: res.data.pages
-        }));
+        setTotalItems(res.data.total);
       }
     } catch (err) {
       if (!isAuto) showToast('Failed to fetch system logs', 'error');
     } finally {
       if (!isAuto) setLoading(false);
     }
-  }, [pagination.page, pagination.limit, pagination.level, showToast]);
+  }, [currentPage, limit, backendLevel, showToast, setTotalItems]);
 
   useEffect(() => {
     fetchLogs();
@@ -259,16 +260,13 @@ const SystemLogs = () => {
     setSelectedFilter(filter);
 
     // Convert visually friendly warning to backend 'WARN'
-    let backendLevel = 'ALL';
-    if (filter === 'INFO') backendLevel = 'INFO';
-    if (filter === 'WARNING') backendLevel = 'WARN';
-    if (filter === 'ERROR') backendLevel = 'ERROR';
+    let levelVal = 'ALL';
+    if (filter === 'INFO') levelVal = 'INFO';
+    if (filter === 'WARNING') levelVal = 'WARN';
+    if (filter === 'ERROR') levelVal = 'ERROR';
 
-    setPagination(p => ({
-      ...p,
-      level: backendLevel,
-      page: 1
-    }));
+    setBackendLevel(levelVal);
+    setCurrentPage(1);
   };
 
   // Filter & Search computation
@@ -445,15 +443,7 @@ const SystemLogs = () => {
               </thead>
               {loading && logs.length === 0 ? (
                 <tbody>
-                  <tr>
-                    <td colSpan="9" className="px-6 py-4">
-                      <div className="space-y-4 p-4 animate-pulse">
-                        {[1, 2, 3].map(i => (
-                          <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
+                  <TableSkeleton rows={5} cols={9} />
                 </tbody>
               ) : (
                 <tbody className="divide-y divide-gray-50 font-sans text-xs">
@@ -554,17 +544,13 @@ const SystemLogs = () => {
             </table>
           </div>
 
-          {pagination.pages > 1 && (
-            <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-              <Pagination
-                currentPage={pagination.page}
-                totalPages={pagination.pages}
-                totalItems={pagination.total}
-                limit={pagination.limit}
-                onPageChange={(page) => setPagination(p => ({ ...p, page }))}
-              />
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            limit={limit}
+            onPageChange={onPageChange}
+          />
         </div>
 
       </div>
