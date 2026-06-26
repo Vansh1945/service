@@ -17,7 +17,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatTime, compressImage, buildStreetAddress } from '../../utils/format';
+import { formatTime, compressImage, buildStreetAddress, smartAddressBuilder } from '../../utils/format';
 
 const setCookie = (name, value, days = 7) => {
   let expires = "";
@@ -430,13 +430,13 @@ const ProviderRegistration = () => {
   const handleInitiateRegistration = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const promise = new Promise(async (resolve, reject) => {
+    const promise = (async () => {
       try {
         const response = await ProviderService.registerInitiate({ email: formData.email });
         const data = response.data;
         if (data.profileComplete) {
           setStep(3);
-          resolve(data.message || 'Incomplete profile found. Please login to complete.');
+          return data.message || 'Incomplete profile found. Please login to complete.';
         } else {
           const sentTime = Date.now();
           setOtpSentTime(sentTime);
@@ -444,14 +444,14 @@ const ProviderRegistration = () => {
           setCanResendOtp(false);
           setResendCountdown(60);
           setStep(2);
-          resolve('OTP sent successfully! Check your email.');
+          return 'OTP sent successfully! Check your email.';
         }
       } catch (err) {
-        reject(err.response?.data?.message || err.message);
+        throw err.response?.data?.message || err.message;
       } finally {
         setIsSubmitting(false);
       }
-    });
+    })();
     toast.promise(promise, {
       pending: 'Sending OTP...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
@@ -462,7 +462,7 @@ const ProviderRegistration = () => {
   const handleCompleteRegistration = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const promise = new Promise(async (resolve, reject) => {
+    const promise = (async () => {
       try {
         const response = await ProviderService.registerComplete({
           email: formData.email,
@@ -479,13 +479,13 @@ const ProviderRegistration = () => {
         setCookie('token', data.token, 7);
 
         setStep(3);
-        resolve('Registration successful! Please login to complete your profile.');
+        return 'Registration successful! Please login to complete your profile.';
       } catch (err) {
-        reject(err.response?.data?.message || err.message);
+        throw err.response?.data?.message || err.message;
       } finally {
         setIsSubmitting(false);
       }
-    });
+    })();
     toast.promise(promise, {
       pending: 'Registering...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
@@ -496,7 +496,7 @@ const ProviderRegistration = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const promise = new Promise(async (resolve, reject) => {
+    const promise = (async () => {
       try {
         const response = await ProviderService.loginForCompletion({
           email: formData.email,
@@ -508,13 +508,13 @@ const ProviderRegistration = () => {
         setCookie('token', data.token, 7);
 
         setStep(4);
-        resolve('Login successful! Please complete your profile.');
+        return 'Login successful! Please complete your profile.';
       } catch (err) {
-        reject(err.response?.data?.message || err.message);
+        throw err.response?.data?.message || err.message;
       } finally {
         setIsSubmitting(false);
       }
-    });
+    })();
     toast.promise(promise, {
       pending: 'Logging in...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
@@ -525,7 +525,7 @@ const ProviderRegistration = () => {
   const handleCompleteProfile = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const promise = new Promise(async (resolve, reject) => {
+    const promise = (async () => {
       try {
         // Compress registration files on the client side before packaging
         let profilePicFile = formData.profilePic;
@@ -572,18 +572,18 @@ const ProviderRegistration = () => {
         setCookie('user', '', -1);
         setCookie('refreshToken', '', -1);
 
-        resolve('Profile completed successfully!\nYour account is pending approval. Please contact support for assistance.');
-
         // Navigate to login after a short delay so the success toast is visible
         setTimeout(() => {
           navigate('/login', { replace: true });
         }, 1500);
+
+        return 'Profile completed successfully!\nYour account is pending approval. Please contact support for assistance.';
       } catch (err) {
-        reject(err.response?.data?.message || err.message);
+        throw err.response?.data?.message || err.message;
       } finally {
         setIsSubmitting(false);
       }
-    });
+    })();
     toast.promise(promise, {
       pending: 'Completing profile...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
@@ -594,27 +594,27 @@ const ProviderRegistration = () => {
   const handleResendOTP = async () => {
     if (!canResendOtp) return;
     setIsSubmitting(true);
-    const promise = new Promise(async (resolve, reject) => {
+    const promise = (async () => {
       try {
         const response = await ProviderService.registerInitiate({ email: formData.email });
         const data = response.data;
         if (data.profileComplete) {
           setStep(3);
-          resolve(data.message || 'Incomplete profile found. Please login to complete.');
+          return data.message || 'Incomplete profile found. Please login to complete.';
         } else {
           const sentTime = Date.now();
           setOtpSentTime(sentTime);
           setOtpExpiryTime(new Date(sentTime + 300000));
           setCanResendOtp(false);
           setResendCountdown(60);
-          resolve('New OTP sent successfully!');
+          return 'New OTP sent successfully!';
         }
       } catch (err) {
-        reject(err.response?.data?.message || err.message);
+        throw err.response?.data?.message || err.message;
       } finally {
         setIsSubmitting(false);
       }
-    });
+    })();
     toast.promise(promise, {
       pending: 'Resending OTP...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
