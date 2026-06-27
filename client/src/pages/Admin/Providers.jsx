@@ -135,9 +135,9 @@ const AdminProvidersPage = () => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }, []);
 
-  const fetchProviders = useCallback(async () => {
+  const fetchProviders = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params = {
         tab: activeTab === 'pending_providers' ? 'pending' : 'bank_pending',
         search: searchTerm,
@@ -155,7 +155,7 @@ const AdminProvidersPage = () => {
       console.error('Error fetching providers:', error);
       showToast('Failed to fetch providers', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [activeTab, searchTerm, getMergedQuery, showToast]);
 
@@ -381,8 +381,13 @@ const AdminProvidersPage = () => {
       return;
     }
 
+    const prevProviders = [...allProviders];
+
     try {
       setProcessingAction(approvalAction);
+
+      // Optimistic UI update
+      setAllProviders(prev => prev.filter(p => p._id !== selectedProvider._id));
 
       const response = await AdminService.updateProviderStatus(selectedProvider._id, {
         status: approvalAction,
@@ -394,19 +399,19 @@ const AdminProvidersPage = () => {
 
       if (data.success) {
         showToast(`Action performed successfully`, 'success');
-        // Refresh the providers list
-        fetchProviders();
-        // Close modal and reset states
+        fetchProviders(true); // Silent background sync
         setShowApprovalModal(false);
         setSelectedProvider(null);
         setApprovalRemarks('');
         setApprovalConfirmation('');
       } else {
         showToast(data.message || 'Failed to update provider status', 'error');
+        setAllProviders(prevProviders);
       }
     } catch (error) {
       console.error('Error updating provider status:', error);
       showToast('Failed to update provider status', 'error');
+      setAllProviders(prevProviders);
     } finally {
       setProcessingAction(null);
     }

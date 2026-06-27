@@ -418,17 +418,20 @@ const AdminCommissionPage = () => {
 
   // Toggle rule status
   const toggleRuleStatus = async (ruleId) => {
+    const prevRules = [...commissionRules];
     try {
+      setCommissionRules(prev => prev.map(r => r._id === ruleId ? { ...r, isActive: !r.isActive } : r));
       const response = await CommissionService.toggleCommissionRuleStatus(ruleId);
       const data = response.data;
       if (data.success) {
         showToast(data.message || 'Rule status updated');
-        fetchCommissionRules(pagination.page, pagination.limit);
       } else {
         showToast(data.message || 'Failed to toggle rule status', 'error');
+        setCommissionRules(prevRules);
       }
     } catch (error) {
       showToast('Failed to toggle rule status', 'error');
+      setCommissionRules(prevRules);
     }
   };
 
@@ -442,17 +445,20 @@ const AdminCommissionPage = () => {
     });
     if (!isConfirmed) return;
 
+    const prevRules = [...commissionRules];
     try {
+      setCommissionRules(prev => prev.filter(r => r._id !== ruleId));
       const response = await CommissionService.deleteCommissionRule(ruleId);
       const data = response.data;
       if (data.success) {
         showToast('Commission rule deleted successfully');
-        fetchCommissionRules(pagination.page, pagination.limit);
       } else {
         showToast(data.message || 'Failed to delete rule', 'error');
+        setCommissionRules(prevRules);
       }
     } catch (error) {
       showToast('Failed to delete commission rule', 'error');
+      setCommissionRules(prevRules);
     }
   };
 

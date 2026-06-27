@@ -14,6 +14,7 @@ const { generateBookingId } = require('../utils/generateUniqueId');
 const { getBookingTimeline } = require('../utils/bookingHelper');
 const BookingService = require('../services/BookingService');
 const ProviderAssignmentService = require('../services/ProviderAssignmentService');
+const { validateBookingTransition } = require('../validation/booking.validation');
 
 // PRODUCTION FIX
 // Robust Mongoose session/transaction retry wrapper with fallback to sequential execution if transactions are unsupported
@@ -90,6 +91,68 @@ const safeEnd = (session) => {
     } catch (err) {
       console.warn("[Transaction] end failed:", err.message);
     }
+  }
+};
+
+
+// Centralized real-time socket helper
+const emitBookingUpdate = (bookingId, bookingData, actionName) => {
+  try {
+    const { getIO } = require('../socket/socketServer');
+    const io = getIO();
+    if (io) {
+      const payload = {
+        bookingId: bookingId.toString(),
+        booking: bookingData,
+        meta: {
+          action: actionName,
+          timestamp: new Date(),
+          updatedAt: bookingData?.updatedAt
+        }
+      };
+
+      // Emit to room booking_${bookingId}
+      io.to(`booking_${bookingId}`).emit('booking-updated', payload);
+
+      // Emit to customer
+      if (bookingData?.customer) {
+        const custId = bookingData.customer._id || bookingData.customer;
+        io.to(custId.toString()).emit('booking-updated', payload);
+      }
+
+      // Emit to provider
+      if (bookingData?.provider) {
+        const provId = bookingData.provider._id || bookingData.provider;
+        io.to(provId.toString()).emit('booking-updated', payload);
+      }
+
+      // Emit to admins
+      io.to('admin_live_room').emit('booking-updated', payload);
+
+      // Also support legacy admin-booking-update event if some parts use it
+      io.to('admin_live_room').emit('admin-booking-update', {
+        bookingId: bookingId.toString(),
+        event: actionName === 'arrived' ? 'provider-arrived' : 'status-changed',
+        status: bookingData?.status,
+        booking: bookingData
+      });
+    }
+  } catch (err) {
+    console.error('Error emitting booking update:', err.message);
+  }
+};
+
+const emitBookingDeleted = (bookingId) => {
+  try {
+    const { getIO } = require('../socket/socketServer');
+    const io = getIO();
+    if (io) {
+      io.to(`booking_${bookingId}`).emit('booking-deleted', { bookingId });
+      io.to('admin_live_room').emit('booking-deleted', { bookingId });
+      io.emit('booking-deleted', { bookingId });
+    }
+  } catch (err) {
+    console.error('Error emitting booking deleted:', err.message);
   }
 };
 
@@ -1200,6 +1263,7 @@ const updateBookingPayment = async (req, res) => {
     }
 
     await booking.save();
+    emitBookingUpdate(booking._id, booking, 'payment_updated');
 
     res.status(200).json({
       success: true,
@@ -1425,6 +1489,7 @@ const payBooking = async (req, res) => {
 
     await safeCommit(session);
     safeEnd(session);
+    emitBookingUpdate(booking._id, booking, 'payment_updated');
 
     res.status(200).json({
       success: true,
@@ -1737,6 +1802,15 @@ const cancelBooking = async (req, res) => {
       });
     }
 
+    if (!validateBookingTransition(booking.status, 'cancelled')) {
+      await safeAbort(session);
+      safeEnd(session);
+      return res.status(400).json({
+        success: false,
+        message: `Cannot cancel booking from its current status: ${booking.status}`
+      });
+    }
+
     if (booking.status === 'completed') {
       await safeAbort(session);
       safeEnd(session);
@@ -1814,6 +1888,7 @@ const cancelBooking = async (req, res) => {
 
       await safeCommit(session);
       safeEnd(session);
+      emitBookingUpdate(booking._id, booking, 'cancelled');
 
       if (booking.provider) {
         try {
@@ -2045,6 +2120,7 @@ const cancelBooking = async (req, res) => {
 
       await safeCommit(session);
       safeEnd(session);
+      emitBookingUpdate(booking._id, booking, 'cancelled');
 
       if (previousStatus === 'accepted' && booking.provider) {
         try {
@@ -2130,6 +2206,13 @@ const userUpdateBookingDateTime = async (req, res) => {
       });
     }
 
+    if (!validateBookingTransition(booking.status, 'rescheduled') && booking.status !== 'pending' && booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reschedule booking from its current status: ${booking.status}`
+      });
+    }
+
     // User can only modify pending or confirmed bookings
     if (!['pending', 'confirmed'].includes(booking.status)) {
       return res.status(403).json({
@@ -2183,6 +2266,7 @@ const userUpdateBookingDateTime = async (req, res) => {
 
     // Save changes
     await booking.save();
+    emitBookingUpdate(booking._id, booking, 'rescheduled');
 
     res.json({
       success: true,
@@ -2747,6 +2831,7 @@ const acceptBooking = async (req, res) => {
 
     // Add system message to chat
     await addSystemMessageToChat(id, `Booking accepted by partner: ${result.providerName}`);
+    emitBookingUpdate(result.populatedBooking._id, result.populatedBooking, 'accepted');
 
     return res.status(200).json({
       success: true,
@@ -2981,6 +3066,7 @@ const startBooking = async (req, res) => {
     });
 
     await booking.save();
+    emitBookingUpdate(booking._id, booking, 'started');
 
     // Add system message to chat
     await addSystemMessageToChat(booking._id, 'Service started by partner');
@@ -3189,6 +3275,7 @@ const rejectBooking = async (req, res) => {
 
     await safeCommit(session);
     safeEnd(session);
+    emitBookingUpdate(booking._id, booking, 'rejected');
 
     // Recalculate provider stats and trust score dynamically after transaction commits successfully to avoid write conflicts
     try {
@@ -3674,6 +3761,7 @@ const completeBooking = async (req, res) => {
 
     await safeCommit(session);
     safeEnd(session);
+    emitBookingUpdate(booking._id, booking, 'completed');
 
     // Trigger Referral & Rewards System
     try {
@@ -4487,99 +4575,125 @@ const assignProvider = async (req, res) => {
     const { id } = req.params;
     const { providerId } = req.body || {};
 
-    const booking = await Booking.findById(id);
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-
-    if (booking.provider) {
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(providerId)) {
       return res.status(400).json({
         success: false,
-        message: 'Booking has already been assigned to a provider'
+        message: 'Invalid booking ID or provider ID format'
       });
     }
 
-    if (booking.status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only pending bookings can be assigned'
-      });
-    }
+    const result = await runInTransactionOrSequential(async (session) => {
+      const booking = session ? await Booking.findById(id).session(session) : await Booking.findById(id);
+      if (!booking) {
+        throw new Error('Booking not found');
+      }
 
-    const provider = await Provider.findById(providerId);
-    if (!provider || !provider.approved || provider.isDeleted) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid provider'
-      });
-    }
+      if (booking.provider) {
+        throw new Error('Booking has already been assigned to a provider');
+      }
 
-    // Check parallel bookings limit & scheduling conflict based on system configuration
-    const { SystemConfig } = require('../models/SystemSetting');
-    let settings = await SystemConfig.findOne();
-    const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
-    const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+      if (booking.status !== 'pending') {
+        throw new Error('Only pending bookings can be assigned');
+      }
 
-    const providerBookings = await Booking.find({
-      provider: providerId,
-      status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+      const provider = session ? await Provider.findById(providerId).session(session) : await Provider.findById(providerId);
+      if (!provider || !provider.approved || provider.isDeleted) {
+        throw new Error('Invalid provider');
+      }
+
+      // Check parallel bookings limit & scheduling conflict based on system configuration
+      const { SystemConfig } = require('../models/SystemSetting');
+      let settings = session ? await SystemConfig.findOne().session(session) : await SystemConfig.findOne();
+      const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+      const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+      const providerBookings = session
+        ? await Booking.find({
+          provider: providerId,
+          status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+        }).session(session)
+        : await Booking.find({
+          provider: providerId,
+          status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+        });
+
+      if (providerBookings.length >= maxBookings) {
+        throw new Error(`This provider has reached the maximum limit of parallel bookings (${maxBookings}).`);
+      }
+
+      if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
+        throw new Error(`Scheduling conflict: This provider already has another booking scheduled around this time. Please complete their current booking first.`);
+      }
+
+      if (!validateBookingTransition(booking.status, 'assigned') && !validateBookingTransition(booking.status, 'scheduled')) {
+        throw new Error(`Cannot assign provider from current status: ${booking.status}`);
+      }
+
+      booking.provider = providerId;
+      booking.status = 'scheduled';
+      await booking.save({ session });
+
+      // Sync transaction record with the new provider and calculated commission
+      try {
+        const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+        await Transaction.updateMany(
+          { booking: booking._id },
+          {
+            provider: booking.provider,
+            providerId: booking.provider.toString(),
+            commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+            providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+            commissionRule: booking.commissionRule,
+            ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+              paymentStatus: isOnline ? 'success' : 'completed'
+            })
+          },
+          session ? { session } : {}
+        );
+      } catch (transError) {
+        console.error('Error syncing transaction on provider assignment:', transError);
+      }
+
+      return { booking, provider };
     });
 
-    if (providerBookings.length >= maxBookings) {
-      return res.status(400).json({
-        success: false,
-        message: `This provider has reached the maximum limit of parallel bookings (${maxBookings}).`
-      });
-    }
+    const populatedBooking = await Booking.findById(result.booking._id)
+      .populate('customer', 'name email phone')
+      .populate('services.service', 'title description price');
 
-    if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
-      return res.status(400).json({
-        success: false,
-        message: `Scheduling conflict: This provider already has another booking scheduled around this time. Please complete their current booking first. You can assign a new booking after some time (considering the ${bufferMinutes}-minute buffer).`
-      });
-    }
-
-    booking.provider = providerId;
-    booking.status = 'scheduled';
-    await booking.save();
-
-    // Sync transaction record with the new provider and calculated commission
-    try {
-      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
-      await Transaction.updateMany(
-        { booking: booking._id },
-        {
-          provider: booking.provider,
-          providerId: booking.provider.toString(),
-          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
-          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
-          commissionRule: booking.commissionRule,
-          // Sync payment status if booking is already paid
-          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
-            paymentStatus: isOnline ? 'success' : 'completed'
-          })
-        }
-      );
-    } catch (transError) {
-      console.error('Error syncing transaction on provider assignment:', transError);
-    }
-
-    // Invalidate dashboard caches
-    try {
-
-
-    } catch (e) { }
+    emitBookingUpdate(result.booking._id, populatedBooking, 'assigned');
 
     // Add system message to chat
-    await addSystemMessageToChat(booking._id, `Booking assigned to partner: ${provider.name}`);
+    await addSystemMessageToChat(result.booking._id, `Booking assigned to partner: ${result.provider.name}`);
+
+    // Send notifications
+    try {
+      if (result.booking.customer) {
+        await sendNotification(
+          result.booking.customer,
+          'customer',
+          'Provider Assigned',
+          `A service provider, ${result.provider.name}, has been assigned to your booking.`,
+          'booking',
+          result.booking._id
+        );
+      }
+      await sendNotification(
+        result.provider._id,
+        'provider',
+        'New Booking Assigned',
+        `You have been assigned a new booking for ${populatedBooking.services && populatedBooking.services[0] ? populatedBooking.services[0].service.title : 'requested service'}.`,
+        'booking',
+        result.booking._id
+      );
+    } catch (notifErr) {
+      console.error('Failed to send notification on provider assignment:', notifErr);
+    }
 
     res.json({
       success: true,
       message: 'Provider assigned successfully',
-      data: booking
+      data: populatedBooking
     });
   } catch (error) {
     res.status(500).json({
@@ -4613,6 +4727,7 @@ const deleteBooking = async (req, res) => {
     const customer = await User.findById(booking.customer);
 
     await Booking.findByIdAndDelete(id);
+    emitBookingDeleted(id);
 
     // Invalidate dashboard caches
     try {
@@ -4663,6 +4778,7 @@ const deleteUserBooking = async (req, res) => {
     const service = await Service.findById(booking.services);
 
     await Booking.findByIdAndDelete(bookingId);
+    emitBookingDeleted(bookingId);
 
     res.json({
       success: true,
@@ -4700,6 +4816,13 @@ const updateBookingDateTime = async (req, res) => {
       });
     }
 
+    if (!validateBookingTransition(booking.status, 'rescheduled') && booking.status !== 'pending' && booking.status !== 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reschedule booking from its current status: ${booking.status}`
+      });
+    }
+
     if (['completed', 'in-progress'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
@@ -4732,6 +4855,7 @@ const updateBookingDateTime = async (req, res) => {
 
     // Save changes
     await booking.save();
+    emitBookingUpdate(booking._id, booking, 'rescheduled');
 
     res.json({
       success: true,

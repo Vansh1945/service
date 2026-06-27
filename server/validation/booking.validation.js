@@ -67,9 +67,31 @@ const updateBookingPaymentSchema = z.object({
   paymentStatus: z.enum(['pending', 'processing', 'paid', 'failed'])
 });
 
+const validateBookingTransition = (currentStatus, targetStatus) => {
+  if (currentStatus === targetStatus) return true;
+  const transitions = {
+    'pending': ['accepted', 'rejected', 'cancelled', 'confirmed', 'scheduled', 'assigned'],
+    'confirmed': ['pending', 'scheduled', 'assigned', 'accepted', 'completed', 'cancelled'],
+    'scheduled': ['assigned', 'cancelled', 'rescheduled', 'accepted', 'pending'],
+    'assigned': ['accepted', 'rejected', 'cancelled', 'arrived', 'arriving', 'started', 'in-progress'],
+    'accepted': ['arriving', 'arrived', 'cancelled', 'rejected', 'started', 'in-progress'],
+    'arriving': ['arrived', 'cancelled'],
+    'arrived': ['started', 'in-progress', 'cancelled'],
+    'started': ['in-progress', 'in_progress', 'completed', 'cancelled'],
+    'in-progress': ['completed', 'cancelled'],
+    'in_progress': ['completed', 'cancelled'],
+    'completed': [],
+    'cancelled': []
+  };
+
+  const allowed = transitions[currentStatus || 'pending'] || [];
+  return allowed.includes(targetStatus);
+};
+
 module.exports = {
   createBookingSchema,
   confirmBookingSchema,
   updateBookingStatusSchema,
-  updateBookingPaymentSchema
+  updateBookingPaymentSchema,
+  validateBookingTransition
 };

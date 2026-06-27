@@ -228,6 +228,20 @@ const getAllCustomers = async (req, res) => {
     }
 };
 
+const emitProviderStatusChange = (provider, status) => {
+    try {
+        const { getIO } = require('../socket/socketServer');
+        const io = getIO();
+        if (io) {
+            const payload = { providerId: provider._id.toString(), status: provider.approved ? 'approved' : status, provider };
+            io.to(provider._id.toString()).emit('provider-status-changed', payload);
+            io.to('admin_live_room').emit('provider-status-changed', payload);
+        }
+    } catch (e) {
+        console.error("Failed to emit provider status change event:", e);
+    }
+};
+
 /**
  * Approve or reject provider account
  */
@@ -306,6 +320,7 @@ const approveProvider = async (req, res) => {
                 console.error('Failed to send bank approval email:', mailError);
             }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Bank details approved successfully',
@@ -372,6 +387,7 @@ const approveProvider = async (req, res) => {
                 console.error('Failed to send bank rejection email:', mailError);
             }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Bank details update rejected successfully',
@@ -437,6 +453,7 @@ const approveProvider = async (req, res) => {
                 });
             } catch (mailError) { }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Provider manual activation/approval successful',
@@ -481,6 +498,7 @@ const approveProvider = async (req, res) => {
                 });
             } catch (mailError) { }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Provider rejected successfully',
@@ -511,6 +529,7 @@ const approveProvider = async (req, res) => {
                 );
             } catch (fcmError) { }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Provider restricted successfully',
@@ -537,6 +556,7 @@ const approveProvider = async (req, res) => {
                 );
             } catch (fcmError) { }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Provider suspended successfully',
@@ -563,6 +583,7 @@ const approveProvider = async (req, res) => {
                 );
             } catch (fcmError) { }
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Provider blocked successfully',
@@ -579,6 +600,7 @@ const approveProvider = async (req, res) => {
 
             await provider.save();
 
+            emitProviderStatusChange(provider, status);
             return res.status(200).json({
                 success: true,
                 message: 'Provider placed in pending review successfully',

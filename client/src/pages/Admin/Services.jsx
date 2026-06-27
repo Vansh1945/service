@@ -443,7 +443,10 @@ const AdminServices = () => {
 
   // Toggle service status
   const handleToggleStatus = useCallback(async (service) => {
+    const prevServices = [...services];
     try {
+      setServices(prev => prev.map(s => s._id === service._id ? { ...s, isActive: !service.isActive } : s));
+
       if (service.isActive) {
         // Deactivate service using DELETE endpoint
         await ServiceService.deleteService(service._id);
@@ -452,15 +455,14 @@ const AdminServices = () => {
         await ServiceService.updateService(service._id, { isActive: true });
       }
 
-      // Refetch services to get updated status
-      await fetchServices();
       toast.success(`Service ${service.isActive ? 'deactivated' : 'activated'} successfully!`);
     } catch (error) {
       if (error.message === 'silent_cancel') return;
       console.error('Toggle status error:', error);
       toast.error(error.message || 'Failed to update service status');
+      setServices(prevServices);
     }
-  }, [fetchServices]);
+  }, [services]);
 
   // Handle bulk import
   const handleBulkImport = async (e) => {

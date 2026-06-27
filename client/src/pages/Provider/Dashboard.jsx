@@ -8,6 +8,7 @@ import {
 import DashboardSkeleton from '../../components/ui-skeletons/DashboardSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
+import { useSocket } from '../../socket/SocketContext';
 import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
@@ -20,6 +21,7 @@ import PwaInstallBanner from '../../components/PwaInstallBanner';
 
 const Dashboard = () => {
   const { token, showToast } = useAuth();
+  const { socket } = useSocket();
 
   const [loading, setLoading] = useState(true);
   const [Recharts, setRecharts] = useState(null);
@@ -62,9 +64,9 @@ const Dashboard = () => {
   const [complaintsCount, setComplaintsCount] = useState(0);
 
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await ProviderService.getDashboardData({ startDate: dateRange.startDate, endDate: dateRange.endDate });
       const { summary, earnings, bookings, wallet, ratings, profile, analytics } = response.data.data;
 
@@ -100,9 +102,66 @@ const Dashboard = () => {
     } catch (error) {
       showToast('Failed to load dashboard data', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [showToast, dateRange]);
+
+  // Silent Refresh on window focus and online status
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchDashboardData(true);
+    };
+    const handleOnline = () => {
+      fetchDashboardData(true);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [fetchDashboardData]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleBookingUpdated = (data) => {
+      if (!data || !data.booking) return;
+      fetchDashboardData(true);
+    };
+
+    const handleBookingDeleted = (data) => {
+      if (!data || !data.bookingId) return;
+      fetchDashboardData(true);
+    };
+
+    const handleProviderStatusChanged = (data) => {
+      if (!data || data.providerId !== user?._id) return;
+      showToast(`Your profile status was updated: ${data.status}`, 'info');
+      if (refreshUser) refreshUser();
+      fetchDashboardData(true);
+    };
+
+    socket.on('booking-updated', handleBookingUpdated);
+    socket.on('booking-deleted', handleBookingDeleted);
+    socket.on('provider-status-changed', handleProviderStatusChanged);
+
+    const handleReconnect = () => {
+      fetchDashboardData(true);
+    };
+    socket.on('connect', handleReconnect);
+    socket.on('reconnect', handleReconnect);
+
+    return () => {
+      socket.off('booking-updated', handleBookingUpdated);
+      socket.off('booking-deleted', handleBookingDeleted);
+      socket.off('provider-status-changed', handleProviderStatusChanged);
+      socket.off('connect', handleReconnect);
+      socket.off('reconnect', handleReconnect);
+    };
+  }, [socket, fetchDashboardData, user, refreshUser]);
 
   // Fetch provider's complaint count
   useEffect(() => {

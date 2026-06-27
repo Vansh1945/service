@@ -411,14 +411,16 @@ const AdminCoupons = () => {
 
   // Deactivate coupon
   const handleDeleteCoupon = async (couponId) => {
+    const prevCoupons = [...coupons];
     try {
+      setCoupons(prev => prev.map(c => c._id === couponId ? { ...c, isActive: false } : c));
       const response = await CouponService.deleteCoupon(couponId);
       const data = response.data;
       toast.success(data.message);
-      await fetchCoupons();
     } catch (error) {
       console.error('Deactivate coupon error:', error);
       toast.error(error.message);
+      setCoupons(prevCoupons);
     }
   };
 
@@ -431,14 +433,16 @@ const AdminCoupons = () => {
   const confirmHardDeleteCoupon = async () => {
     if (!couponToDelete) return;
 
+    const prevCoupons = [...coupons];
     try {
+      setCoupons(prev => prev.filter(c => c._id !== couponToDelete));
       const response = await CouponService.hardDeleteCoupon(couponToDelete);
       const data = response.data;
-      await fetchCoupons();
       toast.success(data.message);
     } catch (error) {
       console.error('Delete coupon error:', error);
       toast.error(error.message);
+      setCoupons(prevCoupons);
     } finally {
       setShowHardDeleteModal(false);
       setCouponToDelete(null);

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import useDebounce from '../../hooks/useDebounce';
+import AdminSearchBar from '../../components/AdminSearchBar';
 // Local status helper functions
 const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -152,8 +153,10 @@ const timeRangeOptions = [
 
 
 // Memoized Booking Row to prevent unnecessary re-renders
-const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel }) => (
-    <tr className="hover:bg-gray-50">
+const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel, rowActionStates = {} }) => {
+    const isRowLoading = !!rowActionStates[booking._id];
+    return (
+    <tr className={`hover:bg-gray-50 ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
         <td className="px-4 py-4 whitespace-nowrap">
             <div className="text-sm font-medium text-secondary">
                 {booking.bookingId || `#${booking._id?.substring(booking._id.length - 8) || 'N/A'}`}
@@ -279,7 +282,8 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
             </div>
         </td>
     </tr>
-));
+    );
+});
 
 const PayoutStatusBadge = ({ status }) => {
     const cfg = {
@@ -588,11 +592,13 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
 
 const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
+    const { socket } = useSocket();
     const navigate = useNavigate();
     const loc = useLocation();
     const [searchParams] = useSearchParams();
     const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
     const [bookings, setBookings] = useState([]);
+    const [rowActionStates, setRowActionStates] = useState({});
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -655,9 +661,9 @@ const AdminBookingsView = () => {
         }
     }, [API]);
 
-    const fetchBookings = useCallback(async () => {
+    const fetchBookings = useCallback(async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
 
             const params = {
                 page: pagination.page,
@@ -688,26 +694,139 @@ const AdminBookingsView = () => {
             console.error('Error fetching bookings:', error);
             showToast(error.message, 'error');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [showToast, filters, pagination.page, pagination.limit, getMergedQuery]);
+
+    // Silent Refresh on window focus and online status
+    useEffect(() => {
+        const handleFocus = () => {
+            fetchBookings(true);
+        };
+        const handleOnline = () => {
+            fetchBookings(true);
+        };
+
+        window.addEventListener('focus', handleFocus);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, [fetchBookings]);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        socket.emit('join-admin-live');
+
+        const handleBookingUpdated = (data) => {
+            if (!data || !data.booking) return;
+
+            setBookings(prev => {
+                const index = prev.findIndex(b => b._id === data.bookingId);
+                if (index === -1) {
+                    return [data.booking, ...prev];
+                }
+
+                const currentBooking = prev[index];
+                const currentUpdatedAt = new Date(currentBooking.updatedAt || 0).getTime();
+                const incomingUpdatedAt = new Date(data.booking.updatedAt || 0).getTime();
+
+                if (incomingUpdatedAt < currentUpdatedAt) {
+                    return prev;
+                }
+
+                const next = [...prev];
+                next[index] = {
+                    ...next[index],
+                    ...data.booking
+                };
+                return next;
+            });
+
+            setSelectedBooking(prev => {
+                if (prev && prev.booking && prev.booking._id === data.bookingId) {
+                    const currentUpdatedAt = new Date(prev.booking.updatedAt || 0).getTime();
+                    const incomingUpdatedAt = new Date(data.booking.updatedAt || 0).getTime();
+                    if (incomingUpdatedAt < currentUpdatedAt) {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        booking: {
+                            ...prev.booking,
+                            ...data.booking
+                        }
+                    };
+                }
+                return prev;
+            });
+        };
+
+        const handleBookingDeleted = (data) => {
+            if (!data || !data.bookingId) return;
+            setBookings(prev => prev.filter(b => b._id !== data.bookingId));
+            setSelectedBooking(prev => {
+                if (prev && prev.booking && prev.booking._id === data.bookingId) {
+                    setShowModal(false);
+                    return null;
+                }
+                return prev;
+            });
+        };
+
+        socket.on('booking-updated', handleBookingUpdated);
+        socket.on('booking-deleted', handleBookingDeleted);
+
+        const handleReconnect = () => {
+            fetchBookings(true);
+        };
+        socket.on('connect', handleReconnect);
+        socket.on('reconnect', handleReconnect);
+
+        return () => {
+            socket.off('booking-updated', handleBookingUpdated);
+            socket.off('booking-deleted', handleBookingDeleted);
+            socket.off('connect', handleReconnect);
+            socket.off('reconnect', handleReconnect);
+        };
+    }, [socket, fetchBookings]);
     const handleCancelBookingByAdmin = useCallback(async (payload) => {
+        if (!selectedBooking?.booking?._id) return;
+        const bookingId = selectedBooking.booking._id;
+        if (rowActionStates[bookingId]) return;
+
+        const prevBookings = [...bookings];
+        const prevSelectedBooking = { ...selectedBooking };
         setActionLoading(true);
+        setRowActionStates(prev => ({ ...prev, [bookingId]: true }));
+
+        // Optimistic UI update
+        setBookings(prev => prev.map(b => b._id === bookingId ? { ...b, status: 'cancelled' } : b));
+        setSelectedBooking(prev => prev ? { ...prev, booking: { ...prev.booking, status: 'cancelled' } } : null);
+
         try {
-            const bookingId = selectedBooking.booking._id;
             const res = await API.patch(`/api/admin/bookings/${bookingId}/cancel`, payload);
             if (res.data.success) {
                 showToast('Booking cancelled successfully and refund processed to wallet.', 'success');
                 setShowCancelModal(false);
                 setShowModal(false);
-                fetchBookings();
+                fetchBookings(true);
+            } else {
+                setBookings(prevBookings);
+                setSelectedBooking(prevSelectedBooking);
             }
         } catch (err) {
             showToast(err.response?.data?.message || 'Failed to cancel booking', 'error');
+            setBookings(prevBookings);
+            setSelectedBooking(prevSelectedBooking);
         } finally {
             setActionLoading(false);
+            setRowActionStates(prev => ({ ...prev, [bookingId]: false }));
         }
-    }, [selectedBooking, API, showToast, fetchBookings]);
+    }, [selectedBooking, API, showToast, fetchBookings, bookings, rowActionStates]);
 
 
 
@@ -795,47 +914,70 @@ const AdminBookingsView = () => {
         }
     }, [entityId, fetchBookingDetails]);
 
-    // Delete booking
     const handleDeleteBooking = useCallback(async (bookingId) => {
+        if (rowActionStates[bookingId]) return;
+
+        const prevBookings = [...bookings];
+        setActionLoading(true);
+        setRowActionStates(prev => ({ ...prev, [bookingId]: true }));
+
+        // Optimistic UI update
+        setBookings(prev => prev.filter(b => b._id !== bookingId));
+
         try {
-            setActionLoading(true);
             await BookingService.deleteBooking(bookingId);
             showToast('Booking deleted successfully', 'success');
             setDeleteConfirm(null);
-            fetchBookings();
+            fetchBookings(true);
             setShowModal(false);
         } catch (error) {
             console.error('Error deleting booking:', error);
             showToast(error.message, 'error');
+            setBookings(prevBookings);
         } finally {
             setActionLoading(false);
+            setRowActionStates(prev => ({ ...prev, [bookingId]: false }));
         }
-    }, [showToast, fetchBookings]);
+    }, [showToast, fetchBookings, bookings, rowActionStates]);
 
-    // Delete user booking
     const handleDeleteUserBooking = useCallback(async (userId, bookingId) => {
+        if (rowActionStates[bookingId]) return;
+
+        const prevBookings = [...bookings];
+        setActionLoading(true);
+        setRowActionStates(prev => ({ ...prev, [bookingId]: true }));
+
+        // Optimistic UI update
+        setBookings(prev => prev.filter(b => b._id !== bookingId));
+
         try {
-            setActionLoading(true);
             await BookingService.deleteUserBooking(userId, bookingId);
             showToast('User booking deleted successfully', 'success');
             setDeleteConfirm(null);
-            fetchBookings();
+            fetchBookings(true);
             setShowModal(false);
         } catch (error) {
             console.error('Error deleting user booking:', error);
             showToast(error.message, 'error');
+            setBookings(prevBookings);
         } finally {
             setActionLoading(false);
+            setRowActionStates(prev => ({ ...prev, [bookingId]: false }));
         }
-    }, [showToast, fetchBookings]);
+    }, [showToast, fetchBookings, bookings, rowActionStates]);
 
-    // Assign provider to booking
     const handleAssignProvider = useCallback(async (bookingId, providerId) => {
+        if (rowActionStates[bookingId]) return;
+
+        const prevBookings = [...bookings];
+        const prevSelectedBooking = { ...selectedBooking };
+        setActionLoading(true);
+        setRowActionStates(prev => ({ ...prev, [bookingId]: true }));
+
         try {
-            setActionLoading(true);
             await BookingService.assignProvider(bookingId, { providerId });
             showToast('Provider assigned successfully', 'success');
-            fetchBookings();
+            fetchBookings(true);
             setShowAssignProviderModal(false);
             if (selectedBooking) {
                 fetchBookingDetails(selectedBooking._id);
@@ -846,31 +988,42 @@ const AdminBookingsView = () => {
             }
             console.error('Error assigning provider:', error);
             showToast(error.response?.data?.message || error.message || 'Failed to assign provider', 'error');
+            setBookings(prevBookings);
+            setSelectedBooking(prevSelectedBooking);
         } finally {
             setActionLoading(false);
+            setRowActionStates(prev => ({ ...prev, [bookingId]: false }));
         }
-    }, [showToast, fetchBookings, fetchBookingDetails, selectedBooking]);
+    }, [showToast, fetchBookings, fetchBookingDetails, selectedBooking, bookings, rowActionStates]);
 
-    // Reschedule booking
     const handleRescheduleBooking = useCallback(async (bookingId, newDate, newTime) => {
+        if (rowActionStates[bookingId]) return;
+
+        const prevBookings = [...bookings];
+        const prevSelectedBooking = { ...selectedBooking };
+        setActionLoading(true);
+        setRowActionStates(prev => ({ ...prev, [bookingId]: true }));
+
         try {
-            setActionLoading(true);
             const body = {};
             if (newDate) body.date = newDate;
             if (newTime) body.time = newTime;
 
             await BookingService.updateBookingDateTimeAdmin(bookingId, body);
             showToast('Booking rescheduled successfully', 'success');
-            fetchBookings();
+            fetchBookings(true);
             setShowRescheduleModal(false);
             setShowModal(false);
         } catch (error) {
             console.error('Error rescheduling booking:', error);
             showToast(error.message, 'error');
+            setBookings(prevBookings);
+            setSelectedBooking(prevSelectedBooking);
         } finally {
             setActionLoading(false);
+            setRowActionStates(prev => ({ ...prev, [bookingId]: false }));
         }
-    }, [showToast, fetchBookings]);
+    }, [showToast, fetchBookings, bookings, rowActionStates, selectedBooking]);
 
     // Handle filter changes — useCallback avoids recreation on every render
     const handleFilterChange = useCallback((key, value) => {
@@ -982,6 +1135,7 @@ const AdminBookingsView = () => {
                 onAssign={handleOnAssign}
                 onCancel={handleInitiateCancel}
                 onDelete={handleOnDelete}
+                rowActionStates={rowActionStates}
             />
         ));
     };

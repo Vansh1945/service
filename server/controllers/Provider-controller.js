@@ -1312,6 +1312,18 @@ exports.deleteAccount = async (req, res) => {
         provider.isActive = false;
         await provider.save();
 
+        try {
+            const { getIO } = require('../socket/socketServer');
+            const io = getIO();
+            if (io) {
+                const payload = { providerId: provider._id.toString(), status: 'deleted', isDeleted: true };
+                io.to(provider._id.toString()).emit('provider-status-changed', payload);
+                io.to('admin_live_room').emit('provider-status-changed', payload);
+            }
+        } catch (e) {
+            console.error("Failed to emit provider deleted event:", e);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Account deleted successfully'
@@ -1364,6 +1376,18 @@ exports.permanentDeleteAccount = async (req, res) => {
 
         // Permanent delete
         await Provider.findByIdAndDelete(req.params.id);
+
+        try {
+            const { getIO } = require('../socket/socketServer');
+            const io = getIO();
+            if (io) {
+                const payload = { providerId: req.params.id, status: 'deleted', isDeleted: true };
+                io.to(req.params.id).emit('provider-status-changed', payload);
+                io.to('admin_live_room').emit('provider-status-changed', payload);
+            }
+        } catch (e) {
+            console.error("Failed to emit provider permanent delete event:", e);
+        }
 
         res.status(200).json({
             success: true,

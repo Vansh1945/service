@@ -1257,8 +1257,8 @@ const ComplaintsPage = () => {
   ];
 
   // ── Data fetching ──
-  const fetchComplaints = async () => {
-    setLoading(true);
+  const fetchComplaints = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params = getMergedQuery({
         page: pagination.page,
@@ -1275,8 +1275,26 @@ const ComplaintsPage = () => {
         setPendingCount(res.data.pendingCount || 0);
       } else showToast('Failed to fetch complaints', 'error');
     } catch { showToast('Error fetching complaints', 'error'); }
-    finally { setLoading(false); }
+    finally { if (!silent) setLoading(false); }
   };
+
+  // Silent Refresh on window focus and online status
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchComplaints(true);
+    };
+    const handleOnline = () => {
+      fetchComplaints(true);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [filters, pagination.page]);
 
   const fetchComplaintDetails = async (id) => {
     try {
@@ -1288,20 +1306,26 @@ const ComplaintsPage = () => {
 
   const updateComplaintStatus = async (id, status) => {
     setUpdating(true);
+    const prevComplaints = [...complaints];
     try {
+      setComplaints(prev => prev.map(c => c._id === id ? { ...c, status } : c));
       const res = await ComplaintService.updateComplaintStatus(id, status);
       if (res.data?.success) {
-        await fetchComplaints();
+        await fetchComplaints(true);
         if (selectedComplaint?.complaint?._id === id) {
-          setSelectedComplaint(p => ({
-            ...p,
-            complaint: { ...p.complaint, status }
-          }));
+          const detailRes = await ComplaintService.getComplaintDetails(id);
+          if (detailRes.data?.success) setSelectedComplaint(detailRes.data.data);
         }
         return true;
       }
-      showToast('Failed to update status', 'error'); return false;
-    } catch { showToast('Failed to update status', 'error'); return false; }
+      showToast('Failed to update status', 'error');
+      setComplaints(prevComplaints);
+      return false;
+    } catch {
+      showToast('Failed to update status', 'error');
+      setComplaints(prevComplaints);
+      return false;
+    }
     finally { setUpdating(false); }
   };
 
