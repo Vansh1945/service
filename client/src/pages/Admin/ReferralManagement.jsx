@@ -33,6 +33,7 @@ const ReferralManagement = () => {
       customerRewardsSum: 0,
       providerRewardsSum: 0,
       referralRevenue: 0,
+      totalReferralCommission: 0,
       netProfit: 0,
       roiPercentage: 0
     }
@@ -90,6 +91,7 @@ const ReferralManagement = () => {
               customerRewardsSum: allTime.totalRewardsPaid || 0,
               providerRewardsSum: allTime.totalWelcomeRewards || 0,
               referralRevenue: allTime.totalReferralRevenue || 0,
+              totalReferralCommission: allTime.totalReferralCommission || 0,
               netProfit: allTime.netProfit || 0,
               roiPercentage: allTime.roiPercentage || 0
             }
@@ -289,7 +291,7 @@ const ReferralManagement = () => {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-500">Qualified Commission Collected</span>
-                      <span className="font-bold text-secondary">₹{(stats.stats.netProfit + stats.stats.totalPaidRewards).toFixed(2)}</span>
+                      <span className="font-bold text-secondary">₹{stats.stats.totalReferralCommission.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-500">Total Reward Payout Cost</span>

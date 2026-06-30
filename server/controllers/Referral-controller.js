@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { Referral } = require('../models/Referral-model');
+const { Referral, ReferralRewardLog } = require('../models/Referral-model');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Booking = require('../models/Booking-model');
@@ -183,7 +183,7 @@ const processReferralRegistration = async (referredUser, referredUserType, refer
     await referredUser.save();
 
     if (referredUserType === 'customer') {
-      const couponCodeStr = `REF-${referredUser._id.toString().substring(18).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const couponCodeStr = `REF_${referredUser._id.toString().substring(18).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
       await createReferralCoupon(
         couponCodeStr,
         refConfig.fixedRewardAmount,
@@ -353,6 +353,19 @@ const triggerCustomerReferralReward = async (booking) => {
           referredUser.wallet.lastUpdated = new Date();
           await referredUser.save();
 
+          try {
+            await sendNotification(
+              referredUser._id,
+              'customer',
+              'Welcome Reward Credited!',
+              `Welcome to Raj Electrical Services! You received a welcome reward of ₹${welcomeRewardValue} in your wallet.`,
+              'wallet',
+              booking._id
+            );
+          } catch (notificationErr) {
+            console.error('Error sending welcome reward notification:', notificationErr);
+          }
+
           const welcomeTx = new Transaction({
             booking: booking._id,
             bookingId: booking.bookingId || booking._id.toString(),
@@ -368,7 +381,7 @@ const triggerCustomerReferralReward = async (booking) => {
         }
 
         if (rules.welcomeRewardType === 'coupon' || rules.welcomeRewardType === 'both') {
-          const welcomeCode = `WELCOME-${customerId.toString().substring(18).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+          const welcomeCode = `WELCOME_${customerId.toString().substring(18).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
           await createReferralCoupon(
             welcomeCode,
             welcomeRewardValue,
@@ -852,12 +865,20 @@ const getFraudReferrals = async (req, res) => {
  */
 const getRewardLogs = async (req, res) => {
   try {
-    const logs = await Transaction.find({ type: 'referral_reward' })
-      .populate('user', 'name email role')
+    const logs = await ReferralRewardLog.find()
+      .populate('recipient')
+      .populate({
+        path: 'referral',
+        populate: [
+          { path: 'referrer', select: 'name email phone' },
+          { path: 'referredUser', select: 'name email phone' }
+        ]
+      })
       .sort({ createdAt: -1 })
       .lean();
     res.status(200).json({ success: true, data: logs });
   } catch (err) {
+    console.error('getRewardLogs error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

@@ -258,10 +258,10 @@ const UserProfile = () => {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 py-5">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
 
                     {/* Sidebar - Desktop */}
-                    <div className="hidden lg:block space-y-3 font-poppins">
+                    <div className="hidden xl:block space-y-3 font-poppins">
                         <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm">
                             {[
                                 { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
@@ -315,7 +315,7 @@ const UserProfile = () => {
                     </div>
 
                     {/* Main Content */}
-                    <div className="lg:col-span-3 space-y-5">
+                    <div className="xl:col-span-3 space-y-5">
                         {/* Profile Header Card */}
                         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                             <div className="h-20 bg-gradient-to-r from-primary/10 to-primary/5"></div>
@@ -366,7 +366,7 @@ const UserProfile = () => {
                                 </div>
 
                                 {/* Mobile Quick Links - Only visible on small screens */}
-                                <div className="grid grid-cols-4 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
+                                <div className="grid grid-cols-4 gap-2 mt-6 xl:hidden border-t border-gray-50 pt-4">
                                     {[
                                         { id: 'payments', label: 'Wallet', icon: <Wallet className="w-5 h-5 text-primary" /> },
                                         { id: 'favorites', label: 'Saved', icon: <Heart className="w-5 h-5 text-rose-500" /> },
@@ -505,43 +505,39 @@ const UserProfile = () => {
                         {activeTab === 'payments' && (
                             <div className="space-y-5">
                                 {/* Wallet Balance Card */}
-                                <div className="bg-gradient-to-br from-secondary to-gray-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden border border-white/5">
-                                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-primary/20 rounded-full blur-3xl"></div>
-                                    <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-32 h-32 bg-accent/10 rounded-full blur-2xl"></div>
+                                <div className="bg-gradient-to-br from-secondary to-gray-900 rounded-xl p-5 text-white shadow-md relative overflow-hidden border border-white/5">
+                                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+                                    <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-32 h-32 bg-accent/5 rounded-full blur-2xl"></div>
                                     <div className="relative z-10">
                                         {/* Balance Header */}
-                                        <div className="flex items-center justify-between mb-5">
-                                            <p className="text-white/60 text-[10px] uppercase tracking-widest font-black flex items-center gap-2">
+                                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                                            <p className="text-white/70 text-xs font-semibold flex items-center gap-1.5">
                                                 <Wallet className="w-4 h-4 text-primary" /> My Wallet
                                             </p>
-                                            <button
-                                                onClick={() => { fetchProfile(); fetchTransactions(); }}
-                                                className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all active:scale-90"
-                                                title="Sync Balance"
-                                            >
-                                                <RotateCcw className={`w-3.5 h-3.5 text-primary ${loading ? '' : ''}`} />
-                                            </button>
                                         </div>
 
-                                        {/* Main balance */}
-                                        <div className="mb-6">
-                                            <p className="text-white/40 text-xs mb-1">Available Balance</p>
-                                            <h3 className="text-5xl font-black tracking-tighter text-white">
-                                                {formatCurrency(profile.wallet?.availableBalance || 0)}
-                                            </h3>
-                                        </div>
-
-                                        {/* 2-stat grid */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                                                <p className="text-[9px] text-primary uppercase tracking-wider font-black mb-1">Refund Credits</p>
-                                                <p className="text-base font-black text-white">{formatCurrency(profile.wallet?.totalRefunded || 0)}</p>
+                                        {/* Main content flex layout */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            {/* Main balance */}
+                                            <div>
+                                                <p className="text-white/40 text-xs mb-0.5">Available Balance</p>
+                                                <h3 className="text-3xl font-bold tracking-tight text-white">
+                                                    {formatCurrency(profile.wallet?.availableBalance || 0)}
+                                                </h3>
                                             </div>
-                                            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                                                <p className="text-[9px] text-white/40 uppercase tracking-wider font-black mb-1">Total Debit</p>
-                                                <p className="text-base font-black text-white">
-                                                    {formatCurrency(transactions.data.filter(t => t.type === 'debit').reduce((acc, t) => acc + t.amount, 0))}
-                                                </p>
+
+                                            {/* Sub stats */}
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-white/5 rounded-lg px-3.5 py-1.5 border border-white/5 min-w-[110px]">
+                                                    <p className="text-[9px] text-primary uppercase tracking-wider font-semibold mb-0.5">Refund Credits</p>
+                                                    <p className="text-sm font-semibold text-white">{formatCurrency(profile.wallet?.totalRefunded || 0)}</p>
+                                                </div>
+                                                <div className="bg-white/5 rounded-lg px-3.5 py-1.5 border border-white/5 min-w-[110px]">
+                                                    <p className="text-[9px] text-white/40 uppercase tracking-wider font-semibold mb-0.5">Total Debit</p>
+                                                    <p className="text-sm font-semibold text-white">
+                                                        {formatCurrency(transactions.data.filter(t => t.type === 'debit').reduce((acc, t) => acc + t.amount, 0))}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

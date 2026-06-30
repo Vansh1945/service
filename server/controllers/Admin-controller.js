@@ -2173,16 +2173,20 @@ const getDashboardAnalytics = async (req, res) => {
             ]),
 
             // 5. Recent Activity
-            Promise.all([
-                Booking.find().sort({ createdAt: -1 }).limit(10).populate('customer', 'name').populate('provider', 'name').select('customer provider createdAt totalAmount status').lean(),
-                Booking.find({ status: 'completed' }).sort({ serviceCompletedAt: -1 }).limit(5).populate('customer', 'name').populate('provider', 'name').select('customer provider serviceCompletedAt createdAt totalAmount').lean(),
-                User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(5).select('name createdAt').lean()
-            ])
+            (() => {
+                const { Referral } = require('../models/Referral-model');
+                return Promise.all([
+                    Booking.find().sort({ createdAt: -1 }).limit(10).populate('customer', 'name').populate('provider', 'name').select('customer provider createdAt totalAmount status').lean(),
+                    Booking.find({ status: 'completed' }).sort({ serviceCompletedAt: -1 }).limit(5).populate('customer', 'name').populate('provider', 'name').select('customer provider serviceCompletedAt createdAt totalAmount').lean(),
+                    User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(5).select('name createdAt').lean(),
+                    Referral.find().sort({ createdAt: -1 }).limit(5).populate('referrer', 'name').populate('referredUser', 'name').lean()
+                ]);
+            })()
         ]);
 
         const stats = bookingStatsAgg[0];
         const [pendingProviders, pendingWithdrawals, pendingDisputes, activeProvidersCount] = pendingCounts;
-        const [recentBookings, recentlyCompleted, latestUsers] = activityData;
+        const [recentBookings, recentlyCompleted, latestUsers, recentReferrals] = activityData;
 
         // Process Live Activity into flat list
         const liveActivity = [
@@ -2205,6 +2209,12 @@ const getDashboardAnalytics = async (req, res) => {
                 message: `New user: ${u.name}`,
                 timestamp: u.createdAt,
                 status: 'new_user'
+            })),
+            ...recentReferrals.map(r => ({
+                type: 'referral',
+                message: `${r.referrer?.name || 'User'} referred ${r.referredUser?.name || 'Friend'}`,
+                timestamp: r.createdAt,
+                status: r.status
             }))
         ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 15);
 

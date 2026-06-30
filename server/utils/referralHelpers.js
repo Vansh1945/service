@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Referral } = require('../models/Referral-model');
+const { Referral, ReferralRewardLog } = require('../models/Referral-model');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Booking = require('../models/Booking-model');
@@ -67,12 +67,12 @@ const validateReferralCode = async (code, expectedRole, settings) => {
     if (!isCustomerEnabled) {
       return { valid: false, message: 'Customer referral program is currently disabled' };
     }
-    referrer = await User.findOne({ referralCode: code.trim(), role: 'customer', isDeleted: false, isSuspended: false });
+    referrer = await User.findOne({ referralCode: code.trim(), role: 'customer', isSuspended: { $ne: true } });
   } else {
     if (!isProviderEnabled) {
       return { valid: false, message: 'Provider referral program is currently disabled' };
     }
-    referrer = await Provider.findOne({ referralCode: code.trim(), isDeleted: false, isSuspended: false });
+    referrer = await Provider.findOne({ referralCode: code.trim(), isDeleted: { $ne: true } });
   }
 
   if (!referrer) {
@@ -178,6 +178,9 @@ const checkFraudFlags = async (referrer, referredUser, req, type) => {
  * Computes the customer referral reward amount.
  */
 const calculateCustomerReward = (booking, settings) => {
+  if (settings.rewardCalculationMode === 'fixed') {
+    return settings.fixedRewardAmount || 50;
+  }
   const rewardPercent = settings.commissionPercentage;
   return parseFloat(((booking.commissionAmount * rewardPercent) / 100).toFixed(2)) || 0;
 };
@@ -263,6 +266,25 @@ const releaseReferralReward = async (referral, referrer, rewardAmount, booking, 
     description: reasonText
   });
   await transaction.save();
+
+  try {
+    const rewardLog = new ReferralRewardLog({
+      referral: referral._id,
+      rewardType: type === 'customer' ? 'customer_referral' : 'provider_milestone',
+      recipient: referrer._id,
+      recipientModel: referrer.role === 'provider' ? 'Provider' : 'User',
+      recipientType: referrer.role === 'provider' ? 'provider' : 'customer',
+      amount: rewardAmount,
+      details: {
+        bookingId: booking?._id
+      },
+      status: 'released'
+    });
+    await rewardLog.save();
+    console.log(`[ReferralRewardLog] Created reward log for ${referrer._id}`);
+  } catch (logErr) {
+    console.error('Error saving ReferralRewardLog:', logErr);
+  }
 
   return transaction;
 };

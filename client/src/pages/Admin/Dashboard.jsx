@@ -683,10 +683,12 @@ const AdminDashboard = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex items-start">
                     <div className={`mt-1 p-2 rounded-lg mr-3 ${activity.type === 'completion' ? 'bg-green-50 text-green-600' :
-                      activity.type === 'registration' ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-600'
+                      activity.type === 'registration' ? 'bg-blue-50 text-blue-600' :
+                      activity.type === 'referral' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-600'
                       }`}>
                       {activity.type === 'completion' ? <FiCheckCircle size={14} /> :
-                        activity.type === 'registration' ? <FiUser size={14} /> : <FiClock size={14} />}
+                        activity.type === 'registration' ? <FiUser size={14} /> :
+                        activity.type === 'referral' ? <FiUsers size={14} /> : <FiClock size={14} />}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">{activity.message}</p>
@@ -698,9 +700,10 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${activity.status === 'completed' || activity.type === 'completion' ? 'bg-green-100 text-green-700' :
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${activity.status === 'completed' || activity.type === 'completion' || activity.status === 'released' ? 'bg-green-100 text-green-700' :
                     activity.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                      activity.status === 'new_user' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                    activity.status === 'new_user' ? 'bg-blue-100 text-blue-700' :
+                    activity.status === 'pending' || activity.type === 'referral' ? 'bg-indigo-100 text-indigo-700' : 'bg-yellow-100 text-yellow-700'
                     }`}>
                     {activity.status?.replace('_', ' ')}
                   </span>

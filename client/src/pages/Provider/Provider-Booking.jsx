@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -6,14 +6,13 @@ import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import { useNotification } from '../../context/NotificationContext';
 import {
-  Calendar, Clock, MapPin, User, Phone, Mail, DollarSign, Eye, Check, X,
-  AlertCircle, Percent, Wallet, Tag, ChevronDown, ChevronUp, Filter,
+  Calendar, Clock, MapPin, User, Phone, Mail, Eye, Check, X,
+  AlertCircle, Percent, ChevronDown, Filter,
   ClipboardList, Timer, CheckCheck, HelpCircle, Copy, Zap, Wrench, Play,
-  CreditCard, CheckSquare, AlertTriangle, Star, Package, Search, Activity,
-  Banknote, Download, FileText, Loader, BarChart2, DownloadCloud, Navigation,
-  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck, MessageSquare, Headphones
+  CreditCard, CheckSquare, AlertTriangle, Package, Search, Activity,
+  Banknote, Download, Loader, BarChart2, DownloadCloud, Navigation,
+  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, MessageSquare
 } from 'lucide-react';
-import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import BookingCardSkeleton from '../../components/ui-skeletons/BookingCardSkeleton';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
@@ -1186,8 +1185,8 @@ const ProviderBooking = () => {
                       {actionLoading.id === booking._id && actionLoading.type === 'start'
                         ? 'Starting...'
                         : (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))
-                           ? 'Payment Pending'
-                           : 'Start Service'}
+                          ? 'Payment Pending'
+                          : 'Start Service'}
                     </button>
                   )}
 
@@ -1495,40 +1494,6 @@ const ProviderBooking = () => {
                                 )}
                               </div>
 
-                              {service.service?.tags && service.service?.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {service.service.tags.map((tag, i) => (
-                                    <span key={i} className="text-[9px] text-gray-500 bg-gray-50 px-1 py-0.5 rounded border border-gray-100">
-                                      #{tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {service.service?.prerequisites && service.service?.prerequisites.length > 0 && (
-                                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                                  <p className="text-[10px] font-bold text-purple-750 uppercase tracking-wider mb-1">Customer Prerequisites:</p>
-                                  <ul className="list-disc pl-4 space-y-0.5">
-                                    {service.service.prerequisites.map((req, i) => (
-                                      <li key={i} className="text-[11px] text-gray-600">{req}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {service.service?.faqs && service.service?.faqs.length > 0 && (
-                                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                                  <p className="text-[10px] font-bold text-secondary uppercase tracking-wider mb-1">FAQs:</p>
-                                  <div className="space-y-2">
-                                    {service.service.faqs.map((faq, i) => (
-                                      <div key={i} className="text-[11px] bg-gray-50/50 p-1.5 rounded-lg border border-gray-100/50">
-                                        <p className="font-semibold text-secondary">Q: {faq.question}</p>
-                                        <p className="text-gray-500 mt-0.5">A: {faq.answer}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                             <div className="text-right shrink-0 ml-3">
                               <p className="font-bold text-primary text-sm">{formatCurrency(service.price * (service.quantity || 1))}</p>

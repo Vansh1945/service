@@ -92,12 +92,12 @@ const computeNotificationUrl = (role, type, title, message, eventId = null, refe
     const refIdStr = referenceId ? referenceId.toString() : '';
 
     if (role === 'customer') {
-        if (cleanEventId === 'chat_message') return `/messages/${refIdStr}`;
-        if (cleanEventId === 'payment_success') return `/payments`;
+        if (cleanEventId === 'chat_message') return `/customer/bookings`;
+        if (cleanEventId === 'payment_success') return `/customer/profile`;
         if (['booking_created', 'provider_assigned', 'provider_accepted', 'provider_reached', 'work_started', 'booking_completed', 'warranty_expiry'].includes(cleanEventId)) {
-            return `/my-bookings/${refIdStr}`;
+            return `/customer/bookings`;
         }
-        if (cleanEventId === 'complaint_updated') return `/complaints/${refIdStr}`;
+        if (cleanEventId === 'complaint_updated') return `/customer/complaints`;
     }
 
     if (role === 'provider') {

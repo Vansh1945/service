@@ -327,7 +327,7 @@ const ReferEarn = () => {
                           </span>
                         ) : (
                           <>
-                            {ref.status === 'completed' && (
+                            {(ref.status === 'released' || ref.status === 'completed') && (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700">
                                 <FiCheckCircle /> First Booking Completed
                               </span>
@@ -348,7 +348,7 @@ const ReferEarn = () => {
                       <td className="py-4 px-4">
                         {isExpired ? (
                           <span className="text-red-500 font-semibold">Expired (No Reward)</span>
-                        ) : ref.status === 'completed' ? (
+                        ) : (ref.status === 'released' || ref.status === 'completed') ? (
                           <span className="text-green-600 font-bold">Reward Credited</span>
                         ) : ref.status === 'fraud_flagged' ? (
                           <span className="text-red-500 font-semibold">Held for Review</span>

@@ -5,7 +5,7 @@ import { register } from '../../services/AuthService';
 import {
   User, Lock, MapPin,
   ArrowLeft, ArrowRight, CheckCircle, Shield, Zap,
-  Sparkles, Award, HeadphonesIcon, Info
+  Sparkles, Award, HeadphonesIcon, Info, Eye, EyeOff
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Processing from '../../components/ui-skeletons/Processing';
@@ -284,7 +284,14 @@ const CustomerRegistration = () => {
       setErrors(backendErrors);
       const errorValues = Object.values(backendErrors);
       const firstError = errorValues[0];
-      const msg = typeof firstError === 'string' ? firstError : (firstError?.message || 'Check your inputs');
+      let msg = 'Check your inputs';
+      if (typeof firstError === 'string') {
+        msg = firstError;
+      } else if (Array.isArray(firstError)) {
+        msg = firstError.map(err => typeof err === 'string' ? err : (err?.message || err?.msg || JSON.stringify(err))).join(', ');
+      } else if (firstError && typeof firstError === 'object') {
+        msg = firstError.message || firstError.msg || firstError.error || JSON.stringify(firstError);
+      }
       showToast(msg, 'error');
     } else {
       showToast('Validation failed. Please check form.', 'error');
@@ -326,6 +333,7 @@ const CustomerRegistration = () => {
   };
 
   const [referralCode, setReferralCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [referralValidating, setReferralValidating] = useState(false);
   const [referralFeedback, setReferralFeedback] = useState('');
   const [isReferralValid, setIsReferralValid] = useState(null);
@@ -477,15 +485,24 @@ const CustomerRegistration = () => {
             <Section title="Security" icon={Lock} accent tooltip="Use at least 8 characters with a mix of letters and numbers for a strong password.">
               <div className="space-y-4">
                 <Field label="Create Password *" error={errors.password}>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      id="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="••••••••"
+                      className={`${inputCls} pr-10`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-secondary focus:outline-none transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </Field>
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
                   <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />

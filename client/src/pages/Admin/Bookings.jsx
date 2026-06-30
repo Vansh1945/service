@@ -139,149 +139,139 @@ const paymentStatusOptions = [
     { value: 'refunded', label: 'Refunded' }
 ];
 
-const timeRangeOptions = [
-    { value: '', label: 'All Time' },
-    { value: 'today', label: 'Today' },
-    { value: 'week', label: 'Last 7 Days' },
-    { value: 'month', label: 'Last 30 Days' },
-    { value: 'quarterly', label: 'Quarterly' },
-    { value: 'half-year', label: 'Half Year' },
-    { value: 'year', label: 'Yearly' }
-];
 
-// Helper functions outside component to prevent recreation on every render
 
 
 // Memoized Booking Row to prevent unnecessary re-renders
 const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel, rowActionStates = {} }) => {
     const isRowLoading = !!rowActionStates[booking._id];
     return (
-    <tr className={`hover:bg-gray-50 ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="text-sm font-medium text-secondary">
-                {booking.bookingId || `#${booking._id?.substring(booking._id.length - 8) || 'N/A'}`}
-            </div>
-            <div className="flex flex-col gap-1 mt-1">
-                {booking.isRebook ? (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-750 border border-teal-200 px-1.5 py-0.5 rounded w-max" title={`Original Booking: ${booking.originalBooking?.bookingId || booking.originalBooking || 'N/A'}`}>
-                        🔄 Rebook
-                    </span>
-                ) : (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded w-max">
-                        🆕 New
-                    </span>
-                )}
-                {booking.isFavoriteProviderBooking && (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded w-max">
-                        ❤️ Preferred
-                    </span>
-                )}
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div>
+        <tr className={`hover:bg-gray-50 ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <td className="px-4 py-4 whitespace-nowrap">
                 <div className="text-sm font-medium text-secondary">
-                    {booking.customer?.name || 'N/A'}
+                    {booking.bookingId || `#${booking._id?.substring(booking._id.length - 8) || 'N/A'}`}
                 </div>
-                <div className="text-sm text-gray-500">
-                    {booking.customer?.email || 'N/A'}
-                </div>
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
-            <div>
-                <div className="text-sm font-medium text-secondary">
-                    {booking.provider?.name || 'Unassigned'}
-                    {booking.provider?.providerId && (
-                        <span className="ml-1 text-[10px] text-gray-400 font-mono">[{booking.provider.providerId}]</span>
+                <div className="flex flex-col gap-1 mt-1">
+                    {booking.isRebook ? (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-750 border border-teal-200 px-1.5 py-0.5 rounded w-max" title={`Original Booking: ${booking.originalBooking?.bookingId || booking.originalBooking || 'N/A'}`}>
+                            🔄 Rebook
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded w-max">
+                            🆕 New
+                        </span>
+                    )}
+                    {booking.isFavoriteProviderBooking && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded w-max">
+                            ❤️ Preferred
+                        </span>
                     )}
                 </div>
-                <div className="text-sm text-gray-500">
-                    {booking.provider?.email || 'N/A'}
-                </div>
-                {booking.provider && booking.assignmentSource && (
-                    <div className="text-[10px] font-semibold text-teal-650 mt-1 flex items-center gap-0.5">
-                        📍 {booking.assignmentSource}
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap">
+                <div>
+                    <div className="text-sm font-medium text-secondary">
+                        {booking.customer?.name || 'N/A'}
                     </div>
-                )}
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div>
-                <div className="text-sm font-medium text-secondary">
-                    {booking.services?.[0]?.service?.title || 'N/A'}
+                    <div className="text-sm text-gray-500">
+                        {booking.customer?.email || 'N/A'}
+                    </div>
                 </div>
-                <div className="text-sm">
-                    <PriceDisplay amount={booking.totalAmount} type="bold-primary" />
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
+                <div>
+                    <div className="text-sm font-medium text-secondary">
+                        {booking.provider?.name || 'Unassigned'}
+                        {booking.provider?.providerId && (
+                            <span className="ml-1 text-[10px] text-gray-400 font-mono">[{booking.provider.providerId}]</span>
+                        )}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                        {booking.provider?.email || 'N/A'}
+                    </div>
+                    {booking.provider && booking.assignmentSource && (
+                        <div className="text-[10px] font-semibold text-teal-650 mt-1 flex items-center gap-0.5">
+                            📍 {booking.assignmentSource}
+                        </div>
+                    )}
                 </div>
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap hidden lg:table-cell">
-            <div>
-                <div className="text-sm text-secondary">
-                    {formatDate(booking.date)}
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap">
+                <div>
+                    <div className="text-sm font-medium text-secondary">
+                        {booking.services?.[0]?.service?.title || 'N/A'}
+                    </div>
+                    <div className="text-sm">
+                        <PriceDisplay amount={booking.totalAmount} type="bold-primary" />
+                    </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                    {booking.time ? formatTime(booking.time) : 'Not specified'}
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap hidden lg:table-cell">
+                <div>
+                    <div className="text-sm text-secondary">
+                        {formatDate(booking.date)}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                        {booking.time ? formatTime(booking.time) : 'Not specified'}
+                    </div>
                 </div>
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
-                {getStatusIcon(booking.status)}
-                <span className="ml-1 capitalize">{booking.status}</span>
-            </span>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="flex items-center space-x-2">
-                <button
-                    onClick={() => onDetails(booking._id)}
-                    className="p-1 text-primary hover:text-teal-700"
-                    title="View Details"
-                >
-                    <Eye className="w-4 h-4" />
-                </button>
-
-                {!["completed", "cancelled"].includes(booking.status) && (
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
+                    {getStatusIcon(booking.status)}
+                    <span className="ml-1 capitalize">{booking.status}</span>
+                </span>
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap">
+                <div className="flex items-center space-x-2">
                     <button
-                        onClick={() => onReschedule(booking)}
-                        className="p-1 text-blue-600 hover:text-blue-800"
-                        title="Update Date/Time"
+                        onClick={() => onDetails(booking._id)}
+                        className="p-1 text-primary hover:text-teal-700"
+                        title="View Details"
                     >
-                        <Calendar className="w-4 h-4" />
+                        <Eye className="w-4 h-4" />
                     </button>
-                )}
 
-                {booking.status === 'pending' && !booking.provider && (
+                    {!["completed", "cancelled"].includes(booking.status) && (
+                        <button
+                            onClick={() => onReschedule(booking)}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                            title="Update Date/Time"
+                        >
+                            <Calendar className="w-4 h-4" />
+                        </button>
+                    )}
+
+                    {booking.status === 'pending' && !booking.provider && (
+                        <button
+                            onClick={() => onAssign(booking)}
+                            className="p-1 text-green-600 hover:text-green-800"
+                            title="Assign Provider"
+                        >
+                            <UserCheck className="w-4 h-4" />
+                        </button>
+                    )}
+
+                    {['pending', 'accepted', 'assigned', 'confirmed'].includes(booking.status) && (
+                        <button
+                            onClick={() => onCancel(booking)}
+                            className="p-1 text-red-500 hover:text-red-700"
+                            title="Cancel Booking"
+                        >
+                            <XCircle className="w-4 h-4" />
+                        </button>
+                    )}
+
                     <button
-                        onClick={() => onAssign(booking)}
-                        className="p-1 text-green-600 hover:text-green-800"
-                        title="Assign Provider"
+                        onClick={() => onDelete(booking)}
+                        className="p-1 text-red-600 hover:text-red-800"
+                        title="Delete Booking"
                     >
-                        <UserCheck className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                     </button>
-                )}
-
-                {['pending', 'accepted', 'assigned', 'confirmed'].includes(booking.status) && (
-                    <button
-                        onClick={() => onCancel(booking)}
-                        className="p-1 text-red-500 hover:text-red-700"
-                        title="Cancel Booking"
-                    >
-                        <XCircle className="w-4 h-4" />
-                    </button>
-                )}
-
-                <button
-                    onClick={() => onDelete(booking)}
-                    className="p-1 text-red-600 hover:text-red-800"
-                    title="Delete Booking"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
-            </div>
-        </td>
-    </tr>
+                </div>
+            </td>
+        </tr>
     );
 });
 
@@ -304,31 +294,8 @@ const PayoutStatusBadge = ({ status }) => {
 };
 
 // Dynamic Google script loader
-const loadGoogleMapsScript = (callback) => {
-    if (window.google && window.google.maps) {
-        if (callback) callback();
-        return;
-    }
-    const existingScript = document.getElementById('google-maps-script');
-    if (!existingScript) {
-        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY;
-        const script = document.createElement('script');
-        script.id = 'google-maps-script';
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
-        script.async = true;
-        script.defer = true;
-        script.onload = () => {
-            if (callback) callback();
-        };
-        document.head.appendChild(script);
-    } else {
-        existingScript.addEventListener('load', () => {
-            if (callback) callback();
-        });
-    }
-};
 
-const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking }) => {
+const AdminLiveTrackingMap = ({ bookingId, address, provider, booking }) => {
     const { socket } = useSocket();
     const [trackingState, setTrackingState] = useState({
         trackingEnabled: booking?.trackingEnabled || false,
@@ -591,7 +558,7 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
 };
 
 const AdminBookingsView = () => {
-    const { token, API, showToast } = useAuth();
+    const { API, showToast } = useAuth();
     const { socket } = useSocket();
     const navigate = useNavigate();
     const loc = useLocation();
@@ -1059,17 +1026,7 @@ const AdminBookingsView = () => {
         setPagination(prev => ({ ...prev, page }));
     }, []);
 
-    const nextPage = useCallback(() => {
-        setPagination(prev =>
-            prev.page < prev.pages ? { ...prev, page: prev.page + 1 } : prev
-        );
-    }, []);
 
-    const prevPage = useCallback(() => {
-        setPagination(prev =>
-            prev.page > 1 ? { ...prev, page: prev.page - 1 } : prev
-        );
-    }, []);
 
     // Filter providers by service location match (stable callback)
     const getFilteredProviders = useCallback((booking) => {
@@ -1147,33 +1104,6 @@ const AdminBookingsView = () => {
     }, [filters, pagination.page, pagination.limit, filterType, year, financialYear, month, quarter, zoneIds]);
 
     // Generate pagination items
-    const getPaginationItems = () => {
-        const items = [];
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, pagination.page - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(pagination.pages, startPage + maxVisiblePages - 1);
-
-        if (endPage - startPage + 1 < maxVisiblePages) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            items.push(
-                <button
-                    key={i}
-                    onClick={() => goToPage(i)}
-                    className={`px-3 py-1 rounded-lg ${pagination.page === i
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                >
-                    {i}
-                </button>
-            );
-        }
-
-        return items;
-    };
 
     return (
         <div className="min-h-screen p-4 md:p-6">
@@ -1239,35 +1169,35 @@ const AdminBookingsView = () => {
                 ]}
             />
 
-                {/* Active Filters Badges */}
-                <div className="flex flex-wrap items-center gap-2 mt-4">
-                    {filters.status && (
-                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
-                            Status: {statusOptions.find(s => s.value === filters.status)?.label}
-                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('status', '')} />
+            {/* Active Filters Badges */}
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+                {filters.status && (
+                    <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
+                        Status: {statusOptions.find(s => s.value === filters.status)?.label}
+                        <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('status', '')} />
+                    </span>
+                )}
+                {filters.paymentStatus && (
+                    <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
+                        Payment: {paymentStatusOptions.find(p => p.value === filters.paymentStatus)?.label}
+                        <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('paymentStatus', '')} />
+                    </span>
+                )}
+                {filters.search && (
+                    <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-600 text-sm font-semibold rounded-full border border-blue-100">
+                            Filtered by Booking ID: {filters.search}
+                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
                         </span>
-                    )}
-                    {filters.paymentStatus && (
-                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
-                            Payment: {paymentStatusOptions.find(p => p.value === filters.paymentStatus)?.label}
-                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('paymentStatus', '')} />
-                        </span>
-                    )}
-                    {filters.search && (
-                        <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-600 text-sm font-semibold rounded-full border border-blue-100">
-                                Filtered by Booking ID: {filters.search}
-                                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
-                            </span>
-                            <button
-                                onClick={() => handleFilterChange('search', '')}
-                                className="text-xs text-red-505 hover:underline font-medium"
-                            >
-                                Clear Filter
-                            </button>
-                        </div>
-                    )}
-                </div>
+                        <button
+                            onClick={() => handleFilterChange('search', '')}
+                            className="text-xs text-red-505 hover:underline font-medium"
+                        >
+                            Clear Filter
+                        </button>
+                    </div>
+                )}
+            </div>
 
             {/* Bookings Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
@@ -1335,7 +1265,6 @@ const AdminBookingsView = () => {
                 const addr = bk.address || {};
                 const pay = selectedBooking.payment || {};
                 const prov = selectedBooking.provider;
-                const refundAmountVal = bk.cancellationProgress?.refundAmount || bk.refundAmount || 0;
                 return (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
                         <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-up">

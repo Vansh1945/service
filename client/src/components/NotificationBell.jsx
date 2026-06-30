@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/auth';
 import { getSocket } from '../socket/socket';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle, ShieldCheck, Wallet } from 'lucide-react';
+import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle, ShieldCheck, Wallet, MessageSquare } from 'lucide-react';
 
 import * as NotificationService from '../services/NotificationService';
 
@@ -34,30 +34,23 @@ const NotificationBell = () => {
     // Initial fetch
     useEffect(() => {
         fetchNotifications();
-    }, [fetchNotifications]);
-
-    // Real-time updates via socket
-    useEffect(() => {
-        if (!token) return;
+        
+        // Listen to new notification from socket
         const socket = getSocket();
-        if (!socket) return;
-
-        const handleNew = (notification) => {
-            setNotifications(prev => [notification, ...prev].slice(0, 15));
-        };
-
-        const handleCount = ({ unreadCount }) => {
-            setUnreadCount(unreadCount);
-        };
-
-        socket.on('new_notification', handleNew);
-        socket.on('unread_count_updated', handleCount);
-
+        if (socket) {
+            socket.on('new_notification', (notification) => {
+                setNotifications(prev => [notification, ...prev].slice(0, 15));
+                setUnreadCount(c => c + 1);
+            });
+        }
+        
         return () => {
-            socket.off('new_notification', handleNew);
-            socket.off('unread_count_updated', handleCount);
+            const socket = getSocket();
+            if (socket) {
+                socket.off('new_notification');
+            }
         };
-    }, [token]);
+    }, [fetchNotifications]);
 
     // Request browser notification permission
     useEffect(() => {
@@ -66,15 +59,15 @@ const NotificationBell = () => {
         }
     }, []);
 
-    // Close on outside click
+    // Close on click outside
     useEffect(() => {
-        const handler = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setIsOpen(false);
             }
         };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const markRead = async (id) => {
@@ -103,6 +96,7 @@ const NotificationBell = () => {
             case 'refund': return <Wallet className={`${cls} text-indigo-500`} />;
             case 'dispute_raised': return <ShieldCheck className={`${cls} text-red-500`} />;
             case 'payout_held': return <AlertCircle className={`${cls} text-orange-500`} />;
+            case 'chat_message': return <MessageSquare className={`${cls} text-teal-500`} />;
             default: return <AlertCircle className={`${cls} text-gray-500`} />;
         }
     };
@@ -184,7 +178,7 @@ const NotificationBell = () => {
                                             await NotificationService.markClicked(n._id);
                                         } catch (err) { /* silent fail for analytics */ }
                                         
-                                        if (n.url && n.url !== '/') {
+                                        if (n.url && n.url !== '/' && !n.url.startsWith('/messages')) {
                                             navigate(n.url);
                                             setIsOpen(false);
                                         }
@@ -198,7 +192,7 @@ const NotificationBell = () => {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between gap-1">
                                                 <p className={`text-sm font-medium truncate ${!n.isRead ? 'text-gray-900' : 'text-gray-700'}`}>
-                                                    {n.title}
+                                                    {n.title === 'chat_message' ? 'New Message' : n.title}
                                                 </p>
                                                 {!n.isRead && (
                                                     <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />

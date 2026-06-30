@@ -1,26 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FiDollarSign, FiCalendar, FiCheckCircle, FiStar,
   FiTrendingUp, FiClock, FiAlertCircle, FiCreditCard,
-  FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
+  FiPieChart, FiBriefcase, FiChevronRight, FiAlertTriangle
 } from 'react-icons/fi';
 import DashboardSkeleton from '../../components/ui-skeletons/DashboardSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import * as ProviderService from '../../services/ProviderService';
-import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
 import { formatCurrency, formatDate, formatTime } from '../../utils/format';
 import { formatAddress } from '../../utils/providerHelpers';
-
-
-
 import PwaInstallBanner from '../../components/PwaInstallBanner';
 
 const Dashboard = () => {
-  const { token, showToast } = useAuth();
+  const { token, showToast, user, refreshUser } = useAuth();
   const { socket } = useSocket();
 
   const [loading, setLoading] = useState(true);
