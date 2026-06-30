@@ -90,10 +90,7 @@ const BookingConfirmation = () => {
       }
 
       const booking = response.data.data;
-      // If cash booking not yet paid (Pay Now flow), default to online
-      if (booking.paymentMethod === 'cash' && !['paid', 'escrow_hold'].includes(booking.paymentStatus)) {
-        setPaymentMethod('online');
-      } else if (booking.paymentMethod) {
+      if (booking.paymentMethod) {
         setPaymentMethod(booking.paymentMethod);
       }
       setBookingDetails(booking);
@@ -157,11 +154,7 @@ const BookingConfirmation = () => {
           const b = loc.state.booking;
           setBookingDetails(b);
           setServiceDetails(loc.state.service);
-          // If it's a cash booking not yet paid (Pay Now flow), default to online so
-          // the customer can choose how to pay — 'cash' is not a valid createOrder method
-          if (b.paymentMethod === 'cash' && !['paid', 'escrow_hold'].includes(b.paymentStatus)) {
-            setPaymentMethod('online');
-          } else if (b.paymentMethod) {
+          if (b.paymentMethod) {
             setPaymentMethod(b.paymentMethod);
           }
         } else {
@@ -726,7 +719,7 @@ const BookingConfirmation = () => {
                         Platform Fee
                         <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
-                          Platform Fee is non-refundable on booking cancellation.
+                          Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
                         </span>
                       </span>
                       <PriceDisplay amount={bookingDetails.platformFee} type="secondary" prefix="+" />

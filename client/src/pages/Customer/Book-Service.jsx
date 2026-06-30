@@ -123,10 +123,10 @@ const BookService = () => {
   const maxDate = availableDates[availableDates.length - 1];
 
   // Generate time slots based on settings
-  const generateTimeSlots = () => {
+  const generateTimeSlotsForDate = (targetDate) => {
     const slots = [];
     const now = new Date();
-    const isToday = formData.date.toDateString() === now.toDateString();
+    const isToday = targetDate.toDateString() === now.toDateString();
 
     const startTimeSetting = systemSettings?.bookingSettings?.startTime || "09:00";
     const endTimeSetting = systemSettings?.bookingSettings?.endTime || "21:00";
@@ -155,7 +155,31 @@ const BookService = () => {
     return slots;
   };
 
+  const generateTimeSlots = () => {
+    return generateTimeSlotsForDate(formData.date);
+  };
+
   const timeSlots = generateTimeSlots();
+
+  // Auto-switch to the next day if the currently selected date has no slots
+  useEffect(() => {
+    if (service && systemSettings) {
+      const todaySlots = generateTimeSlotsForDate(formData.date);
+      if (todaySlots.length === 0) {
+        const dates = getNext3Days();
+        for (const d of dates) {
+          if (generateTimeSlotsForDate(d).length > 0) {
+            setFormData(prev => ({
+              ...prev,
+              date: d,
+              time: ''
+            }));
+            break;
+          }
+        }
+      }
+    }
+  }, [service, systemSettings]);
 
 
   // Fetch service details
@@ -1054,7 +1078,7 @@ const BookService = () => {
                         Platform Fee
                         <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
-                          Platform Fee is non-refundable on booking cancellation.
+                          Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
                         </span>
                       </span>
                       <span className="text-secondary font-semibold">

@@ -150,9 +150,9 @@ const BookingTimeline = ({ booking }) => {
                   {isCurrent && (
                     <span className="inline-block mt-1 px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-bold rounded-full border border-orange-100 animate-pulse">
                       {step.title.toLowerCase().includes('way') ? 'On The Way' :
-                       step.title.toLowerCase().includes('protection') || step.title.toLowerCase().includes('review') ? 'Active' :
-                       step.title.toLowerCase().includes('dispute') || step.title.toLowerCase().includes('complaint') ? 'Under Review' :
-                       'In Progress'}
+                        step.title.toLowerCase().includes('protection') || step.title.toLowerCase().includes('review') ? 'Active' :
+                          step.title.toLowerCase().includes('dispute') || step.title.toLowerCase().includes('complaint') ? 'Under Review' :
+                            'In Progress'}
                     </span>
                   )}
                 </div>
@@ -329,7 +329,7 @@ const PaymentDetails = ({ booking }) => {
               Platform Fee
               <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
-                Platform Fee is non-refundable on booking cancellation.
+                Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
               </span>
             </span>
             <PriceDisplay amount={booking.platformFee} type="default" prefix="+" />
@@ -730,12 +730,12 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-secondary"><PriceDisplay amount={booking.totalAmount || 0} type="large-bold-secondary" /></p>
                 <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${['paid', 'escrow_hold'].includes(booking.paymentStatus)
-                    ? 'bg-green-100 text-green-600'
-                    : booking.paymentStatus === 'refunded'
-                      ? 'bg-purple-100 text-purple-600'
-                      : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
-                        ? 'bg-yellow-100 text-yellow-600'
-                        : 'bg-red-50 text-accent')
+                  ? 'bg-green-100 text-green-600'
+                  : booking.paymentStatus === 'refunded'
+                    ? 'bg-purple-100 text-purple-600'
+                    : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                      ? 'bg-yellow-100 text-yellow-600'
+                      : 'bg-red-50 text-accent')
                   }`}>
                   {['paid', 'escrow_hold'].includes(booking.paymentStatus)
                     ? `✓ Paid`
@@ -1049,11 +1049,11 @@ const CustomerBookingsPage = () => {
     if (!bookingToReschedule) return;
     const actionKey = `${bookingToReschedule._id}-reschedule`;
     if (actionLoading[actionKey]) return;
-    
+
     // Save previous state for rollback
     const prevBookings = [...bookings];
     const prevSelected = selectedBooking ? { ...selectedBooking } : null;
-    
+
     try {
       setActionLoading(prev => ({ ...prev, [actionKey]: true }));
       // Optimistic update
@@ -1200,7 +1200,7 @@ const CustomerBookingsPage = () => {
                       const prevSelected = selectedBooking ? { ...selectedBooking } : null;
                       try {
                         setActionLoading(prev => ({ ...prev, [actionKey]: true }));
-                        
+
                         // Optimistic update
                         setBookings(prev => prev.map(item => item._id === b._id ? { ...item, status: 'cancelled', cancellationProgress: { ...item.cancellationProgress, status: 'cancelled', cancelledAt: new Date() } } : item));
                         if (selectedBooking && selectedBooking._id === b._id) {
