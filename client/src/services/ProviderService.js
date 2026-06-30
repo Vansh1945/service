@@ -12,16 +12,16 @@ export const loginForCompletion = (data) => {
     return axiosInstance.post("/provider/login-for-completion", data);
 };
 
-export const completeProfile = (data) => {
-    return axiosInstance.put("/provider/profile/complete", data);
+export const completeProfile = (data, config = {}) => {
+    return axiosInstance.put("/provider/profile/complete", data, config);
 };
 
 export const getProfile = () => {
     return axiosInstance.get("/provider/profile");
 };
 
-export const updateProfile = (data) => {
-    return axiosInstance.put("/provider/profile", data);
+export const updateProfile = (data, config = {}) => {
+    return axiosInstance.put("/provider/profile", data, config);
 };
 
 export const viewDocument = (type) => {
@@ -39,4 +39,8 @@ export const permanentDeleteAccount = (id) => {
 
 export const getDashboardData = (params) => {
     return axiosInstance.get("/provider/dashboard", { params });
+};
+
+export const getAgreementPdf = () => {
+    return axiosInstance.get("/provider/agreement-pdf");
 };

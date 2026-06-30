@@ -26,7 +26,7 @@ const TEMPLATE_METADATA = {
     name: 'Provider Approved',
     description: 'Notification sent when a service provider profile is successfully approved by the admin.',
     icon: <FiCheck className="w-5 h-5" />,
-    variables: ['name', 'providerName', 'reason', 'email']
+    variables: ['name', 'providerName', 'reason', 'email', 'agreementPdfUrl', 'approvalLetterUrl']
   },
   providerRejection: {
     name: 'Provider Rejected',

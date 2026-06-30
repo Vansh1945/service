@@ -2,7 +2,7 @@ const Provider = require('../models/Provider-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
 const PaymentRecord = require('../models/PaymentRecord-model');
 const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
-const { uploadProfilePic, uploadResume, uploadPassbookImg } = require('../middlewares/upload');
+const { uploadProfilePic, uploadPassbookImg } = require('../middlewares/upload');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
@@ -419,39 +419,92 @@ exports.completeProfile = async (req, res) => {
             services,
             experience,
             serviceArea,
-            street,
-            city,
-            state,
-            postalCode,
             country,
             accountNo,
             ifsc,
+            bankName,
+            accountName,
             lat,
             lng,
-            houseNumber,
             road,
-            landmark,
             area,
-            pincode,
             formattedAddress,
-            addressLine
+            addressLine,
+            addressSame,
+            currentAddress,
+            permanentAddress,
+            selfDeclaration,
+            agreementAccepted,
+            termsAccepted,
+            privacyAccepted,
+            signedName,
+            signatureMethod,
+            signatureImage
         } = req.body;
 
-        // Validate required fields
-        if (!services || !experience || !serviceArea || !street || !city ||
-            !state || !postalCode || !accountNo || !ifsc) {
+        // Check if KYC documents are uploaded
+        const hasAadhaar = req.files && req.files['aadhaarFront'] && req.files['aadhaarBack'];
+        const hasPan = req.files && req.files['panCard'];
+        const hasSelfie = req.files && req.files['liveSelfie'];
+
+        if (!hasSelfie || (!hasAadhaar && !hasPan)) {
             return res.status(400).json({
                 success: false,
-                message: 'All professional and bank details are required'
+                message: 'A valid identity document (either Aadhaar Front & Back, or PAN Card) along with a Live Selfie is required'
             });
         }
 
-        // Validate IFSC format
-        const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-        if (!ifscRegex.test(ifsc)) {
+        // Validate Legal Acceptance & Signature fields
+        if (!selfDeclaration || !agreementAccepted || !termsAccepted || !privacyAccepted || !signedName || !signatureMethod || !signatureImage) {
             return res.status(400).json({
                 success: false,
-                message: 'Please enter a valid IFSC code'
+                message: 'Legal self declaration, agreements, signed name, signature method and signature image are required'
+            });
+        }
+
+        // Validate required fields
+        if (!services || !experience || !serviceArea || !accountNo || !ifsc || !currentAddress || (!addressSame && !permanentAddress)) {
+            return res.status(400).json({
+                success: false,
+                message: 'All professional, bank details, and current/permanent address details are required'
+            });
+        }
+
+        // Map currentAddress fields to the top-level variables for backward compatibility and location logic
+        const street = currentAddress.street;
+        const city = currentAddress.villageCity;
+        const state = currentAddress.state;
+        const postalCode = currentAddress.pincode;
+        const houseNumber = currentAddress.houseNumber;
+        const landmark = currentAddress.landmark;
+        const pincode = currentAddress.pincode;
+
+        // Validate IFSC using ifsc package
+        const cleanIfsc = ifsc.trim().toUpperCase();
+        const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+        if (!ifscRegex.test(cleanIfsc)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid IFSC format. Expected format: ABCD0123456'
+            });
+        }
+
+        const isIfscValid = require('ifsc').validate(cleanIfsc);
+        if (!isIfscValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid IFSC code. Validation failed.'
+            });
+        }
+
+        let ifscDetails;
+        try {
+            ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
+            if (!ifscDetails) throw new Error('Details not found');
+        } catch (err) {
+            return res.status(400).json({
+                success: false,
+                message: 'Failed to fetch details for the provided IFSC code'
             });
         }
 
@@ -608,27 +661,108 @@ exports.completeProfile = async (req, res) => {
         // Update bank details
         provider.bankDetails = {
             accountNo,
-            ifsc,
+            ifsc: cleanIfsc,
+            bankName: ifscDetails.BANK ? `${ifscDetails.BANK}${ifscDetails.BRANCH ? ' - ' + ifscDetails.BRANCH : ''}` : (bankName || ''),
+            district: ifscDetails.DISTRICT || '',
+            city: ifscDetails.CITY || '',
+            address: ifscDetails.ADDRESS || '',
+            accountName: accountName || '',
             passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
             passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : undefined,
             verified: false
         };
 
-        // Update profile picture if uploaded
+        // Save profile picture if uploaded
         if (req.files && req.files['profilePic']) {
             provider.profilePicUrl = req.files['profilePic'][0].path;
             provider.profilePicPublicId = req.files['profilePic'][0].filename;
         }
 
-        // Update resume if uploaded
-        if (req.files && req.files['resume']) {
-            provider.resume = req.files['resume'][0].path;
-            provider.resumePublicId = req.files['resume'][0].filename;
+        // Save KYC documents
+        if (req.files) {
+            if (req.files['aadhaarFront']) {
+                provider.aadhaarFront = req.files['aadhaarFront'][0].path;
+                provider.aadhaarFrontPublicId = req.files['aadhaarFront'][0].filename;
+            }
+            if (req.files['aadhaarBack']) {
+                provider.aadhaarBack = req.files['aadhaarBack'][0].path;
+                provider.aadhaarBackPublicId = req.files['aadhaarBack'][0].filename;
+            }
+            if (req.files['panCard']) {
+                provider.panCard = req.files['panCard'][0].path;
+                provider.panCardPublicId = req.files['panCard'][0].filename;
+            }
+            if (req.files['liveSelfie']) {
+                provider.liveSelfie = req.files['liveSelfie'][0].path;
+                provider.liveSelfiePublicId = req.files['liveSelfie'][0].filename;
+            }
+        }
+
+        // Save address fields
+        provider.addressSame = addressSame === 'true' || addressSame === true;
+        provider.currentAddress = currentAddress;
+        provider.permanentAddress = (addressSame === 'true' || addressSame === true) ? currentAddress : permanentAddress;
+
+        // Save Legal Acceptance
+        const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        const userAgent = req.headers['user-agent'] || '';
+        provider.legalAcceptance = {
+            selfDeclaration: selfDeclaration === 'true' || selfDeclaration === true,
+            agreementAccepted: agreementAccepted === 'true' || agreementAccepted === true,
+            termsAccepted: termsAccepted === 'true' || termsAccepted === true,
+            privacyAccepted: privacyAccepted === 'true' || privacyAccepted === true,
+            acceptedAt: new Date(),
+            ipAddress: ip,
+            userAgent: userAgent,
+            version: '1.0'
+        };
+
+        // Upload signature image to Cloudinary (since it comes as a base64 string)
+        if (signatureImage && signatureImage.startsWith('data:image')) {
+            try {
+                const base64Data = signatureImage.replace(/^data:image\/\w+;base64,/, '');
+                const sigBuffer = Buffer.from(base64Data, 'base64');
+                const sigUpload = await new Promise((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream(
+                        { folder: 'provider_signatures' },
+                        (error, result) => error ? reject(error) : resolve(result)
+                    );
+                    stream.end(sigBuffer);
+                });
+                provider.digitalSignature = {
+                    signatureUrl: sigUpload.secure_url,
+                    signaturePublicId: sigUpload.public_id,
+                    signedName: signedName,
+                    signedAt: new Date(),
+                    method: signatureMethod,
+                    deviceInfo: userAgent,
+                    ipAddress: ip
+                };
+            } catch (sigErr) {
+                console.error('Failed to upload signature image to Cloudinary:', sigErr);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to upload digital signature image'
+                });
+            }
         }
 
         // Mark profile as complete
         provider.profileComplete = true;
         provider.registrationDate = new Date();
+
+        // Generate and upload Agreement PDF
+        try {
+            const { generateAgreement, uploadPdfBuffer } = require('../services/agreementGenerator');
+            const pdfBuffer = await generateAgreement(provider);
+            const pdfUpload = await uploadPdfBuffer(pdfBuffer, 'provider_agreements', `agreement_${provider._id}`);
+            provider.agreementPdfUrl = pdfUpload.secure_url;
+            provider.agreementPdfPublicId = pdfUpload.public_id;
+        } catch (pdfErr) {
+            console.error('Failed to generate/upload agreement PDF:', pdfErr);
+            // We do not fail the registration, but log it
+        }
+
         await provider.save();
 
         res.status(200).json({
@@ -640,7 +774,8 @@ exports.completeProfile = async (req, res) => {
                 email: provider.email,
                 profileComplete: provider.profileComplete,
                 kycStatus: provider.kycStatus,
-                approved: provider.approved
+                approved: provider.approved,
+                agreementPdfUrl: provider.agreementPdfUrl
             }
         });
     } catch (error) {
@@ -757,7 +892,10 @@ exports.getProfile = async (req, res) => {
             age: age,
             averageRating: averageRating,
             ratingCount: ratingCount,
-            hasResume: !!provider.resume,
+            hasAadhaarFront: !!provider.aadhaarFront,
+            hasAadhaarBack: !!provider.aadhaarBack,
+            hasPanCard: !!provider.panCard,
+            hasLiveSelfie: !!provider.liveSelfie,
             hasPassbookImage: !!provider.bankDetails?.passbookImage,
             hasProfilePic: !!provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg'
         };
@@ -1051,12 +1189,34 @@ exports.updateProviderProfile = async (req, res) => {
         if (!updateType || updateType === 'bank') {
             // Bank Details Updates
             if (accountNo || ifsc || bankName || accountName) {
-                // Validate IFSC if provided
-                if (ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Please enter a valid IFSC code'
-                    });
+                // Validate IFSC using ifsc package
+                let ifscDetails = {};
+                let cleanIfsc = ifsc ? ifsc.trim().toUpperCase() : null;
+                if (cleanIfsc) {
+                    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Invalid IFSC format. Expected format: ABCD0123456'
+                        });
+                    }
+
+                    const isIfscValid = require('ifsc').validate(cleanIfsc);
+                    if (!isIfscValid) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Invalid IFSC code. Validation failed.'
+                        });
+                    }
+
+                    try {
+                        ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
+                        if (!ifscDetails) throw new Error('Details not found');
+                    } catch (err) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Failed to fetch details for the provided IFSC code'
+                        });
+                    }
                 }
 
                 // Validate account number if provided
@@ -1070,12 +1230,75 @@ exports.updateProviderProfile = async (req, res) => {
                 updates.bankDetails = {
                     ...currentProvider.bankDetails,
                     ...(accountNo && { accountNo }),
-                    ...(ifsc && { ifsc }),
-                    ...(bankName && { bankName }),
+                    ...(cleanIfsc && { 
+                        ifsc: cleanIfsc,
+                        bankName: ifscDetails.BANK ? `${ifscDetails.BANK}${ifscDetails.BRANCH ? ' - ' + ifscDetails.BRANCH : ''}` : (bankName || ''),
+                        district: ifscDetails.DISTRICT || '',
+                        city: ifscDetails.CITY || '',
+                        address: ifscDetails.ADDRESS || ''
+                    }),
+                    ...(bankName && !cleanIfsc && { bankName }),
                     ...(accountName && { accountName }),
                     verified: false // Reset verification when details change
                 };
             }
+        }
+
+        // Check if KYC documents are uploaded but provider is approved
+        const isKycUploadRequested = (req.files && (
+            req.files['aadhaarFront'] ||
+            req.files['aadhaarBack'] ||
+            req.files['panCard'] ||
+            req.files['liveSelfie']
+        )) || (req.file && ['aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie'].includes(req.file.fieldname));
+
+        if (isKycUploadRequested && currentProvider.approved) {
+            return res.status(400).json({
+                success: false,
+                message: 'KYC documents cannot be updated after account approval'
+            });
+        }
+
+        // Parse and set address updates
+        if (req.body.currentAddress) {
+            updates.currentAddress = req.body.currentAddress;
+            const streetVal = req.body.currentAddress.street;
+            const cityVal = req.body.currentAddress.villageCity;
+            const stateVal = req.body.currentAddress.state;
+            const postalCodeVal = req.body.currentAddress.pincode;
+
+            if (streetVal || cityVal || stateVal || postalCodeVal) {
+                const currentAddr = currentProvider.address || {};
+                const newLat = lat !== undefined ? (lat ? parseFloat(lat) : null) : currentAddr.lat;
+                const newLng = lng !== undefined ? (lng ? parseFloat(lng) : null) : currentAddr.lng;
+                const newS2CellId = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 13) : currentAddr.s2CellId || null;
+                const newS2CellIdPrecise = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 20) : currentAddr.s2CellIdPrecise || null;
+
+                updates.address = {
+                    ...currentAddr,
+                    ...(streetVal && { street: streetVal }),
+                    ...(cityVal && { city: cityVal }),
+                    ...(stateVal && { state: stateVal }),
+                    ...(postalCodeVal && { postalCode: postalCodeVal }),
+                    lat: newLat,
+                    lng: newLng,
+                    s2CellId: newS2CellId,
+                    s2CellIdPrecise: newS2CellIdPrecise,
+                    houseNumber: req.body.currentAddress.houseNumber || currentAddr.houseNumber,
+                    landmark: req.body.currentAddress.landmark || currentAddr.landmark,
+                    pincode: req.body.currentAddress.pincode || currentAddr.pincode
+                };
+            }
+        }
+
+        if (req.body.addressSame !== undefined) {
+            updates.addressSame = req.body.addressSame === 'true' || req.body.addressSame === true;
+        }
+
+        if (req.body.permanentAddress) {
+            updates.permanentAddress = req.body.permanentAddress;
+        } else if (updates.addressSame || (req.body.addressSame === undefined && currentProvider.addressSame)) {
+            updates.permanentAddress = req.body.currentAddress || currentProvider.currentAddress;
         }
 
         // Handle file uploads
@@ -1094,18 +1317,42 @@ exports.updateProviderProfile = async (req, res) => {
                 successMessage = 'Profile picture updated successfully';
             }
 
-            // Resume Upload
-            if (req.files['resume']) {
-                const resumeFile = req.files['resume'][0];
-
-                // Delete old resume
-                if (currentProvider.resumePublicId) {
-                    await deleteFile(currentProvider.resumePublicId);
+            // KYC Uploads
+            if (req.files['aadhaarFront']) {
+                const fileObj = req.files['aadhaarFront'][0];
+                if (currentProvider.aadhaarFrontPublicId) {
+                    await deleteFile(currentProvider.aadhaarFrontPublicId);
                 }
-
-                updates.resume = resumeFile.path;
-                updates.resumePublicId = resumeFile.filename;
-                successMessage = 'Resume updated successfully';
+                updates.aadhaarFront = fileObj.path;
+                updates.aadhaarFrontPublicId = fileObj.filename;
+                successMessage = 'Aadhaar Front updated successfully';
+            }
+            if (req.files['aadhaarBack']) {
+                const fileObj = req.files['aadhaarBack'][0];
+                if (currentProvider.aadhaarBackPublicId) {
+                    await deleteFile(currentProvider.aadhaarBackPublicId);
+                }
+                updates.aadhaarBack = fileObj.path;
+                updates.aadhaarBackPublicId = fileObj.filename;
+                successMessage = 'Aadhaar Back updated successfully';
+            }
+            if (req.files['panCard']) {
+                const fileObj = req.files['panCard'][0];
+                if (currentProvider.panCardPublicId) {
+                    await deleteFile(currentProvider.panCardPublicId);
+                }
+                updates.panCard = fileObj.path;
+                updates.panCardPublicId = fileObj.filename;
+                successMessage = 'PAN Card updated successfully';
+            }
+            if (req.files['liveSelfie']) {
+                const fileObj = req.files['liveSelfie'][0];
+                if (currentProvider.liveSelfiePublicId) {
+                    await deleteFile(currentProvider.liveSelfiePublicId);
+                }
+                updates.liveSelfie = fileObj.path;
+                updates.liveSelfiePublicId = fileObj.filename;
+                successMessage = 'Live Selfie updated successfully';
             }
 
             // Passbook Image Upload
@@ -1139,13 +1386,34 @@ exports.updateProviderProfile = async (req, res) => {
                 updates.profilePicUrl = req.file.path;
                 updates.profilePicPublicId = req.file.filename;
                 successMessage = 'Profile picture updated successfully';
-            } else if (fieldName === 'resume') {
-                if (currentProvider.resumePublicId) {
-                    await deleteFile(currentProvider.resumePublicId);
+            } else if (fieldName === 'aadhaarFront') {
+                if (currentProvider.aadhaarFrontPublicId) {
+                    await deleteFile(currentProvider.aadhaarFrontPublicId);
                 }
-                updates.resume = req.file.path;
-                updates.resumePublicId = req.file.filename;
-                successMessage = 'Resume updated successfully';
+                updates.aadhaarFront = req.file.path;
+                updates.aadhaarFrontPublicId = req.file.filename;
+                successMessage = 'Aadhaar Front updated successfully';
+            } else if (fieldName === 'aadhaarBack') {
+                if (currentProvider.aadhaarBackPublicId) {
+                    await deleteFile(currentProvider.aadhaarBackPublicId);
+                }
+                updates.aadhaarBack = req.file.path;
+                updates.aadhaarBackPublicId = req.file.filename;
+                successMessage = 'Aadhaar Back updated successfully';
+            } else if (fieldName === 'panCard') {
+                if (currentProvider.panCardPublicId) {
+                    await deleteFile(currentProvider.panCardPublicId);
+                }
+                updates.panCard = req.file.path;
+                updates.panCardPublicId = req.file.filename;
+                successMessage = 'PAN Card updated successfully';
+            } else if (fieldName === 'liveSelfie') {
+                if (currentProvider.liveSelfiePublicId) {
+                    await deleteFile(currentProvider.liveSelfiePublicId);
+                }
+                updates.liveSelfie = req.file.path;
+                updates.liveSelfiePublicId = req.file.filename;
+                successMessage = 'Live Selfie updated successfully';
             } else if (fieldName === 'passbookImage') {
                 if (!currentProvider.bankDetails?.verified && currentProvider.bankDetails?.passbookImagePublicId) {
                     await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
@@ -1179,10 +1447,41 @@ exports.updateProviderProfile = async (req, res) => {
             });
         }
 
+        // Auto-regenerate agreement PDF if legalAcceptance exists
+        if (updatedProvider.legalAcceptance && updatedProvider.legalAcceptance.agreementAccepted) {
+            try {
+                const { generateAgreement, generateApprovalLetter, uploadPdfBuffer } = require('../services/agreementGenerator');
+                
+                // Regenerate agreement PDF
+                const pdfBuffer = await generateAgreement(updatedProvider);
+                if (updatedProvider.agreementPdfPublicId) {
+                    await deleteFile(updatedProvider.agreementPdfPublicId);
+                }
+                const pdfUpload = await uploadPdfBuffer(pdfBuffer, 'provider_agreements', `agreement_${updatedProvider._id}`);
+                updatedProvider.agreementPdfUrl = pdfUpload.secure_url;
+                updatedProvider.agreementPdfPublicId = pdfUpload.public_id;
+
+                // Regenerate approval letter PDF if already approved
+                if (updatedProvider.approved) {
+                    const approvalBuffer = await generateApprovalLetter(updatedProvider, updatedProvider.rejectionReason || '');
+                    if (updatedProvider.approvalLetterPublicId) {
+                        await deleteFile(updatedProvider.approvalLetterPublicId);
+                    }
+                    const approvalUpload = await uploadPdfBuffer(approvalBuffer, 'provider_approval_letters', `approval_${updatedProvider._id}`);
+                    updatedProvider.approvalLetterUrl = approvalUpload.secure_url;
+                    updatedProvider.approvalLetterPublicId = approvalUpload.public_id;
+                }
+
+                await updatedProvider.save();
+            } catch (pdfErr) {
+                console.error('Failed to regenerate PDFs during profile update:', pdfErr);
+            }
+        }
+
         res.status(200).json({
             success: true,
             message: successMessage,
-            provider: updatedProvider
+            provider: updatedProvider.toJSON()
         });
 
     } catch (error) {
@@ -1238,10 +1537,25 @@ exports.viewDocument = async (req, res) => {
         let publicId;
 
         switch (type) {
-            case 'resume':
-                fileUrl = provider.resume;
-                publicId = provider.resumePublicId;
-                fileName = 'resume';
+            case 'aadhaarFront':
+                fileUrl = provider.aadhaarFront;
+                publicId = provider.aadhaarFrontPublicId;
+                fileName = 'aadhaarFront';
+                break;
+            case 'aadhaarBack':
+                fileUrl = provider.aadhaarBack;
+                publicId = provider.aadhaarBackPublicId;
+                fileName = 'aadhaarBack';
+                break;
+            case 'panCard':
+                fileUrl = provider.panCard;
+                publicId = provider.panCardPublicId;
+                fileName = 'panCard';
+                break;
+            case 'liveSelfie':
+                fileUrl = provider.liveSelfie;
+                publicId = provider.liveSelfiePublicId;
+                fileName = 'liveSelfie';
                 break;
             case 'passbook':
                 fileUrl = provider.bankDetails?.passbookImage;
@@ -1256,7 +1570,7 @@ exports.viewDocument = async (req, res) => {
             default:
                 return res.status(400).json({
                     success: false,
-                    message: 'Invalid document type. Use: resume, passbook, or profile'
+                    message: 'Invalid document type. Use: aadhaarFront, aadhaarBack, panCard, liveSelfie, passbook, or profile'
                 });
         }
 
@@ -1367,8 +1681,17 @@ exports.permanentDeleteAccount = async (req, res) => {
         if (provider.profilePicPublicId) {
             await deleteFile(provider.profilePicPublicId);
         }
-        if (provider.resumePublicId) {
-            await deleteFile(provider.resumePublicId);
+        if (provider.aadhaarFrontPublicId) {
+            await deleteFile(provider.aadhaarFrontPublicId);
+        }
+        if (provider.aadhaarBackPublicId) {
+            await deleteFile(provider.aadhaarBackPublicId);
+        }
+        if (provider.panCardPublicId) {
+            await deleteFile(provider.panCardPublicId);
+        }
+        if (provider.liveSelfiePublicId) {
+            await deleteFile(provider.liveSelfiePublicId);
         }
         if (provider.bankDetails?.passbookImagePublicId) {
             await deleteFile(provider.bankDetails.passbookImagePublicId);
@@ -1777,7 +2100,7 @@ exports.getDashboardData = async (req, res) => {
                     restrictedUntil: performance.restrictedUntil || null,
                     restrictionReason: performance.restrictionReason || null
                 },
-                profile: {
+        profile: {
                     name: provider?.name,
                     providerId: provider?.providerId,
                     approved: provider?.approved,
@@ -1792,6 +2115,40 @@ exports.getDashboardData = async (req, res) => {
             success: false,
             message: 'Failed to fetch unified dashboard data',
         });
+    }
+};
+
+/**
+ * @desc    Get/Download Provider Agreement PDF
+ * @route   GET /api/providers/agreement-pdf
+ * @access  Private (Provider)
+ */
+exports.getAgreementPdf = async (req, res) => {
+    try {
+        const provider = await Provider.findById(req.providerId);
+        if (!provider) {
+            return res.status(404).json({ success: false, message: 'Provider not found' });
+        }
+
+        if (provider.agreementPdfUrl) {
+            return res.status(200).json({ success: true, url: provider.agreementPdfUrl });
+        }
+
+        // Generate dynamically if missing but has accepted terms
+        if (provider.legalAcceptance && provider.legalAcceptance.agreementAccepted) {
+            const { generateAgreement, uploadPdfBuffer } = require('../services/agreementGenerator');
+            const pdfBuffer = await generateAgreement(provider);
+            const pdfUpload = await uploadPdfBuffer(pdfBuffer, 'provider_agreements', `agreement_${provider._id}`);
+            provider.agreementPdfUrl = pdfUpload.secure_url;
+            provider.agreementPdfPublicId = pdfUpload.public_id;
+            await provider.save();
+            return res.status(200).json({ success: true, url: provider.agreementPdfUrl });
+        }
+
+        return res.status(400).json({ success: false, message: 'Agreement PDF not generated yet' });
+    } catch (error) {
+        console.error('Get agreement PDF error:', error);
+        res.status(500).json({ success: false, message: 'Server error while fetching agreement PDF' });
     }
 };
 

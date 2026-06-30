@@ -18,7 +18,7 @@ const ProtectedRoute = ({ allowedRoles, requireTest }) => {
   if (requireTest && role === 'provider' && user) {
     // 1. Enforce approval validation
     if (!user.approved) {
-      return <Navigate to="/login" replace />;
+      return <Navigate to="/register-provider" replace />;
     }
     // 2. Enforce qualification test validation
     if (!user.testPassed) {

@@ -14,11 +14,11 @@ const extractDeviceInfo = (req) => {
   const ip = req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
   return {
     ip,
-    deviceId:    req.headers['x-device-id'] || req.body?.deviceId || '',
+    deviceId: req.headers['x-device-id'] || req.body?.deviceId || '',
     fingerprint: req.deviceFingerprint || req.body?.fingerprint || '',
-    ipHash:      ip ? crypto.createHash('sha256').update(ip).digest('hex') : '',
-    userAgent:   req.headers['user-agent'] || '',
-    platform:    req.headers['x-device-platform'] || ''
+    ipHash: ip ? crypto.createHash('sha256').update(ip).digest('hex') : '',
+    userAgent: req.headers['user-agent'] || '',
+    platform: req.headers['x-device-platform'] || ''
   };
 };
 
@@ -569,8 +569,8 @@ exports.firebaseLogin = async (req, res) => {
 
     const { uid, email, phone_number, name, picture, firebase: fbData } = decoded;
     const signInProvider = fbData?.sign_in_provider || 'google.com';
-    const authProvider   = signInProvider === 'phone' ? 'phone' : 'google';
-    const deviceInfo     = extractDeviceInfo(req);
+    const authProvider = signInProvider === 'phone' ? 'phone' : 'google';
+    const deviceInfo = extractDeviceInfo(req);
 
     // 2. Find or create user
     let user, userType;
@@ -619,7 +619,7 @@ exports.firebaseLogin = async (req, res) => {
         return res.status(503).json({ success: false, maintenance: true, message: s.maintenanceMode.customer.message });
       if (userType === 'provider' && s?.maintenanceMode?.provider?.enabled)
         return res.status(503).json({ success: false, maintenance: true, message: s.maintenanceMode.provider.message });
-    } catch (e) {}
+    } catch (e) { }
 
     if (userType === 'provider') {
       if (!user.profileComplete)
@@ -652,9 +652,11 @@ exports.firebaseLogin = async (req, res) => {
 
     // 7. Fraud track
     const { trackEvent } = require('../middlewares/fraud-middleware');
-    await trackEvent({ req, actionType: 'login', userId: user._id,
+    await trackEvent({
+      req, actionType: 'login', userId: user._id,
       userModel: userType === 'provider' ? 'Provider' : 'User',
-      role: userType, flagReason: `Firebase ${authProvider} login` });
+      role: userType, flagReason: `Firebase ${authProvider} login`
+    });
 
     const userData = {
       _id: user._id, name: user.name, email: user.email,
@@ -688,9 +690,9 @@ exports.refreshAccessToken = async (req, res) => {
     // Search all collections for matching valid token
     let user, userType, Model;
     const collections = [
-      { model: User,     type: 'customer' },
+      { model: User, type: 'customer' },
       { model: Provider, type: 'provider' },
-      { model: Admin,    type: 'admin'    }
+      { model: Admin, type: 'admin' }
     ];
 
     for (const { model, type } of collections) {

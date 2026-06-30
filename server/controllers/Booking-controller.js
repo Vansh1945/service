@@ -745,9 +745,9 @@ const confirmBooking = async (req, res) => {
         case 'wallet': {
           const updatedUser = await User.findOneAndUpdate(
             { _id: userId, "wallet.availableBalance": { $gte: booking.totalAmount } },
-            { 
+            {
               $inc: { "wallet.availableBalance": -booking.totalAmount },
-              $push: { 
+              $push: {
                 "wallet.walletTransactions": {
                   type: 'debit',
                   amount: booking.totalAmount,

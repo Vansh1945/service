@@ -37,14 +37,35 @@ const loginForCompletionSchema = z.object({
   password: z.string().min(1, "Password is required")
 });
 
+const parseJsonOrObject = (val) => {
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val);
+    } catch (e) {
+      return val;
+    }
+  }
+  return val;
+};
+
+const addressValidationSchema = z.object({
+  houseNumber: z.string().min(1, "House Number is required"),
+  street: z.string().min(1, "Street is required"),
+  landmark: z.string().min(1, "Landmark is required"),
+  villageCity: z.string().min(1, "Village/City is required"),
+  district: z.string().min(1, "District is required"),
+  state: z.string().min(1, "State is required"),
+  pincode: z.string().regex(/^\d{6}$/, "Pincode must be 6 digits")
+});
+
 const completeProfileSchema = z.object({
   services: z.union([z.string(), z.array(z.string())]).optional(),
   experience: z.union([z.string(), z.number()]).optional(),
   serviceArea: z.string().min(1, "Service area is required"),
-  street: z.string().min(1, "Street is required"),
-  city: z.string().min(1, "City is required"),
-  state: z.string().min(1, "State is required"),
-  postalCode: z.string().regex(/^\d{6}$/, "Postal code must be 6 digits"),
+  street: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postalCode: z.string().optional(),
   country: z.string().optional(),
   accountNo: z.string().regex(/^[0-9]{9,18}$/, "Please enter a valid account number (9-18 digits)"),
   ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please enter a valid IFSC code"),
@@ -56,7 +77,17 @@ const completeProfileSchema = z.object({
   area: z.string().optional().or(z.literal('')),
   pincode: z.string().optional().or(z.literal('')),
   formattedAddress: z.string().optional().or(z.literal('')),
-  addressLine: z.string().optional().or(z.literal(''))
+  addressLine: z.string().optional().or(z.literal('')),
+  addressSame: z.preprocess(val => val === 'true' || val === true, z.boolean()),
+  currentAddress: z.preprocess(parseJsonOrObject, addressValidationSchema),
+  permanentAddress: z.preprocess(parseJsonOrObject, addressValidationSchema),
+  selfDeclaration: z.preprocess(val => val === 'true' || val === true, z.boolean().refine(v => v === true, 'Self declaration must be accepted')),
+  agreementAccepted: z.preprocess(val => val === 'true' || val === true, z.boolean().refine(v => v === true, 'Agreement must be accepted')),
+  termsAccepted: z.preprocess(val => val === 'true' || val === true, z.boolean().refine(v => v === true, 'Terms must be accepted')),
+  privacyAccepted: z.preprocess(val => val === 'true' || val === true, z.boolean().refine(v => v === true, 'Privacy policy must be accepted')),
+  signedName: z.string().min(1, "Signature name is required"),
+  signatureMethod: z.enum(['draw', 'type']),
+  signatureImage: z.string().min(1, "Digital signature is required")
 });
 
 const updateProviderProfileSchema = z.object({
@@ -98,7 +129,17 @@ const updateProviderProfileSchema = z.object({
   pincode: z.string().optional().or(z.literal('')),
   formattedAddress: z.string().optional().or(z.literal('')),
   addressLine: z.string().optional().or(z.literal('')),
-  notificationPreferences: z.union([z.string(), z.record(z.any())]).optional()
+  notificationPreferences: z.union([z.string(), z.record(z.any())]).optional(),
+  addressSame: z.preprocess(val => val === 'true' || val === true, z.boolean()).optional(),
+  currentAddress: z.preprocess(parseJsonOrObject, addressValidationSchema.partial()).optional(),
+  permanentAddress: z.preprocess(parseJsonOrObject, addressValidationSchema.partial()).optional(),
+  selfDeclaration: z.preprocess(val => val === 'true' || val === true, z.boolean()).optional(),
+  agreementAccepted: z.preprocess(val => val === 'true' || val === true, z.boolean()).optional(),
+  termsAccepted: z.preprocess(val => val === 'true' || val === true, z.boolean()).optional(),
+  privacyAccepted: z.preprocess(val => val === 'true' || val === true, z.boolean()).optional(),
+  signedName: z.string().optional(),
+  signatureMethod: z.enum(['draw', 'type']).optional(),
+  signatureImage: z.string().optional()
 });
 
 module.exports = {

@@ -14,9 +14,8 @@ import * as ComplaintService from '../../services/ComplaintService';
 import { formatCurrency, formatDate, formatTime } from '../../utils/format';
 import { formatAddress } from '../../utils/providerHelpers';
 import PwaInstallBanner from '../../components/PwaInstallBanner';
-
 const Dashboard = () => {
-  const { token, showToast, user, refreshUser } = useAuth();
+  const { token, showToast, user, refreshUser, logoutUser } = useAuth();
   const { socket } = useSocket();
 
   const [loading, setLoading] = useState(true);
@@ -262,17 +261,60 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Account Restriction or Low Performance Alert Banner */}
-        {ratings?.restrictionsActive && (
-          <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-start gap-3 shadow-sm">
-            <FiAlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
+        {/* Account Warning/Restriction/Suspended/Blocked Alert Banner */}
+        {user?.blockedTill && new Date(user.blockedTill) > new Date() && (
+          <div className="bg-red-900 border border-red-850 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md text-white animate-pulse">
+            <div className="flex items-start gap-3">
+              <FiAlertTriangle className="w-8 h-8 text-red-200 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-extrabold text-lg text-white">Account Blocked</p>
+                <p className="text-red-100 text-xs mt-1 leading-relaxed">
+                  Your account has been blocked by the administrator. All actions have been restricted.
+                  {user.rejectionReason && ` Reason: ${user.rejectionReason}`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => logoutUser()}
+              className="px-4 py-2 bg-white text-red-950 font-bold text-xs rounded-xl hover:bg-slate-100 transition-all self-start sm:self-center"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+
+        {user?.isSuspended && (
+          <div className="bg-rose-600 border border-rose-700 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md text-white">
+            <div className="flex items-start gap-3">
+              <FiAlertTriangle className="w-8 h-8 text-rose-100 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-extrabold text-lg text-white">Account Suspended</p>
+                <p className="text-rose-100 text-xs mt-1 leading-relaxed">
+                  Your account is suspended. All login-protected provider operations are restricted.
+                  {user.suspensionReason && ` Reason: ${user.suspensionReason}`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => logoutUser()}
+              className="px-4 py-2 bg-white text-rose-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-all self-start sm:self-center"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+
+        {ratings?.restrictionsActive && !user?.isSuspended && !(user?.blockedTill && new Date(user.blockedTill) > new Date()) && (
+          <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex items-start gap-3 shadow-sm border-l-4 border-l-amber-500">
+            <FiAlertTriangle className="w-7 h-7 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-red-800 text-sm">Account Restricted</p>
-              <p className="text-red-700 text-xs mt-1 leading-relaxed">
-                Your account is restricted from accepting new bookings.
-                {ratings.restrictionReason && ` Reason: ${ratings.restrictionReason}`}
-                {ratings.restrictedUntil && ` Restricting until: ${new Date(ratings.restrictedUntil).toLocaleDateString()}`}
-              </p>
+              <p className="font-bold text-amber-800 text-sm">Account Restricted</p>
+              <div className="text-amber-700 text-xs mt-1 space-y-1 leading-relaxed">
+                <p>Your account is currently restricted. Restricted features have been disabled.</p>
+                <p><strong>Current Status:</strong> Restricted</p>
+                <p><strong>Reason:</strong> {ratings.restrictionReason || 'Manual restriction'}</p>
+                {ratings.restrictedUntil && <p><strong>Action Date:</strong> {new Date(ratings.restrictedUntil).toLocaleString()}</p>}
+              </div>
             </div>
           </div>
         )}

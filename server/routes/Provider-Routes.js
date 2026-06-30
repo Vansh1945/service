@@ -29,7 +29,10 @@ router.put('/profile/complete',
   requireProvider,
   upload.fields([
     { name: 'profilePic', maxCount: 1 },
-    { name: 'resume', maxCount: 1 },
+    { name: 'aadhaarFront', maxCount: 1 },
+    { name: 'aadhaarBack', maxCount: 1 },
+    { name: 'panCard', maxCount: 1 },
+    { name: 'liveSelfie', maxCount: 1 },
     { name: 'passbookImage', maxCount: 1 }
   ]),
   validateBody(completeProfileSchema),
@@ -46,12 +49,18 @@ router.put('/profile',
   requireProvider,
   upload.fields([
     { name: 'profilePic', maxCount: 1 },
-    { name: 'resume', maxCount: 1 },
+    { name: 'aadhaarFront', maxCount: 1 },
+    { name: 'aadhaarBack', maxCount: 1 },
+    { name: 'panCard', maxCount: 1 },
+    { name: 'liveSelfie', maxCount: 1 },
     { name: 'passbookImage', maxCount: 1 }
   ]),
   validateBody(updateProviderProfileSchema),
   providerController.updateProviderProfile
 );
+
+// Agreement PDF Route
+router.get('/agreement-pdf', providerAuthMiddleware, requireProvider, providerController.getAgreementPdf);
 
 
 // Document Viewing Route (Protected)

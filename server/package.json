@@ -25,6 +25,7 @@
     "firebase-admin": "^13.7.0",
     "handlebars": "^4.7.8",
     "helmet": "^8.1.0",
+    "ifsc": "^2.0.50",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.30.1",
     "mongoose": "^8.17.0",

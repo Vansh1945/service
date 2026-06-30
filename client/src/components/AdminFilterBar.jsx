@@ -73,21 +73,21 @@ const AdminFilterBar = ({ onApply }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-150 p-6 mb-6">
-      <div className="flex flex-col gap-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-150 p-4 mb-4">
+      <div className="flex flex-col gap-4">
         {/* Header & Toggle */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <div>
-            <h3 className="font-bold text-secondary text-base flex items-center gap-2">
+            <h3 className="font-bold text-secondary text-sm flex items-center gap-2">
               <FiCalendar className="text-primary" /> Global Filter Control
             </h3>
-            <p className="text-xs text-gray-500">Filters applied across all admin analytical dashboards</p>
+            <p className="text-[11px] text-gray-500">Filters applied across all admin analytical dashboards</p>
           </div>
 
-          <div className="flex bg-gray-100 p-1 rounded-xl w-fit border border-gray-200">
+          <div className="flex bg-gray-100 p-0.5 rounded-lg w-fit border border-gray-200">
             <button
               onClick={() => setFilterType('calendar')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
                 filterType === 'calendar'
                   ? 'bg-white text-secondary shadow-sm'
                   : 'text-gray-500 hover:text-secondary'
@@ -97,7 +97,7 @@ const AdminFilterBar = ({ onApply }) => {
             </button>
             <button
               onClick={() => setFilterType('financial')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
                 filterType === 'financial'
                   ? 'bg-white text-secondary shadow-sm'
                   : 'text-gray-500 hover:text-secondary'
@@ -109,10 +109,10 @@ const AdminFilterBar = ({ onApply }) => {
         </div>
 
         {/* Dynamic Filters Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
           {/* Year Selector */}
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
               {filterType === 'financial' ? 'Financial Year' : 'Year'}
             </label>
             <div className="relative">
@@ -125,7 +125,7 @@ const AdminFilterBar = ({ onApply }) => {
                     setYear(parseInt(e.target.value, 10));
                   }
                 }}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold appearance-none"
+                className="w-full px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold appearance-none"
               >
                 {filterType === 'financial'
                   ? financialYears.map((fy) => (
@@ -144,14 +144,14 @@ const AdminFilterBar = ({ onApply }) => {
 
           {/* Month Selector */}
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Month</label>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Month</label>
             <select
               value={month}
               onChange={(e) => {
                 setMonth(e.target.value);
                 if (e.target.value) setQuarter(''); // Reset quarter if month is selected
               }}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold"
+              className="w-full px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold"
             >
               {months.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -163,14 +163,14 @@ const AdminFilterBar = ({ onApply }) => {
 
           {/* Quarter Selector */}
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Quarter</label>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Quarter</label>
             <select
               value={quarter}
               onChange={(e) => {
                 setQuarter(e.target.value);
                 if (e.target.value) setMonth(''); // Reset month if quarter is selected
               }}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold"
+              className="w-full px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold"
             >
               {quarters.map((q) => (
                 <option key={q.value} value={q.value}>

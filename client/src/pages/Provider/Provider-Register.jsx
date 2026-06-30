@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  User, Mail, Phone, Lock, MapPin,
+  User, Mail, Lock,
   ArrowLeft, CheckCircle, Shield, Zap,
   Sparkles, Award, Users,
   DollarSign, Calendar, FileText, Camera, CreditCard,
-  Briefcase, RotateCcw, AlertCircle, X, Info, ChevronDown
+  Briefcase, RotateCcw, AlertCircle, X, Info, ChevronDown, Eye, EyeOff
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
+import { IfscBankDetails } from '../../components/IfscBankDetails';
+import { ProviderPolicy } from '../../components/ProviderPolicy';
 import Processing from '../../components/ui-skeletons/Processing';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
@@ -15,7 +17,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
-import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
 import { formatTime, compressImage, buildStreetAddress, smartAddressBuilder } from '../../utils/format';
 
@@ -99,6 +100,227 @@ const FileField = ({ label, fieldName, accept, placeholder, icon: Icon, value, o
     </div>
   </Field>
 );
+
+const KycFileField = ({ label, fieldName, accept, placeholder, icon: Icon, value, onChange, onRemove, progress }) => {
+  const [preview, setPreview] = useState(null);
+
+  useEffect(() => {
+    if (!value) {
+      setPreview(null);
+      return;
+    }
+    if (typeof value === 'string') {
+      setPreview(value);
+      return;
+    }
+    if (value instanceof File) {
+      const url = URL.createObjectURL(value);
+      setPreview(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [value]);
+
+  return (
+    <Field label={label}>
+      {preview ? (
+        <div className="relative border border-gray-200 rounded-xl p-3 bg-gray-50 flex items-center justify-between gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <img src={preview} alt={label} className="w-12 h-12 object-cover rounded-lg border border-gray-200 shadow-sm flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-secondary truncate">{value.name || 'Uploaded Document'}</p>
+              {value.size && <p className="text-[10px] text-gray-400 mt-0.5">{(value.size / (1024 * 1024)).toFixed(2)} MB</p>}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <label htmlFor={fieldName} className="px-2.5 py-1.5 bg-background border border-gray-200 rounded-lg text-[10px] font-bold text-secondary hover:border-primary hover:text-primary transition-all cursor-pointer">
+              Replace
+            </label>
+            <button type="button" onClick={onRemove} className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-500 hover:bg-red-100 transition-all">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <input
+            type="file"
+            id={fieldName}
+            name={fieldName}
+            onChange={onChange}
+            accept={accept}
+            className="hidden"
+          />
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            type="file"
+            id={fieldName}
+            name={fieldName}
+            onChange={onChange}
+            accept={accept}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          />
+          <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-6 bg-background hover:border-primary hover:bg-primary/5 transition-all text-center">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+              <Icon className="w-5 h-5 text-primary" />
+            </div>
+            <span className="text-xs font-bold text-secondary">{placeholder}</span>
+            <span className="text-[10px] text-gray-400 mt-1">PNG, JPG, JPEG, WEBP up to 5MB</span>
+          </div>
+        </div>
+      )}
+      {progress > 0 && progress < 100 && (
+        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
+          <div className="bg-primary h-1.5 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+        </div>
+      )}
+    </Field>
+  );
+};
+
+const SelfieCaptureField = ({ value, onChange, onRemove, progress }) => {
+  const [stream, setStream] = useState(null);
+  const [active, setActive] = useState(false);
+  const videoRef = React.useRef(null);
+  const [preview, setPreview] = useState(null);
+
+  useEffect(() => {
+    if (!value) {
+      setPreview(null);
+      return;
+    }
+    if (typeof value === 'string') {
+      setPreview(value);
+      return;
+    }
+    if (value instanceof File) {
+      const url = URL.createObjectURL(value);
+      setPreview(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [value]);
+
+  const startCamera = async () => {
+    try {
+      setActive(true);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480, facingMode: 'user' } });
+      setStream(mediaStream);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 100);
+    } catch (err) {
+      toast.error('Could not access camera. Please upload file instead.');
+      setActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setActive(false);
+  };
+
+  const capture = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(480, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(videoRef.current, 0, 0, 480, 480);
+    canvas.toBlob((blob) => {
+      const file = new File([blob], `selfie_${Date.now()}.png`, { type: 'image/png' });
+      onChange(file);
+      stopCamera();
+    }, 'image/png');
+  };
+
+  return (
+    <Field label="Live Selfie Image *">
+      {preview ? (
+        <div className="relative border border-gray-200 rounded-xl p-3 bg-gray-50 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src={preview} alt="Live Selfie" className="w-16 h-16 object-cover rounded-lg border border-gray-200 shadow-sm" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-secondary truncate">{value.name || 'Live Selfie'}</p>
+              {value.size && <p className="text-[10px] text-gray-400 mt-0.5">{(value.size / (1024 * 1024)).toFixed(2)} MB</p>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={startCamera} className="px-3 py-1.5 bg-background border border-gray-200 rounded-lg text-[10px] font-bold text-secondary hover:border-primary hover:text-primary transition-all">
+              Re-Capture
+            </button>
+            <button type="button" onClick={onRemove} className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500 hover:bg-red-100 transition-all">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      ) : active ? (
+        <div className="relative border border-gray-200 rounded-xl p-4 bg-black flex flex-col items-center gap-4 overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-64 h-64 object-cover rounded-lg scale-x-[-1] border border-gray-700"
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={capture} className="px-4 py-2 bg-primary text-background rounded-lg text-xs font-bold hover:bg-primary/95 transition-all">
+              Capture Photo
+            </button>
+            <button type="button" onClick={stopCamera} className="px-4 py-2 bg-gray-800 text-white rounded-lg text-xs font-bold hover:bg-gray-700 transition-all">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="border border-dashed border-gray-300 rounded-xl p-6 bg-white hover:border-primary/50 transition-all text-center">
+          <div className="w-14 h-14 rounded-full bg-primary/5 flex items-center justify-center mx-auto mb-3">
+            <User className="w-7 h-7 text-primary" />
+          </div>
+          <h4 className="text-xs font-bold text-secondary mb-1">Live Selfie Verification</h4>
+          <p className="text-[10px] text-gray-400 mb-4 max-w-xs mx-auto">Please capture a clear photo of your face, or upload a portrait photo from your device.</p>
+
+          <div className="flex flex-col sm:flex-row gap-2 justify-center items-center max-w-xs mx-auto">
+            <button
+              type="button"
+              onClick={startCamera}
+              className="w-full sm:w-auto px-4 py-2 bg-primary text-background rounded-lg text-xs font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Take Live Photo
+            </button>
+
+            <div className="relative w-full sm:w-auto">
+              <input
+                type="file"
+                id="liveSelfie"
+                name="liveSelfie"
+                onChange={(e) => onChange(e.target.files[0])}
+                accept="image/*"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <button
+                type="button"
+                className="w-full sm:w-auto px-4 py-2 bg-gray-100 text-secondary rounded-lg text-xs font-bold hover:bg-gray-200 transition-all"
+              >
+                Upload from Files
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {progress > 0 && progress < 100 && (
+        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
+          <div className="bg-primary h-1.5 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+        </div>
+      )}
+    </Field>
+  );
+};
 
 // ─── Step progress labels ─
 const STEP_LABELS = ['Email', 'Details', 'Login', 'Profile'];
@@ -256,7 +478,33 @@ const ProviderRegistration = () => {
     services: '',
     experience: '',
     serviceArea: '',
-    resume: null,
+    aadhaarFront: null,
+    aadhaarBack: null,
+    panCard: null,
+    liveSelfie: null,
+    addressSame: false,
+    currentAddress: {
+      houseNumber: '',
+      road: '',
+      street: '',
+      landmark: '',
+      area: '',
+      villageCity: '',
+      district: '',
+      state: '',
+      pincode: ''
+    },
+    permanentAddress: {
+      houseNumber: '',
+      road: '',
+      street: '',
+      landmark: '',
+      area: '',
+      villageCity: '',
+      district: '',
+      state: '',
+      pincode: ''
+    },
     street: '',
     city: '',
     state: '',
@@ -279,10 +527,26 @@ const ProviderRegistration = () => {
     passbookImage: null,
     profilePic: null,
     referralCode: '',
+    selfDeclaration: false,
+    agreementAccepted: false,
+    termsAccepted: false,
+    privacyAccepted: false,
+    signedName: '',
+    signatureMethod: 'type',
+    signatureImage: ''
   });
 
 
   const [step, setStep] = useState(1);
+  const [profileSubStep, setProfileSubStep] = useState(1);
+  const [uploadProgresses, setUploadProgresses] = useState({
+    aadhaarFront: 0,
+    aadhaarBack: 0,
+    panCard: 0,
+    liveSelfie: 0,
+    passbookImage: 0,
+    profilePic: 0
+  });
   const [otpSentTime, setOtpSentTime] = useState(null);
   const [canResendOtp, setCanResendOtp] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(60);
@@ -290,7 +554,59 @@ const ProviderRegistration = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]);
   const { categories: providerServices, loading: providerServicesLoading, error: providerServicesError } = useCategory();
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [documentType, setDocumentType] = useState('aadhaar');
+  const [isBankValid, setIsBankValid] = useState(false);
+
+  // Signature state for step 5
+  const [typedSig, setTypedSig] = useState(formData.signedName || '');
+
+  const handleTypeSignature = (val) => {
+    setTypedSig(val);
+    setFormData(prev => ({ ...prev, signedName: val }));
+
+    // Render typed signature to a virtual canvas to save as base64 png
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 120;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'italic 32px Georgia';
+    ctx.fillText(val, 20, 70);
+
+    setFormData(prev => ({
+      ...prev,
+      signatureImage: canvas.toDataURL('image/png')
+    }));
+  };
+
+  const [agreementModal, setAgreementModal] = useState({
+    isOpen: false,
+    type: '', // 'agreement', 'terms', 'privacy'
+    hasScrolled: false
+  });
+
+  const openAgreementModal = (type) => {
+    setAgreementModal({
+      isOpen: true,
+      type,
+      hasScrolled: false
+    });
+  };
+
+  const acceptAgreement = (type) => {
+    setFormData(prev => {
+      const updated = { ...prev };
+      if (type === 'agreement') updated.agreementAccepted = true;
+      if (type === 'terms') updated.termsAccepted = true;
+      if (type === 'privacy') updated.privacyAccepted = true;
+      return updated;
+    });
+    setAgreementModal({ isOpen: false, type: '', hasScrolled: false });
+  };
 
   const [referralCode, setReferralCode] = useState('');
   const [referralValidating, setReferralValidating] = useState(false);
@@ -418,6 +734,20 @@ const ProviderRegistration = () => {
     setFormData((prev) => ({ ...prev, [field]: e.target.files[0] }));
   };
 
+  const handleKycFileChange = (field) => (file) => {
+    if (!file) return;
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Only JPG, JPEG, PNG, and WEBP images are allowed');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must not exceed 5 MB');
+      return;
+    }
+    setFormData((prev) => ({ ...prev, [field]: file }));
+  };
+
   const handleServiceChange = (service) => {
     const serviceId = service.value || service._id;
     setSelectedServices((prev) => {
@@ -504,8 +834,8 @@ const ProviderRegistration = () => {
         });
         const data = response.data;
 
-        // Store the token in the correct 'token' key
-        setCookie('token', data.token, 7);
+        // Use loginUser from AuthContext to set state and cookies correctly
+        await loginUser(data.token, 'provider', data.provider);
 
         setStep(4);
         return 'Login successful! Please complete your profile.';
@@ -523,19 +853,55 @@ const ProviderRegistration = () => {
   };
 
   const handleCompleteProfile = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     const promise = (async () => {
       try {
+        // Validate KYC documents based on documentType selection
+        if (documentType === 'aadhaar') {
+          if (!formData.aadhaarFront || !formData.aadhaarBack || !formData.liveSelfie) {
+            throw new Error('Aadhaar Front, Aadhaar Back, and Live Selfie are required');
+          }
+        } else {
+          if (!formData.panCard || !formData.liveSelfie) {
+            throw new Error('PAN Card and Live Selfie are required');
+          }
+        }
+
+        // Validate Bank details verification
+        if (!isBankValid) {
+          throw new Error('Please enter valid bank details and verify your IFSC code');
+        }
+
+        // Validate Legal Acceptance & Signature fields
+        if (!formData.selfDeclaration || !formData.agreementAccepted || !formData.termsAccepted || !formData.privacyAccepted || !formData.signedName || !formData.signatureImage) {
+          throw new Error('You must accept all declarations/agreements and sign before submitting');
+        }
+
         // Compress registration files on the client side before packaging
         let profilePicFile = formData.profilePic;
         if (profilePicFile) {
           profilePicFile = await compressImage(profilePicFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
         }
 
-        let resumeFile = formData.resume;
-        if (resumeFile && resumeFile.type.startsWith('image/')) {
-          resumeFile = await compressImage(resumeFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+        let aadhaarFrontFile = formData.aadhaarFront;
+        if (aadhaarFrontFile) {
+          aadhaarFrontFile = await compressImage(aadhaarFrontFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+        }
+
+        let aadhaarBackFile = formData.aadhaarBack;
+        if (aadhaarBackFile) {
+          aadhaarBackFile = await compressImage(aadhaarBackFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+        }
+
+        let panCardFile = formData.panCard;
+        if (panCardFile) {
+          panCardFile = await compressImage(panCardFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+        }
+
+        let liveSelfieFile = formData.liveSelfie;
+        if (liveSelfieFile && liveSelfieFile instanceof File) {
+          liveSelfieFile = await compressImage(liveSelfieFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
         }
 
         let passbookImageFile = formData.passbookImage;
@@ -547,14 +913,19 @@ const ProviderRegistration = () => {
           ...formData,
           services: selectedServices,
           profilePic: profilePicFile,
-          resume: resumeFile,
-          passbookImage: passbookImageFile
+          aadhaarFront: aadhaarFrontFile,
+          aadhaarBack: aadhaarBackFile,
+          panCard: panCardFile,
+          liveSelfie: liveSelfieFile,
+          passbookImage: passbookImageFile,
+          currentAddress: JSON.stringify(formData.currentAddress),
+          permanentAddress: JSON.stringify(formData.addressSame ? formData.currentAddress : formData.permanentAddress)
         };
 
         const fd = new FormData();
         Object.entries(formDataWithServices).forEach(([key, value]) => {
           if (value !== null && value !== undefined && value !== '') {
-            if (['resume', 'passbookImage', 'profilePic'].includes(key)) {
+            if (['aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie', 'passbookImage', 'profilePic'].includes(key)) {
               if (value) fd.append(key, value);
             } else if (key === 'services') {
               value.forEach((s) => fd.append('services', s));
@@ -563,7 +934,22 @@ const ProviderRegistration = () => {
             }
           }
         });
-        const response = await ProviderService.completeProfile(fd);
+
+        const config = {
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgresses({
+              aadhaarFront: percentCompleted,
+              aadhaarBack: percentCompleted,
+              panCard: percentCompleted,
+              liveSelfie: percentCompleted,
+              passbookImage: percentCompleted,
+              profilePic: percentCompleted
+            });
+          }
+        };
+
+        const response = await ProviderService.completeProfile(fd, config);
         const data = response.data;
 
         // Clear all auth cookies before navigating to prevent stale auth state
@@ -781,26 +1167,44 @@ const ProviderRegistration = () => {
             <Section title="Account Security" icon={Lock}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field label="Create Password *">
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Min. 8 characters"
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      id="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Min. 8 characters"
+                      className={`${inputCls} pr-10`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-secondary transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </Field>
                 <Field label="Confirm Password *">
-                  <input
-                    type="password"
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="Repeat password"
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="Repeat password"
+                      className={`${inputCls} pr-10`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-secondary transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </Field>
               </div>
             </Section>
@@ -862,26 +1266,357 @@ const ProviderRegistration = () => {
             </Field>
 
             <Field label="Password *">
-              <input
-                type="password"
-                id="password-login"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                className={inputCls}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password-login"
+                  name="password"
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className={`${inputCls} pr-10`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-secondary transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </Field>
           </div>
         );
 
-      // ── Step 4 : Professional Profile ──
+      // ── Step 4 : Professional Profile (KYC & Address Sub-steps) ──
       case 4:
-        return (
+        if (profileSubStep === 1) {
+          return (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-secondary">Step 1 of 4: Identity Verification</h2>
+                <p className="text-sm text-gray-500 mt-1">Upload clear images of your identity documents</p>
+              </div>
+
+              <Field label="Select Identity Document Type *">
+                <div className="relative">
+                  <select
+                    value={documentType}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      setDocumentType(type);
+                      // Clear the other document's uploads when changing type
+                      if (type === 'aadhaar') {
+                        setFormData(prev => ({ ...prev, panCard: null }));
+                      } else {
+                        setFormData(prev => ({ ...prev, aadhaarFront: null, aadhaarBack: null }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none"
+                  >
+                    <option value="aadhaar">Aadhaar Card (Front & Back)</option>
+                    <option value="pan">PAN Card</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  </div>
+                </div>
+              </Field>
+
+              {documentType === 'aadhaar' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <KycFileField
+                    label="Aadhaar Front Image *"
+                    fieldName="aadhaarFront"
+                    accept="image/*"
+                    placeholder="Upload Aadhaar Front..."
+                    icon={Camera}
+                    value={formData.aadhaarFront}
+                    onChange={(e) => handleKycFileChange('aadhaarFront')(e.target.files[0])}
+                    onRemove={() => setFormData(prev => ({ ...prev, aadhaarFront: null }))}
+                    progress={uploadProgresses.aadhaarFront}
+                  />
+                  <KycFileField
+                    label="Aadhaar Back Image *"
+                    fieldName="aadhaarBack"
+                    accept="image/*"
+                    placeholder="Upload Aadhaar Back..."
+                    icon={Camera}
+                    value={formData.aadhaarBack}
+                    onChange={(e) => handleKycFileChange('aadhaarBack')(e.target.files[0])}
+                    onRemove={() => setFormData(prev => ({ ...prev, aadhaarBack: null }))}
+                    progress={uploadProgresses.aadhaarBack}
+                  />
+                </div>
+              ) : (
+                <KycFileField
+                  label="PAN Card Image *"
+                  fieldName="panCard"
+                  accept="image/*"
+                  placeholder="Upload PAN Card..."
+                  icon={Camera}
+                  value={formData.panCard}
+                  onChange={(e) => handleKycFileChange('panCard')(e.target.files[0])}
+                  onRemove={() => setFormData(prev => ({ ...prev, panCard: null }))}
+                  progress={uploadProgresses.panCard}
+                />
+              )}
+
+              <SelfieCaptureField
+                value={formData.liveSelfie}
+                onChange={(file) => handleKycFileChange('liveSelfie')(file)}
+                onRemove={() => setFormData(prev => ({ ...prev, liveSelfie: null }))}
+                progress={uploadProgresses.liveSelfie}
+              />
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (documentType === 'aadhaar') {
+                      if (!formData.aadhaarFront || !formData.aadhaarBack || !formData.liveSelfie) {
+                        toast.error('Aadhaar Front, Back, and Live Selfie are required');
+                        return;
+                      }
+                    } else {
+                      if (!formData.panCard || !formData.liveSelfie) {
+                        toast.error('PAN Card and Live Selfie are required');
+                        return;
+                      }
+                    }
+                    setProfileSubStep(2);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 transition-all"
+                >
+                  Next Step
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        if (profileSubStep === 2) {
+          return (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-secondary">Step 2 of 4: Current Address</h2>
+                <p className="text-sm text-gray-500 mt-1">Please enter your current residential address</p>
+              </div>
+
+              <AddressSelector
+                address={{
+                  houseNumber: formData.currentAddress.houseNumber,
+                  road: formData.currentAddress.road || '',
+                  landmark: formData.currentAddress.landmark,
+                  area: formData.currentAddress.area || '',
+                  city: formData.currentAddress.villageCity || formData.currentAddress.city || '',
+                  state: formData.currentAddress.state,
+                  pincode: formData.currentAddress.pincode || formData.currentAddress.postalCode || '',
+                  postalCode: formData.currentAddress.pincode || formData.currentAddress.postalCode || '',
+                  street: formData.currentAddress.street,
+                  formattedAddress: formData.currentAddress.formattedAddress,
+                  isManuallyEdited: formData.currentAddress.isManuallyEdited,
+                }}
+                onChange={(updatedAddress) => {
+                  setFormData((prev) => {
+                    const mapped = {
+                      ...prev.currentAddress,
+                      houseNumber: updatedAddress.houseNumber || '',
+                      road: updatedAddress.road || '',
+                      landmark: updatedAddress.landmark || '',
+                      area: updatedAddress.area || '',
+                      city: updatedAddress.city || '',
+                      state: updatedAddress.state || '',
+                      pincode: updatedAddress.pincode || updatedAddress.postalCode || '',
+                      postalCode: updatedAddress.postalCode || updatedAddress.pincode || '',
+                      street: updatedAddress.street || '',
+                      villageCity: updatedAddress.city || '',
+                      district: updatedAddress.area || '', // Map area to district
+                      formattedAddress: updatedAddress.formattedAddress || '',
+                      isManuallyEdited: updatedAddress.isManuallyEdited || false,
+                    };
+                    const updated = {
+                      ...prev,
+                      currentAddress: mapped
+                    };
+                    if (prev.addressSame) {
+                      updated.permanentAddress = { ...mapped };
+                    }
+                    return updated;
+                  });
+                }}
+              />
+
+              <div className="flex items-center gap-2 mt-4">
+                <input
+                  type="checkbox"
+                  id="addressSame"
+                  checked={formData.addressSame}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData(prev => {
+                      const updated = { ...prev, addressSame: checked };
+                      if (checked) {
+                        updated.permanentAddress = { ...prev.currentAddress };
+                      }
+                      return updated;
+                    });
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
+                />
+                <label htmlFor="addressSame" className="text-xs font-bold text-secondary cursor-pointer select-none">
+                  Permanent Address same as Current Address
+                </label>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setProfileSubStep(1)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const c = formData.currentAddress;
+                    if (!c.houseNumber || (!c.street && !c.road) || !c.landmark || (!c.villageCity && !c.city) || !c.state || !c.pincode) {
+                      toast.error('All Current Address fields are required');
+                      return;
+                    }
+                    if (!/^\d{6}$/.test(c.pincode)) {
+                      toast.error('Pincode must be 6 digits');
+                      return;
+                    }
+
+                    // Copy currentAddress to top-level of formData for backend compatibility
+                    setFormData(prev => ({
+                      ...prev,
+                      houseNumber: c.houseNumber,
+                      road: c.road || '',
+                      street: c.street || '',
+                      landmark: c.landmark || '',
+                      area: c.area || '',
+                      city: c.villageCity || c.city || '',
+                      state: c.state || '',
+                      pincode: c.pincode || '',
+                      postalCode: c.pincode || '',
+                      formattedAddress: c.formattedAddress || '',
+                      lat: c.lat || prev.lat,
+                      lng: c.lng || prev.lng,
+                      s2CellId: c.s2CellId || prev.s2CellId,
+                      s2CellIdPrecise: c.s2CellIdPrecise || prev.s2CellIdPrecise,
+                      serviceArea: c.villageCity || c.city || prev.serviceArea
+                    }));
+
+                    if (formData.addressSame) {
+                      setProfileSubStep(4);
+                    } else {
+                      setProfileSubStep(3);
+                    }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 transition-all"
+                >
+                  Next Step
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        if (profileSubStep === 3) {
+          return (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-secondary">Step 3 of 4: Permanent Address</h2>
+                <p className="text-sm text-gray-500 mt-1">Please enter your permanent residential address</p>
+              </div>
+
+              <AddressSelector
+                address={{
+                  houseNumber: formData.permanentAddress.houseNumber,
+                  road: formData.permanentAddress.road || '',
+                  landmark: formData.permanentAddress.landmark,
+                  area: formData.permanentAddress.area || '',
+                  city: formData.permanentAddress.villageCity || formData.permanentAddress.city || '',
+                  state: formData.permanentAddress.state,
+                  pincode: formData.permanentAddress.pincode || formData.permanentAddress.postalCode || '',
+                  postalCode: formData.permanentAddress.pincode || formData.permanentAddress.postalCode || '',
+                  street: formData.permanentAddress.street,
+                  formattedAddress: formData.permanentAddress.formattedAddress,
+                  isManuallyEdited: formData.permanentAddress.isManuallyEdited,
+                }}
+                onChange={(updatedAddress) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    permanentAddress: {
+                      ...prev.permanentAddress,
+                      houseNumber: updatedAddress.houseNumber || '',
+                      road: updatedAddress.road || '',
+                      landmark: updatedAddress.landmark || '',
+                      area: updatedAddress.area || '',
+                      city: updatedAddress.city || '',
+                      state: updatedAddress.state || '',
+                      pincode: updatedAddress.pincode || updatedAddress.postalCode || '',
+                      postalCode: updatedAddress.postalCode || updatedAddress.pincode || '',
+                      street: updatedAddress.street || '',
+                      villageCity: updatedAddress.city || '',
+                      district: updatedAddress.area || '',
+                      formattedAddress: updatedAddress.formattedAddress || '',
+                      isManuallyEdited: updatedAddress.isManuallyEdited || false,
+                    }
+                  }));
+                }}
+              />
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setProfileSubStep(2)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = formData.permanentAddress;
+                    if (!p.houseNumber || (!p.street && !p.road) || !p.landmark || (!p.villageCity && !p.city) || !p.state || !p.pincode) {
+                      toast.error('All Permanent Address fields are required');
+                      return;
+                    }
+                    if (!/^\d{6}$/.test(p.pincode)) {
+                      toast.error('Pincode must be 6 digits');
+                      return;
+                    }
+                    setProfileSubStep(4);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/95 transition-all"
+                >
+                  Next Step
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // Substep 4: Professional & Bank Details
+        if (profileSubStep === 4) {
+          return (
           <div className="space-y-5">
             <div>
-              <h2 className="text-2xl font-bold text-secondary">Complete Your Profile</h2>
-              <p className="text-sm text-gray-500 mt-1">Add professional details to start receiving bookings</p>
+              <h2 className="text-xl font-bold text-secondary">Step 4 of 4: Professional & Bank Details</h2>
+              <p className="text-sm text-gray-500 mt-1">Complete your service details and bank information</p>
             </div>
 
             {/* Professional Info */}
@@ -889,7 +1624,7 @@ const ProviderRegistration = () => {
               <Field label="Service Categories (Select 1–3) *">
                 {providerServicesLoading ? (
                   <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
-                    <div className=" rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+                    <div className=" rounded-full h-4 w-4 border-2 border-primary border-t-transparent animate-spin" />
                     Loading categories...
                   </div>
                 ) : providerServicesError ? (
@@ -939,7 +1674,7 @@ const ProviderRegistration = () => {
                                   onClick={() => handleServiceChange({ value: id })}
                                   className="hover:text-primary/60 transition-colors"
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
                               </span>
                             );
@@ -1007,47 +1742,7 @@ const ProviderRegistration = () => {
               </div>
             </Section>
 
-            {/* Address Details */}
-            <Section title="Address Details" icon={MapPin}>
-              <AddressSelector
-                address={{
-                  houseNumber: formData.houseNumber,
-                  road: formData.road,
-                  landmark: formData.landmark,
-                  area: formData.area,
-                  city: formData.city,
-                  state: formData.state,
-                  pincode: formData.pincode || formData.postalCode,
-                  postalCode: formData.postalCode || formData.pincode,
-                  lat: formData.lat,
-                  lng: formData.lng,
-                  s2CellId: formData.s2CellId,
-                  s2CellIdPrecise: formData.s2CellIdPrecise,
-                  formattedAddress: formData.formattedAddress,
-                  street: formData.street,
-                }}
-                onChange={(updatedAddress) => {
-                  setFormData((prev) => ({
-                    ...prev,
-                    houseNumber: updatedAddress.houseNumber || '',
-                    road: updatedAddress.road || '',
-                    landmark: updatedAddress.landmark || '',
-                    area: updatedAddress.area || '',
-                    city: updatedAddress.city || '',
-                    state: updatedAddress.state || '',
-                    pincode: updatedAddress.pincode || updatedAddress.postalCode || '',
-                    postalCode: updatedAddress.postalCode || updatedAddress.pincode || '',
-                    street: updatedAddress.street || '',
-                    lat: updatedAddress.lat ?? prev.lat,
-                    lng: updatedAddress.lng ?? prev.lng,
-                    s2CellId: updatedAddress.s2CellId ?? prev.s2CellId,
-                    s2CellIdPrecise: updatedAddress.s2CellIdPrecise ?? prev.s2CellIdPrecise,
-                    formattedAddress: updatedAddress.formattedAddress || '',
-                    serviceArea: updatedAddress.city || prev.serviceArea,
-                  }));
-                }}
-              />
-            </Section>
+
 
             {/* Bank Details */}
             <Section
@@ -1056,104 +1751,253 @@ const ProviderRegistration = () => {
               accent
               tooltip="Your bank details are used for secure payment transfers after each completed job. All information is encrypted and never shared. Provide the account where you want to receive your earnings."
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Account Number *">
-                  <input
-                    type="text"
-                    id="accountNo"
-                    name="accountNo"
-                    value={formData.accountNo}
-                    onChange={handleChange}
-                    placeholder="1234567890"
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label="IFSC Code *">
-                  <input
-                    type="text"
-                    id="ifsc"
-                    name="ifsc"
-                    value={formData.ifsc}
-                    onChange={handleChange}
-                    placeholder="ABCD0123456"
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label="Bank Name">
-                  <input
-                    type="text"
-                    id="bankName"
-                    name="bankName"
-                    value={formData.bankName}
-                    onChange={handleChange}
-                    placeholder="e.g., State Bank of India"
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label="Account Holder Name">
-                  <input
-                    type="text"
-                    id="accountName"
-                    name="accountName"
-                    value={formData.accountName}
-                    onChange={handleChange}
-                    placeholder="Name as per bank records"
-                    className={inputCls}
-                  />
-                </Field>
+              <div className="space-y-4">
+                <IfscBankDetails
+                  value={{
+                    ifsc: formData.ifsc,
+                    accountNo: formData.accountNo,
+                    bankName: formData.bankName,
+                    branch: formData.branch,
+                    district: formData.district,
+                    state: formData.state,
+                    city: formData.city,
+                    address: formData.address,
+                  }}
+                  onChange={(updated) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      ifsc: updated.ifsc || '',
+                      accountNo: updated.accountNo || '',
+                      bankName: updated.bankName || '',
+                      branch: updated.branch || '',
+                      district: updated.district || '',
+                      state: updated.state || '',
+                      city: updated.city || '',
+                      address: updated.address || '',
+                    }));
+                  }}
+                  onValidityChange={setIsBankValid}
+                  showAccountName={true}
+                  accountNameValue={formData.accountName || ''}
+                  onAccountNameChange={(name) => setFormData((prev) => ({ ...prev, accountName: name }))}
+                />
+
+                <KycFileField
+                  label="Bank Passbook Image *"
+                  fieldName="passbookImage"
+                  accept="image/*"
+                  placeholder="Upload passbook image..."
+                  icon={Camera}
+                  value={formData.passbookImage}
+                  onChange={(e) => handleKycFileChange('passbookImage')(e.target.files[0])}
+                  onRemove={() => setFormData(prev => ({ ...prev, passbookImage: null }))}
+                  progress={uploadProgresses.passbookImage}
+                />
               </div>
-              <FileField
-                label="Bank Passbook Image *"
-                fieldName="passbookImage"
-                accept="image/*"
-                placeholder="Upload passbook image..."
-                icon={Camera}
-                value={formData.passbookImage}
-                onChange={handleFileChange('passbookImage')}
-              />
             </Section>
 
             {/* Documents */}
             <Section
-              title="Documents Upload"
+              title="Profile Picture"
               icon={FileText}
-              tooltip="Upload clear images only. 'Any Experience' can be a certificate, work photo, or any proof of your skills. 'Profile Picture' should be a clear face photo. These help build trust with customers."
+              tooltip="Upload a clear face photo. This helps build trust with customers."
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FileField
-                  label="Any Experience (Image) *"
-                  fieldName="resume"
-                  accept="image/*"
-                  placeholder="Upload experience photo/certificate..."
-                  icon={Camera}
-                  value={formData.resume}
-                  onChange={handleFileChange('resume')}
-                />
-                <FileField
-                  label="Profile Picture *"
-                  fieldName="profilePic"
-                  accept="image/*"
-                  placeholder="Upload profile photo..."
-                  icon={Camera}
-                  value={formData.profilePic}
-                  onChange={handleFileChange('profilePic')}
-                />
-              </div>
+              <KycFileField
+                label="Profile Picture *"
+                fieldName="profilePic"
+                accept="image/*"
+                placeholder="Upload profile photo..."
+                icon={Camera}
+                value={formData.profilePic}
+                onChange={(e) => handleKycFileChange('profilePic')(e.target.files[0])}
+                onRemove={() => setFormData(prev => ({ ...prev, profilePic: null }))}
+                progress={uploadProgresses.profilePic}
+              />
             </Section>
 
-            <div className="flex items-start gap-3 mt-4 px-1">
-              <input
-                type="checkbox"
-                id="terms-provider"
-                required
-                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
-              />
-              <label htmlFor="terms-provider" className="text-xs text-gray-400 leading-relaxed cursor-pointer select-none">
-                I agree to the <Link to="/terms" className="text-primary font-bold hover:underline">Provider Terms of Service</Link> and <Link to="/privacy" className="text-primary font-bold hover:underline">Privacy Policy</Link>
-              </label>
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setProfileSubStep(formData.addressSame ? 2 : 3)}
+                className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedServices.length === 0) {
+                    toast.error('Please select at least one service category');
+                    return;
+                  }
+                  if (!formData.experience || formData.experience < 0) {
+                    toast.error('Please enter valid years of experience');
+                    return;
+                  }
+                  if (!formData.serviceArea) {
+                    toast.error('Please enter your service area');
+                    return;
+                  }
+                  if (!formData.accountNo || !formData.ifsc) {
+                    toast.error('Bank account number and IFSC code are required');
+                    return;
+                  }
+                  if (!formData.passbookImage) {
+                    toast.error('Bank passbook image is required');
+                    return;
+                  }
+                  if (!formData.profilePic) {
+                    toast.error('Profile picture is required');
+                    return;
+                  }
+                  setProfileSubStep(5);
+                }}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 transition-all"
+              >
+                Next Step
+              </button>
             </div>
           </div>
         );
+      }
+
+      // Substep 5: Legal Acceptance & Digital Signature
+      if (profileSubStep === 5) {
+        return (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-secondary">Step 5 of 5: Legal Agreements</h2>
+                <p className="text-sm text-gray-500 mt-1">Please review the declarations and sign below to complete registration</p>
+              </div>
+
+              {/* Declarations */}
+              <div className="space-y-3.5 bg-gray-50 border border-gray-200 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="selfDeclaration"
+                    checked={formData.selfDeclaration}
+                    onChange={(e) => setFormData(prev => ({ ...prev, selfDeclaration: e.target.checked }))}
+                    className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
+                  />
+                  <label htmlFor="selfDeclaration" className="text-xs text-secondary/80 leading-relaxed cursor-pointer select-none">
+                    <strong>Self Declaration:</strong> I hereby declare that all the information, identity documents (Aadhaar, PAN), and bank details provided are true and correct to the best of my knowledge. I understand that any false statements may result in account termination.
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3 border-t border-gray-200 pt-3">
+                  <input
+                    type="checkbox"
+                    id="agreementAccepted"
+                    checked={formData.agreementAccepted}
+                    onChange={() => {
+                      if (!formData.agreementAccepted) {
+                        openAgreementModal('agreement');
+                      } else {
+                        setFormData(prev => ({ ...prev, agreementAccepted: false }));
+                      }
+                    }}
+                    className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
+                  />
+                  <label htmlFor="agreementAccepted" className="text-xs text-secondary/80 leading-relaxed cursor-pointer select-none">
+                    I have read and agree to the <button type="button" onClick={() => openAgreementModal('agreement')} className="text-primary font-bold hover:underline">Provider Agreement</button> and platform SLAs.
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3 border-t border-gray-200 pt-3">
+                  <input
+                    type="checkbox"
+                    id="termsAccepted"
+                    checked={formData.termsAccepted}
+                    onChange={() => {
+                      if (!formData.termsAccepted) {
+                        openAgreementModal('terms');
+                      } else {
+                        setFormData(prev => ({ ...prev, termsAccepted: false }));
+                      }
+                    }}
+                    className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
+                  />
+                  <label htmlFor="termsAccepted" className="text-xs text-secondary/80 leading-relaxed cursor-pointer select-none">
+                    I accept the general <button type="button" onClick={() => openAgreementModal('terms')} className="text-primary font-bold hover:underline">Terms and Conditions</button> of service.
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3 border-t border-gray-200 pt-3">
+                  <input
+                    type="checkbox"
+                    id="privacyAccepted"
+                    checked={formData.privacyAccepted}
+                    onChange={() => {
+                      if (!formData.privacyAccepted) {
+                        openAgreementModal('privacy');
+                      } else {
+                        setFormData(prev => ({ ...prev, privacyAccepted: false }));
+                      }
+                    }}
+                    className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
+                  />
+                  <label htmlFor="privacyAccepted" className="text-xs text-secondary/80 leading-relaxed cursor-pointer select-none">
+                    I acknowledge and accept the <button type="button" onClick={() => openAgreementModal('privacy')} className="text-primary font-bold hover:underline">Privacy Policy</button> for data handling.
+                  </label>
+                </div>
+              </div>
+
+              {/* Digital Signature */}
+              <div className="border border-gray-200 rounded-xl p-5 bg-background">
+                <div className="space-y-4">
+                  <Field label="Full Name for Signature *">
+                    <input
+                      type="text"
+                      value={typedSig}
+                      onChange={(e) => handleTypeSignature(e.target.value)}
+                      placeholder="Type your name to sign..."
+                      className={inputCls}
+                    />
+                  </Field>
+                  {typedSig && (
+                    <div className="border border-gray-200 rounded-lg p-5 bg-gray-50 flex items-center justify-center">
+                      <span className="text-3xl font-normal italic text-secondary tracking-wider" style={{ fontFamily: 'Georgia, serif' }}>
+                        {typedSig}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Signed Name */}
+              <Field label="Printed Name of Signatory *">
+                <input
+                  type="text"
+                  value={formData.signedName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, signedName: e.target.value }))}
+                  placeholder="Verify your printed name..."
+                  className={inputCls}
+                />
+              </Field>
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setProfileSubStep(4)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <Processing
+                  type="submit"
+                  loading={isSubmitting}
+                  loadingText="Submitting..."
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Sign & Submit Application
+                </Processing>
+              </div>
+            </div>
+          );
+        }
 
       default:
         return null;
@@ -1257,28 +2101,30 @@ const ProviderRegistration = () => {
                 {renderStepContent()}
 
                 {/* Action buttons */}
-                <div className="flex gap-3 mt-8">
-                  {step === 2 && (
-                    <button
-                      type="button"
-                      onClick={() => setStep(1)}
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </button>
-                  )}
+                {step !== 4 && (
+                  <div className="flex gap-3 mt-8">
+                    {step === 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        disabled={isSubmitting}
+                        className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back
+                      </button>
+                    )}
 
-                  <Processing
-                    type="submit"
-                    loading={isSubmitting}
-                    loadingText="Submitting..."
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {submitLabel[step]}
-                  </Processing>
-                </div>
+                    <Processing
+                      type="submit"
+                      loading={isSubmitting}
+                      loadingText="Submitting..."
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {submitLabel[step]}
+                    </Processing>
+                  </div>
+                )}
               </form>
 
               {/* Footer link */}
@@ -1291,7 +2137,14 @@ const ProviderRegistration = () => {
             </div>
           </div>
 
-        </div>
+      </div>
+
+      <ProviderPolicy
+        isOpen={agreementModal.isOpen}
+        type={agreementModal.type}
+        onClose={() => setAgreementModal({ isOpen: false, type: '', hasScrolled: false })}
+        onAccept={acceptAgreement}
+      />
       </div>
     </div>
   );

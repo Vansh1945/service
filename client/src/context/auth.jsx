@@ -135,9 +135,9 @@ export const AuthProvider = ({ children }) => {
         if (cached) {
             try {
                 setActiveBranding(JSON.parse(cached));
-            } catch (e) {}
+            } catch (e) { }
         }
-        
+
         // Background update fetch
         fetchSystemAndBranding(currentBrandingRole);
     }, [currentBrandingRole, fetchSystemAndBranding]);
@@ -247,13 +247,14 @@ export const AuthProvider = ({ children }) => {
                 if (finalRole === 'admin' || userObj.isAdmin) {
                     navigate('/admin/dashboard', { replace: true });
                 } else if (finalRole === 'provider') {
-                    if (!userObj.approved) {
+                    if (userObj.profileComplete === false) {
+                        navigate('/register-provider', { replace: true });
+                    } else if (!userObj.approved) {
                         // Unapproved provider should not access provider routes
                         showToast('Your account is pending approval. Please contact support for assistance.', 'info');
                         logoutUser();
                         return;
-                    }
-                    if (!userObj.testPassed) {
+                    } else if (!userObj.testPassed) {
                         navigate('/provider/test');
                     } else {
                         navigate('/provider/dashboard');
@@ -405,4 +406,4 @@ export const useAuth = () => {
         throw new Error("useAuth must be used within an AuthProvider");
     }
     return context;
-};
+};

@@ -51,7 +51,7 @@ const DEFAULT_EMAIL_TEMPLATES = {
     </div>
 </div>`,
     isActive: true,
-    allowedVariables: ["name", "providerName", "reason", "email"]
+    allowedVariables: ["name", "providerName", "reason", "email", "agreementPdfUrl", "approvalLetterUrl"]
   },
   providerRejection: {
     subject: "Update Regarding Your Provider Account",
@@ -175,8 +175,10 @@ const DEFAULT_EMAIL_TEMPLATES = {
  * @param {string} [options.html]       - HTML body of the email (ignored if dynamic template is active)
  * @param {string} [options.templateType] - Key of the emailTemplates object in SystemSettings
  * @param {Object} [options.variables]   - Key-value pairs to inject into the template placeholders
+ * @param {Object} [options.attachment]  - Optional single attachment info (name, content as base64)
+ * @param {Array} [options.attachments]  - Optional array of attachment objects
  */
-const sendMail = async ({ to, subject, html, templateType, variables }) => {
+const sendMail = async ({ to, subject, html, templateType, variables, attachment, attachments }) => {
   try {
     const config = await SystemConfig.findOne();
     if (config && config.notificationSettings && config.notificationSettings.emailEnabled === false) {
@@ -230,9 +232,9 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
           const bgColor = isRejection ? '#fef2f2' : '#f0fdf4';
           const textColor = isRejection ? '#991b1b' : '#115e59';
           const title = isRejection ? 'Reason for Rejection' : 'Admin Remarks';
-          
+
           const remarksBox = `\n<div style="margin-top: 20px; padding: 15px; border-left: 4px solid ${borderColor}; background-color: ${bgColor}; color: ${textColor}; border-radius: 6px; font-family: sans-serif; font-size: 14px;"><strong>${title}:</strong> {{reason}}</div>`;
-          
+
           if (bodyMarkup.includes('</div>')) {
             const lastIndex = bodyMarkup.lastIndexOf('</div>');
             bodyMarkup = bodyMarkup.slice(0, lastIndex) + remarksBox + bodyMarkup.slice(lastIndex);
@@ -241,7 +243,7 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
           }
         } else if (variables?.remark && !bodyMarkup.includes('{{remark}}') && !bodyMarkup.includes('remark')) {
           const remarksBox = `\n<div style="margin-top: 20px; padding: 15px; border-left: 4px solid #0d9488; background-color: #f0fdf4; color: #115e59; border-radius: 6px; font-family: sans-serif; font-size: 14px;"><strong>Remarks:</strong> {{remark}}</div>`;
-          
+
           if (bodyMarkup.includes('</div>')) {
             const lastIndex = bodyMarkup.lastIndexOf('</div>');
             bodyMarkup = bodyMarkup.slice(0, lastIndex) + remarksBox + bodyMarkup.slice(lastIndex);
@@ -279,7 +281,7 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
           }
           finalHtml = Handlebars.compile(bodyMarkup)(variables || {});
           finalSubject = Handlebars.compile(fallback.subject)(variables || {});
-        } catch (_) {}
+        } catch (_) { }
       }
     }
   }
@@ -289,7 +291,7 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
   try {
     const config = await SystemConfig.findOne();
     if (config?.companyName) senderName = config.companyName;
-  } catch (_) {}
+  } catch (_) { }
 
   const payload = {
     sender: { name: senderName, email: senderEmail },
@@ -304,6 +306,20 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
     },
     tags: [templateType || "transactional"]
   };
+
+  if (attachments && Array.isArray(attachments)) {
+    payload.attachment = attachments.map(att => ({
+      content: att.content,
+      name: att.name
+    }));
+  } else if (attachment && attachment.content && attachment.name) {
+    payload.attachment = [
+      {
+        content: attachment.content,
+        name: attachment.name
+      }
+    ];
+  }
 
   try {
     const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {

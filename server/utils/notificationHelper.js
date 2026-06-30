@@ -103,10 +103,10 @@ const computeNotificationUrl = (role, type, title, message, eventId = null, refe
     if (role === 'provider') {
         if (cleanEventId === 'chat_message') return `/provider/messages/${refIdStr}`;
         if (cleanEventId === 'booking_completed') {
-            return `/provider/bookings/${refIdStr}`;
+            return `/provider/booking-requests/${refIdStr}`;
         }
         if (cleanEventId === 'booking_created' || cleanEventId === 'provider_assigned') {
-            return refIdStr ? `/provider/bookings/${refIdStr}` : `/provider/bookings`;
+            return refIdStr ? `/provider/booking-requests/${refIdStr}` : `/provider/booking-requests`;
         }
         if (cleanEventId === 'payment_released' || cleanEventId === 'payout_success') return `/provider/earnings`;
         if (['provider_verification_approved', 'provider_verification_rejected'].includes(cleanEventId)) {
@@ -190,7 +190,7 @@ const triggerEventNotification = async (eventId, context = {}, overrideTargetUse
         // Enrich context with flat variables if context.booking exists
         if (context.booking) {
             let booking = context.booking;
-            
+
             // If booking is just an ID, query it
             if (typeof booking === 'string' || (booking && booking instanceof mongoose.Types.ObjectId)) {
                 const BookingModel = mongoose.model('Booking');
@@ -238,7 +238,7 @@ const triggerEventNotification = async (eventId, context = {}, overrideTargetUse
                             const ServiceModel = mongoose.model('Service');
                             const sRef = await ServiceModel.findById(firstService.service).select('title');
                             if (sRef) sTitle = sRef.title;
-                        } catch (e) {}
+                        } catch (e) { }
                     }
                     context.serviceName = sTitle || 'service';
                 }
@@ -453,7 +453,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             }
 
             const isBookingAlert = role === 'provider' && (resolvedEventId === 'booking_created' || resolvedEventId === 'provider_assigned' || resolvedEventId === 'emergency_booking');
-            
+
             // Resolve correct sound URL
             let soundUrl = '/assets/sounds/notification.mp3';
             if (isBookingAlert) {
@@ -475,7 +475,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 const room = userId.toString();
                 const socketsInRoom = await _io.in(room).fetchSockets();
                 console.log(`[Socket] Emitting to room "${room}" — ${socketsInRoom.length} socket(s) connected`);
-                
+
                 // Construct standard message data
                 const socketPayload = {
                     _id: notification._id,

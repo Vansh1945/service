@@ -132,3 +132,11 @@ export const forceLogoutUser = (data) => {
 export const getSystemLogs = (params) => {
     return axiosInstance.get("/admin/system-logs", { params });
 };
+
+export const getProviderAgreementPdf = (id) => {
+    return axiosInstance.get(`/admin/providers/${id}/agreement-pdf`, { responseType: 'blob' });
+};
+
+export const getProviderApprovalLetter = (id) => {
+    return axiosInstance.get(`/admin/providers/${id}/approval-letter`, { responseType: 'blob' });
+};

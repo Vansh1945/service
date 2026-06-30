@@ -241,9 +241,9 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     toast.info('Detecting your current location...');
     try {
       const result = await detectCurrentLocation({
-        timeout: 8000,
-        targetAccuracy: 80,
-        maxUpdates: 2,
+        timeout: 4000,
+        targetAccuracy: 150,
+        maxUpdates: 1,
         maxRetries: 0
       });
       shouldSkipGeocodeRef.current = true;

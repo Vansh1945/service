@@ -21,7 +21,8 @@ import {
   Shield,
   Banknote,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -49,10 +50,24 @@ const getServiceBadges = (services) => {
 };
 
 const getStatusBadge = (provider) => {
+  if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white border border-red-700">
+        <XCircle className="w-3 h-3 mr-1" />Blocked
+      </span>
+    );
+  }
+  if (provider.isSuspended) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+        <AlertCircle className="w-3 h-3 mr-1 animate-pulse" />Suspended
+      </span>
+    );
+  }
   if (provider.performanceScore?.restrictionsActive) {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
-        <Shield className="w-3 h-3 mr-1 text-red-600 animate-pulse" />Restricted
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+        <Shield className="w-3 h-3 mr-1 text-amber-600 animate-pulse" />Restricted
       </span>
     );
   }
@@ -186,11 +201,10 @@ const AdminProviders = () => {
     setRatingFilter('all');
     setSearchTerm('');
   }, []);
-
   const handleStatusUpdate = async (action, durationDays = null) => {
     if (!selectedProvider) return;
 
-    if ((action === 'rejected' || action === 'restricted' || action === 'suspended') && !approvalRemarks.trim()) {
+    if ((action === 'rejected' || action === 'restricted' || action === 'suspended' || action === 'blocked') && !approvalRemarks.trim()) {
       showToast('Please provide a reason or remarks for this action', 'error');
       return;
     }
@@ -216,7 +230,14 @@ const AdminProviders = () => {
 
         showToast(msg, 'success');
         fetchProviders();
-        setShowViewModal(false);
+        
+        // Update local state without closing the modal or refresh to meet "no page refresh required"
+        if (data.provider) {
+          setSelectedProvider(data.provider);
+          setProviders(prev => prev.map(p => p._id === data.provider._id ? data.provider : p));
+        } else {
+          setShowViewModal(false);
+        }
         setShowConfirmModal({ show: false, action: null });
       } else {
         showToast(data.message || 'Failed to update status', 'error');
@@ -226,6 +247,20 @@ const AdminProviders = () => {
       showToast(error.response?.data?.message || 'Failed to update status', 'error');
     } finally {
       setProcessingAction(null);
+    }
+  };
+  const handleDownloadPDF = async (providerId, type) => {
+    try {
+      const response = type === 'agreement'
+        ? await AdminService.getProviderAgreementPdf(providerId)
+        : await AdminService.getProviderApprovalLetter(providerId);
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const fileURL = URL.createObjectURL(blob);
+      window.open(fileURL, '_blank');
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+      showToast('Failed to download PDF document', 'error');
     }
   };
 
@@ -473,6 +508,7 @@ const AdminProviders = () => {
             setApprovalRemarks={setApprovalRemarks}
             processingAction={processingAction}
             handleStatusUpdate={handleStatusUpdate}
+            handleDownloadPDF={handleDownloadPDF}
           />
         )}
       </div>
@@ -511,7 +547,8 @@ const ProviderModal = ({
   approvalRemarks,
   setApprovalRemarks,
   processingAction,
-  handleStatusUpdate
+  handleStatusUpdate,
+  handleDownloadPDF
 }) => {
   const [showDurationInput, setShowDurationInput] = useState(false);
   const [durationType, setDurationType] = useState('restricted'); // or 'blocked'
@@ -536,7 +573,7 @@ const ProviderModal = ({
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Gradient Header ── */}
-        <div className="relative bg-gradient-to-br from-teal-600 via-teal-500 to-emerald-400 px-6 pt-6 pb-16 flex-shrink-0">
+        <div className="relative bg-gradient-to-r from-primary to-teal-700 px-6 pt-6 pb-16 flex-shrink-0">
           <button
             onClick={onClose}
             className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
@@ -559,13 +596,13 @@ const ProviderModal = ({
               src={provider.profilePicUrl || '/default-avatar.png'}
               alt={provider.name}
               onError={(e) => { e.target.src = '/default-avatar.png'; }}
-              className="w-16 h-16 rounded-xl object-cover border-2 border-teal-100 shadow flex-shrink-0"
+              className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow flex-shrink-0"
             />
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 {getStatusBadge(provider)}
                 {ps.restrictionsActive && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-danger/10 text-danger">
                     <Shield size={10} /> Restricted
                   </span>
                 )}
@@ -593,15 +630,15 @@ const ProviderModal = ({
 
           {/* Restriction Alert */}
           {ps.restrictionsActive && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={16} className="text-danger flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-bold text-red-700">Account Restricted</p>
-                <p className="text-xs text-red-600 mt-0.5">
+                <p className="text-sm font-bold text-danger">Account Restricted</p>
+                <p className="text-xs text-danger mt-0.5">
                   {ps.restrictionReason || 'Restricted due to poor performance or excessive complaints.'}
                 </p>
                 {ps.restrictedUntil && (
-                  <p className="text-xs text-red-500 mt-0.5">
+                  <p className="text-xs text-danger mt-0.5">
                     Until: {new Date(ps.restrictedUntil).toLocaleString()}
                   </p>
                 )}
@@ -614,22 +651,22 @@ const ProviderModal = ({
             <StatPill
               label="Completed Jobs"
               value={provider.completedBookings || 0}
-              color="bg-emerald-50 text-emerald-700"
+              color="bg-success-light text-success"
             />
             <StatPill
               label="Cancelled Jobs"
               value={provider.canceledBookings || 0}
-              color="bg-rose-50 text-rose-600"
+              color="bg-danger-light text-danger"
             />
             <StatPill
               label="Experience"
               value={`${provider.experience || 0}y`}
-              color="bg-blue-50 text-blue-600"
+              color="bg-info-light text-info"
             />
             <StatPill
               label="Performance Badge"
               value={ps.badge || 'Bronze'}
-              color="bg-purple-50 text-purple-700"
+              color="bg-warning-light text-warning"
             />
           </div>
 
@@ -644,7 +681,7 @@ const ProviderModal = ({
               <div className="flex flex-col gap-0.5">
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">COD Risk</span>
                 <span className={`text-sm font-bold ${ps.codAbuseRisk === 'HIGH' ? 'text-red-600' :
-                    ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-500' : 'text-emerald-600'
+                  ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-500' : 'text-emerald-600'
                   }`}>{ps.codAbuseRisk || 'LOW'}</span>
               </div>
             </div>
@@ -702,8 +739,8 @@ const ProviderModal = ({
               <div>
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">KYC Status</span>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.kycStatus === 'approved' ? 'bg-green-100 text-green-800' :
-                    provider.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
+                  provider.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
                   }`}>
                   {provider.kycStatus?.charAt(0).toUpperCase() + provider.kycStatus?.slice(1) || 'N/A'}
                 </span>
@@ -729,6 +766,10 @@ const ProviderModal = ({
                 <InfoRow label="Account Number" value={bd.accountNo} mono />
                 <InfoRow label="Bank Name" value={bd.bankName} />
                 <InfoRow label="IFSC Code" value={bd.ifsc} mono />
+                <InfoRow label="District" value={bd.district} />
+                <div className="sm:col-span-2">
+                  <InfoRow label="Address" value={bd.address} />
+                </div>
                 <div className="sm:col-span-2">
                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Verification Status</span>
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${bd.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
@@ -742,9 +783,73 @@ const ProviderModal = ({
             </SectionCard>
           )}
 
+          {/* Legal Contracts & Signatures */}
+          <SectionCard title="Legal Contracts & Signatures" icon={FileText} iconColor="text-teal-600">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-bold text-gray-700 text-sm mb-1">Provider Service Agreement</h4>
+                  <p className="text-xs text-gray-500 mb-3">Legal contract containing self declaration and digital signature logs.</p>
+                </div>
+                {provider.legalAcceptance?.agreementAccepted ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPDF(provider._id, 'agreement')}
+                    className="text-center py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium text-xs block w-full"
+                  >
+                    Download/View Agreement PDF
+                  </button>
+                ) : (
+                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                    Agreement Pending Acceptance
+                  </button>
+                )}
+              </div>
+              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-bold text-gray-700 text-sm mb-1">Official Approval Letter</h4>
+                  <p className="text-xs text-gray-500 mb-3">Registration confirmation letter with approved service details.</p>
+                </div>
+                {provider.approved ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPDF(provider._id, 'approval')}
+                    className="text-center py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium text-xs block w-full"
+                  >
+                    Download/View Approval Letter
+                  </button>
+                ) : (
+                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                    Approval Letter Pending Activation
+                  </button>
+                )}
+              </div>
+            </div>
+            {provider.legalAcceptance?.acceptedAt && (
+              <div className="mt-4 pt-3 border-t border-teal-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-gray-500 font-medium">
+                <div>Accepted At: {new Date(provider.legalAcceptance.acceptedAt).toLocaleString()}</div>
+                <div>Version: {provider.legalAcceptance.version}</div>
+                <div>IP: {provider.legalAcceptance.ipAddress || 'N/A'}</div>
+                {provider.digitalSignature?.signatureUrl && (
+                  <div className="flex items-center gap-2">
+                    <span>Signature:</span>
+                    <img src={provider.digitalSignature.signatureUrl} alt="Signature" className="h-6 object-contain bg-white border rounded" />
+                  </div>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
           {/* Account Controls */}
           <SectionCard title="Account Controls" icon={Shield} iconColor="text-slate-600" bgColor="bg-slate-50">
-            <p className="text-xs text-slate-500 mb-4">Manually manage this provider's account access and status.</p>
+            <div className="mb-4 bg-white p-3 rounded-xl border border-slate-100 space-y-1">
+              <h5 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Actions Guide</h5>
+              <p className="text-[10px] text-slate-500">
+                ⚠️ <strong>Restrict:</strong> Disables new bookings. | 
+                🚫 <strong>Suspend:</strong> Restricts login operations. | 
+                ❌ <strong>Block:</strong> Complete block & logout.
+              </p>
+            </div>
             <div className="mb-3">
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                 Remarks / Reason <span className="text-red-400">(Required for Restrict, Suspend, Reject)</span>
@@ -758,63 +863,75 @@ const ProviderModal = ({
               />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {(isAnyNegativeState || !provider.approved) && (
+              {isBlocked ? (
                 <button
                   onClick={() => handleStatusUpdate('active')}
                   disabled={processingAction}
                   className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
                 >
-                  {processingAction === 'active' ? 'Activating…' : '✓ Reactivate'}
+                  {processingAction === 'active' ? 'Unblocking…' : '✓ Unblock'}
                 </button>
-              )}
-              {(!isRestricted && !isBlocked && !isSuspended && provider.approved) && (
-                <button
-                  onClick={() => {
-                    setDurationType('restricted');
-                    setDurationValue('');
-                    setShowDurationInput(true);
-                  }}
-                  disabled={processingAction}
-                  className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-                >
-                  {processingAction === 'restricted' ? 'Restricting…' : '⚠ Restrict'}
-                </button>
-              )}
-              {(!isSuspended && !isBlocked && provider.approved) && (
-                <button
-                  onClick={() => handleStatusUpdate('suspended')}
-                  disabled={processingAction}
-                  className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-                >
-                  {processingAction === 'suspended' ? 'Suspending…' : '🚫 Suspend'}
-                </button>
-              )}
-              {(!isBlocked && provider.approved) && (
-                <button
-                  onClick={() => {
-                    setDurationType('blocked');
-                    setDurationValue('');
-                    setShowDurationInput(true);
-                  }}
-                  disabled={processingAction}
-                  className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-                >
-                  {processingAction === 'blocked' ? 'Blocking…' : '❌ Block'}
-                </button>
-              )}
-              {(provider.approved && !isBlocked && !isSuspended && !isRestricted) && (
-                <button
-                  onClick={() => handleStatusUpdate('pending_review')}
-                  disabled={processingAction}
-                  className="py-2.5 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-                >
-                  {processingAction === 'pending_review' ? 'Updating…' : '⏳ Pending Review'}
-                </button>
+              ) : (
+                <>
+                  {/* Restriction buttons */}
+                  {isRestricted ? (
+                    <button
+                      onClick={() => handleStatusUpdate('active')}
+                      disabled={processingAction}
+                      className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'active' ? 'Activating…' : '✓ Remove Restriction'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setDurationType('restricted');
+                        setDurationValue('');
+                        setShowDurationInput(true);
+                      }}
+                      disabled={processingAction}
+                      className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                    >
+                      ⚠ Restrict
+                    </button>
+                  )}
+
+                  {/* Suspension buttons */}
+                  {isSuspended ? (
+                    <button
+                      onClick={() => handleStatusUpdate('active')}
+                      disabled={processingAction}
+                      className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'active' ? 'Activating…' : '✓ Unsuspend'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleStatusUpdate('suspended')}
+                      disabled={processingAction}
+                      className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'suspended' ? 'Suspending…' : '🚫 Suspend'}
+                    </button>
+                  )}
+
+                  {/* Block button */}
+                  <button
+                    onClick={() => {
+                      setDurationType('blocked');
+                      setDurationValue('');
+                      setShowDurationInput(true);
+                    }}
+                    disabled={processingAction}
+                    className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                  >
+                    ❌ Block
+                  </button>
+                </>
               )}
             </div>
           </SectionCard>
-
-        </div>{/* end scrollable */}
+        </div>
 
         {/* ── Sticky Footer ── */}
         <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex justify-end">
@@ -868,9 +985,8 @@ const ProviderModal = ({
                   const days = durationValue.trim();
                   handleStatusUpdate(durationType, days ? Number(days) : null);
                 }}
-                className={`flex-1 py-2 px-4 text-xs font-bold text-white rounded-lg transition-all ${
-                  durationType === 'restricted' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-700 hover:bg-red-800'
-                }`}
+                className={`flex-1 py-2 px-4 text-xs font-bold text-white rounded-lg transition-all ${durationType === 'restricted' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-700 hover:bg-red-800'
+                  }`}
               >
                 Confirm
               </button>

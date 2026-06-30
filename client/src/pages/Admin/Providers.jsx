@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
 import {
@@ -10,35 +10,19 @@ import {
   MapPin,
   Phone,
   Mail,
-  Calendar,
-  DollarSign,
-  Award,
   User,
   X,
-  ChevronLeft,
-  ChevronRight,
-  Download,
   FileImage,
   Image,
-  File,
   Briefcase,
   Home,
   CreditCard,
-  AlertCircle,
-  Filter,
-  ArrowUpDown,
   FileText,
-  Building,
-  Hash,
-  CheckSquare,
-  XSquare,
-  Plus,
-  TrendingUp,
   UserCheck,
   UserPlus,
   Clock as ClockIcon,
-  Loader,
-  Star
+  Star,
+  Camera
 } from 'lucide-react';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
@@ -62,6 +46,22 @@ const AdminProvidersPage = () => {
   useEffect(() => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
+
+  const handleDownloadPDF = async (providerId, type) => {
+    try {
+      const response = type === 'agreement'
+        ? await AdminService.getProviderAgreementPdf(providerId)
+        : await AdminService.getProviderApprovalLetter(providerId);
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const fileURL = URL.createObjectURL(blob);
+      window.open(fileURL, '_blank');
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+      showToast('Failed to download PDF document', 'error');
+    }
+  };
+
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalAction, setApprovalAction] = useState('');
   const [approvalRemarks, setApprovalRemarks] = useState('');
@@ -197,7 +197,7 @@ const AdminProvidersPage = () => {
       return false;
     }).length;
 
-    const withResume = allProviders.filter(p => p.resume).length;
+    const withResume = allProviders.filter(p => p.aadhaarFront && p.aadhaarBack && p.panCard && p.liveSelfie).length;
     const withBankDetails = allProviders.filter(p => p.bankDetails?.accountNo).length;
     const profileComplete = allProviders.filter(p => p.profileComplete).length;
     const testPassed = allProviders.filter(p => p.testPassed).length;
@@ -261,7 +261,7 @@ const AdminProvidersPage = () => {
           filtered = filtered.filter(p => p.bankDetails?.verified === (value === 'true'));
           break;
         case 'hasResume':
-          filtered = filtered.filter(p => !!p.resume === (value === 'true'));
+          filtered = filtered.filter(p => !!(p.aadhaarFront && p.aadhaarBack && p.panCard && p.liveSelfie) === (value === 'true'));
           break;
         case 'hasPassbook':
           filtered = filtered.filter(p => !!p.bankDetails?.passbookImage === (value === 'true'));
@@ -432,9 +432,21 @@ const AdminProvidersPage = () => {
         url = provider.profilePicUrl;
         type = 'image';
         break;
-      case 'resume':
-        url = provider.resume;
-        type = 'document';
+      case 'aadhaarFront':
+        url = provider.aadhaarFront;
+        type = 'image';
+        break;
+      case 'aadhaarBack':
+        url = provider.aadhaarBack;
+        type = 'image';
+        break;
+      case 'panCard':
+        url = provider.panCard;
+        type = 'image';
+        break;
+      case 'liveSelfie':
+        url = provider.liveSelfie;
+        type = 'image';
         break;
       case 'passbook':
         url = provider.bankDetails?.passbookImage;
@@ -516,7 +528,7 @@ const AdminProvidersPage = () => {
         {/* Additional Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <StatsCard
-            title="With Resume"
+            title="KYC Documents"
             value={<span className="text-primary">{stats.withResume}</span>}
           />
           <StatsCard
@@ -583,31 +595,41 @@ const AdminProvidersPage = () => {
             { key: 'state', label: 'State', placeholder: 'Filter by state', type: 'text' },
             { key: 'experience', label: 'Min Experience', placeholder: 'Years', type: 'number' },
             { key: 'age', label: 'Min Age', placeholder: 'Age', type: 'number' },
-            { key: 'testPassed', label: 'Test Status', type: 'select', options: [
-              { value: '', label: 'All' },
-              { value: 'true', label: 'Passed' },
-              { value: 'false', label: 'Not Passed' }
-            ] },
-            { key: 'profileComplete', label: 'Profile Status', type: 'select', options: [
-              { value: '', label: 'All' },
-              { value: 'true', label: 'Complete' },
-              { value: 'false', label: 'Incomplete' }
-            ] },
-            { key: 'bankVerified', label: 'Bank Verification', type: 'select', options: [
-              { value: '', label: 'All' },
-              { value: 'true', label: 'Verified' },
-              { value: 'false', label: 'Not Verified' }
-            ] },
-            { key: 'hasResume', label: 'Has Resume', type: 'select', options: [
-              { value: '', label: 'All' },
-              { value: 'true', label: 'Yes' },
-              { value: 'false', label: 'No' }
-            ] },
-            { key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: [
-              { value: '', label: 'All' },
-              { value: 'true', label: 'Yes' },
-              { value: 'false', label: 'No' }
-            ] },
+            {
+              key: 'testPassed', label: 'Test Status', type: 'select', options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Passed' },
+                { value: 'false', label: 'Not Passed' }
+              ]
+            },
+            {
+              key: 'profileComplete', label: 'Profile Status', type: 'select', options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Complete' },
+                { value: 'false', label: 'Incomplete' }
+              ]
+            },
+            {
+              key: 'bankVerified', label: 'Bank Verification', type: 'select', options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Verified' },
+                { value: 'false', label: 'Not Verified' }
+              ]
+            },
+            {
+              key: 'hasResume', label: 'Has KYC Docs', type: 'select', options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Yes' },
+                { value: 'false', label: 'No' }
+              ]
+            },
+            {
+              key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Yes' },
+                { value: 'false', label: 'No' }
+              ]
+            },
             { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
             { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' }
           ]}
@@ -635,7 +657,7 @@ const AdminProvidersPage = () => {
                 <table className="w-full">
                   <thead className="bg-gradient-to-r from-primary to-teal-600">
                     <tr>
-                      {['Provider', 'Phone', 'Location', 'Services', 'Experience', 'Registered', 'Days Pending', 'Performance', 'Actions'].map((header) => (
+                      {['Provider', 'Phone', 'Location', 'Services', 'Experience', 'Registered', 'Days Pending', 'Actions'].map((header) => (
                         <th key={header} className="p-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                           {header}
                         </th>
@@ -681,6 +703,7 @@ const AdminProvidersPage = () => {
             viewDocument={viewDocument}
             activeTab={activeTab}
             openApprovalModal={openApprovalModal}
+            handleDownloadPDF={handleDownloadPDF}
           />
         )}
         <ApprovalModal
@@ -768,20 +791,7 @@ const ProviderTableRow = React.memo(({ provider, onViewDetails, onApprove, onRej
           {daysPending} days
         </div>
       </td>
-      <td className="p-4">
-        <div className="flex flex-col gap-1">
-          <div className="text-sm font-medium text-gray-900 flex items-center">
-            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 mr-1" />
-            {provider.performanceScore?.rating ? provider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
-          </div>
-          <div className="text-xs text-gray-500 flex items-center mt-1">
-            <Clock className="w-3 h-3 mr-1" /> On-Time: {provider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
-          </div>
-          <div className="text-xs text-gray-500 flex items-center">
-            <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
-          </div>
-        </div>
-      </td>
+
       <td className="p-4">
         <div className="flex items-center gap-2">
           <button
@@ -852,7 +862,8 @@ const ProviderDetailsModal = ({
   closeModal,
   viewDocument,
   activeTab,
-  openApprovalModal
+  openApprovalModal,
+  handleDownloadPDF
 }) => {
   if (!selectedProvider) return null;
 
@@ -988,24 +999,28 @@ const ProviderDetailsModal = ({
                     {selectedProvider.testPassed ? 'Passed' : 'Not Taken'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Rating</span>
-                  <span className="font-medium text-secondary">
-                    ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">On-Time</span>
-                  <span className="font-medium text-secondary">
-                    {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Completion</span>
-                  <span className="font-medium text-secondary">
-                    {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
-                  </span>
-                </div>
+                {selectedProvider.approved && (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">Rating</span>
+                      <span className="font-medium text-secondary">
+                        ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600">On-Time</span>
+                      <span className="font-medium text-secondary">
+                        {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-600">Completion</span>
+                      <span className="font-medium text-secondary">
+                        {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1015,25 +1030,56 @@ const ProviderDetailsModal = ({
                 <Home className="w-5 h-5 mr-2 text-primary" />
                 Address Information
               </h3>
-              <div className="space-y-3">
-                {selectedProvider.address ? (
-                  <>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">Street</span>
-                      <span className="font-medium text-secondary text-right">{selectedProvider.address.street || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">City</span>
-                      <span className="font-medium text-secondary">{selectedProvider.address.city || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">State</span>
-                      <span className="font-medium text-secondary">{selectedProvider.address.state || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-sm text-gray-600">Postal Code</span>
-                      <span className="font-medium text-secondary">{selectedProvider.address.postalCode || 'N/A'}</span>
-                    </div>
+              <div className="space-y-4">
+                {selectedProvider.currentAddress ? (
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Current Address</h4>
+                    <p className="text-sm text-secondary leading-relaxed bg-white p-3 rounded-lg border border-teal-50">
+                      {selectedProvider.currentAddress.houseNumber && `${selectedProvider.currentAddress.houseNumber}, `}
+                      {selectedProvider.currentAddress.street && `${selectedProvider.currentAddress.street}, `}
+                      {selectedProvider.currentAddress.landmark && `${selectedProvider.currentAddress.landmark}, `}
+                      {selectedProvider.currentAddress.villageCity && `${selectedProvider.currentAddress.villageCity}, `}
+                      {selectedProvider.currentAddress.district && `${selectedProvider.currentAddress.district}, `}
+                      {selectedProvider.currentAddress.state && `${selectedProvider.currentAddress.state} - `}
+                      {selectedProvider.currentAddress.pincode || ''}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Current Address</h4>
+                    <p className="text-xs text-gray-400 italic">No current address</p>
+                  </div>
+                )}
+
+                {selectedProvider.addressSame ? (
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Permanent Address</h4>
+                    <p className="text-xs text-teal-600 font-semibold italic bg-teal-50/50 p-2.5 rounded-lg border border-teal-100/50">Same as Current Address</p>
+                  </div>
+                ) : selectedProvider.permanentAddress ? (
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Permanent Address</h4>
+                    <p className="text-sm text-secondary leading-relaxed bg-white p-3 rounded-lg border border-teal-50">
+                      {selectedProvider.permanentAddress.houseNumber && `${selectedProvider.permanentAddress.houseNumber}, `}
+                      {selectedProvider.permanentAddress.street && `${selectedProvider.permanentAddress.street}, `}
+                      {selectedProvider.permanentAddress.landmark && `${selectedProvider.permanentAddress.landmark}, `}
+                      {selectedProvider.permanentAddress.villageCity && `${selectedProvider.permanentAddress.villageCity}, `}
+                      {selectedProvider.permanentAddress.district && `${selectedProvider.permanentAddress.district}, `}
+                      {selectedProvider.permanentAddress.state && `${selectedProvider.permanentAddress.state} - `}
+                      {selectedProvider.permanentAddress.pincode || ''}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Permanent Address</h4>
+                    <p className="text-xs text-gray-400 italic">No permanent address</p>
+                  </div>
+                )}
+
+                {selectedProvider.address && (
+                  <div>
+                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Map Routing Coordinates Location</h4>
+                    <p className="text-sm text-secondary bg-white p-3 rounded-lg border border-teal-50">{selectedProvider.address.formattedAddress || selectedProvider.address.street || 'N/A'}</p>
                     {/* S2 Geofence Telemetry */}
                     {(selectedProvider.address?.s2CellId || selectedProvider.address?.s2CellIdPrecise) && (
                       <div className="mt-3 bg-slate-900 p-3 rounded-lg border border-slate-700">
@@ -1068,9 +1114,7 @@ const ProviderDetailsModal = ({
                         </div>
                       </div>
                     )}
-                  </>
-                ) : (
-                  <p className="text-gray-500 text-center py-4">Address not provided</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1084,32 +1128,45 @@ const ProviderDetailsModal = ({
               <div className="space-y-3">
                 {selectedProvider.bankDetails ? (
                   <>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">Bank Name</span>
-                      <span className="font-medium text-secondary">
+                    <div className="flex justify-between items-start py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Account Holder Name</span>
+                      <span className="font-medium text-secondary text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.accountName || 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">Account Number</span>
-                      <span className="font-medium text-secondary font-mono">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Account Number</span>
+                      <span className="font-medium text-secondary font-mono text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.accountNo || 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">IFSC Code</span>
-                      <span className="font-medium text-secondary font-mono">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">IFSC Code</span>
+                      <span className="font-medium text-secondary font-mono text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.ifsc || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">Bank Name</span>
-                      <span className="font-medium text-secondary">
+                    <div className="flex justify-between items-start py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Bank Name</span>
+                      <span className="font-medium text-secondary text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.bankName || 'N/A'}
                       </span>
                     </div>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">District</span>
+                      <span className="font-medium text-secondary text-right max-w-[70%] break-words">
+                        {selectedProvider.bankDetails.district || 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-start py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Branch Address</span>
+                      <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                        {selectedProvider.bankDetails.address || 'N/A'}
+                      </span>
+                    </div>
                     <div className="flex justify-between items-center py-2">
-                      <span className="text-sm text-gray-600">Verification Status</span>
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verification Status</span>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.verified
                         ? 'bg-green-100 text-green-800'
                         : 'bg-yellow-100 text-yellow-800'
@@ -1128,94 +1185,126 @@ const ProviderDetailsModal = ({
           {/* Documents Section */}
           <div className="mt-8 bg-gradient-to-br from-teal-50 to-white rounded-xl p-6 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
             <h3 className="text-lg font-semibold mb-6 text-secondary">Documents</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Profile Picture */}
-              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center mb-4">
-                  <Image className="w-5 h-5 mr-2 text-primary" />
-                  <span className="font-semibold text-secondary">Profile Picture</span>
-                </div>
-                {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
-                  <>
-                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
-                      <img
-                        src={selectedProvider.profilePicUrl}
-                        alt="Profile"
-                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
-                        onClick={() => viewDocument(selectedProvider, 'profile')}
-                      />
-                    </div>
-                    <button
-                      onClick={() => viewDocument(selectedProvider, 'profile')}
-                      className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
-                    >
-                      View Full Size
-                    </button>
-                  </>
-                ) : (
-                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
-                    <p className="text-gray-400">Not uploaded</p>
-                  </div>
-                )}
-              </div>
+            {(() => {
+              const docs = [];
+              if (selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg') {
+                docs.push({ label: 'Profile Picture', icon: Image, src: selectedProvider.profilePicUrl, type: 'profile' });
+              }
+              if (selectedProvider.aadhaarFront) {
+                docs.push({ label: 'Aadhaar Front', icon: FileText, src: selectedProvider.aadhaarFront, type: 'aadhaarFront' });
+              }
+              if (selectedProvider.aadhaarBack) {
+                docs.push({ label: 'Aadhaar Back', icon: FileText, src: selectedProvider.aadhaarBack, type: 'aadhaarBack' });
+              }
+              if (selectedProvider.panCard) {
+                docs.push({ label: 'PAN Card', icon: FileText, src: selectedProvider.panCard, type: 'panCard' });
+              }
+              if (selectedProvider.liveSelfie) {
+                docs.push({ label: 'Live Selfie', icon: Camera, src: selectedProvider.liveSelfie, type: 'liveSelfie' });
+              }
+              if (selectedProvider.bankDetails?.passbookImage) {
+                docs.push({ label: 'Bank Passbook', icon: FileImage, src: selectedProvider.bankDetails.passbookImage, type: 'passbook' });
+              }
 
-              {/* Resume */}
-              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
+              if (docs.length === 0) {
+                return <p className="text-gray-400 text-center py-6">No documents uploaded yet</p>;
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {docs.map((doc) => {
+                    const IconComp = doc.icon;
+                    return (
+                      <div key={doc.type} className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center mb-4">
+                          <IconComp className="w-5 h-5 mr-2 text-primary" />
+                          <span className="font-semibold text-secondary">{doc.label}</span>
+                        </div>
+                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
+                          <img
+                            src={doc.src}
+                            alt={doc.label}
+                            className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                            onClick={() => viewDocument(selectedProvider, doc.type)}
+                          />
+                        </div>
+                        <button
+                          onClick={() => viewDocument(selectedProvider, doc.type)}
+                          className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
+                        >
+                          View Full Size
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+              {/* Agreement PDF and Approval Letter PDF */}
+              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow col-span-1 md:col-span-3">
                 <div className="flex items-center mb-4">
                   <FileText className="w-5 h-5 mr-2 text-primary" />
-                  <span className="font-semibold text-secondary">Resume/CV</span>
+                  <span className="font-semibold text-secondary">Legal Contracts & Signatures</span>
                 </div>
-                {selectedProvider.resume ? (
-                  <>
-                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 cursor-pointer hover:bg-gray-200 transition-colors border border-teal-100"
-                      onClick={() => viewDocument(selectedProvider, 'resume')}>
-                      <FileText className="w-12 h-12 text-primary" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-bold text-secondary text-sm mb-1">Provider Service Agreement</h4>
+                      <p className="text-xs text-gray-500 mb-3">Dynamically compiled legal contract containing self declaration and digital signature logs.</p>
                     </div>
-                    <button
-                      onClick={() => viewDocument(selectedProvider, 'resume')}
-                      className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
-                    >
-                      View Document
-                    </button>
-                  </>
-                ) : (
-                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
-                    <p className="text-gray-400">Not uploaded</p>
+                    {selectedProvider.legalAcceptance?.agreementAccepted ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPDF(selectedProvider._id, 'agreement')}
+                        className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
+                      >
+                        Download/View Agreement PDF
+                      </button>
+                    ) : (
+                      <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                        Agreement Pending Acceptance
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Passbook */}
-              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center mb-4">
-                  <FileImage className="w-5 h-5 mr-2 text-primary" />
-                  <span className="font-semibold text-secondary">Bank Passbook</span>
-                </div>
-                {selectedProvider.bankDetails?.passbookImage ? (
-                  <>
-                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
-                      <img
-                        src={selectedProvider.bankDetails.passbookImage}
-                        alt="Passbook"
-                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
-                        onClick={() => viewDocument(selectedProvider, 'passbook')}
-                      />
+                  <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-bold text-secondary text-sm mb-1">Official Approval Letter</h4>
+                      <p className="text-xs text-gray-500 mb-3">System generated registration confirmation letter containing approved service details and admin comments.</p>
                     </div>
-                    <button
-                      onClick={() => viewDocument(selectedProvider, 'passbook')}
-                      className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
-                    >
-                      View Full Size
-                    </button>
-                  </>
-                ) : (
-                  <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-300">
-                    <p className="text-gray-400">Not uploaded</p>
+                    {selectedProvider.approved ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPDF(selectedProvider._id, 'approval')}
+                        className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
+                      >
+                        Download/View Approval Letter
+                      </button>
+                    ) : (
+                      <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                        Approval Letter Pending Activation
+                      </button>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {selectedProvider.legalAcceptance?.acceptedAt && (
+                  <div className="mt-4 pt-3 border-t border-teal-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-gray-500 font-medium">
+                    <div>Accepted At: {new Date(selectedProvider.legalAcceptance.acceptedAt).toLocaleString()}</div>
+                    <div>Signature Version: {selectedProvider.legalAcceptance.version}</div>
+                    <div>IP Address: {selectedProvider.legalAcceptance.ipAddress || 'N/A'}</div>
+                    {selectedProvider.digitalSignature?.signatureUrl && (
+                      <div className="flex items-center gap-2">
+                        <span>Signature:</span>
+                        <img src={selectedProvider.digitalSignature.signatureUrl} alt="Signature Log" className="h-6 object-contain bg-white border rounded" />
+                      </div>
+                    )}
               </div>
-            </div>
+            )}
           </div>
+
 
           {activeTab === 'pending_providers' ? (
             <div className="mt-8 flex gap-4">

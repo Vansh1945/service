@@ -938,7 +938,7 @@ export const detectCurrentLocation = (options = {}) => {
                 (fallbackErr) => {
                   reject(new Error("Location request timed out. Please select your address manually."));
                 },
-                { enableHighAccuracy: false, timeout: 5000 }
+                { enableHighAccuracy: false, timeout: 3000 }
               );
             }
           }
@@ -1004,7 +1004,7 @@ export const detectCurrentLocation = (options = {}) => {
                 (fallbackErr) => {
                   reject(new Error("Location unavailable. Please select your address manually."));
                 },
-                { enableHighAccuracy: false, timeout: 5000 }
+                { enableHighAccuracy: false, timeout: 3000 }
               );
             } else {
               const msg =

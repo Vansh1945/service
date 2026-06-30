@@ -160,19 +160,6 @@ const providerSchema = new mongoose.Schema({
         formattedAddress: { type: String }
     },
 
-    // Geo JSON Location for 2dsphere queries
-    location: {
-        type: {
-            type: String,
-            enum: ['Point'],
-            default: 'Point'
-        },
-        coordinates: {
-            type: [Number],
-            default: [0, 0]
-        }
-    },
-
     currentLocation: {
         type: {
             type: String,
@@ -243,6 +230,9 @@ const providerSchema = new mongoose.Schema({
             }
         },
         bankName: String,
+        district: String,
+        city: String,
+        address: String,
         accountName: String,
         passbookImage: String,
         passbookImagePublicId: String,
@@ -268,8 +258,36 @@ const providerSchema = new mongoose.Schema({
         default: 'default-provider.jpg'
     },
     profilePicPublicId: String,
-    resume: String,
-    resumePublicId: String,
+    aadhaarFront: String,
+    aadhaarFrontPublicId: String,
+    aadhaarBack: String,
+    aadhaarBackPublicId: String,
+    panCard: String,
+    panCardPublicId: String,
+    liveSelfie: String,
+    liveSelfiePublicId: String,
+    addressSame: {
+        type: Boolean,
+        default: false
+    },
+    currentAddress: {
+        houseNumber: String,
+        street: String,
+        landmark: String,
+        villageCity: String,
+        district: String,
+        state: String,
+        pincode: String
+    },
+    permanentAddress: {
+        houseNumber: String,
+        street: String,
+        landmark: String,
+        villageCity: String,
+        district: String,
+        state: String,
+        pincode: String
+    },
 
     // Service Stats
     approved: {
@@ -368,6 +386,30 @@ const providerSchema = new mongoose.Schema({
         bookingAlertDuration: { type: Number, default: 30 },
         bookingRepeatAlert: { type: Boolean, default: false }
     },
+    // Legal Acceptance & Agreement
+    legalAcceptance: {
+        selfDeclaration: { type: Boolean, default: false },
+        agreementAccepted: { type: Boolean, default: false },
+        termsAccepted: { type: Boolean, default: false },
+        privacyAccepted: { type: Boolean, default: false },
+        acceptedAt: { type: Date, default: null },
+        ipAddress: { type: String, default: '' },
+        userAgent: { type: String, default: '' },
+        version: { type: String, default: '1.0' }
+    },
+    digitalSignature: {
+        signatureUrl: { type: String, default: '' },
+        signaturePublicId: { type: String, default: '' },
+        signedName: { type: String, default: '' },
+        signedAt: { type: Date, default: null },
+        method: { type: String, enum: ['draw', 'type', ''], default: '' },
+        deviceInfo: { type: String, default: '' },
+        ipAddress: { type: String, default: '' }
+    },
+    agreementPdfUrl: { type: String, default: '' },
+    agreementPdfPublicId: { type: String, default: '' },
+    approvalLetterUrl: { type: String, default: '' },
+    approvalLetterPublicId: { type: String, default: '' },
     lastSeen: {
         type: Date,
         default: null
@@ -390,7 +432,6 @@ providerSchema.index({ services: 1 });
 providerSchema.index({ isActive: 1, approved: 1 });
 providerSchema.index({ approved: 1, isDeleted: 1 });
 providerSchema.index({ 'performanceScore.rating': -1 });
-providerSchema.index({ location: '2dsphere' });
 providerSchema.index({ currentLocation: '2dsphere' });
 providerSchema.index({ currentZone: 1 });
 providerSchema.index({ createdAt: -1 });

@@ -467,7 +467,7 @@ const App = () => {
 
       localStorage.setItem("installMode", "standalone");
       localStorage.setItem("installRole", installTarget);
-      
+
       // Dispatch trigger PWA install event after a brief delay to let page mount
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('triggerPwaInstall', {

@@ -140,17 +140,23 @@ const SystemSetting = () => {
       dailyReferralLimitPerUser: 5,
       monthlyReferralLimitPerUser: 20,
       systemReferralOwner: '',
-      providerMilestones: []
+      providerMilestones: [],
+      authorizedSignature: '',
+      companyStamp: ''
     }
   });
 
   const [activeTab, setActiveTab] = useState('general');
   const [logoFile, setLogoFile] = useState(null);
   const [faviconFile, setFaviconFile] = useState(null);
+  const [signatureFile, setSignatureFile] = useState(null);
+  const [stampFile, setStampFile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [previewLogo, setPreviewLogo] = useState('');
   const [previewFavicon, setPreviewFavicon] = useState('');
+  const [previewSignature, setPreviewSignature] = useState('');
+  const [previewStamp, setPreviewStamp] = useState('');
 
   const [categories, setCategories] = useState([]);
   const [zones, setZones] = useState([]);
@@ -195,6 +201,22 @@ const SystemSetting = () => {
     }
   }, [faviconFile]);
 
+  useEffect(() => {
+    if (signatureFile) {
+      const objectUrl = URL.createObjectURL(signatureFile);
+      setPreviewSignature(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  }, [signatureFile]);
+
+  useEffect(() => {
+    if (stampFile) {
+      const objectUrl = URL.createObjectURL(stampFile);
+      setPreviewStamp(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  }, [stampFile]);
+
   const fetchSystemSettings = async () => {
     try {
       const response = await SystemService.getSystemSettingAdmin();
@@ -206,6 +228,8 @@ const SystemSetting = () => {
           tagline: settingsData.data.tagline || '',
           logo: settingsData.data.logo || '',
           favicon: settingsData.data.favicon || '',
+          authorizedSignature: settingsData.data.authorizedSignature || '',
+          companyStamp: settingsData.data.companyStamp || '',
           address: settingsData.data.address || '',
           phone: settingsData.data.phone || '',
           email: settingsData.data.email || '',
@@ -315,6 +339,8 @@ const SystemSetting = () => {
 
         if (settingsData.data.logo) setPreviewLogo(settingsData.data.logo);
         if (settingsData.data.favicon) setPreviewFavicon(settingsData.data.favicon);
+        if (settingsData.data.authorizedSignature) setPreviewSignature(settingsData.data.authorizedSignature);
+        if (settingsData.data.companyStamp) setPreviewStamp(settingsData.data.companyStamp);
       }
     } catch (error) {
       showToast('Error fetching system settings', 'error');
@@ -453,6 +479,12 @@ const SystemSetting = () => {
       if (faviconFile) {
         formData.append('favicon', faviconFile);
       }
+      if (signatureFile) {
+        formData.append('authorizedSignature', signatureFile);
+      }
+      if (stampFile) {
+        formData.append('companyStamp', stampFile);
+      }
 
       const response = await SystemService.updateSystemSetting(formData);
       const data = response.data;
@@ -462,6 +494,8 @@ const SystemSetting = () => {
         writeSystemSettingsCache(data.data);
         setLogoFile(null);
         setFaviconFile(null);
+        setSignatureFile(null);
+        setStampFile(null);
         fetchSystemSettings(); // Refresh data
       } else {
         throw new Error(data.message || 'Failed to save system settings');
@@ -856,6 +890,84 @@ const SystemSetting = () => {
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                           setFaviconFile(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Authorized Signature Upload */}
+                <div className="border border-gray-200 rounded-2xl p-5 text-center bg-gray-50 hover:bg-gray-100/50 transition-colors">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Authorized Signature</label>
+                  {previewSignature ? (
+                    <div className="space-y-4">
+                      <div className="relative mx-auto w-36 h-16 bg-white p-2 border border-gray-150 rounded-lg flex items-center justify-center">
+                        <img
+                          src={previewSignature}
+                          alt="Signature preview"
+                          className="max-w-full max-h-full object-contain"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/150x50?text=Signature';
+                          }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-inter">Supported: JPEG, PNG</p>
+                    </div>
+                  ) : (
+                    <div className="py-6">
+                      <Upload className="text-2xl text-gray-300 mx-auto mb-2" />
+                      <p className="text-xs text-gray-400">No signature uploaded yet</p>
+                    </div>
+                  )}
+                  <label className="mt-4 inline-flex items-center gap-1.5 bg-primary hover:bg-primary/95 text-white text-xs font-semibold px-4 py-2.5 rounded-lg cursor-pointer transition-all shadow-sm">
+                    <Upload className="w-3.5 h-3.5" />
+                    Select Signature File
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setSignatureFile(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Company Stamp Upload */}
+                <div className="border border-gray-200 rounded-2xl p-5 text-center bg-gray-50 hover:bg-gray-100/50 transition-colors">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Company Stamp</label>
+                  {previewStamp ? (
+                    <div className="space-y-4">
+                      <div className="relative mx-auto w-24 h-24 bg-white p-2 border border-gray-150 rounded-lg flex items-center justify-center">
+                        <img
+                          src={previewStamp}
+                          alt="Stamp preview"
+                          className="max-w-full max-h-full object-contain"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/100x100?text=Stamp';
+                          }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-inter">Supported: JPEG, PNG</p>
+                    </div>
+                  ) : (
+                    <div className="py-6">
+                      <Upload className="text-2xl text-gray-300 mx-auto mb-2" />
+                      <p className="text-xs text-gray-400">No stamp uploaded yet</p>
+                    </div>
+                  )}
+                  <label className="mt-4 inline-flex items-center gap-1.5 bg-secondary hover:bg-secondary/95 text-white text-xs font-semibold px-4 py-2.5 rounded-lg cursor-pointer transition-all shadow-sm">
+                    <Upload className="w-3.5 h-3.5" />
+                    Select Stamp File
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setStampFile(e.target.files[0]);
                         }
                       }}
                       className="hidden"

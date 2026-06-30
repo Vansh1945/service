@@ -125,8 +125,9 @@ const LoginPage = () => {
       if (role === 'admin' || user?.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
       } else if (role === 'provider') {
-        // Only redirect if provider is approved; unapproved providers stay on login
-        if (user?.approved) {
+        if (user?.profileComplete === false) {
+          navigate('/register-provider', { replace: true });
+        } else if (user?.approved) {
           navigate(user?.testPassed ? '/provider/dashboard' : '/provider/test', { replace: true });
         }
       } else {

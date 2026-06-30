@@ -159,7 +159,7 @@ api.interceptors.response.use(
         if (['post', 'put', 'patch', 'delete'].includes(response.config.method)) {
             pendingRequests.delete(getRequestKey(response.config));
         }
-        if (response.data) {
+        if (response.data && response.config.responseType !== 'blob' && response.config.responseType !== 'arraybuffer') {
             response.data = optimizeCloudinaryUrls(response.data);
         }
         return response;

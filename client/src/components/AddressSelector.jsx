@@ -296,7 +296,7 @@ const AddressSelector = ({
         <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview / Edit Manually</label>
         <textarea
           name="formattedAddress"
-          value={address.formattedAddress || ''}
+          value={address.formattedAddress || buildAddressPreview(address) || ''}
           onChange={(e) => {
             const val = e.target.value;
             onChange(enrichAddressWithS2Cells({

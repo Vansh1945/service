@@ -1,4 +1,5 @@
 const { SystemConfig, Category, Banner } = require('../models/SystemSetting');
+const ifsc = require('ifsc');
 
 // In-memory cache for SystemConfig
 let cachedSystemConfig = null;
@@ -84,6 +85,16 @@ const updateSystemSetting = async (req, res) => {
     // Handle providerBookingRingtone upload
     if (req.files && req.files.providerBookingRingtone && req.files.providerBookingRingtone[0]) {
       updateData.providerBookingRingtone = req.files.providerBookingRingtone[0].path; // Cloudinary URL
+    }
+
+    // Handle authorizedSignature upload
+    if (req.files && req.files.authorizedSignature && req.files.authorizedSignature[0]) {
+      updateData.authorizedSignature = req.files.authorizedSignature[0].path; // Cloudinary URL
+    }
+
+    // Handle companyStamp upload
+    if (req.files && req.files.companyStamp && req.files.companyStamp[0]) {
+      updateData.companyStamp = req.files.companyStamp[0].path; // Cloudinary URL
     }
 
     // Sanitize empty ObjectId strings to prevent CastError
@@ -1127,6 +1138,89 @@ const getBrandingFaviconRedirect = async (req, res) => {
   }
 };
 
+const validateIfsc = async (req, res) => {
+  try {
+    const { code } = req.params;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'IFSC Code is required' });
+    }
+
+    const cleanCode = code.trim().toUpperCase();
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (!ifscRegex.test(cleanCode)) {
+      return res.status(400).json({ success: false, message: 'Invalid IFSC format. Expected format: ABCD0123456' });
+    }
+
+    let details = null;
+
+    // 1. Try local server dataset first
+    try {
+      const localRbiDataset = require('../utils/localRbiDataset.json');
+      const matched = localRbiDataset.find(item => item.IFSC === cleanCode);
+      if (matched) {
+        details = {
+          BANK: matched.BANK,
+          BRANCH: matched.BRANCH,
+          DISTRICT: matched.DISTRICT,
+          STATE: matched.STATE,
+          CITY: matched.CITY,
+          ADDRESS: matched.ADDRESS,
+          MICR: matched.MICR
+        };
+      }
+    } catch (err) {
+      console.warn("Error reading local server dataset:", err.message);
+    }
+
+    // 2. Try validation via npm 'ifsc' package
+    if (!details) {
+      try {
+        const isValid = ifsc.validate(cleanCode);
+        if (isValid) {
+          const fetchedDetails = await ifsc.fetchDetails(cleanCode);
+          if (fetchedDetails) {
+            details = {
+              BANK: fetchedDetails.BANK || '',
+              BRANCH: fetchedDetails.BRANCH || '',
+              DISTRICT: fetchedDetails.DISTRICT || '',
+              STATE: fetchedDetails.STATE || '',
+              CITY: fetchedDetails.CITY || '',
+              ADDRESS: fetchedDetails.ADDRESS || '',
+              MICR: fetchedDetails.MICR || ''
+            };
+          }
+        }
+      } catch (localError) {
+        console.warn("Local ifsc package lookup failed:", localError.message);
+      }
+    }
+
+    if (!details) {
+      return res.status(404).json({ success: false, message: 'IFSC Details not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ifsc: cleanCode,
+        bank: details.BANK || '',
+        branch: details.BRANCH || '',
+        district: details.DISTRICT || '',
+        state: details.STATE || '',
+        city: details.CITY || '',
+        address: details.ADDRESS || '',
+        micr: details.MICR || ''
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Failed to validate IFSC code. Please check code or try again.',
+      error: error.message
+    });
+  }
+};
+
 
 module.exports = {
   getSystemSetting,
@@ -1148,10 +1242,12 @@ module.exports = {
   uploadBrandingAsset,
   getBrandingManifest,
   getEmailTemplates,
+  updateEmailTemplates: getEmailTemplates, // Preserve compatibility if any
   updateEmailTemplate,
   previewEmailTemplate,
   testSendEmailTemplate,
   restoreDefaultTemplate,
   getBrandingLogoRedirect,
-  getBrandingFaviconRedirect
+  getBrandingFaviconRedirect,
+  validateIfsc
 };

@@ -42,6 +42,8 @@ router.get('/customers/:id', adminController.getCustomerById);
 // Provider management
 router.get('/providers/pending', adminController.getPendingProviders);
 router.put('/providers/:id/status', validateBody(approveProviderSchema), adminController.approveProvider);
+router.get('/providers/:id/agreement-pdf', adminController.getProviderAgreementPdf);
+router.get('/providers/:id/approval-letter', adminController.getProviderApprovalLetter);
 router.get('/providers', adminController.getAllProviders);
 router.get('/providers/:id', adminController.getProviderDetails);
 

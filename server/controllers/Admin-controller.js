@@ -405,6 +405,7 @@ const approveProvider = async (req, res) => {
             provider.isSuspended = false;
             provider.suspensionReason = '';
             provider.blockedTill = null;
+            provider.rejectionReason = '';
             if (provider.performanceScore) {
                 provider.performanceScore.restrictionsActive = false;
                 provider.performanceScore.restrictedUntil = null;
@@ -441,6 +442,27 @@ const approveProvider = async (req, res) => {
             }
 
             try {
+                // Generate and upload Approval Letter PDF
+                const { generateApprovalLetter, generateAgreement, uploadPdfBuffer } = require('../services/agreementGenerator');
+                const approvalPdfBuffer = await generateApprovalLetter(provider, finalRemarks);
+                if (provider.approvalLetterPublicId) {
+                    await deleteFile(provider.approvalLetterPublicId);
+                }
+                const approvalPdfUpload = await uploadPdfBuffer(approvalPdfBuffer, 'provider_approval_letters', `approval_${provider._id}`);
+                provider.approvalLetterUrl = approvalPdfUpload.secure_url;
+                provider.approvalLetterPublicId = approvalPdfUpload.public_id;
+
+                // Generate and upload Agreement PDF
+                const agreementPdfBuffer = await generateAgreement(provider);
+                if (provider.agreementPdfPublicId) {
+                    await deleteFile(provider.agreementPdfPublicId);
+                }
+                const agreementPdfUpload = await uploadPdfBuffer(agreementPdfBuffer, 'provider_agreements', `agreement_${provider._id}`);
+                provider.agreementPdfUrl = agreementPdfUpload.secure_url;
+                provider.agreementPdfPublicId = agreementPdfUpload.public_id;
+
+                await provider.save();
+
                 await sendMail({
                     to: provider.email,
                     templateType: 'providerApproval',
@@ -448,10 +470,24 @@ const approveProvider = async (req, res) => {
                         name: provider.name,
                         providerName: provider.providerId,
                         reason: finalRemarks,
-                        email: `${process.env.FRONTEND_URL}/login`
-                    }
+                        email: `${process.env.FRONTEND_URL}/login`,
+                        agreementPdfUrl: provider.agreementPdfUrl,
+                        approvalLetterUrl: provider.approvalLetterUrl
+                    },
+                    attachments: [
+                        {
+                            content: approvalPdfBuffer.toString('base64'),
+                            name: `Approval_Letter_${provider.providerId || provider._id}.pdf`
+                        },
+                        {
+                            content: agreementPdfBuffer.toString('base64'),
+                            name: `Service_Agreement_${provider.providerId || provider._id}.pdf`
+                        }
+                    ]
                 });
-            } catch (mailError) { }
+            } catch (mailError) {
+                console.error('Failed to send approval email/PDF:', mailError);
+            }
 
             emitProviderStatusChange(provider, status);
             return res.status(200).json({
@@ -507,11 +543,14 @@ const approveProvider = async (req, res) => {
         }
 
         if (status === 'restricted') {
+            if (!finalRemarks) {
+                return res.status(400).json({ success: false, message: 'Remarks/Reason is required to restrict the provider account.' });
+            }
             if (!provider.performanceScore) {
                 provider.performanceScore = {};
             }
             provider.performanceScore.restrictionsActive = true;
-            provider.performanceScore.restrictionReason = finalRemarks || 'Manual restriction by administrator';
+            provider.performanceScore.restrictionReason = finalRemarks;
             provider.performanceScore.restrictedUntil = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
 
             if (global.logger) global.logger.warn(`Provider manually restricted by Admin: ${provider._id}. Duration: ${durationDays || 'Indefinite'} days.`);
@@ -524,7 +563,7 @@ const approveProvider = async (req, res) => {
                     'provider',
                     'Account Restricted ⚠️',
                     `Your provider account has been restricted. Reason: ${provider.performanceScore.restrictionReason}`,
-                    'restriction',
+                    'system',
                     provider._id
                 );
             } catch (fcmError) { }
@@ -538,8 +577,11 @@ const approveProvider = async (req, res) => {
         }
 
         if (status === 'suspended') {
+            if (!finalRemarks) {
+                return res.status(400).json({ success: false, message: 'Remarks/Reason is required to suspend the provider account.' });
+            }
             provider.isSuspended = true;
-            provider.suspensionReason = finalRemarks || 'Manual suspension by administrator';
+            provider.suspensionReason = finalRemarks;
 
             if (global.logger) global.logger.warn(`Provider manually suspended by Admin: ${provider._id}`);
 
@@ -551,7 +593,7 @@ const approveProvider = async (req, res) => {
                     'provider',
                     'Account Suspended 🚫',
                     `Your account has been suspended. Reason: ${provider.suspensionReason}`,
-                    'suspension',
+                    'system',
                     provider._id
                 );
             } catch (fcmError) { }
@@ -565,8 +607,12 @@ const approveProvider = async (req, res) => {
         }
 
         if (status === 'blocked') {
+            if (!finalRemarks) {
+                return res.status(400).json({ success: false, message: 'Remarks/Reason is required to block the provider account.' });
+            }
             provider.blockedTill = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
             provider.isActive = false;
+            provider.rejectionReason = finalRemarks;
 
             if (global.logger) global.logger.warn(`Provider manually blocked by Admin: ${provider._id}. Duration: ${durationDays || 'Permanent'}`);
 
@@ -577,8 +623,8 @@ const approveProvider = async (req, res) => {
                     provider._id,
                     'provider',
                     'Account Blocked ❌',
-                    `Your account has been blocked by the administrator.`,
-                    'blocked',
+                    `Your account has been blocked by the administrator. Reason: ${finalRemarks}`,
+                    'system',
                     provider._id
                 );
             } catch (fcmError) { }
@@ -3814,3 +3860,55 @@ const getSystemLogs = async (req, res) => {
 module.exports.getSystemLogs = getSystemLogs;
 module.exports.getActiveSessions = getActiveSessions;
 module.exports.forceLogoutUser = forceLogoutUser;
+
+module.exports.getProviderAgreementPdf = async (req, res) => {
+    try {
+        const provider = await Provider.findById(req.params.id);
+        if (!provider) {
+            return res.status(404).json({ success: false, message: 'Provider not found' });
+        }
+
+        if (!provider.legalAcceptance || !provider.legalAcceptance.agreementAccepted) {
+            return res.status(400).json({ success: false, message: 'Agreement PDF not generated yet' });
+        }
+
+        const { generateAgreement } = require('../services/agreementGenerator');
+        const pdfBuffer = await generateAgreement(provider);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="agreement_${provider._id}.pdf"`,
+            'Content-Length': pdfBuffer.length
+        });
+        return res.send(pdfBuffer);
+    } catch (error) {
+        console.error('Admin get agreement PDF error:', error);
+        res.status(500).json({ success: false, message: 'Server error while fetching agreement PDF' });
+    }
+};
+
+module.exports.getProviderApprovalLetter = async (req, res) => {
+    try {
+        const provider = await Provider.findById(req.params.id);
+        if (!provider) {
+            return res.status(404).json({ success: false, message: 'Provider not found' });
+        }
+
+        if (!provider.approved) {
+            return res.status(400).json({ success: false, message: 'Approval letter PDF not generated yet (provider not approved)' });
+        }
+
+        const { generateApprovalLetter } = require('../services/agreementGenerator');
+        const pdfBuffer = await generateApprovalLetter(provider, provider.rejectionReason || '');
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="approval_letter_${provider._id}.pdf"`,
+            'Content-Length': pdfBuffer.length
+        });
+        return res.send(pdfBuffer);
+    } catch (error) {
+        console.error('Admin get approval letter PDF error:', error);
+        res.status(500).json({ success: false, message: 'Server error while fetching approval letter PDF' });
+    }
+};

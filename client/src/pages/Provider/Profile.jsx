@@ -10,6 +10,7 @@ import * as NotificationService from '../../services/NotificationService';
 import useCategory from '../../hooks/useCategory';
 import { formatDate, formatCurrency, compressImage } from '../../utils/format';
 import AddressSelector from '../../components/AddressSelector';
+import { IfscBankDetails } from '../../components/IfscBankDetails';
 import ProfileSkeleton from '../../components/ui-skeletons/ProfileSkeleton';
 import { useNavigate } from 'react-router-dom';
 import Processing from '../../components/ui-skeletons/Processing';
@@ -56,8 +57,33 @@ const ProviderProfile = () => {
     rejectionReason: '',
     profilePicUrl: '',
     profilePicPublicId: '',
-    resume: '',
-    resumePublicId: '',
+    aadhaarFront: '',
+    aadhaarFrontPublicId: '',
+    aadhaarBack: '',
+    aadhaarBackPublicId: '',
+    panCard: '',
+    panCardPublicId: '',
+    liveSelfie: '',
+    liveSelfiePublicId: '',
+    addressSame: false,
+    currentAddress: {
+      houseNumber: '',
+      street: '',
+      landmark: '',
+      villageCity: '',
+      district: '',
+      state: '',
+      pincode: ''
+    },
+    permanentAddress: {
+      houseNumber: '',
+      street: '',
+      landmark: '',
+      villageCity: '',
+      district: '',
+      state: '',
+      pincode: ''
+    },
     approved: false,
     testPassed: false,
     completedBookings: 0,
@@ -82,9 +108,17 @@ const ProviderProfile = () => {
     }
   });
 
-  const [editMode, setEditMode] = useState({ basic: false, professional: false, address: false, bank: false });
+  const [editMode, setEditMode] = useState({ basic: false, professional: false, address: false, bank: false, kyc: false });
+  const [isBankValid, setIsBankValid] = useState(false);
 
-  const [fileUploads, setFileUploads] = useState({ profilePic: null, resume: null, passbookImage: null });
+  const [fileUploads, setFileUploads] = useState({
+    profilePic: null,
+    aadhaarFront: null,
+    aadhaarBack: null,
+    panCard: null,
+    liveSelfie: null,
+    passbookImage: null
+  });
   const { categories: providerServices, loading: providerServicesLoading } = useCategory();
   const [loading, setLoading] = useState(false);
 
@@ -189,7 +223,22 @@ const ProviderProfile = () => {
   };
 
   const handleFileChange = (e, field) => {
-    setFileUploads(prev => ({ ...prev, [field]: e.target.files[0] }));
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const kycFields = ['aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie'];
+    if (kycFields.includes(field)) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        showToast('Only JPG, JPEG, PNG, and WEBP images are allowed', 'error');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('File size must not exceed 5 MB', 'error');
+        return;
+      }
+    }
+    setFileUploads(prev => ({ ...prev, [field]: file }));
   };
 
   const updateProfile = async (updateType) => {
@@ -204,9 +253,24 @@ const ProviderProfile = () => {
         profilePicFile = await compressImage(profilePicFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
       }
 
-      let resumeFile = fileUploads.resume;
-      if (resumeFile && resumeFile.type.startsWith('image/')) {
-        resumeFile = await compressImage(resumeFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      let aadhaarFrontFile = fileUploads.aadhaarFront;
+      if (aadhaarFrontFile) {
+        aadhaarFrontFile = await compressImage(aadhaarFrontFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
+      let aadhaarBackFile = fileUploads.aadhaarBack;
+      if (aadhaarBackFile) {
+        aadhaarBackFile = await compressImage(aadhaarBackFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
+      let panCardFile = fileUploads.panCard;
+      if (panCardFile) {
+        panCardFile = await compressImage(panCardFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
+      let liveSelfieFile = fileUploads.liveSelfie;
+      if (liveSelfieFile) {
+        liveSelfieFile = await compressImage(liveSelfieFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
       }
 
       let passbookImageFile = fileUploads.passbookImage;
@@ -225,27 +289,23 @@ const ProviderProfile = () => {
           formData.append('services', JSON.stringify(profileData.services));
           formData.append('experience', profileData.experience);
           formData.append('serviceArea', profileData.serviceArea);
-          if (resumeFile) formData.append('resume', resumeFile);
           break;
         case 'address':
-          formData.append('street', profileData.address.street);
-          formData.append('city', profileData.address.city);
-          formData.append('state', profileData.address.state);
-          formData.append('postalCode', profileData.address.postalCode);
-          formData.append('country', profileData.address.country);
-          if (profileData.address.lat !== undefined && profileData.address.lat !== null) {
+          formData.append('addressSame', profileData.addressSame);
+          formData.append('currentAddress', JSON.stringify(profileData.currentAddress));
+          formData.append('permanentAddress', JSON.stringify(profileData.addressSame ? profileData.currentAddress : profileData.permanentAddress));
+          // Backward compatibility mappings
+          formData.append('street', profileData.currentAddress.street || '');
+          formData.append('city', profileData.currentAddress.villageCity || '');
+          formData.append('state', profileData.currentAddress.state || '');
+          formData.append('postalCode', profileData.currentAddress.pincode || '');
+          formData.append('country', 'India');
+          if (profileData.address && profileData.address.lat !== undefined && profileData.address.lat !== null) {
             formData.append('lat', profileData.address.lat);
           }
-          if (profileData.address.lng !== undefined && profileData.address.lng !== null) {
+          if (profileData.address && profileData.address.lng !== undefined && profileData.address.lng !== null) {
             formData.append('lng', profileData.address.lng);
           }
-          // houseNumber, road, landmark, area fields if present
-          if (profileData.address.houseNumber) formData.append('houseNumber', profileData.address.houseNumber);
-          if (profileData.address.road) formData.append('road', profileData.address.road);
-          if (profileData.address.landmark) formData.append('landmark', profileData.address.landmark);
-          if (profileData.address.area) formData.append('area', profileData.address.area);
-          if (profileData.address.pincode) formData.append('pincode', profileData.address.pincode);
-          if (profileData.address.formattedAddress) formData.append('formattedAddress', profileData.address.formattedAddress);
           break;
         case 'bank':
           formData.append('accountNo', profileData.bankDetails.accountNo);
@@ -258,9 +318,27 @@ const ProviderProfile = () => {
           if (!profilePicFile) throw new Error('Please select a profile picture');
           formData.append('profilePic', profilePicFile);
           break;
-        case 'resume':
-          if (!resumeFile) throw new Error('Please select a resume file');
-          formData.append('resume', resumeFile);
+        case 'kyc':
+          if (aadhaarFrontFile) formData.append('aadhaarFront', aadhaarFrontFile);
+          if (aadhaarBackFile) formData.append('aadhaarBack', aadhaarBackFile);
+          if (panCardFile) formData.append('panCard', panCardFile);
+          if (liveSelfieFile) formData.append('liveSelfie', liveSelfieFile);
+          break;
+        case 'aadhaarFront':
+          if (!aadhaarFrontFile) throw new Error('Please select Aadhaar Front image');
+          formData.append('aadhaarFront', aadhaarFrontFile);
+          break;
+        case 'aadhaarBack':
+          if (!aadhaarBackFile) throw new Error('Please select Aadhaar Back image');
+          formData.append('aadhaarBack', aadhaarBackFile);
+          break;
+        case 'panCard':
+          if (!panCardFile) throw new Error('Please select PAN Card image');
+          formData.append('panCard', panCardFile);
+          break;
+        case 'liveSelfie':
+          if (!liveSelfieFile) throw new Error('Please select Live Selfie image');
+          formData.append('liveSelfie', liveSelfieFile);
           break;
         case 'settings':
           const currentPrefs = profileData.notificationPreferences || {
@@ -289,8 +367,8 @@ const ProviderProfile = () => {
           bankDetails: data.provider.bankDetails || prev.bankDetails,
           notificationPreferences: data.provider.notificationPreferences || prev.notificationPreferences
         }));
-        setFileUploads({ profilePic: null, resume: null, passbookImage: null });
-        setEditMode({ basic: false, professional: false, address: false, bank: false });
+        setFileUploads({ profilePic: null, aadhaarFront: null, aadhaarBack: null, panCard: null, liveSelfie: null, passbookImage: null });
+        setEditMode({ basic: false, professional: false, address: false, bank: false, kyc: false });
         showToast(data.message || 'Profile updated successfully');
       } else {
         showToast(data.message, 'error');
@@ -339,9 +417,9 @@ const ProviderProfile = () => {
     const fields = [
       profileData.name, profileData.phone, profileData.dateOfBirth,
       profileData.services?.length > 0, profileData.experience, profileData.serviceArea,
-      profileData.address.street, profileData.address.city, profileData.address.state,
-      profileData.address.postalCode, profileData.bankDetails.accountNo, profileData.bankDetails.ifsc,
-      profileData.profilePicUrl, profileData.resume, profileData.bankDetails.passbookImage
+      profileData.currentAddress?.street, profileData.currentAddress?.villageCity, profileData.currentAddress?.state,
+      profileData.currentAddress?.pincode, profileData.bankDetails.accountNo, profileData.bankDetails.ifsc,
+      profileData.profilePicUrl, profileData.aadhaarFront, profileData.aadhaarBack, profileData.panCard, profileData.liveSelfie, profileData.bankDetails.passbookImage
     ];
     const completed = fields.filter(f => f && f !== false).length;
     return Math.round((completed / fields.length) * 100);
@@ -626,34 +704,157 @@ const ProviderProfile = () => {
                     </div>
                   </div>
 
-                  {/* Experience ID Proof */}
+                   {/* Aadhaar Front */}
                   <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
                     <div className="w-12 h-12 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
                       <FileText className="w-6 h-6" />
                     </div>
-                    <h4 className="font-bold text-secondary text-sm mb-2">Experience / ID Proof</h4>
-                    <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.resume ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'}`}>
-                      {profileData.resume ? '✓ Verified Proof' : '✗ Multi-Proof ID'}
+                    <h4 className="font-bold text-secondary text-sm mb-2">Aadhaar Front</h4>
+                    <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.aadhaarFront ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'}`}>
+                      {profileData.aadhaarFront ? '✓ Verified Front' : '✗ Required'}
                     </span>
                     <div className="space-y-2">
-                      <input id="resumeUpload" type="file" onChange={(e) => handleFileChange(e, 'resume')} accept=".pdf,.doc,.docx,image/*" className="hidden" />
-                      <label htmlFor="resumeUpload" className="block w-full px-4 py-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
-                        <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload ID Proof
-                      </label>
-                      {fileUploads.resume && (
-                        <Processing
-                          onClick={() => updateProfile('resume')}
-                          loading={isSaving}
-                          loadingText="Submitting..."
-                          icon={<Check className="w-3.5 h-3.5" />}
-                          className="block w-full py-2 bg-accent text-white rounded-lg text-xs font-black shadow-sm"
-                        >
-                          Submit Document
-                        </Processing>
+                      {!profileData.approved ? (
+                        <>
+                          <input id="aadhaarFrontUpload" type="file" onChange={(e) => handleFileChange(e, 'aadhaarFront')} accept="image/*" className="hidden" />
+                          <label htmlFor="aadhaarFrontUpload" className="block w-full px-4 py-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
+                            <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload Front
+                          </label>
+                          {fileUploads.aadhaarFront && (
+                            <Processing
+                              onClick={() => updateProfile('aadhaarFront')}
+                              loading={isSaving}
+                              loadingText="Submitting..."
+                              icon={<Check className="w-3.5 h-3.5" />}
+                              className="block w-full py-2 bg-accent text-white rounded-lg text-xs font-black shadow-sm"
+                            >
+                              Submit Front
+                            </Processing>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-gray-400 font-semibold italic mb-2">Read-only (Approved)</p>
                       )}
-                      {profileData.resume && (
-                        <button onClick={() => viewDocument('resume')} className="block w-full px-4 py-2 bg-secondary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">
-                          <Eye className="w-3.5 h-3.5 inline mr-2" /> View Document
+                      {profileData.aadhaarFront && (
+                        <button onClick={() => viewDocument('aadhaarFront')} className="block w-full px-4 py-2 bg-secondary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">
+                          <Eye className="w-3.5 h-3.5 inline mr-2" /> View Front
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Aadhaar Back */}
+                  <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
+                    <div className="w-12 h-12 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-secondary text-sm mb-2">Aadhaar Back</h4>
+                    <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.aadhaarBack ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'}`}>
+                      {profileData.aadhaarBack ? '✓ Verified Back' : '✗ Required'}
+                    </span>
+                    <div className="space-y-2">
+                      {!profileData.approved ? (
+                        <>
+                          <input id="aadhaarBackUpload" type="file" onChange={(e) => handleFileChange(e, 'aadhaarBack')} accept="image/*" className="hidden" />
+                          <label htmlFor="aadhaarBackUpload" className="block w-full px-4 py-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
+                            <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload Back
+                          </label>
+                          {fileUploads.aadhaarBack && (
+                            <Processing
+                              onClick={() => updateProfile('aadhaarBack')}
+                              loading={isSaving}
+                              loadingText="Submitting..."
+                              icon={<Check className="w-3.5 h-3.5" />}
+                              className="block w-full py-2 bg-accent text-white rounded-lg text-xs font-black shadow-sm"
+                            >
+                              Submit Back
+                            </Processing>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-gray-400 font-semibold italic mb-2">Read-only (Approved)</p>
+                      )}
+                      {profileData.aadhaarBack && (
+                        <button onClick={() => viewDocument('aadhaarBack')} className="block w-full px-4 py-2 bg-secondary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">
+                          <Eye className="w-3.5 h-3.5 inline mr-2" /> View Back
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PAN Card */}
+                  <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
+                    <div className="w-12 h-12 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-secondary text-sm mb-2">PAN Card</h4>
+                    <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.panCard ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'}`}>
+                      {profileData.panCard ? '✓ Verified PAN' : '✗ Required'}
+                    </span>
+                    <div className="space-y-2">
+                      {!profileData.approved ? (
+                        <>
+                          <input id="panCardUpload" type="file" onChange={(e) => handleFileChange(e, 'panCard')} accept="image/*" className="hidden" />
+                          <label htmlFor="panCardUpload" className="block w-full px-4 py-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
+                            <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload PAN
+                          </label>
+                          {fileUploads.panCard && (
+                            <Processing
+                              onClick={() => updateProfile('panCard')}
+                              loading={isSaving}
+                              loadingText="Submitting..."
+                              icon={<Check className="w-3.5 h-3.5" />}
+                              className="block w-full py-2 bg-accent text-white rounded-lg text-xs font-black shadow-sm"
+                            >
+                              Submit PAN
+                            </Processing>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-gray-400 font-semibold italic mb-2">Read-only (Approved)</p>
+                      )}
+                      {profileData.panCard && (
+                        <button onClick={() => viewDocument('panCard')} className="block w-full px-4 py-2 bg-secondary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">
+                          <Eye className="w-3.5 h-3.5 inline mr-2" /> View PAN
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Live Selfie */}
+                  <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
+                    <div className="w-12 h-12 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
+                      <Camera className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-secondary text-sm mb-2">Live Selfie</h4>
+                    <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.liveSelfie ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'}`}>
+                      {profileData.liveSelfie ? '✓ Verified Selfie' : '✗ Required'}
+                    </span>
+                    <div className="space-y-2">
+                      {!profileData.approved ? (
+                        <>
+                          <input id="liveSelfieUpload" type="file" onChange={(e) => handleFileChange(e, 'liveSelfie')} accept="image/*" className="hidden" />
+                          <label htmlFor="liveSelfieUpload" className="block w-full px-4 py-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
+                            <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload Selfie
+                          </label>
+                          {fileUploads.liveSelfie && (
+                            <Processing
+                              onClick={() => updateProfile('liveSelfie')}
+                              loading={isSaving}
+                              loadingText="Submitting..."
+                              icon={<Check className="w-3.5 h-3.5" />}
+                              className="block w-full py-2 bg-accent text-white rounded-lg text-xs font-black shadow-sm"
+                            >
+                              Submit Selfie
+                            </Processing>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-gray-400 font-semibold italic mb-2">Read-only (Approved)</p>
+                      )}
+                      {profileData.liveSelfie && (
+                        <button onClick={() => viewDocument('liveSelfie')} className="block w-full px-4 py-2 bg-secondary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">
+                          <Eye className="w-3.5 h-3.5 inline mr-2" /> View Selfie
                         </button>
                       )}
                     </div>
@@ -692,6 +893,31 @@ const ProviderProfile = () => {
                       {profileData.bankDetails.passbookImage && (
                         <button onClick={() => viewDocument('passbook')} className="block w-full px-4 py-2 bg-secondary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">
                           <Eye className="w-3.5 h-3.5 inline mr-2" /> View Current
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Provider Agreement PDF */}
+                  <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group col-span-1 md:col-span-3">
+                    <div className="w-12 h-12 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-secondary text-sm mb-2">Provider Service Agreement</h4>
+                    <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">This contains your signed legal declarations, accepted terms, and digitized signature logs.</p>
+                    <div className="max-w-xs mx-auto">
+                      {profileData.legalAcceptance?.agreementAccepted ? (
+                        <a
+                          href={`${API}/provider/agreement-pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block w-full px-4 py-2.5 bg-primary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-all text-center shadow-sm"
+                        >
+                          View & Download Agreement PDF
+                        </a>
+                      ) : (
+                        <button disabled className="block w-full px-4 py-2.5 bg-gray-100 text-gray-400 rounded-lg text-xs font-bold cursor-not-allowed">
+                          No Active Agreement
                         </button>
                       )}
                     </div>
@@ -840,6 +1066,137 @@ const ProviderProfile = () => {
 
                     {editMode.address ? (
                       <form onSubmit={(e) => { e.preventDefault(); updateProfile('address'); }} className="space-y-4">
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Current Address</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">House Number *</label>
+                              <input type="text" value={profileData.currentAddress?.houseNumber || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, houseNumber: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Street *</label>
+                              <input type="text" value={profileData.currentAddress?.street || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, street: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark *</label>
+                              <input type="text" value={profileData.currentAddress?.landmark || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, landmark: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Village/City *</label>
+                              <input type="text" value={profileData.currentAddress?.villageCity || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, villageCity: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">District *</label>
+                              <input type="text" value={profileData.currentAddress?.district || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, district: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
+                              <input type="text" value={profileData.currentAddress?.state || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, state: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
+                              <input type="text" value={profileData.currentAddress?.pincode || ''} onChange={(e) => setProfileData(prev => {
+                                const updatedAddr = { ...prev.currentAddress, pincode: e.target.value };
+                                return {
+                                  ...prev,
+                                  currentAddress: updatedAddr,
+                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
+                                };
+                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input type="checkbox" id="profileAddressSame" checked={profileData.addressSame} onChange={(e) => {
+                              const checked = e.target.checked;
+                              setProfileData(prev => ({
+                                ...prev,
+                                addressSame: checked,
+                                permanentAddress: checked ? { ...prev.currentAddress } : prev.permanentAddress
+                              }));
+                            }} className="w-4 h-4 rounded border-gray-300 text-primary" />
+                            <label htmlFor="profileAddressSame" className="text-xs font-bold text-secondary">Permanent Address same as Current Address</label>
+                          </div>
+ 
+                          {!profileData.addressSame && (
+                            <>
+                              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-4">Permanent Address</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">House Number *</label>
+                                  <input type="text" value={profileData.permanentAddress?.houseNumber || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, houseNumber: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Street *</label>
+                                  <input type="text" value={profileData.permanentAddress?.street || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, street: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark *</label>
+                                  <input type="text" value={profileData.permanentAddress?.landmark || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, landmark: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Village/City *</label>
+                                  <input type="text" value={profileData.permanentAddress?.villageCity || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, villageCity: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">District *</label>
+                                  <input type="text" value={profileData.permanentAddress?.district || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, district: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
+                                  <input type="text" value={profileData.permanentAddress?.state || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, state: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
+                                  <input type="text" value={profileData.permanentAddress?.pincode || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, pincode: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+ 
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-4">Location Coordinates (Map Selector)</h4>
                         <AddressSelector
                           address={profileData.address}
                           onChange={(updatedAddress) => setProfileData(prev => ({
@@ -854,20 +1211,53 @@ const ProviderProfile = () => {
                           loadingText="Saving..."
                           className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
                         >
-                          Save Address
+                          Save Address Details
                         </Processing>
                       </form>
                     ) : (
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
-                        <div className="flex-1">
-                          {profileData.address.street || profileData.address.city ? (
-                            <p className="text-sm font-semibold text-secondary">
-                              {profileData.address.formattedAddress || profileData.address.street}
-                            </p>
-                          ) : (
-                            <p className="text-sm text-gray-400 italic">No address added yet.</p>
-                          )}
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
+                          <div className="flex-1">
+                            <p className="text-xs font-bold text-gray-400 mb-1">Current Address</p>
+                            {profileData.currentAddress?.street || profileData.currentAddress?.villageCity ? (
+                              <p className="text-sm font-semibold text-secondary">
+                                {`${profileData.currentAddress.houseNumber || ''}, ${profileData.currentAddress.street || ''}, ${profileData.currentAddress.landmark || ''}, ${profileData.currentAddress.villageCity || ''}, ${profileData.currentAddress.district || ''}, ${profileData.currentAddress.state || ''} - ${profileData.currentAddress.pincode || ''}`}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">No current address added yet.</p>
+                            )}
+                          </div>
+                        </div>
+ 
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-accent" /></div>
+                          <div className="flex-1">
+                            <p className="text-xs font-bold text-gray-400 mb-1">Permanent Address</p>
+                            {profileData.addressSame ? (
+                              <p className="text-sm font-semibold text-secondary italic">Same as Current Address</p>
+                            ) : (profileData.permanentAddress?.street || profileData.permanentAddress?.villageCity) ? (
+                              <p className="text-sm font-semibold text-secondary">
+                                {`${profileData.permanentAddress.houseNumber || ''}, ${profileData.permanentAddress.street || ''}, ${profileData.permanentAddress.landmark || ''}, ${profileData.permanentAddress.villageCity || ''}, ${profileData.permanentAddress.district || ''}, ${profileData.permanentAddress.state || ''} - ${profileData.permanentAddress.pincode || ''}`}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">No permanent address added yet.</p>
+                            )}
+                          </div>
+                        </div>
+ 
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-gray-400" /></div>
+                          <div className="flex-1">
+                            <p className="text-xs font-bold text-gray-400 mb-1">Map Coordinates Location</p>
+                            {profileData.address?.street || profileData.address?.city ? (
+                              <p className="text-sm font-semibold text-secondary">
+                                {profileData.address.formattedAddress || profileData.address.street}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">No coordinates set yet.</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -885,36 +1275,53 @@ const ProviderProfile = () => {
                     </div>
 
                     {editMode.bank ? (
-                      <form onSubmit={(e) => { e.preventDefault(); updateProfile('bank'); }} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">Account Holder Name *</label>
-                            <input type="text" name="accountName" value={profileData.bankDetails.accountName} onChange={(e) => handleChange(e, 'bank')} required
-                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">Bank Name *</label>
-                            <input type="text" name="bankName" value={profileData.bankDetails.bankName} onChange={(e) => handleChange(e, 'bank')} required
-                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">Account Number *</label>
-                            <input type="text" name="accountNo" value={profileData.bankDetails.accountNo} onChange={(e) => handleChange(e, 'bank')} required
-                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">IFSC Code *</label>
-                            <input type="text" name="ifsc" value={profileData.bankDetails.ifsc} onChange={(e) => handleChange(e, 'bank')} required
-                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                          </div>
-                        </div>
+                      <form onSubmit={(e) => { e.preventDefault(); if (isBankValid) { updateProfile('bank'); } }} className="space-y-4 text-left">
+                        <IfscBankDetails
+                          value={{
+                            ifsc: profileData.bankDetails.ifsc,
+                            accountNo: profileData.bankDetails.accountNo,
+                            bankName: profileData.bankDetails.bankName,
+                            branch: profileData.bankDetails.branch,
+                            district: profileData.bankDetails.district,
+                            state: profileData.bankDetails.state,
+                            city: profileData.bankDetails.city,
+                            address: profileData.bankDetails.address,
+                          }}
+                          onChange={(updated) => {
+                            setProfileData((prev) => ({
+                              ...prev,
+                              bankDetails: {
+                                ...prev.bankDetails,
+                                ifsc: updated.ifsc || '',
+                                accountNo: updated.accountNo || '',
+                                bankName: updated.bankName || '',
+                                branch: updated.branch || '',
+                                district: updated.district || '',
+                                state: updated.state || '',
+                                city: updated.city || '',
+                                address: updated.address || '',
+                              }
+                            }));
+                          }}
+                          onValidityChange={setIsBankValid}
+                          showAccountName={true}
+                          accountNameValue={profileData.bankDetails.accountName || ''}
+                          onAccountNameChange={(name) => {
+                            setProfileData((prev) => ({
+                              ...prev,
+                              bankDetails: {
+                                ...prev.bankDetails,
+                                accountName: name,
+                              }
+                            }));
+                          }}
+                        />
                         <Processing
                           type="submit"
                           loading={isSaving}
+                          disabled={!isBankValid || isSaving}
                           loadingText="Saving..."
-                          className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
+                          className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           Save Bank Details
                         </Processing>

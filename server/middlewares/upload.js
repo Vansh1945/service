@@ -61,8 +61,18 @@ const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
         } else if (file.fieldname === 'passbookImage') {
           activeType = 'work_completion'; // 100KB-300KB target
           activeFolder = 'passbookImage';
-        } else if (file.fieldname === 'resume') {
-          activeFolder = 'resume';
+        } else if (file.fieldname === 'aadhaarFront') {
+          activeType = 'work_completion';
+          activeFolder = 'aadhaarFront';
+        } else if (file.fieldname === 'aadhaarBack') {
+          activeType = 'work_completion';
+          activeFolder = 'aadhaarBack';
+        } else if (file.fieldname === 'panCard') {
+          activeType = 'work_completion';
+          activeFolder = 'panCard';
+        } else if (file.fieldname === 'liveSelfie') {
+          activeType = 'work_completion';
+          activeFolder = 'liveSelfie';
         } else if (file.fieldname === 'image' || file.fieldname === 'images') {
           activeType = 'service';
           activeFolder = 'serviceImage';
@@ -168,11 +178,6 @@ const rawProfilePic = multer({
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
 });
 
-const rawResume = multer({
-  storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
-  fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif', 'application/pdf'], ['jpg', 'jpeg', 'png', 'heic', 'heif', 'pdf'])
-});
 
 const rawServiceImage = multer({
   storage: localStorage,
@@ -254,7 +259,6 @@ const handleUploadErrors = (err, req, res, next) => {
 module.exports = {
   upload: wrapMulter(rawGeneral, 'general', 'raj-electrical'),
   uploadProfilePic: wrapMulter(rawProfilePic, 'profile', 'profilePics'),
-  uploadResume: wrapMulter(rawResume, 'general', 'resume'),
   uploadServiceImage: wrapMulter(rawServiceImage, 'service', 'serviceImage'),
   uploadComplaintImage: wrapMulter(rawComplaintImage, 'work_completion', 'complaintImage'),
   uploadPassbookImg: wrapMulter(rawPassbookImg, 'work_completion', 'passbookImage'),
