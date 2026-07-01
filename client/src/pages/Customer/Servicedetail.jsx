@@ -486,65 +486,65 @@ const ServiceDetailPage = () => {
                   <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{service.description}</p>
                 </div>
                 {serviceGuarantees.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Guarantees</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {serviceGuarantees.map((text, index) => {
-                      const icons = [
-                        <ShieldCheckIcon className="w-4.5 h-4.5" />,
-                        <UserIcon className="w-4.5 h-4.5" />,
-                        <ClockIcon className="w-4.5 h-4.5" />,
-                        <CheckBadgeIcon className="w-4.5 h-4.5" />
-                      ];
-                      return (
-                        <div key={index} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl">
-                          <div className="text-primary">{icons[index % 4]}</div>
-                          <span className="text-xs font-semibold text-gray-600">{text}</span>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-4">
+                    <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Guarantees</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {serviceGuarantees.map((text, index) => {
+                        const icons = [
+                          <ShieldCheckIcon className="w-4.5 h-4.5" />,
+                          <UserIcon className="w-4.5 h-4.5" />,
+                          <ClockIcon className="w-4.5 h-4.5" />,
+                          <CheckBadgeIcon className="w-4.5 h-4.5" />
+                        ];
+                        return (
+                          <div key={index} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl">
+                            <div className="text-primary">{icons[index % 4]}</div>
+                            <span className="text-xs font-semibold text-gray-600">{text}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
                 )}
               </div>
 
               {/* Service Includes & Excludes */}
               {(serviceIncludes.length > 0 || serviceExcludes.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
-                {/* Service Includes */}
-                {serviceIncludes.length > 0 && (
-                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
-                  <h3 className="text-emerald-700 font-extrabold text-xs tracking-wider uppercase border-b border-emerald-100/50 pb-2">
-                    Service Includes
-                  </h3>
-                  <ul className="space-y-2">
-                    {serviceIncludes.map((note, index) => (
-                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
-                        <MdCheck className="text-emerald-600 mt-0.5 shrink-0" />
-                        <span>{note}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+                  {/* Service Includes */}
+                  {serviceIncludes.length > 0 && (
+                    <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                      <h3 className="text-emerald-700 font-extrabold text-xs tracking-wider uppercase border-b border-emerald-100/50 pb-2">
+                        Service Includes
+                      </h3>
+                      <ul className="space-y-2">
+                        {serviceIncludes.map((note, index) => (
+                          <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                            <MdCheck className="text-emerald-600 mt-0.5 shrink-0" />
+                            <span>{note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-                {/* Service Excludes */}
-                {serviceExcludes.length > 0 && (
-                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
-                  <h3 className="text-red-700 font-extrabold text-xs tracking-wider uppercase border-b border-red-100/50 pb-2">
-                    Service Excludes
-                  </h3>
-                  <ul className="space-y-2">
-                    {serviceExcludes.map((item, index) => (
-                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
-                        <span className="text-red-500 font-bold shrink-0 mt-0.5">x</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {/* Service Excludes */}
+                  {serviceExcludes.length > 0 && (
+                    <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                      <h3 className="text-red-700 font-extrabold text-xs tracking-wider uppercase border-b border-red-100/50 pb-2">
+                        Service Excludes
+                      </h3>
+                      <ul className="space-y-2">
+                        {serviceExcludes.map((item, index) => (
+                          <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                            <span className="text-red-500 font-bold shrink-0 mt-0.5">x</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                )}
-              </div>
               )}
 
             </div>
@@ -616,41 +616,41 @@ const ServiceDetailPage = () => {
 
               {/* Tools & Materials and Prerequisites */}
               {((materialsUsed && materialsUsed.length > 0) || prerequisites.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
-                {/* Tools & Materials */}
-                {materialsUsed && materialsUsed.length > 0 && (
-                <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
-                  <h3 className="text-sky-700 font-extrabold text-xs tracking-wider uppercase border-b border-sky-100/50 pb-2">
-                    Tools & Materials Used
-                  </h3>
-                  <ul className="space-y-2">
-                    {materialsUsed.map((item, index) => (
-                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+                  {/* Tools & Materials */}
+                  {materialsUsed && materialsUsed.length > 0 && (
+                    <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                      <h3 className="text-sky-700 font-extrabold text-xs tracking-wider uppercase border-b border-sky-100/50 pb-2">
+                        Tools & Materials Used
+                      </h3>
+                      <ul className="space-y-2">
+                        {materialsUsed.map((item, index) => (
+                          <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-                {/* Prerequisites */}
-                {prerequisites.length > 0 && (
-                <div className="bg-purple-50/50 p-5 rounded-2xl border border-purple-100 space-y-3">
-                  <h3 className="text-purple-700 font-extrabold text-xs tracking-wider uppercase border-b border-purple-100/50 pb-2">
-                    Prerequisites
-                  </h3>
-                  <ul className="space-y-2">
-                    {prerequisites.map((item, index) => (
-                      <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
-                        <MdCheck className="text-purple-600 mt-0.5 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {/* Prerequisites */}
+                  {prerequisites.length > 0 && (
+                    <div className="bg-purple-50/50 p-5 rounded-2xl border border-purple-100 space-y-3">
+                      <h3 className="text-purple-700 font-extrabold text-xs tracking-wider uppercase border-b border-purple-100/50 pb-2">
+                        Prerequisites
+                      </h3>
+                      <ul className="space-y-2">
+                        {prerequisites.map((item, index) => (
+                          <li key={index} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                            <MdCheck className="text-purple-600 mt-0.5 shrink-0" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                )}
-              </div>
               )}
             </div>
           )}

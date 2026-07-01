@@ -372,7 +372,10 @@ const createBooking = async (req, res) => {
       }
 
       // Resolve booking zone from address coordinates upfront
-      let detectedZoneId = detectedZone ? detectedZone._id : null;
+      if (!detectedZone) {
+        throw new Error('Selected address is outside our active service zones');
+      }
+      let detectedZoneId = detectedZone._id;
 
       // Calculate amounts
       let subtotal = (service.discountPrice || service.basePrice) * quantity;

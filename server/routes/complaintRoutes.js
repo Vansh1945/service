@@ -26,28 +26,7 @@ const {
   replyToComplaintSchema
 } = require("../validation/complaint.validation");
 
-// Unified Auth for Customer and Provider
-
-// PRODUCTION FIX
-const sharedAuth = (req, res, next) => {
-  const token = req.header('Authorization');
-  if (!token) return res.status(401).json({ success: false, message: "Authorization required" });
-
-  try {
-    const jwtToken = token.replace("Bearer ", "").trim();
-    const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
-
-    if (decoded.role === 'admin') {
-      return adminAuthMiddleware(req, res, next);
-    } else if (decoded.role === 'provider') {
-      return providerAuthMiddleware(req, res, next);
-    } else {
-      return userAuthMiddleware(req, res, next);
-    }
-  } catch (error) {
-    return res.status(401).json({ success: false, message: "Invalid session" });
-  }
-};
+const { sharedAuthMiddleware } = require("../middlewares/sharedAuth-middleware");
 
 const requireCustomerOrProvider = roleMiddleware(['customer', 'provider']);
 const requireAdmin = roleMiddleware(['admin']);
@@ -55,21 +34,21 @@ const requireAdmin = roleMiddleware(['admin']);
 // Customer & Provider routes
 router.post(
   "/",
-  sharedAuth,
+  sharedAuthMiddleware,
   uploadComplaintImage.array("images", 5),
   validateBody(submitComplaintSchema),
   submitComplaint
 );
 
 // Shared routes ( Customer and Provider )
-router.get("/my-complaints", sharedAuth, getMyComplaints);
-router.get("/:id", sharedAuth, getComplaint);
-router.put("/:id/reopen", sharedAuth, validateBody(reopenComplaintSchema), reopenComplaint);
+router.get("/my-complaints", sharedAuthMiddleware, getMyComplaints);
+router.get("/:id", sharedAuthMiddleware, getComplaint);
+router.put("/:id/reopen", sharedAuthMiddleware, validateBody(reopenComplaintSchema), reopenComplaint);
 
 // Reply route (Admin and Provider)
 router.post(
   "/:id/reply",
-  sharedAuth,
+  sharedAuthMiddleware,
   uploadComplaintImage.array("images", 5),
   validateBody(replyToComplaintSchema),
   replyToComplaint

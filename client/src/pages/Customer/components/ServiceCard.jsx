@@ -2,8 +2,8 @@ import React from 'react';
 import { Clock, Star } from 'lucide-react';
 
 const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL 
-    ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') 
+  const backendUrl = import.meta.env.VITE_BACKEND_URL
+    ? import.meta.env.VITE_BACKEND_URL.replace('/api', '')
     : window.location.origin;
   const defaultServiceImage = `${backendUrl}/assets/Service.png`;
 
@@ -105,8 +105,8 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
             onClick={() => onBook(service._id, isAvailable)}
             disabled={!isAvailable}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 whitespace-nowrap ${isAvailable
-                ? 'bg-primary text-white hover:bg-primary/95 shadow-sm shadow-primary/10'
-                : 'bg-gray-150 text-gray-400 cursor-not-allowed'
+              ? 'bg-primary text-white hover:bg-primary/95 shadow-sm shadow-primary/10'
+              : 'bg-gray-150 text-gray-400 cursor-not-allowed'
               }`}
           >
             Book Now

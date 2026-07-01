@@ -12,7 +12,7 @@ const analyticsCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 const refreshAnalytics = async () => {
     try {
         console.log('[AnalyticsService] Refreshing precomputed analytics...');
-        
+
         const today = moment().startOf('day').toDate();
         const startOfMonth = moment().startOf('month').toDate();
 
@@ -36,15 +36,15 @@ const refreshAnalytics = async () => {
                 { $group: { _id: "$status", count: { $sum: 1 } } }
             ]),
             // Existing revenueStats aggregation
-          Booking.aggregate([
-            { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-            { $group: { _id: null, monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } } } }
-          ]),
-          // New admin earnings aggregation (commission + companySurgeShare)
-          Booking.aggregate([
-            { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-            { $group: { _id: null, totalAdminEarnings: { $sum: { $add: ["$commissionAmount", { $ifNull: ["$companySurgeShare", 0] }] } } } }
-          ])
+            Booking.aggregate([
+                { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
+                { $group: { _id: null, monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } } } }
+            ]),
+            // New admin earnings aggregation (commission + companySurgeShare)
+            Booking.aggregate([
+                { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
+                { $group: { _id: null, totalAdminEarnings: { $sum: { $add: ["$commissionAmount", { $ifNull: ["$companySurgeShare", 0] }] } } } }
+            ])
         ]);
 
         const analytics = {

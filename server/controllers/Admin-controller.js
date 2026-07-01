@@ -2268,7 +2268,7 @@ const getDashboardAnalytics = async (req, res) => {
         const cancelledCount = stats.statusDistribution.find(s => s._id === 'cancelled')?.count || 0;
 
         // Rebook and Favorite Provider Analytics
-        const [totalRebooks, topRepeatedServices, mostFavoritedProviders, repeatCustomerCount, totalFavBookings] = await Promise.all([
+        const [totalRebooks, topRepeatedServices, mostFavoritedProviders, repeatCustomerCount, totalFavBookings, unassignedBookingsByZone] = await Promise.all([
             Booking.countDocuments({ isRebook: true }),
             Booking.aggregate([
                 { $match: { isRebook: true } },
@@ -2298,7 +2298,31 @@ const getDashboardAnalytics = async (req, res) => {
                 { $match: { count: { $gt: 1 } } },
                 { $count: "count" }
             ]),
-            Booking.countDocuments({ isFavoriteProviderBooking: true })
+            Booking.countDocuments({ isFavoriteProviderBooking: true }),
+            Booking.aggregate([
+                { $match: { provider: null, status: 'pending' } },
+                {
+                    $group: {
+                        _id: "$zoneId",
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'zones',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'zoneInfo'
+                    }
+                },
+                { $unwind: { path: "$zoneInfo", preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        zoneName: { $ifNull: ["$zoneInfo.name", "Unknown Zone"] },
+                        count: 1
+                    }
+                }
+            ])
         ]);
 
         const repeatBookingRate = totalBookings > 0 ? ((totalRebooks / totalBookings) * 100).toFixed(1) : 0;
@@ -2364,7 +2388,8 @@ const getDashboardAnalytics = async (req, res) => {
                 mostFavoritedProviders,
                 providerRetentionScore,
                 repeatCustomerCount: finalRepeatCustomerCount
-            }
+            },
+            unassignedBookingsByZone: unassignedBookingsByZone || []
         };
 
 

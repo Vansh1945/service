@@ -583,6 +583,11 @@ const BookService = () => {
       return false;
     }
 
+    if (!detectedZoneId) {
+      toast.error('Service is currently unavailable at this address. Please select another location.');
+      return false;
+    }
+
     if (formData.paymentMethod === 'wallet' && walletBalance < calculateTotal()) {
       toast.error('Insufficient wallet balance for full wallet payment.');
       return false;
@@ -713,6 +718,19 @@ const BookService = () => {
       </div>
 
       <div className="w-full max-w-[98%] mx-auto px-2 md:px-4 lg:px-4 py-4">
+        {/* Out of Service Zone Alert */}
+        {!detectedZoneId && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 animate-fade-in mb-4">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-amber-700">Outside Service Area</h4>
+              <p className="text-[10.5px] text-amber-700/90 leading-relaxed mt-0.5">
+                We currently do not operate in this location. Please choose a different service address to continue.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column - Booking Form */}
           <div className="lg:col-span-8 space-y-5">
@@ -727,9 +745,8 @@ const BookService = () => {
                     onError={(e) => e.target.src = 'https://placehold.co/400x400?text=No+Image'}
                   />
                   {(service.serviceType && service.serviceType !== 'standard') && (
-                    <span className={`absolute bottom-1 left-1 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${
-                      service.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
-                    }`}>
+                    <span className={`absolute bottom-1 left-1 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${service.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
+                      }`}>
                       {service.serviceType}
                     </span>
                   )}
@@ -752,7 +769,7 @@ const BookService = () => {
                       <span className="font-semibold text-secondary text-sm">{service.averageRating?.toFixed(1) || '0.0'}</span>
                     </div>
                   </div>
-                  
+
                   {service.shortDescription ? (
                     <p className="text-gray-500 text-xs mt-1 italic">"{service.shortDescription}"</p>
                   ) : (
@@ -765,15 +782,6 @@ const BookService = () => {
                     </div>
                   )}
 
-                  {service.tags && service.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {service.tags.map((tag, idx) => (
-                        <span key={idx} className="text-[9px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
 
                   <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 font-medium">
                     <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-primary" />{service.duration} hrs</div>
@@ -789,7 +797,7 @@ const BookService = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="mt-2">
                     <div className="flex items-baseline gap-1.5">
                       {service.discountPrice ? (
@@ -1072,7 +1080,7 @@ const BookService = () => {
                       </div>
                     </>
                   )}
-                   {getCustomerPricingBreakdown().platformFee > 0 && (
+                  {getCustomerPricingBreakdown().platformFee > 0 && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
                         Platform Fee
@@ -1311,11 +1319,14 @@ const BookService = () => {
                 )}
               </div>
 
+
+
               {/* Confirm Booking Button */}
               <Processing
                 onClick={handleSubmit}
                 loading={isSubmitting}
                 loadingText="Processing..."
+                disabled={!detectedZoneId || isSubmitting}
                 className="w-full bg-accent hover:bg-accent/95 text-white py-3.5 rounded-xl font-extrabold shadow-md shadow-accent/10 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs uppercase tracking-wider disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="w-4 h-4" />

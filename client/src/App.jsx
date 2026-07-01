@@ -4,6 +4,7 @@ import { FiRefreshCw } from "react-icons/fi";
 import "./index.css";
 import { useAuth } from "./context/auth";
 import AppInstall from "./components/AppInstall";
+import { FALLBACK_ASSETS } from "./config/constants";
 
 // Components
 import Navbar from "./components/Navbar";
@@ -340,7 +341,7 @@ const App = () => {
 
     const manifestUrl = generateManifestUrl(currentRole, activeBranding);
     // Favicon sequence: globalSettings.favicon -> activeBranding.favicon -> activeBranding.icon -> activeBranding.logo -> globalSettings.logo -> fallback -> favicon.ico
-    const resolvedFavicon = globalSettings?.favicon || activeBranding?.favicon || activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || "/icon-192.png";
+    const resolvedFavicon = globalSettings?.favicon || activeBranding?.favicon || activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || FALLBACK_ASSETS.FAVICON;
 
     const settings = {
       companyName: activeBranding?.browserTitle || activeBranding?.appName || globalSettings?.companyName || "Raj Electrical Service",
@@ -348,7 +349,7 @@ const App = () => {
       favicon: resolvedFavicon,
       description: activeBranding?.description || globalSettings?.tagline || "",
       manifestUrl: manifestUrl,
-      icon: activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || "/icon-192.png",
+      icon: activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || FALLBACK_ASSETS.APP_ICON,
       splashScreen: globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen || null
     };
 

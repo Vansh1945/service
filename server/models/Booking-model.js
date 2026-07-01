@@ -501,6 +501,18 @@ const bookingSchema = new Schema({
     default: false
   },
 
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0]
+    }
+  },
+
   metadata: {
     ip: String,
     userAgent: String,
@@ -541,6 +553,12 @@ bookingSchema.pre('save', async function (next) {
       if (this.address && typeof this.address.lat === 'number' && typeof this.address.lng === 'number') {
         this.address.s2CellId = latLngToS2CellId(this.address.lat, this.address.lng, 13);
         this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 20);
+
+        // Populate GeoJSON location
+        this.location = {
+          type: 'Point',
+          coordinates: [this.address.lng, this.address.lat]
+        };
 
         // Populate or reassign booking.zoneId when coordinates change or on creation
         if (this.isNew || this.isModified('address.lat') || this.isModified('address.lng')) {
@@ -712,6 +730,8 @@ bookingSchema.virtual('progressStatus').get(function () {
 bookingSchema.virtual('adminEarning').get(function () {
   return parseFloat(((this.commissionAmount || 0) + (this.companySurgeShare || 0)).toFixed(2));
 });
+
+bookingSchema.index({ location: '2dsphere' });
 
 // Indexes for query optimization
 bookingSchema.index({ customer: 1 });

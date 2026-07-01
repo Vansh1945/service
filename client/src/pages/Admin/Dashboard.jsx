@@ -684,11 +684,11 @@ const AdminDashboard = () => {
                   <div className="flex items-start">
                     <div className={`mt-1 p-2 rounded-lg mr-3 ${activity.type === 'completion' ? 'bg-green-50 text-green-600' :
                       activity.type === 'registration' ? 'bg-blue-50 text-blue-600' :
-                      activity.type === 'referral' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-600'
+                        activity.type === 'referral' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-600'
                       }`}>
                       {activity.type === 'completion' ? <FiCheckCircle size={14} /> :
                         activity.type === 'registration' ? <FiUser size={14} /> :
-                        activity.type === 'referral' ? <FiUsers size={14} /> : <FiClock size={14} />}
+                          activity.type === 'referral' ? <FiUsers size={14} /> : <FiClock size={14} />}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">{activity.message}</p>
@@ -702,8 +702,8 @@ const AdminDashboard = () => {
                   </div>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${activity.status === 'completed' || activity.type === 'completion' || activity.status === 'released' ? 'bg-green-100 text-green-700' :
                     activity.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                    activity.status === 'new_user' ? 'bg-blue-100 text-blue-700' :
-                    activity.status === 'pending' || activity.type === 'referral' ? 'bg-indigo-100 text-indigo-700' : 'bg-yellow-100 text-yellow-700'
+                      activity.status === 'new_user' ? 'bg-blue-100 text-blue-700' :
+                        activity.status === 'pending' || activity.type === 'referral' ? 'bg-indigo-100 text-indigo-700' : 'bg-yellow-100 text-yellow-700'
                     }`}>
                     {activity.status?.replace('_', ' ')}
                   </span>
@@ -766,6 +766,28 @@ const AdminDashboard = () => {
                 {analytics?.pendingActions?.pendingDisputes || 0}
               </span>
             </div>
+
+            {/* Zone Alerts - No Provider Available */}
+            {analytics?.unassignedBookingsByZone && analytics.unassignedBookingsByZone.length > 0 && (
+              <div className="p-4 bg-purple-50 border border-purple-100 rounded-xl mt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 bg-purple-100 rounded-lg text-purple-700">
+                    <FiAlertTriangle className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-purple-800">Unserviced Zones (No Providers)</h4>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {analytics.unassignedBookingsByZone.map((zone, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-purple-100/50 text-xs">
+                      <span className="font-semibold text-gray-700">{zone.zoneName}</span>
+                      <span className="px-2 py-0.5 bg-purple-100 text-purple-750 font-bold rounded-full text-[10px]">
+                        {zone.count} Pending
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="mt-8 p-6 bg-gray-900 rounded-2xl relative overflow-hidden">
             <div className="relative z-10">
