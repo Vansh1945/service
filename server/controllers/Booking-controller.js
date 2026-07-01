@@ -4908,7 +4908,14 @@ const downloadBookingReport = async (req, res) => {
     })
       .populate('customer', 'name email phone')
       .populate('provider', 'name area providerId')
-      .populate('services.service', 'name category')
+      .populate({
+        path: 'services.service',
+        select: 'title category',
+        populate: {
+          path: 'category',
+          select: 'name'
+        }
+      })
       .populate('complaint', 'complaintId')
       .lean();
 
@@ -4953,7 +4960,9 @@ const downloadBookingReport = async (req, res) => {
     // Add rows
     bookings.forEach(b => {
       const serviceDetails = b.services.map(s => {
-        return `${s.service.title} (${s.service.category}) x${s.quantity} = ${s.price - s.discountAmount}`;
+        const title = s.service?.title || 'Unknown Service';
+        const categoryName = s.service?.category?.name || s.service?.category || 'N/A';
+        return `${title} (${categoryName}) x${s.quantity} = ${s.price - s.discountAmount}`;
       }).join('; ');
 
       worksheet.addRow({
