@@ -175,7 +175,7 @@ const ServicesPage = () => {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.1 }}
                                 viewport={{ once: true }}
-                                className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300"
+                                className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 flex flex-col h-full"
                             >
                                 <div className="relative h-48 overflow-hidden">
                                     <img
@@ -189,7 +189,7 @@ const ServicesPage = () => {
                                     </div>
                                 </div>
 
-                                <div className="p-6">
+                                <div className="p-6 flex flex-col flex-grow">
                                     <div className="flex justify-between items-start mb-3">
                                         <h3 className="text-xl font-bold text-gray-900">{service.title}</h3>
                                         <span className="text-accent font-bold">{service.price}</span>
@@ -207,7 +207,7 @@ const ServicesPage = () => {
 
                                     <button
                                         onClick={() => handleBookNow(service)}
-                                        className="w-full bg-accent text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-accent/90 transition-colors flex items-center justify-center gap-2 shadow-md shadow-accent/10"
+                                        className="w-full bg-accent text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-accent/90 transition-colors flex items-center justify-center gap-2 shadow-md shadow-accent/10 mt-auto"
                                     >
                                         Book Now <ArrowRight className="w-4 h-4" />
                                     </button>

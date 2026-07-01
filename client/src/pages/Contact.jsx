@@ -31,7 +31,7 @@ const Contact = () => {
     emergencyPhone: systemData?.phone || '+91 9625333919',
     ctaPhone: systemData?.phone || '+91 9625333919',
     email: systemData?.email || 'info@rajelectricalservices.com',
-    address: systemData?.address || 'Himachal Pradesh & Punjab, India',
+    address: systemData?.address || 'India, India',
     businessHours: {
       weekdays: '9:00 AM - 6:00 PM',
       sunday: '9:30 AM - 5:00 PM'
@@ -311,7 +311,7 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-1">Address</h3>
                       <p className="text-gray-600">{contactInfo.address}</p>
-                      <p className="text-sm text-gray-500 mt-1">Himachal Pradesh & Punjab</p>
+                      <p className="text-sm text-gray-500 mt-1">India</p>
                     </div>
                   </div>
 

@@ -246,45 +246,45 @@ const CareersPage = () => {
       </section>
 
       {/* Requirements Section */}
-      <section className="py-10 md:py-16 bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
+      <section className="py-8 md:py-12 bg-gray-900 text-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
             >
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">Joining Requirements</h2>
-              <p className="text-gray-400 mb-10 text-lg">We only hire honest and skilled professionals. To join us, you need:</p>
+              <h2 className="text-xl md:text-2xl font-bold mb-3">Joining Requirements</h2>
+              <p className="text-gray-400 mb-6 text-xs md:text-sm">We only hire honest and skilled professionals. To join us, you need:</p>
 
-              <div className="space-y-8">
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="w-6 h-6 text-white" />
+              <div className="space-y-5">
+                <div className="flex gap-3">
+                  <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold mb-2">ID Proof</h3>
-                    <p className="text-gray-400">You need a valid ID card to start working with us.</p>
+                    <h3 className="text-sm md:text-base font-semibold mb-1">ID Proof</h3>
+                    <p className="text-gray-400 text-xs md:text-sm">You need a valid ID card to start working with us.</p>
                   </div>
                 </div>
 
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Wrench className="w-6 h-6 text-white" />
+                <div className="flex gap-3">
+                  <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Wrench className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold mb-2">Professional Skills</h3>
-                    <p className="text-gray-400">You must have good experience in electrical or repair work.</p>
+                    <h3 className="text-sm md:text-base font-semibold mb-1">Professional Skills</h3>
+                    <p className="text-gray-400 text-xs md:text-sm">You must have good experience in electrical or repair work.</p>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-12">
+              <div className="mt-8">
                 <Link
                   to="/register-provider"
-                  className="inline-flex items-center justify-center gap-2 bg-accent text-white px-8 py-4 rounded-xl text-lg font-bold hover:bg-accent/90 transition-all transform hover:scale-105 shadow-lg shadow-accent/20"
+                  className="inline-flex items-center justify-center gap-2 bg-accent text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
                 >
-                  Join Now <ArrowRight className="w-5 h-5" />
+                  Join Now <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
             </motion.div>
@@ -296,11 +296,11 @@ const CareersPage = () => {
               viewport={{ once: true }}
               className="relative"
             >
-              <div className="rounded-3xl overflow-hidden ring-4 ring-white/10 shadow-2xl">
+              <div className="rounded-2xl overflow-hidden ring-4 ring-white/5 shadow-xl">
                 <img
                   src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop"
                   alt="Professional Electrician"
-                  className="w-full h-[450px] object-cover"
+                  className="w-full h-[300px] object-cover"
                 />
               </div>
             </motion.div>
