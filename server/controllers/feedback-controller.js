@@ -43,7 +43,7 @@ const updateServiceFeedback = async (serviceId, feedbackId, updateData) => {
     await service.save();
     await updateServiceAverageRating(serviceId);
   } catch (error) {
-    console.error('Error updating service feedback:', error);
+    global.logger.error('Error updating service feedback: ' + error.message, error);
     throw error;
   }
 };
@@ -68,7 +68,7 @@ const updateServiceAverageRating = async (serviceId) => {
     service.ratingCount = service.feedback.length;
     await service.save();
   } catch (error) {
-    console.error('Error updating service average rating:', error);
+    global.logger.error('Error updating service average rating: ' + error.message, error);
     throw error;
   }
 };
@@ -102,14 +102,14 @@ const updateProviderAverageRating = async (providerId) => {
 
     await provider.save();
   } catch (error) {
-    console.error('Error updating provider average rating:', error);
+    global.logger.error('Error updating provider average rating: ' + error.message, error);
   }
 };
 
 // @desc    Submit feedback for a booking
 // @route   POST /api/feedback
 // @access  Private (Customer)
-const submitFeedback = async (req, res) => {
+const submitFeedback = async (req, res, next) => {
   try {
     const {
       bookingId,
@@ -210,18 +210,15 @@ const submitFeedback = async (req, res) => {
       data: feedback
     });
   } catch (error) {
-    console.error('Error submitting feedback:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while submitting feedback'
-    });
+    global.logger.error(`[FeedbackController.submitFeedback] Route: ${req.originalUrl || req.url} - Error submitting feedback: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Get customer's own feedbacks
 // @route   GET /api/feedback/my-feedbacks
 // @access  Private (Customer)
-const getCustomerFeedbacks = async (req, res) => {
+const getCustomerFeedbacks = async (req, res, next) => {
   try {
     const feedbacks = await Feedback.find({ customer: req.user._id })
       .populate({
@@ -242,18 +239,15 @@ const getCustomerFeedbacks = async (req, res) => {
       data: feedbacks
     });
   } catch (error) {
-    console.error('Error getting customer feedbacks:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching feedbacks'
-    });
+    global.logger.error(`[FeedbackController.getCustomerFeedbacks] Route: ${req.originalUrl || req.url} - Error getting customer feedbacks: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Get single feedback (customer and admin can only view their own)
 // @route   GET /api/feedback/:feedbackId
 // @access  Private (Customer)
-const getFeedback = async (req, res) => {
+const getFeedback = async (req, res, next) => {
   try {
     let query = { _id: req.params.feedbackId };
     if (req.user) {
@@ -288,18 +282,15 @@ const getFeedback = async (req, res) => {
       data: feedback
     });
   } catch (error) {
-    console.error('Error getting feedback:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching feedback'
-    });
+    global.logger.error(`[FeedbackController.getFeedback] Route: ${req.originalUrl || req.url} - Error getting feedback: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Edit feedback (customer can only edit their own)
 // @route   PUT /api/feedback/:feedbackId
 // @access  Private (Customer)
-const editFeedback = async (req, res) => {
+const editFeedback = async (req, res, next) => {
   try {
     const {
       providerRating,
@@ -385,18 +376,15 @@ const editFeedback = async (req, res) => {
       data: feedback
     });
   } catch (error) {
-    console.error('Error editing feedback:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while editing feedback'
-    });
+    global.logger.error(`[FeedbackController.editFeedback] Route: ${req.originalUrl || req.url} - Error editing feedback: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Delete feedback (customer can only delete their own)
 // @route   DELETE /api/feedback/:feedbackId
 // @access  Private (Customer)
-const deleteFeedback = async (req, res) => {
+const deleteFeedback = async (req, res, next) => {
   try {
     const feedback = await Feedback.findOneAndDelete({
       _id: req.params.feedbackId,
@@ -437,18 +425,15 @@ const deleteFeedback = async (req, res) => {
       message: 'Feedback deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting feedback:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while deleting feedback'
-    });
+    global.logger.error(`[FeedbackController.deleteFeedback] Route: ${req.originalUrl || req.url} - Error deleting feedback: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Delete feedback (Admin)
 // @route   DELETE /api/feedback/admin/:feedbackId
 // @access  Private (Admin)
-const deleteFeedbackAdmin = async (req, res) => {
+const deleteFeedbackAdmin = async (req, res, next) => {
   try {
     const feedback = await Feedback.findByIdAndDelete(req.params.feedbackId);
 
@@ -486,18 +471,15 @@ const deleteFeedbackAdmin = async (req, res) => {
       message: 'Feedback deleted successfully by Admin'
     });
   } catch (error) {
-    console.error('Error deleting feedback by admin:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while deleting feedback'
-    });
+    global.logger.error(`[FeedbackController.deleteFeedbackAdmin] Route: ${req.originalUrl || req.url} - Error deleting feedback by admin: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Get provider's feedbacks
 // @route   GET /api/feedback/provider/my-feedbacks
 // @access  Private (Provider)
-const getProviderFeedbacks = async (req, res) => {
+const getProviderFeedbacks = async (req, res, next) => {
   try {
     const feedbacks = await Feedback.find({
       'providerFeedback.provider': req.provider._id
@@ -524,18 +506,15 @@ const getProviderFeedbacks = async (req, res) => {
       data: feedbacks
     });
   } catch (error) {
-    console.error('Error getting provider feedbacks:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching feedbacks'
-    });
+    global.logger.error(`[FeedbackController.getProviderFeedbacks] Route: ${req.originalUrl || req.url} - Error getting provider feedbacks: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Get provider's average rating
 // @route   GET /api/feedback/provider/average-rating
 // @access  Private (Provider)
-const getProviderAverageRating = async (req, res) => {
+const getProviderAverageRating = async (req, res, next) => {
   try {
     const result = await Feedback.aggregate([
       { $match: { 'providerFeedback.provider': req.provider._id } },
@@ -553,18 +532,15 @@ const getProviderAverageRating = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error getting provider average rating:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while calculating average rating'
-    });
+    global.logger.error(`[FeedbackController.getProviderAverageRating] Route: ${req.originalUrl || req.url} - Error getting provider average rating: ${error.message}`, error);
+    next(error);
   }
 };
 
 // @desc    Get all feedbacks (admin only)
 // @route   GET /api/feedback/admin/all-feedbacks
 // @access  Private (Admin)
-const getAllFeedbacks = async (req, res) => {
+const getAllFeedbacks = async (req, res, next) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
@@ -603,11 +579,8 @@ const getAllFeedbacks = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error getting all feedbacks:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching feedbacks'
-    });
+    global.logger.error(`[FeedbackController.getAllFeedbacks] Route: ${req.originalUrl || req.url} - Error getting all feedbacks: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -683,7 +656,7 @@ const getServiceFeedbacks = async (req, res, next) => {
  * @route   PATCH /api/feedback/admin/toggle-approval/:feedbackId
  * @access  Private (Admin)
  */
-const toggleFeedbackApproval = async (req, res) => {
+const toggleFeedbackApproval = async (req, res, next) => {
   try {
     const { feedbackId } = req.params;
 
@@ -712,11 +685,8 @@ const toggleFeedbackApproval = async (req, res) => {
       data: feedback
     });
   } catch (error) {
-    console.error('Error toggling feedback approval:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while toggling feedback approval'
-    });
+    global.logger.error(`[FeedbackController.toggleFeedbackApproval] Route: ${req.originalUrl || req.url} - Error toggling feedback approval: ${error.message}`, error);
+    next(error);
   }
 };
 

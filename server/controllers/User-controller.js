@@ -149,7 +149,7 @@ const validateRegistrationData = (data) => {
   return Object.keys(errors).length > 0 ? errors : null;
 };
 
-const register = async (req, res) => {
+const register = async (req, res, next) => {
   try {
     const { name, email, phone, password, address, profilePicUrl } = req.body;
 
@@ -256,7 +256,7 @@ const register = async (req, res) => {
           userData.currentZone = detectedZone ? detectedZone._id : null;
           userData.zoneUpdatedAt = new Date();
         } catch (zoneErr) {
-          console.error('Zone detection error during registration:', zoneErr);
+          global.logger.error('Zone detection error during registration: ' + zoneErr.message, zoneErr);
           userData.currentZone = null;
           userData.zoneUpdatedAt = new Date();
         }
@@ -272,7 +272,7 @@ const register = async (req, res) => {
         const referralController = require('./Referral-controller');
         await referralController.processReferralRegistration(user, 'customer', referralCode, req);
       } catch (refErr) {
-        console.error('Error handling referral during registration:', refErr);
+        global.logger.error('Error handling referral during registration: ' + refErr.message, refErr);
       }
     }
 
@@ -326,7 +326,7 @@ const register = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Registration error:", error);
+    global.logger.error(`[UserController.register] Route: ${req.originalUrl || req.url} - Registration error: ${error.message}`, error);
 
     // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
@@ -355,19 +355,16 @@ const register = async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      success: false,
-      message: "Internal server error. Please try again later."
-    });
+    next(error);
   }
-}
+};
 
 
 
 /**
  * Get current user profile
  */
-const getProfile = async (req, res) => {
+const getProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id)
       .select('-password -__v')
@@ -414,7 +411,7 @@ const getProfile = async (req, res) => {
               };
             }
           } catch (err) {
-            console.error('Error fetching favorite provider details in getProfile:', err);
+            global.logger.error('Error fetching favorite provider details in getProfile: ' + err.message, err);
             return {
               ...fav,
               rating: 0,
@@ -446,18 +443,15 @@ const getProfile = async (req, res) => {
       user: updatedUser
     });
   } catch (error) {
-    console.error('Get profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    global.logger.error(`[UserController.getProfile] Route: ${req.originalUrl || req.url} - Get profile error: ${error.message}`, error);
+    next(error);
   }
-}
+};
 
 /**
  * Update user profile (text fields)
  */
-const updateProfile = async (req, res) => {
+const updateProfile = async (req, res, next) => {
   try {
     const updates = {
       name: req.body.name,
@@ -474,7 +468,7 @@ const updateProfile = async (req, res) => {
         try {
           zone = await Zone.findZoneByCoordinates(latVal, lngVal);
         } catch (err) {
-          console.error('Zone resolution error:', err);
+          global.logger.error('Zone resolution error: ' + err.message, err);
         }
       }
 
@@ -524,24 +518,21 @@ const updateProfile = async (req, res) => {
       user
     });
   } catch (error) {
-    console.error('Update profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    global.logger.error(`[UserController.updateProfile] Route: ${req.originalUrl || req.url} - Update profile error: ${error.message}`, error);
+    next(error);
   }
-}
+};
 
 /**
  * Upload profile picture
  */
-const uploadProfilePicture = async (req, res) => {
+const uploadProfilePicture = async (req, res, next) => {
   try {
-    console.log('Upload request received'); // Debug log
-    console.log('File:', req.file); // Debug log
+    global.logger.info('Upload request received'); // Debug log
+    global.logger.info('File: ' + JSON.stringify(req.file)); // Debug log
 
     if (!req.file) {
-      console.log('No file in request'); // Debug log
+      global.logger.info('No file in request'); // Debug log
       return res.status(400).json({
         success: false,
         message: 'No file uploaded'
@@ -558,7 +549,7 @@ const uploadProfilePicture = async (req, res) => {
       { new: true }
     ).select('-password -__v');
 
-    console.log('User updated with Cloudinary URL:', cloudinaryUrl); // Debug log
+    global.logger.info('User updated with Cloudinary URL: ' + cloudinaryUrl); // Debug log
 
     res.status(200).json({
       success: true,
@@ -567,13 +558,10 @@ const uploadProfilePicture = async (req, res) => {
       user
     });
   } catch (error) {
-    console.error('Upload profile picture error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Internal server error'
-    });
+    global.logger.error(`[UserController.uploadProfilePicture] Route: ${req.originalUrl || req.url} - Upload profile picture error: ${error.message}`, error);
+    next(error);
   }
-}
+};
 
 
 /**
@@ -581,7 +569,7 @@ const uploadProfilePicture = async (req, res) => {
  * @route   GET /api/customer/dashboard/stats
  * @access  Private (Customer)
  */
-const getCustomerDashboardStats = async (req, res) => {
+const getCustomerDashboardStats = async (req, res, next) => {
   try {
     const customerId = req.user._id; // Get customer ID from authenticated user
 
@@ -814,12 +802,8 @@ const getCustomerDashboardStats = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching customer dashboard stats:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch dashboard statistics',
-      error: error.message
-    });
+    global.logger.error(`[UserController.getCustomerDashboardStats] Route: ${req.originalUrl || req.url} - Error fetching customer dashboard stats: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -828,7 +812,7 @@ const getCustomerDashboardStats = async (req, res) => {
  * @route   GET /api/user/wallet/history
  * @access  Private (Customer)
  */
-const getWalletHistory = async (req, res) => {
+const getWalletHistory = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id)
       .select('wallet')
@@ -855,15 +839,12 @@ const getWalletHistory = async (req, res) => {
       )
     });
   } catch (error) {
-    console.error('Wallet history error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch wallet history'
-    });
+    global.logger.error(`[UserController.getWalletHistory] Route: ${req.originalUrl || req.url} - Wallet history error: ${error.message}`, error);
+    next(error);
   }
 };
 
-const toggleFavoriteProvider = async (req, res) => {
+const toggleFavoriteProvider = async (req, res, next) => {
   try {
     const { providerId, providerName, category } = req.body;
     if (!providerId) {
@@ -916,12 +897,12 @@ const toggleFavoriteProvider = async (req, res) => {
       favoriteProviders: user.favoriteProviders
     });
   } catch (error) {
-    console.error('Error toggling favorite provider:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    global.logger.error(`[UserController.toggleFavoriteProvider] Route: ${req.originalUrl || req.url} - Error toggling favorite provider: ${error.message}`, error);
+    next(error);
   }
 };
 
-const checkFavoriteProviderAvailability = async (req, res) => {
+const checkFavoriteProviderAvailability = async (req, res, next) => {
   try {
     const { providerId } = req.params;
     const { categoryId } = req.query;
@@ -949,8 +930,8 @@ const checkFavoriteProviderAvailability = async (req, res) => {
       message: isAvailable ? 'Provider is available' : 'Provider is unavailable'
     });
   } catch (error) {
-    console.error('Error checking favorite provider availability:', error);
-    res.status(500).json({ success: false, isAvailable: false, message: 'Internal server error' });
+    global.logger.error(`[UserController.checkFavoriteProviderAvailability] Route: ${req.originalUrl || req.url} - Error checking favorite provider availability: ${error.message}`, error);
+    next(error);
   }
 };
 

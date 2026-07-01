@@ -216,9 +216,7 @@ app.use("/api/auth/verify-otp", otpLimiter);
 // 4️⃣ MAINTENANCE MODE MIDDLEWARE
 // ─────────────────────────────────────────────────────────────────────────────
 
-let cachedSystemConfig = null;
-let lastSystemConfigFetchTime = 0;
-const SYSTEM_CONFIG_CACHE_TTL = 30000; // 30 seconds cache TTL
+const cache = require('./utils/cache');
 
 app.use(async (req, res, next) => {
   // Always allow health checks, test-routes, static assets, and uploads
@@ -235,13 +233,11 @@ app.use(async (req, res, next) => {
     const { SystemConfig } = require('./models/SystemSetting');
     const jwt = require('jsonwebtoken');
 
-    let settings = cachedSystemConfig;
-    const now = Date.now();
-    if (!settings || now - lastSystemConfigFetchTime > SYSTEM_CONFIG_CACHE_TTL) {
+    let settings = cache.get('system_config');
+    if (!settings) {
       settings = await SystemConfig.findOne().lean();
       if (settings) {
-        cachedSystemConfig = settings;
-        lastSystemConfigFetchTime = now;
+        cache.set('system_config', settings, 30); // 30 seconds cache TTL
       }
     }
 
@@ -352,7 +348,7 @@ app.use((req, res, next) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error("Error:", err.message, err.stack);
+  global.logger.error("Error: " + err.message, err);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal server error",
@@ -412,11 +408,11 @@ const startServer = async () => {
           existingConfig.markModified('customerBranding');
           existingConfig.markModified('providerBranding');
           await existingConfig.save();
-          console.log('[SEO Migration] Successfully migrated database branding defaults from Raj Electrical Services to Raj Electrical Service!');
+          global.logger.info('[SEO Migration] Successfully migrated database branding defaults from Raj Electrical Services to Raj Electrical Service!');
         }
       }
     } catch (migError) {
-      console.error('[SEO Migration] Failed to auto-migrate database branding:', migError);
+      global.logger.error('[SEO Migration] Failed to auto-migrate database branding: ' + migError.message, migError);
     }
 
     // Initialize background tasks
@@ -424,18 +420,18 @@ const startServer = async () => {
 
     // Run releaseHeldEarnings every hour
     setInterval(async () => {
-      console.log('Running background task: releaseHeldEarnings');
+      global.logger.info('Running background task: releaseHeldEarnings');
       await releaseHeldEarnings();
     }, 60 * 60 * 1000);
 
     // Initial run on startup
-    releaseHeldEarnings().catch(err => console.error('Initial releaseHeldEarnings failed:', err));
+    releaseHeldEarnings().catch(err => global.logger.error('Initial releaseHeldEarnings failed: ' + err.message, err));
 
     server.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+      global.logger.info(`Server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("MongoDB connection failed:", error);
+    global.logger.error("MongoDB connection failed: " + error.message, error);
     process.exit(1);
   }
 };

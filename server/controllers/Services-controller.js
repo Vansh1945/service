@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
 const { Category } = require('../models/SystemSetting');
+const cache = require('../utils/cache');
 
 const parseArrayInput = (value, fallback = []) => {
     if (value === undefined || value === null || value === '') return fallback;
@@ -26,7 +27,7 @@ const parseArrayInput = (value, fallback = []) => {
  */
 
 // Create a new service (Admin only)
-const createService = async (req, res) => {
+const createService = async (req, res, next) => {
     try {
         const {
             title,
@@ -83,7 +84,7 @@ const createService = async (req, res) => {
                 });
                 imageUrls = [uploadResult.secure_url];
             } catch (uploadError) {
-                console.error('Error uploading default image:', uploadError);
+                global.logger.error('Error uploading default image: ' + uploadError.message, uploadError);
             }
         }
 
@@ -114,22 +115,22 @@ const createService = async (req, res) => {
         // Populate the category field
         const populatedService = await service.populate('category');
 
+        cache.delByPrefix('services_');
+        cache.delByPrefix('service_');
+
         res.status(201).json({
             success: true,
             message: 'Service created successfully',
             data: populatedService
         });
     } catch (error) {
-        console.error('Error creating service:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to create service'
-        });
+        global.logger.error(`[ServicesController.createService] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Update service details (Admin only)
-const updateService = async (req, res) => {
+const updateService = async (req, res, next) => {
     try {
         const { id } = req.params;
         const updates = req.body;
@@ -229,27 +230,30 @@ const updateService = async (req, res) => {
         // Populate the category field
         const populatedService = await service.populate('category');
 
+        cache.delByPrefix('services_');
+        cache.delByPrefix('service_');
+
         res.json({
             success: true,
             message: 'Service updated successfully',
             data: populatedService
         });
     } catch (error) {
-        console.error('Error updating service:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to update service'
-        });
+        global.logger.error(`[ServicesController.updateService] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Update base price (Admin only)
-const updateBasePrice = async (req, res) => {
+const updateBasePrice = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { basePrice } = req.body;
 
         const service = await Service.updateBasePrice(req.adminID, id, basePrice);
+
+        cache.delByPrefix('services_');
+        cache.delByPrefix('service_');
 
         res.json({
             success: true,
@@ -257,16 +261,13 @@ const updateBasePrice = async (req, res) => {
             data: service
         });
     } catch (error) {
-        console.error('Error updating base price:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to update base price'
-        });
+        global.logger.error(`[ServicesController.updateBasePrice] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Delete service (Admin only - soft delete)
-const deleteService = async (req, res) => {
+const deleteService = async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -289,21 +290,21 @@ const deleteService = async (req, res) => {
         service.isActive = false;
         await service.save();
 
+        cache.delByPrefix('services_');
+        cache.delByPrefix('service_');
+
         res.json({
             success: true,
             message: 'Service deactivated successfully'
         });
     } catch (error) {
-        console.error('Error deleting service:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to delete service'
-        });
+        global.logger.error(`[ServicesController.deleteService] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Get all services (Admin view)
-const getAllServices = async (req, res) => {
+const getAllServices = async (req, res, next) => {
     try {
         const { page = 1, limit = 10, search, category } = req.query;
         const skip = (page - 1) * limit;
@@ -337,16 +338,13 @@ const getAllServices = async (req, res) => {
             data: services
         });
     } catch (error) {
-        console.error('Error fetching services:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch services'
-        });
+        global.logger.error(`[ServicesController.getAllServices] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Get service by ID (Admin view)
-const getServiceById = async (req, res) => {
+const getServiceById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -375,11 +373,8 @@ const getServiceById = async (req, res) => {
             data: service
         });
     } catch (error) {
-        console.error('Error fetching service:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch service'
-        });
+        global.logger.error(`[ServicesController.getServiceById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -388,7 +383,7 @@ const getServiceById = async (req, res) => {
  */
 
 // Get services for provider
-const getServicesForProvider = async (req, res) => {
+const getServicesForProvider = async (req, res, next) => {
     try {
         const { page = 1, limit = 10, search, category } = req.query;
         const skip = (page - 1) * limit;
@@ -421,16 +416,13 @@ const getServicesForProvider = async (req, res) => {
             data: services
         });
     } catch (error) {
-        console.error('Error fetching services for provider:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch services'
-        });
+        global.logger.error(`[ServicesController.getServicesForProvider] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Get service details for provider
-const getServiceDetailsForProvider = async (req, res) => {
+const getServiceDetailsForProvider = async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -451,11 +443,8 @@ const getServiceDetailsForProvider = async (req, res) => {
             data: service
         });
     } catch (error) {
-        console.error('Error fetching service details:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to fetch service details'
-        });
+        global.logger.error(`[ServicesController.getServiceDetailsForProvider] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -464,10 +453,16 @@ const getServiceDetailsForProvider = async (req, res) => {
  */
 
 // Get all active services (public)
-const getActiveServices = async (req, res) => {
+const getActiveServices = async (req, res, next) => {
     try {
         const { page = 1, limit = 10, search, category } = req.query;
         const skip = (page - 1) * limit;
+
+        const cacheKey = `services_active_${page}_${limit}_${search || ''}_${category || ''}`;
+        const cachedResult = cache.get(cacheKey);
+        if (cachedResult) {
+            return res.json(cachedResult);
+        }
 
         let query = { isActive: true };
 
@@ -512,26 +507,26 @@ const getActiveServices = async (req, res) => {
 
         const total = await Service.countDocuments(query);
 
-        res.json({
+        const resultResponse = {
             success: true,
             count: enhancedServices.length,
             total,
             page: parseInt(page),
             pages: Math.ceil(total / limit),
             data: enhancedServices
-        });
+        };
+
+        cache.set(cacheKey, resultResponse, 300);
+
+        res.json(resultResponse);
     } catch (error) {
-        console.error('Error fetching active services:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch services',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+        global.logger.error(`[ServicesController.getActiveServices] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Get service by ID (public)
-const getPublicServiceById = async (req, res) => {
+const getPublicServiceById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -541,6 +536,12 @@ const getPublicServiceById = async (req, res) => {
                 success: false,
                 message: 'Invalid service ID format'
             });
+        }
+
+        const cacheKey = `service_${id}`;
+        const cachedResult = cache.get(cacheKey);
+        if (cachedResult) {
+            return res.json(cachedResult);
         }
 
         // First get the service with basic info
@@ -616,25 +617,32 @@ const getPublicServiceById = async (req, res) => {
             feedback: transformedFeedback
         };
 
-        res.json({
+        const resultResponse = {
             success: true,
             data: responseData
-        });
+        };
+
+        cache.set(cacheKey, resultResponse, 300);
+
+        res.json(resultResponse);
     } catch (error) {
-        console.error('Error fetching service:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to fetch service'
-        });
+        global.logger.error(`[ServicesController.getPublicServiceById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Get services by category (public)
-const getServicesByCategory = async (req, res) => {
+const getServicesByCategory = async (req, res, next) => {
     try {
         const { category } = req.params;
         const { page = 1, limit = 10 } = req.query;
         const skip = (page - 1) * limit;
+
+        const cacheKey = `services_cat_${category}_${page}_${limit}`;
+        const cachedResult = cache.get(cacheKey);
+        if (cachedResult) {
+            return res.json(cachedResult);
+        }
 
         const services = await Service.findActiveByCategory(category)
             .select('title category description images basePrice duration durationFormatted averageRating')
@@ -645,25 +653,26 @@ const getServicesByCategory = async (req, res) => {
 
         const total = await Service.countDocuments({ category, isActive: true });
 
-        res.json({
+        const resultResponse = {
             success: true,
             count: services.length,
             total,
             page: parseInt(page),
             pages: Math.ceil(total / limit),
             data: services
-        });
+        };
+
+        cache.set(cacheKey, resultResponse, 300);
+
+        res.json(resultResponse);
     } catch (error) {
-        console.error('Error fetching services by category:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch services'
-        });
+        global.logger.error(`[ServicesController.getServicesByCategory] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Bulk import services from Excel (Admin only)
-const bulkImportServices = async (req, res) => {
+const bulkImportServices = async (req, res, next) => {
     try {
         if (!req.file) {
             return res.status(400).json({
@@ -751,6 +760,9 @@ const bulkImportServices = async (req, res) => {
         // Clean up file
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
+        cache.delByPrefix('services_');
+        cache.delByPrefix('service_');
+
         return res.json({
             success: true,
             message: `Import completed: ${successCount} success, ${errors.length} failed`,
@@ -761,17 +773,14 @@ const bulkImportServices = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Bulk import error:', error);
+        global.logger.error(`[ServicesController.bulkImportServices] Route: ${req.originalUrl || req.url} - Bulk import error: ${error.message}`, error);
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        return res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to process bulk import'
-        });
+        next(error);
     }
 };
 
 // Download Service Import Template
-const downloadServiceTemplate = async (req, res) => {
+const downloadServiceTemplate = async (req, res, next) => {
     try {
         const workbook = new excelJS.Workbook();
         const worksheet = workbook.addWorksheet('Service Template');
@@ -846,13 +855,13 @@ const downloadServiceTemplate = async (req, res) => {
         await workbook.xlsx.write(res);
         res.end();
     } catch (error) {
-        console.error('Error generating template:', error);
-        res.status(500).json({ success: false, message: 'Failed to generate template' });
+        global.logger.error(`[ServicesController.downloadServiceTemplate] Route: ${req.originalUrl || req.url} - Error generating template: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Export services to Excel (Admin only) - Including Images
-const exportServicesToExcel = async (req, res) => {
+const exportServicesToExcel = async (req, res, next) => {
     try {
         const services = await Service.find({ createdBy: req.adminID })
             .sort({ createdAt: -1 })
@@ -918,16 +927,13 @@ const exportServicesToExcel = async (req, res) => {
         res.end();
 
     } catch (error) {
-        console.error('Error exporting services:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to export services'
-        });
+        global.logger.error(`[ServicesController.exportServicesToExcel] Route: ${req.originalUrl || req.url} - Error exporting services: ${error.message}`, error);
+        next(error);
     }
 };
 
 // Bulk disable discounts (Admin only)
-const disableDiscounts = async (req, res) => {
+const disableDiscounts = async (req, res, next) => {
     try {
         const { scope, categoryId } = req.body;
 
@@ -958,11 +964,8 @@ const disableDiscounts = async (req, res) => {
             modifiedCount: result.modifiedCount
         });
     } catch (error) {
-        console.error('Error disabling discounts:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to deactivate discounts'
-        });
+        global.logger.error(`[ServicesController.disableDiscounts] Route: ${req.originalUrl || req.url} - Error disabling discounts: ${error.message}`, error);
+        next(error);
     }
 };
 

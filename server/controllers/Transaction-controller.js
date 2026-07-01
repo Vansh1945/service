@@ -40,7 +40,7 @@ const rollbackWalletDeduction = async (transaction, session) => {
   }
 };
 
-const createOrder = async (req, res) => {
+const createOrder = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -192,7 +192,7 @@ const createOrder = async (req, res) => {
     try {
       order = await razorpay.orders.create(options);
     } catch (razorpayError) {
-      console.error('Razorpay order creation failed:', razorpayError);
+      global.logger.error('Razorpay order creation failed: ' + razorpayError.message, razorpayError);
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -228,7 +228,7 @@ const createOrder = async (req, res) => {
           providerEarning = parseFloat((booking.totalAmount - commission).toFixed(2));
         }
       } catch (err) {
-        console.error('Error calculating initial commission:', err);
+        global.logger.error('Error calculating initial commission: ' + err.message, err);
         providerEarning = booking.totalAmount;
       }
     }
@@ -282,26 +282,14 @@ const createOrder = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error creating order:', {
-      message: error.message,
-      stack: error.stack,
-      requestBody: req.body
-    });
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create order',
-      errorDetails: process.env.NODE_ENV === 'development' ? {
-        message: error.message,
-        stack: error.stack
-      } : undefined
-    });
+    global.logger.error(`[TransactionController.createOrder] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   } finally {
     session.endSession();
   }
 };
 
-const verifyPayment = async (req, res) => {
+const verifyPayment = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -331,7 +319,7 @@ const verifyPayment = async (req, res) => {
       .digest('hex');
 
     if (generatedSignature !== razorpay_signature) {
-      console.warn(`[Payment Security Alert] Invalid signature for order: ${razorpay_order_id}, payment: ${razorpay_payment_id}. Generated: ${generatedSignature}, Received: ${razorpay_signature}`);
+      global.logger.warn(`[Payment Security Alert] Invalid signature for order: ${razorpay_order_id}, payment: ${razorpay_payment_id}. Generated: ${generatedSignature}, Received: ${razorpay_signature}`);
       // Update transaction status to failed and rollback wallet balance
       const transaction = await Transaction.findById(transactionId).session(session);
       if (transaction) {
@@ -385,7 +373,7 @@ const verifyPayment = async (req, res) => {
     try {
       razorpayResponse = await razorpay.payments.fetch(razorpay_payment_id);
     } catch (fetchError) {
-      console.warn('Failed to fetch captured payment details from Razorpay API:', fetchError);
+      global.logger.warn('Failed to fetch captured payment details from Razorpay API: ' + fetchError.message, fetchError);
     }
 
     // Update Transaction
@@ -455,16 +443,13 @@ const verifyPayment = async (req, res) => {
       const ProviderAssignmentService = require('../services/ProviderAssignmentService');
       ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
     } catch (assignError) {
-      console.error('Error triggering auto-assignment after verification:', assignError);
+      global.logger.error('Error triggering auto-assignment after verification: ' + assignError.message, assignError);
     }
 
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error verifying payment:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Payment verification failed'
-    });
+    global.logger.error(`[TransactionController.verifyPayment] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   } finally {
     session.endSession();
   }
@@ -475,12 +460,12 @@ const verifyPayment = async (req, res) => {
  * @route   POST /api/payments/webhook
  * @access  Public
  */
-const handleWebhook = async (req, res) => {
+const handleWebhook = async (req, res, next) => {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
   const razorpaySignature = req.headers['x-razorpay-signature'];
 
   if (!webhookSecret) {
-    console.error('Webhook secret not configured');
+    global.logger.error('Webhook secret not configured');
     return res.status(500).send('Server error');
   }
 
@@ -491,7 +476,7 @@ const handleWebhook = async (req, res) => {
   const generatedSignature = shasum.digest('hex');
 
   if (generatedSignature !== razorpaySignature) {
-    console.warn(`[Payment Security Alert] Webhook signature verification failed for signature ${razorpaySignature}. Generated: ${generatedSignature}`);
+    global.logger.warn(`[Payment Security Alert] Webhook signature verification failed for signature ${razorpaySignature}. Generated: ${generatedSignature}`);
     return res.status(400).send('Invalid signature');
   }
 
@@ -500,7 +485,7 @@ const handleWebhook = async (req, res) => {
   try {
     payload = req.rawBody ? JSON.parse(req.rawBody.toString()) : (Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body);
   } catch (parseErr) {
-    console.error('Failed to parse webhook payload:', parseErr);
+    global.logger.error('Failed to parse webhook payload: ' + parseErr.message, parseErr);
     return res.status(400).send('Invalid JSON payload');
   }
   const event = payload.event;
@@ -544,13 +529,13 @@ const handleWebhook = async (req, res) => {
         const ProviderAssignmentService = require('../services/ProviderAssignmentService');
         ProviderAssignmentService.autoAssignProviderIfEnabled(bookingToAssignId);
       } catch (assignError) {
-        console.error('Error triggering auto-assignment after webhook captured:', assignError);
+        global.logger.error('Error triggering auto-assignment after webhook captured: ' + assignError.message, assignError);
       }
     }
   } catch (error) {
     await session.abortTransaction();
-    console.error('Webhook processing error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    global.logger.error(`[TransactionController.handleWebhook] Route: ${req.originalUrl || req.url} - Webhook processing error: ${error.message}`, error);
+    next(error);
   } finally {
     session.endSession();
   }
@@ -566,7 +551,7 @@ const handleSuccessfulPayment = async (payment, session) => {
   }
 
   if (transaction.paymentStatus === 'success' || transaction.paymentStatus === 'completed' || transaction.razorpayPaymentId === payment.id) {
-    console.log(`Payment already processed for order: ${payment.order_id}`);
+    global.logger.info(`Payment already processed for order: ${payment.order_id}`);
     const { notifyAdmins } = require('../utils/notificationHelper');
     try {
       notifyAdmins(
@@ -683,7 +668,7 @@ const handleRefundProcessed = async (refund, session) => {
 /**
  * Get all transactions for admin
  */
-const getAllTransactions = async (req, res) => {
+const getAllTransactions = async (req, res, next) => {
   try {
     const { bookingId, status, page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -768,18 +753,15 @@ const getAllTransactions = async (req, res) => {
       data: transactions
     });
   } catch (error) {
-    console.error('Get transactions error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while fetching transactions'
-    });
+    global.logger.error(`[TransactionController.getAllTransactions] Route: ${req.originalUrl || req.url} - Get transactions error: ${error.message}`, error);
+    next(error);
   }
 };
 
 /**
  * Get single transaction details
  */
-const getTransactionById = async (req, res) => {
+const getTransactionById = async (req, res, next) => {
   try {
     const transaction = await Transaction.findById(req.params.id)
       .populate('user', 'name email phone')
@@ -806,11 +788,8 @@ const getTransactionById = async (req, res) => {
       data: transaction
     });
   } catch (error) {
-    console.error('Get transaction details error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while fetching transaction details'
-    });
+    global.logger.error(`[TransactionController.getTransactionById] Route: ${req.originalUrl || req.url} - Get transaction details error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -822,7 +801,7 @@ const getTransactionById = async (req, res) => {
  *   - Admin wallet adjustments
  * Does NOT show raw Razorpay / gateway payment transactions.
  */
-const getCustomerTransactions = async (req, res) => {
+const getCustomerTransactions = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
@@ -949,15 +928,12 @@ const getCustomerTransactions = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get customer wallet activity error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while fetching wallet activity'
-    });
+    global.logger.error(`[TransactionController.getCustomerTransactions] Route: ${req.originalUrl || req.url} - Get customer wallet activity error: ${error.message}`, error);
+    next(error);
   }
 };
 
-const adminRetryVerify = async (req, res) => {
+const adminRetryVerify = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -985,7 +961,7 @@ const adminRetryVerify = async (req, res) => {
     try {
       paymentsResponse = await razorpay.orders.fetchPayments(transaction.razorpayOrderId);
     } catch (razorpayError) {
-      console.error('Failed to fetch payments from Razorpay:', razorpayError);
+      global.logger.error('Failed to fetch payments from Razorpay: ' + razorpayError.message, razorpayError);
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -1052,14 +1028,14 @@ const adminRetryVerify = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error in adminRetryVerify:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to retry verification' });
+    global.logger.error(`[TransactionController.adminRetryVerify] Route: ${req.originalUrl || req.url} - Error in adminRetryVerify: ${error.message}`, error);
+    next(error);
   } finally {
     session.endSession();
   }
 };
 
-const adminMarkPaid = async (req, res) => {
+const adminMarkPaid = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -1127,8 +1103,8 @@ const adminMarkPaid = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error in adminMarkPaid:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to mark paid manually' });
+    global.logger.error(`[TransactionController.adminMarkPaid] Route: ${req.originalUrl || req.url} - Error in adminMarkPaid: ${error.message}`, error);
+    next(error);
   } finally {
     session.endSession();
   }

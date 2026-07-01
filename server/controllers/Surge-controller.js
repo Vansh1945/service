@@ -2,7 +2,7 @@ const Surge = require('../models/Surge-model');
 const Zone = require('../models/Zone-model');
 
 // List surge rules for admin
-exports.listSurgeRules = async (req, res) => {
+exports.listSurgeRules = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, active, scope, chargeType } = req.query;
     const query = {};
@@ -35,10 +35,8 @@ exports.listSurgeRules = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[SurgeController.listSurgeRules] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -78,7 +76,7 @@ exports.createSurgeRule = async (req, res) => {
 };
 
 // Get surge rule by ID
-exports.getSurgeRuleById = async (req, res) => {
+exports.getSurgeRuleById = async (req, res, next) => {
   try {
     const rule = await Surge.findById(req.params.id).populate('zoneId', 'name city zoneLevel');
     if (!rule) {
@@ -93,10 +91,8 @@ exports.getSurgeRuleById = async (req, res) => {
       data: rule
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[SurgeController.getSurgeRuleById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -213,7 +209,7 @@ const isTimeInWindow = (timeStr, start, end) => {
 };
 
 // Resolve active surcharges for checkout
-exports.resolveActiveSurcharges = async (req, res) => {
+exports.resolveActiveSurcharges = async (req, res, next) => {
   try {
     const { zoneId, lat, lng, time } = req.query;
     
@@ -273,9 +269,7 @@ exports.resolveActiveSurcharges = async (req, res) => {
       zoneAncestry: zoneAncestry
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[SurgeController.resolveActiveSurcharges] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };

@@ -8,16 +8,17 @@ const { validateBody } = require('../validation/common.validation');
 const { createOrderSchema, verifyPaymentSchema } = require('../validation/transaction.validation');
 
 const adminRoleCheck = roleMiddleware(['admin']);
+const { paymentLimiter } = require('../middlewares/rate-limit');
 
 // @desc    Create Razorpay order for booking payment
 // @route   POST /api/transaction/create-order
 // @access  Private (user)
-router.post('/create-order', userAuthMiddleware, validateBody(createOrderSchema), paymentController.createOrder);
+router.post('/create-order', userAuthMiddleware, paymentLimiter, validateBody(createOrderSchema), paymentController.createOrder);
 
 // @desc    Verify payment and update records
 // @route   POST /api/transaction/verify
 // @access  Private (user)
-router.post('/verify', userAuthMiddleware, validateBody(verifyPaymentSchema), paymentController.verifyPayment);
+router.post('/verify', userAuthMiddleware, paymentLimiter, validateBody(verifyPaymentSchema), paymentController.verifyPayment);
 
 
 // @desc    Razorpay webhook handler

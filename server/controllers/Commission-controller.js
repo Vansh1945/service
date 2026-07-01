@@ -3,13 +3,14 @@ const Booking = require('../models/Booking-model');
 const Provider = require('../models/Provider-model');
 const Transaction = require('../models/Transaction-model');
 const Admin = require('../models/Admin-model');
+const cache = require('../utils/cache');
 
 
 
 
 
 // Get all commission rules (for admin)
-exports.listCommissionRules = async (req, res) => {
+exports.listCommissionRules = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, isActive, applyTo, priorityTier, performanceScore, zoneIds } = req.query;
     const query = {};
@@ -69,10 +70,8 @@ exports.listCommissionRules = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[CommissionController.listCommissionRules] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -128,6 +127,8 @@ exports.createCommissionRule = async (req, res) => {
     await newRule.populate('createdBy', 'name email');
     await newRule.populate('specificProvider', 'name email');
 
+    cache.delByPrefix('comm_rule_');
+
     res.status(201).json({
       success: true,
       data: newRule,
@@ -156,6 +157,8 @@ exports.toggleCommissionRuleStatus = async (req, res) => {
     rule.isActive = !rule.isActive;
     rule.updatedBy = req.admin._id;
     await rule.save();
+
+    cache.delByPrefix('comm_rule_');
 
     res.status(200).json({
       success: true,
@@ -193,6 +196,8 @@ exports.updateCommissionRule = async (req, res) => {
     await updatedRule.populate('createdBy updatedBy', 'name email');
     await updatedRule.populate('specificProvider', 'name email');
 
+    cache.delByPrefix('comm_rule_');
+
     res.status(200).json({
       success: true,
       data: updatedRule,
@@ -213,6 +218,8 @@ exports.deleteCommissionRule = async (req, res) => {
 
     await CommissionRule.deleteCommissionRule(id);
 
+    cache.delByPrefix('comm_rule_');
+
     res.status(200).json({
       success: true,
       message: 'Commission rule deleted successfully'
@@ -226,7 +233,7 @@ exports.deleteCommissionRule = async (req, res) => {
 };
 
 // Get commission rule by ID
-exports.getCommissionRuleById = async (req, res) => {
+exports.getCommissionRuleById = async (req, res, next) => {
   try {
     const rule = await CommissionRule.findById(req.params.id)
       .populate('createdBy updatedBy', 'name email')
@@ -244,9 +251,7 @@ exports.getCommissionRuleById = async (req, res) => {
       data: rule
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[CommissionController.getCommissionRuleById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };

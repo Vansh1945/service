@@ -1,32 +1,26 @@
 const { SystemConfig, Category, Banner } = require('../models/SystemSetting');
 const ifsc = require('ifsc');
-
-// In-memory cache for SystemConfig
-let cachedSystemConfig = null;
-let lastCacheTime = 0;
-const CACHE_TTL = 30 * 1000; // 30 seconds cache TTL
+const cache = require('../utils/cache');
 
 const getCachedConfig = async () => {
-  const now = Date.now();
-  if (!cachedSystemConfig || (now - lastCacheTime > CACHE_TTL)) {
-    let config = await SystemConfig.findOne();
+  let config = cache.get('system_config');
+  if (!config) {
+    config = await SystemConfig.findOne();
     if (!config) {
       config = new SystemConfig({ companyName: 'Default Company' });
       await config.save();
     }
-    cachedSystemConfig = config;
-    lastCacheTime = now;
+    cache.set('system_config', config, 30); // 30 seconds cache TTL
   }
-  return cachedSystemConfig;
+  return config;
 };
 
 const clearSystemConfigCache = () => {
-  cachedSystemConfig = null;
-  lastCacheTime = 0;
+  cache.del('system_config');
 };
 
 // 1. Get System Setting
-const getSystemSetting = async (req, res) => {
+const getSystemSetting = async (req, res, next) => {
   try {
     const config = await getCachedConfig();
     res.status(200).json({
@@ -34,11 +28,8 @@ const getSystemSetting = async (req, res) => {
       data: config
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch system setting',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getSystemSetting] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -67,7 +58,7 @@ const updateSystemSetting = async (req, res) => {
         try {
           updateData[field] = JSON.parse(updateData[field]);
         } catch (error) {
-          console.error(`Error parsing ${field}:`, error);
+          global.logger.error(`Error parsing ${field}: ` + error.message, error);
         }
       }
     });
@@ -131,7 +122,7 @@ const updateSystemSetting = async (req, res) => {
 };
 
 // 3. Create Category (Admin)
-const createCategory = async (req, res) => {
+const createCategory = async (req, res, next) => {
   try {
     const { name, description } = req.body;
     const existingCategory = await Category.findOne({ name });
@@ -151,22 +142,20 @@ const createCategory = async (req, res) => {
 
     const category = new Category(categoryData);
     await category.save();
+    cache.del('active_categories');
     res.status(201).json({
       success: true,
       message: 'Category created successfully',
       data: category
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create category',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.createCategory] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 4. Get All Categories Admin (Admin)
-const getAllCategoriesAdmin = async (req, res) => {
+const getAllCategoriesAdmin = async (req, res, next) => {
   try {
     const categories = await Category.find();
     res.status(200).json({
@@ -174,33 +163,31 @@ const getAllCategoriesAdmin = async (req, res) => {
       data: categories
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch categories',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getAllCategoriesAdmin] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 5. Get Active Categories (Public)
-const getActiveCategories = async (req, res) => {
+const getActiveCategories = async (req, res, next) => {
   try {
-    const categories = await Category.find({ isActive: true });
+    let categories = cache.get('active_categories');
+    if (!categories) {
+      categories = await Category.find({ isActive: true });
+      cache.set('active_categories', categories, 300);
+    }
     res.status(200).json({
       success: true,
       data: categories
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch active categories',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getActiveCategories] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 6. Update Category (Admin)
-const updateCategory = async (req, res) => {
+const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, isActive } = req.body;
@@ -222,22 +209,20 @@ const updateCategory = async (req, res) => {
     }
 
     await category.save();
+    cache.del('active_categories');
     res.status(200).json({
       success: true,
       message: 'Category updated successfully',
       data: category
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update category',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.updateCategory] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 7. Delete Category (Admin) - Permanent Delete
-const deleteCategory = async (req, res) => {
+const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
     const category = await Category.findByIdAndDelete(id);
@@ -251,17 +236,15 @@ const deleteCategory = async (req, res) => {
       success: true,
       message: 'Category deleted successfully'
     });
+    cache.del('active_categories');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete category',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.deleteCategory] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 8. Toggle Category Status (Admin) - Activate/Inactivate
-const toggleCategoryStatus = async (req, res) => {
+const toggleCategoryStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const category = await Category.findById(id);
@@ -273,39 +256,38 @@ const toggleCategoryStatus = async (req, res) => {
     }
     category.isActive = !category.isActive;
     await category.save();
+    cache.del('active_categories');
     res.status(200).json({
       success: true,
       message: `Category ${category.isActive ? 'activated' : 'deactivated'} successfully`,
       data: category
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to toggle category status',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.toggleCategoryStatus] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 9. Get Banners (Public)
-const getBanners = async (req, res) => {
+const getBanners = async (req, res, next) => {
   try {
-    const banners = await Banner.find();
+    let banners = cache.get('banners');
+    if (!banners) {
+      banners = await Banner.find();
+      cache.set('banners', banners, 300);
+    }
     res.status(200).json({
       success: true,
       data: banners
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch banners',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getBanners] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 10. Create Banner (Admin)
-const createBanner = async (req, res) => {
+const createBanner = async (req, res, next) => {
   try {
     const { title, subtitle, startDate, endDate, noExpiry } = req.body;
 
@@ -321,22 +303,20 @@ const createBanner = async (req, res) => {
 
     const banner = new Banner(bannerData);
     await banner.save();
+    cache.del('banners');
     res.status(201).json({
       success: true,
       message: 'Banner created successfully',
       data: banner
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create banner',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.createBanner] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 11. Get All Banners Admin (Admin)
-const getAllBannersAdmin = async (req, res) => {
+const getAllBannersAdmin = async (req, res, next) => {
   try {
     const banners = await Banner.find();
     res.status(200).json({
@@ -344,16 +324,13 @@ const getAllBannersAdmin = async (req, res) => {
       data: banners
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch banners',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getAllBannersAdmin] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 12. Update Banner (Admin)
-const updateBanner = async (req, res) => {
+const updateBanner = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { image, title, subtitle, startDate, endDate, noExpiry } = req.body;
@@ -381,22 +358,20 @@ const updateBanner = async (req, res) => {
         message: 'Banner not found'
       });
     }
+    cache.del('banners');
     res.status(200).json({
       success: true,
       message: 'Banner updated successfully',
       data: banner
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update banner',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.updateBanner] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 13. Delete Banner (Admin)
-const deleteBanner = async (req, res) => {
+const deleteBanner = async (req, res, next) => {
   try {
     const { id } = req.params;
     const banner = await Banner.findByIdAndDelete(id);
@@ -410,17 +385,15 @@ const deleteBanner = async (req, res) => {
       success: true,
       message: 'Banner deleted successfully'
     });
+    cache.del('banners');
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete banner',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.deleteBanner] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 14. Get branding settings for a specific role
-const getBrandingSettings = async (req, res) => {
+const getBrandingSettings = async (req, res, next) => {
   try {
     const { role } = req.params;
     if (!['customer', 'provider', 'admin'].includes(role)) {
@@ -451,7 +424,7 @@ const getBrandingSettings = async (req, res) => {
           installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmDevices.0': { $exists: true } });
         }
       } catch (countError) {
-        console.error('Failed to count installed PWA users:', countError);
+        global.logger.error('Failed to count installed PWA users: ' + countError.message, countError);
       }
     }
 
@@ -466,16 +439,13 @@ const getBrandingSettings = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch branding settings',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getBrandingSettings] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 15. Update branding settings for a specific role (Admin only - Draft Mode)
-const updateBrandingSettings = async (req, res) => {
+const updateBrandingSettings = async (req, res, next) => {
   try {
     const { role } = req.params;
     if (!['customer', 'provider', 'admin'].includes(role)) {
@@ -513,16 +483,13 @@ const updateBrandingSettings = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update branding settings',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.updateBrandingSettings] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 15.5 Publish branding settings and send FCM update (Admin only)
-const publishBrandingUpdate = async (req, res) => {
+const publishBrandingUpdate = async (req, res, next) => {
   try {
     const { role } = req.params;
     if (!['customer', 'provider', 'admin'].includes(role)) {
@@ -625,7 +592,7 @@ const publishBrandingUpdate = async (req, res) => {
         };
         await sendPushNotification(uniqueTokens, payload);
       } catch (fcmError) {
-        console.error('Failed to send FCM branding update notifications:', fcmError);
+        global.logger.error('Failed to send FCM branding update notifications: ' + fcmError.message, fcmError);
       }
     }
 
@@ -640,7 +607,7 @@ const publishBrandingUpdate = async (req, res) => {
         installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmDevices.0': { $exists: true } });
       }
     } catch (countError) {
-      console.error('Failed to count installed PWA users on publish:', countError);
+      global.logger.error('Failed to count installed PWA users on publish: ' + countError.message, countError);
     }
 
     res.status(200).json({
@@ -655,16 +622,13 @@ const publishBrandingUpdate = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to publish branding settings update',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.publishBrandingUpdate] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 16. Upload branding visual asset for a specific role (Admin only)
-const uploadBrandingAsset = async (req, res) => {
+const uploadBrandingAsset = async (req, res, next) => {
   try {
     const { role } = req.params;
     if (!['customer', 'provider', 'admin'].includes(role)) {
@@ -716,16 +680,13 @@ const uploadBrandingAsset = async (req, res) => {
       field: fieldName
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload branding asset',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.uploadBrandingAsset] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // 17. Dynamically generate PWA manifest based on role branding in DB
-const getBrandingManifest = async (req, res) => {
+const getBrandingManifest = async (req, res, next) => {
   try {
     const { role } = req.params;
     if (!['customer', 'provider', 'admin'].includes(role)) {
@@ -820,11 +781,8 @@ const getBrandingManifest = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(200).send(JSON.stringify(manifest, null, 2));
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate manifest',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getBrandingManifest] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -849,7 +807,7 @@ const MOCK_TEMPLATE_VARIABLES = {
 };
 
 // getEmailTemplates()
-const getEmailTemplates = async (req, res) => {
+const getEmailTemplates = async (req, res, next) => {
   try {
     let config = await SystemConfig.findOne();
     if (!config) {
@@ -881,16 +839,13 @@ const getEmailTemplates = async (req, res) => {
       data: config.emailTemplates
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch email templates',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.getEmailTemplates] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // updateEmailTemplate()
-const updateEmailTemplate = async (req, res) => {
+const updateEmailTemplate = async (req, res, next) => {
   try {
     const { type } = req.params;
     const { subject, body, isActive } = req.body;
@@ -943,16 +898,13 @@ const updateEmailTemplate = async (req, res) => {
       data: config.emailTemplates[type]
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update email template',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.updateEmailTemplate] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // previewEmailTemplate()
-const previewEmailTemplate = async (req, res) => {
+const previewEmailTemplate = async (req, res, next) => {
   try {
     const { subject, body, type } = req.body;
 
@@ -983,16 +935,13 @@ const previewEmailTemplate = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to preview email template',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.previewEmailTemplate] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // testSendEmailTemplate()
-const testSendEmailTemplate = async (req, res) => {
+const testSendEmailTemplate = async (req, res, next) => {
   try {
     const { type, testEmail, subject, body } = req.body;
 
@@ -1043,16 +992,13 @@ const testSendEmailTemplate = async (req, res) => {
       data: emailResponse
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send test email',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.testSendEmailTemplate] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // restoreDefaultTemplate()
-const restoreDefaultTemplate = async (req, res) => {
+const restoreDefaultTemplate = async (req, res, next) => {
   try {
     const { type } = req.body;
 
@@ -1091,17 +1037,14 @@ const restoreDefaultTemplate = async (req, res) => {
       data: config.emailTemplates[type]
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to restore default template',
-      error: error.message
-    });
+    global.logger.error(`[SystemSettingController.restoreDefaultTemplate] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 
 // getBrandingLogoRedirect()
-const getBrandingLogoRedirect = async (req, res) => {
+const getBrandingLogoRedirect = async (req, res, next) => {
   try {
     const { role = 'customer' } = req.query;
     const config = await SystemConfig.findOne();
@@ -1115,12 +1058,13 @@ const getBrandingLogoRedirect = async (req, res) => {
     }
     res.status(404).send('Logo not found');
   } catch (error) {
-    res.status(500).send(error.message);
+    global.logger.error(`[SystemSettingController.getBrandingLogoRedirect] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // getBrandingFaviconRedirect()
-const getBrandingFaviconRedirect = async (req, res) => {
+const getBrandingFaviconRedirect = async (req, res, next) => {
   try {
     const { role = 'customer' } = req.query;
     const config = await SystemConfig.findOne();
@@ -1134,7 +1078,8 @@ const getBrandingFaviconRedirect = async (req, res) => {
     }
     res.status(404).send('Favicon not found');
   } catch (error) {
-    res.status(500).send(error.message);
+    global.logger.error(`[SystemSettingController.getBrandingFaviconRedirect] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -1153,7 +1098,7 @@ const validateIfsc = async (req, res) => {
 
     let details = null;
 
-    // 1. Try local server dataset first
+    // 1. Try local RBI dataset first
     try {
       const localRbiDataset = require('../utils/localRbiDataset.json');
       const matched = localRbiDataset.find(item => item.IFSC === cleanCode);
@@ -1169,7 +1114,7 @@ const validateIfsc = async (req, res) => {
         };
       }
     } catch (err) {
-      console.warn("Error reading local server dataset:", err.message);
+      global.logger.warn("Error reading local server dataset: " + err.message);
     }
 
     // 2. Try validation via npm 'ifsc' package
@@ -1191,7 +1136,7 @@ const validateIfsc = async (req, res) => {
           }
         }
       } catch (localError) {
-        console.warn("Local ifsc package lookup failed:", localError.message);
+        global.logger.warn("Local ifsc package lookup failed: " + localError.message);
       }
     }
 

@@ -19,8 +19,10 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { validateBody } = require('../validation/common.validation');
 const { submitFeedbackSchema, editFeedbackSchema } = require('../validation/feedback.validation');
 
+const { feedbackLimiter } = require('../middlewares/rate-limit');
+
 // Customer routes
-router.post('/', userAuthMiddleware, validateBody(submitFeedbackSchema), submitFeedback);
+router.post('/', userAuthMiddleware, feedbackLimiter, validateBody(submitFeedbackSchema), submitFeedback);
 router.get('/my-feedbacks', userAuthMiddleware, getCustomerFeedbacks);
 router.get('/:feedbackId', userAuthMiddleware, getFeedback);
 router.put('/edit/:feedbackId', userAuthMiddleware, validateBody(editFeedbackSchema), editFeedback);

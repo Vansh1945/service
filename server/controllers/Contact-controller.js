@@ -6,7 +6,7 @@ const { sendMail } = require('../utils/sendmail');
  * @route   POST /api/contact
  * @access  Public
  */
-exports.submitContact = async (req, res) => {
+exports.submitContact = async (req, res, next) => {
   try {
     const { name, email, phone, subject, message } = req.body;
 
@@ -49,10 +49,8 @@ exports.submitContact = async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      success: false,
-      message: 'Failed to submit contact form. Please try again.'
-    });
+    global.logger.error(`[ContactController.submitContact] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -61,7 +59,7 @@ exports.submitContact = async (req, res) => {
  * @route   GET /api/contact/admin
  * @access  Admin only
  */
-exports.getAllContacts = async (req, res) => {
+exports.getAllContacts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -132,10 +130,8 @@ exports.getAllContacts = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch contacts'
-    });
+    global.logger.error(`[ContactController.getAllContacts] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -144,7 +140,7 @@ exports.getAllContacts = async (req, res) => {
  * @route   GET /api/contact/:id
  * @access  Admin only
  */
-exports.getContactById = async (req, res) => {
+exports.getContactById = async (req, res, next) => {
   try {
     const contact = await Contact.findById(req.params.id)
       .populate('adminReply.repliedBy', 'name email');
@@ -162,10 +158,8 @@ exports.getContactById = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch contact'
-    });
+    global.logger.error(`[ContactController.getContactById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -242,7 +236,7 @@ exports.replyToContact = async (req, res) => {
         }
       });
     } catch (mailError) {
-      console.error('Failed to send reply email:', mailError.message);
+      global.logger.error('Failed to send reply email: ' + mailError.message, mailError);
     }
 
     res.status(200).json({
@@ -252,10 +246,7 @@ exports.replyToContact = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send reply',
-      error: error.message
-    });
+    global.logger.error(`[ContactController.replyToContact] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };

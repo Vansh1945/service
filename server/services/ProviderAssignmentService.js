@@ -3,22 +3,8 @@ const Provider = require('../models/Provider-model');
 const Booking = require('../models/Booking-model');
 const Transaction = require('../models/Transaction-model');
 const { sendNotification } = require('../utils/notificationHelper');
-
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371e3; // metres
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
-    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  const d = R * c; // in metres
-  return d;
-};
+const { calculateDistance } = require('../utils/geoUtils');
+const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
 
 const checkProviderOverlap = (newBooking, providerBookings, bufferMinutes = 30) => {
   const newStart = new Date(newBooking.date);
@@ -150,6 +136,20 @@ class ProviderAssignmentService {
         'performanceScore.restrictionsActive': { $ne: true },
         services: { $all: bookingServicesCategories }
       };
+
+      const bookingS2CellId = latLngToS2CellId(lat, lng, 13);
+      if (bookingS2CellId) {
+        const s2CellIds = [bookingS2CellId, ...getNeighbors(bookingS2CellId)];
+        baseProviderQuery.$and = [
+          {
+            $or: [
+              { s2CellId: { $in: s2CellIds } },
+              { 'currentLocation.s2CellId': { $in: s2CellIds } },
+              { 'address.s2CellId': { $in: s2CellIds } }
+            ]
+          }
+        ];
+      }
 
       let selectedProvider = null;
       let selectedSource = null;

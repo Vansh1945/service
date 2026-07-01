@@ -15,9 +15,10 @@ const { roleMiddleware } = require('../middlewares/role-middleware');
 const requireCustomer = roleMiddleware(['customer']);
 const requireProvider = roleMiddleware(['provider']);
 const requireAdmin = roleMiddleware(['admin']);
+const { bookingLimiter } = require('../middlewares/rate-limit');
 
 // USER ROUTES
-router.post('/', userAuthMiddleware, requireCustomer, validateBody(createBookingSchema), bookingController.createBooking);
+router.post('/', userAuthMiddleware, requireCustomer, bookingLimiter, validateBody(createBookingSchema), bookingController.createBooking);
 router.post('/confirm', userAuthMiddleware, requireCustomer, validateBody(confirmBookingSchema), bookingController.confirmBooking);
 router.patch('/:id/status', userAuthMiddleware, requireCustomer, validateBody(updateBookingStatusSchema), bookingController.updateBookingStatus);
 router.get('/user', userAuthMiddleware, requireCustomer, bookingController.getUserBookings);

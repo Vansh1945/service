@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Zone = require('../models/Zone-model');
+const cache = require('../utils/cache');
 
 const MAX_ZONE_POLYGON_VERTICES = 800;
 
@@ -95,7 +96,7 @@ const normalizeZonePolygon = (polygon) => {
 /**
  * Create a new Zone
  */
-exports.createZone = async (req, res) => {
+exports.createZone = async (req, res, next) => {
   try {
     const { name, polygon, priority, status, serviceRadius, maxProviders, description, city, zoneLevel, parentZone, adjacentZones } = req.body;
 
@@ -180,22 +181,32 @@ exports.createZone = async (req, res) => {
 
     await newZone.save();
 
+    cache.delByPrefix('zone_');
+    cache.delByPrefix('zones_');
+
     return res.status(201).json({ success: true, message: "Zone created successfully", data: newZone });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message, data: null });
+    global.logger.error(`[ZoneController.createZone] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 /**
  * Get all zones with optional pagination and filters
  */
-exports.getAllZones = async (req, res) => {
+exports.getAllZones = async (req, res, next) => {
   try {
     const { city, status, zoneLevel, page = 1, limit = 100 } = req.query;
     const query = {};
     if (city) query.city = city;
     if (status) query.status = status;
     if (zoneLevel) query.zoneLevel = zoneLevel;
+
+    const cacheKey = `zones_all_${city || ''}_${status || ''}_${zoneLevel || ''}_${page}_${limit}`;
+    const cachedResult = cache.get(cacheKey);
+    if (cachedResult) {
+      return res.status(200).json(cachedResult);
+    }
 
     const skipIndex = (parseInt(page) - 1) * parseInt(limit);
     
@@ -209,9 +220,13 @@ exports.getAllZones = async (req, res) => {
       Zone.countDocuments(query)
     ]);
 
-    return res.status(200).json({ success: true, message: "Zones retrieved successfully", data: zones, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } });
+    const resultResponse = { success: true, message: "Zones retrieved successfully", data: zones, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } };
+    cache.set(cacheKey, resultResponse, 300);
+
+    return res.status(200).json(resultResponse);
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message, data: null });
+    global.logger.error(`[ZoneController.getAllZones] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -283,9 +298,16 @@ const isPolygonInteriorOverlapping = (poly1Coords, poly2Coords) => {
 /**
  * Get a single Zone by ID (Enhanced with analytics and linked users/providers)
  */
-exports.getZoneById = async (req, res) => {
+exports.getZoneById = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    const cacheKey = `zone_${id}`;
+    const cachedResult = cache.get(cacheKey);
+    if (cachedResult) {
+      return res.status(200).json(cachedResult);
+    }
+
     const zone = await Zone.findById(id).populate('parentZone adjacentZones');
     if (!zone) {
       return res.status(404).json({ success: false, message: "Zone not found", data: null });
@@ -462,7 +484,7 @@ exports.getZoneById = async (req, res) => {
         assignmentSuccessRate
     };
 
-    return res.status(200).json({ 
+    const resultResponse = { 
       success: true, 
       message: "Zone retrieved successfully", 
       data: {
@@ -471,16 +493,21 @@ exports.getZoneById = async (req, res) => {
         linkedProviders: matchedProviders,
         linkedUsers: matchedUsers
       } 
-    });
+    };
+
+    cache.set(cacheKey, resultResponse, 300);
+
+    return res.status(200).json(resultResponse);
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message, data: null });
+    global.logger.error(`[ZoneController.getZoneById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 /**
  * Update an existing Zone
  */
-exports.updateZone = async (req, res) => {
+exports.updateZone = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, polygon, priority, status, serviceRadius, maxProviders, description, city, zoneLevel, parentZone, adjacentZones } = req.body;
@@ -573,16 +600,21 @@ exports.updateZone = async (req, res) => {
     if (parentZone !== undefined) zone.parentZone = parentZone;
     if (adjacentZones !== undefined) zone.adjacentZones = adjacentZones;
     await zone.save();
+
+    cache.delByPrefix('zone_');
+    cache.delByPrefix('zones_');
+
     return res.status(200).json({ success: true, message: "Zone updated successfully", data: zone });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message, data: null });
+    global.logger.error(`[ZoneController.updateZone] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 /**
  * Delete a Zone (Hard Delete and clean up references)
  */
-exports.deleteZone = async (req, res) => {
+exports.deleteZone = async (req, res, next) => {
   try {
     const { id } = req.params;
     const zone = await Zone.findById(id);
@@ -615,9 +647,13 @@ exports.deleteZone = async (req, res) => {
       { $set: { currentZone: null } }
     );
 
+    cache.delByPrefix('zone_');
+    cache.delByPrefix('zones_');
+
     return res.status(200).json({ success: true, message: "Zone deleted successfully", data: zone });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message, data: null });
+    global.logger.error(`[ZoneController.deleteZone] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -625,7 +661,7 @@ exports.deleteZone = async (req, res) => {
 /**
  * Toggle Zone Status between active and inactive
  */
-exports.toggleZoneStatus = async (req, res) => {
+exports.toggleZoneStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const zone = await Zone.findById(id);
@@ -663,9 +699,14 @@ exports.toggleZoneStatus = async (req, res) => {
       zone.status = 'inactive';
     }
     await zone.save();
+
+    cache.delByPrefix('zone_');
+    cache.delByPrefix('zones_');
+
     return res.status(200).json({ success: true, message: `Zone status updated to ${zone.status}`, data: zone });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message, data: null });
+    global.logger.error(`[ZoneController.toggleZoneStatus] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -674,18 +715,30 @@ exports.toggleZoneStatus = async (req, res) => {
 /**
  * Resolve Zone by Coordinates
  */
-exports.resolveZoneByCoordinates = async (req, res) => {
+exports.resolveZoneByCoordinates = async (req, res, next) => {
   try {
     const { lat, lng } = req.body;
     if (lat === undefined || lng === undefined) {
       return res.status(400).json({ success: false, message: "Latitude (lat) and Longitude (lng) are required" });
     }
+
+    const cacheKey = `zone_coords_${lat}_${lng}`;
+    const cachedResult = cache.get(cacheKey);
+    if (cachedResult) {
+      return res.status(200).json(cachedResult);
+    }
+
     const zone = await Zone.findZoneByCoordinates(lat, lng);
     if (!zone) {
-      return res.status(200).json({ success: false, message: "No service zone found" });
+      const failResponse = { success: false, message: "No service zone found" };
+      return res.status(200).json(failResponse);
     }
-    return res.status(200).json({ success: true, zone });
+    const successResponse = { success: true, zone };
+    cache.set(cacheKey, successResponse, 300);
+
+    return res.status(200).json(successResponse);
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    global.logger.error(`[ZoneController.resolveZoneByCoordinates] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };

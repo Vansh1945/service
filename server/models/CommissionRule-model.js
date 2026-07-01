@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const cache = require('../utils/cache');
 
 const commissionRuleSchema = new Schema({
   name: {
@@ -138,8 +139,6 @@ commissionRuleSchema.index({ zoneId: 1 });
 
 // Get applicable commission rule for a provider
 commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = 'standard', serviceId = null, categoryId = null) {
-  const now = new Date();
-
   try {
     // If tier not provided, calculate from provider metrics
     if (!providerperformanceScore || providerperformanceScore === 'standard') {
@@ -162,6 +161,12 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       }
     }
 
+    const cacheKey = `comm_rule_${providerId || ''}_${zoneId || ''}_${providerperformanceScore || ''}_${serviceId || ''}_${categoryId || ''}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached === 'none' ? null : cached;
+    }
+
     // Resolve Zone Ancestry Array
     const zoneAncestry = [];
     if (zoneId) {
@@ -174,125 +179,130 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       }
     }
 
-    // PRIORITY 1: Specific Provider Rule (closest zone ancestry first, then global)
-    if (providerId) {
-      if (zoneAncestry.length > 0) {
-        for (const zId of zoneAncestry) {
-          const rule = await this.findOne({
-            isActive: true,
-            applyTo: 'specificProvider',
-            specificProvider: providerId,
-            zoneId: zId
-          }).sort({ createdAt: -1 });
+    const rule = await (async () => {
+      // PRIORITY 1: Specific Provider Rule (closest zone ancestry first, then global)
+      if (providerId) {
+        if (zoneAncestry.length > 0) {
+          for (const zId of zoneAncestry) {
+            const rule = await this.findOne({
+              isActive: true,
+              applyTo: 'specificProvider',
+              specificProvider: providerId,
+              zoneId: zId
+            }).sort({ createdAt: -1 });
 
-          if (rule) return rule;
+            if (rule) return rule;
+          }
         }
-      }
 
-      const globalSpecificRule = await this.findOne({
-        isActive: true,
-        applyTo: 'specificProvider',
-        specificProvider: providerId,
-        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-      }).sort({ createdAt: -1 });
-
-      if (globalSpecificRule) return globalSpecificRule;
-    }
-
-    // PRIORITY 2: Specific Service Rule (closest zone ancestry first, then global)
-    if (serviceId) {
-      if (zoneAncestry.length > 0) {
-        for (const zId of zoneAncestry) {
-          const rule = await this.findOne({
-            isActive: true,
-            applyTo: 'specificService',
-            specificService: serviceId,
-            zoneId: zId
-          }).sort({ createdAt: -1 });
-
-          if (rule) return rule;
-        }
-      }
-
-      const globalServiceRule = await this.findOne({
-        isActive: true,
-        applyTo: 'specificService',
-        specificService: serviceId,
-        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-      }).sort({ createdAt: -1 });
-
-      if (globalServiceRule) return globalServiceRule;
-    }
-
-    // PRIORITY 3: Specific Category Rule (closest zone ancestry first, then global)
-    if (categoryId) {
-      if (zoneAncestry.length > 0) {
-        for (const zId of zoneAncestry) {
-          const rule = await this.findOne({
-            isActive: true,
-            applyTo: 'specificCategory',
-            specificCategory: categoryId,
-            zoneId: zId
-          }).sort({ createdAt: -1 });
-
-          if (rule) return rule;
-        }
-      }
-
-      const globalCategoryRule = await this.findOne({
-        isActive: true,
-        applyTo: 'specificCategory',
-        specificCategory: categoryId,
-        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-      }).sort({ createdAt: -1 });
-
-      if (globalCategoryRule) return globalCategoryRule;
-    }
-
-    // PRIORITY 4: Zone + Performance Score Rule (closest zone first)
-    if (zoneAncestry.length > 0) {
-      for (const zId of zoneAncestry) {
-        const zoneTierRule = await this.findOne({
+        const globalSpecificRule = await this.findOne({
           isActive: true,
-          applyTo: 'performanceScore',
-          performanceScore: providerperformanceScore,
-          zoneId: zId
+          applyTo: 'specificProvider',
+          specificProvider: providerId,
+          $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
         }).sort({ createdAt: -1 });
 
-        if (zoneTierRule) return zoneTierRule;
+        if (globalSpecificRule) return globalSpecificRule;
       }
-    }
 
-    // PRIORITY 5: Zone Default Rule (closest zone first)
-    if (zoneAncestry.length > 0) {
-      for (const zId of zoneAncestry) {
-        const zoneDefaultRule = await this.findOne({
+      // PRIORITY 2: Specific Service Rule (closest zone ancestry first, then global)
+      if (serviceId) {
+        if (zoneAncestry.length > 0) {
+          for (const zId of zoneAncestry) {
+            const rule = await this.findOne({
+              isActive: true,
+              applyTo: 'specificService',
+              specificService: serviceId,
+              zoneId: zId
+            }).sort({ createdAt: -1 });
+
+            if (rule) return rule;
+          }
+        }
+
+        const globalServiceRule = await this.findOne({
           isActive: true,
-          applyTo: 'all',
-          zoneId: zId
+          applyTo: 'specificService',
+          specificService: serviceId,
+          $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
         }).sort({ createdAt: -1 });
 
-        if (zoneDefaultRule) return zoneDefaultRule;
+        if (globalServiceRule) return globalServiceRule;
       }
-    }
 
-    // PRIORITY 6: Global Rules (Performance global tier first, then Global Default rule)
-    const globalTierRule = await this.findOne({
-      isActive: true,
-      applyTo: 'performanceScore',
-      performanceScore: providerperformanceScore,
-      $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-    }).sort({ createdAt: -1 });
+      // PRIORITY 3: Specific Category Rule (closest zone ancestry first, then global)
+      if (categoryId) {
+        if (zoneAncestry.length > 0) {
+          for (const zId of zoneAncestry) {
+            const rule = await this.findOne({
+              isActive: true,
+              applyTo: 'specificCategory',
+              specificCategory: categoryId,
+              zoneId: zId
+            }).sort({ createdAt: -1 });
 
-    if (globalTierRule) return globalTierRule;
+            if (rule) return rule;
+          }
+        }
 
-    const globalDefaultRule = await this.findOne({
-      isActive: true,
-      applyTo: 'all',
-      $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-    }).sort({ createdAt: -1 });
+        const globalCategoryRule = await this.findOne({
+          isActive: true,
+          applyTo: 'specificCategory',
+          specificCategory: categoryId,
+          $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+        }).sort({ createdAt: -1 });
 
-    return globalDefaultRule || null;
+        if (globalCategoryRule) return globalCategoryRule;
+      }
+
+      // PRIORITY 4: Zone + Performance Score Rule (closest zone first)
+      if (zoneAncestry.length > 0) {
+        for (const zId of zoneAncestry) {
+          const zoneTierRule = await this.findOne({
+            isActive: true,
+            applyTo: 'performanceScore',
+            performanceScore: providerperformanceScore,
+            zoneId: zId
+          }).sort({ createdAt: -1 });
+
+          if (zoneTierRule) return zoneTierRule;
+        }
+      }
+
+      // PRIORITY 5: Zone Default Rule (closest zone first)
+      if (zoneAncestry.length > 0) {
+        for (const zId of zoneAncestry) {
+          const zoneDefaultRule = await this.findOne({
+            isActive: true,
+            applyTo: 'all',
+            zoneId: zId
+          }).sort({ createdAt: -1 });
+
+          if (zoneDefaultRule) return zoneDefaultRule;
+        }
+      }
+
+      // PRIORITY 6: Global Rules (Performance global tier first, then Global Default rule)
+      const globalTierRule = await this.findOne({
+        isActive: true,
+        applyTo: 'performanceScore',
+        performanceScore: providerperformanceScore,
+        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+      }).sort({ createdAt: -1 });
+
+      if (globalTierRule) return globalTierRule;
+
+      const globalDefaultRule = await this.findOne({
+        isActive: true,
+        applyTo: 'all',
+        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+      }).sort({ createdAt: -1 });
+
+      return globalDefaultRule || null;
+    })();
+
+    cache.set(cacheKey, rule || 'none', 300);
+    return rule;
 
   } catch (error) {
     console.error('Error getting commission rule:', error);

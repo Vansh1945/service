@@ -1,13 +1,10 @@
-const NodeCache = require('node-cache');
+const analyticsCache = require('../utils/cache');
 const Booking = require('../models/Booking-model');
 const Provider = require('../models/Provider-model');
 const User = require('../models/User-model');
 const Complaint = require('../models/Complaint-model');
 const Transaction = require('../models/Transaction-model');
 const moment = require('moment');
-
-// Refresh every 5 minutes (300 seconds)
-const analyticsCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
 const refreshAnalytics = async () => {
     try {

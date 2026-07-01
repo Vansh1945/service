@@ -92,7 +92,7 @@ const {
 /**
  * API: Verify referral code validity instantly on registration forms.
  */
-const verifyReferralCode = async (req, res) => {
+const verifyReferralCode = async (req, res, next) => {
   try {
     const referralSettings = await bootstrapReferralSettings();
     const { code, role } = req.query;
@@ -114,8 +114,8 @@ const verifyReferralCode = async (req, res) => {
       name: result.referrer.name
     });
   } catch (err) {
-    console.error('Error verifying referral code:', err);
-    res.status(500).json({ success: false, message: 'Server error verifying code' });
+    global.logger.error(`[ReferralController.verifyReferralCode] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
@@ -223,7 +223,7 @@ const processReferralRegistration = async (referredUser, referredUserType, refer
 
     return referral;
   } catch (err) {
-    console.error('Error processing referral signup:', err);
+    global.logger.error('Error processing referral signup: ' + err.message, err);
     return null;
   }
 };
@@ -363,7 +363,7 @@ const triggerCustomerReferralReward = async (booking) => {
               booking._id
             );
           } catch (notificationErr) {
-            console.error('Error sending welcome reward notification:', notificationErr);
+            global.logger.error('Error sending welcome reward notification: ' + notificationErr.message, notificationErr);
           }
 
           const welcomeTx = new Transaction({
@@ -404,10 +404,10 @@ const triggerCustomerReferralReward = async (booking) => {
         booking._id
       );
     } catch (e) {
-      console.error(e);
+      global.logger.error('Error sending referral notification: ' + e.message, e);
     }
   } catch (err) {
-    console.error('Error handling customer referral reward transaction:', err);
+    global.logger.error('Error handling customer referral reward transaction: ' + err.message, err);
   }
 };
 
@@ -482,18 +482,18 @@ const triggerProviderReferralReward = async (referredProviderId) => {
           null
         );
       } catch (e) {
-        console.error(e);
+        global.logger.error('Error sending milestone notification: ' + e.message, e);
       }
     }
   } catch (err) {
-    console.error('Error handling provider referral reward:', err);
+    global.logger.error('Error handling provider referral reward: ' + err.message, err);
   }
 };
 
 /**
  * API: Get referral details for currently logged in customer.
  */
-const getCustomerReferralDetails = async (req, res) => {
+const getCustomerReferralDetails = async (req, res, next) => {
   try {
     const customerId = req.userID;
     let customer = await User.findById(customerId);
@@ -549,14 +549,15 @@ const getCustomerReferralDetails = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    global.logger.error(`[ReferralController.getCustomerReferralDetails] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get referral details for currently logged in provider.
  */
-const getProviderReferralDetails = async (req, res) => {
+const getProviderReferralDetails = async (req, res, next) => {
   try {
     const providerId = req.providerId;
     let provider = await Provider.findById(providerId);
@@ -635,14 +636,15 @@ const getProviderReferralDetails = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    global.logger.error(`[ReferralController.getProviderReferralDetails] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get Admin referral dashboard analytics & controls
  */
-const getAdminDashboard = async (req, res) => {
+const getAdminDashboard = async (req, res, next) => {
   try {
     const sysSettings = await bootstrapReferralSettings();
     const config = sysSettings;
@@ -730,27 +732,28 @@ const getAdminDashboard = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error fetching admin referral dashboard:', err);
-    res.status(500).json({ success: false, message: 'Server error fetching dashboard' });
+    global.logger.error(`[ReferralController.getAdminDashboard] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get referral settings
  */
-const getSettings = async (req, res) => {
+const getSettings = async (req, res, next) => {
   try {
     const config = await bootstrapReferralSettings();
     res.status(200).json({ success: true, data: config });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    global.logger.error(`[ReferralController.getSettings] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Update referral configurations.
  */
-const updateSettings = async (req, res) => {
+const updateSettings = async (req, res, next) => {
   try {
     let sysSettings = await SystemConfig.findOne();
     if (!sysSettings) {
@@ -770,27 +773,29 @@ const updateSettings = async (req, res) => {
       data: sysSettings.referralSettings
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to save configuration settings' });
+    global.logger.error(`[ReferralController.updateSettings] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get milestones list
  */
-const getMilestones = async (req, res) => {
+const getMilestones = async (req, res, next) => {
   try {
     const sysSettings = await SystemConfig.findOne();
     const milestones = sysSettings?.referralSettings?.providerMilestones || [];
     res.status(200).json({ success: true, data: milestones });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error fetching milestones' });
+    global.logger.error(`[ReferralController.getMilestones] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Add milestone target
  */
-const addMilestone = async (req, res) => {
+const addMilestone = async (req, res, next) => {
   try {
     const { bookingsCount, rewardAmount, description } = req.body;
     let sysSettings = await SystemConfig.findOne();
@@ -816,14 +821,15 @@ const addMilestone = async (req, res) => {
       data: sysSettings.referralSettings.providerMilestones
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to add milestone' });
+    global.logger.error(`[ReferralController.addMilestone] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Delete milestone target
  */
-const deleteMilestone = async (req, res) => {
+const deleteMilestone = async (req, res, next) => {
   try {
     const { id } = req.params;
     let sysSettings = await SystemConfig.findOne();
@@ -840,14 +846,15 @@ const deleteMilestone = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Milestone deleted successfully' });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Failed to delete milestone' });
+    global.logger.error(`[ReferralController.deleteMilestone] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get flagged fraud referrals
  */
-const getFraudReferrals = async (req, res) => {
+const getFraudReferrals = async (req, res, next) => {
   try {
     const fraudList = await Referral.find({ status: 'fraud_flagged' })
       .populate('referrer', 'name email phone')
@@ -856,14 +863,15 @@ const getFraudReferrals = async (req, res) => {
       .lean();
     res.status(200).json({ success: true, data: fraudList });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error fetching fraud' });
+    global.logger.error(`[ReferralController.getFraudReferrals] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get reward logs
  */
-const getRewardLogs = async (req, res) => {
+const getRewardLogs = async (req, res, next) => {
   try {
     const logs = await ReferralRewardLog.find()
       .populate('recipient')
@@ -878,15 +886,15 @@ const getRewardLogs = async (req, res) => {
       .lean();
     res.status(200).json({ success: true, data: logs });
   } catch (err) {
-    console.error('getRewardLogs error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    global.logger.error(`[ReferralController.getRewardLogs] Route: ${req.originalUrl || req.url} - getRewardLogs error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Manual release of flagged or held referral reward.
  */
-const releaseHeldReward = async (req, res) => {
+const releaseHeldReward = async (req, res, next) => {
   try {
     const { referralId } = req.body;
     const referral = await Referral.findById(referralId);
@@ -900,14 +908,15 @@ const releaseHeldReward = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Reward manually released successfully!' });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error manually releasing' });
+    global.logger.error(`[ReferralController.releaseHeldReward] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get referral eligibility for currently logged in customer.
  */
-const getCustomerEligibility = async (req, res) => {
+const getCustomerEligibility = async (req, res, next) => {
   try {
     const customerId = req.userID;
     const refConfig = await bootstrapReferralSettings();
@@ -923,14 +932,15 @@ const getCustomerEligibility = async (req, res) => {
       data: eligibility
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    global.logger.error(`[ReferralController.getCustomerEligibility] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 
 /**
  * API: Get referral eligibility for currently logged in provider.
  */
-const getProviderEligibility = async (req, res) => {
+const getProviderEligibility = async (req, res, next) => {
   try {
     const providerId = req.providerId;
     const refConfig = await bootstrapReferralSettings();
@@ -946,7 +956,8 @@ const getProviderEligibility = async (req, res) => {
       data: eligibility
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    global.logger.error(`[ReferralController.getProviderEligibility] Route: ${req.originalUrl || req.url} - Error: ${err.message}`, err);
+    next(err);
   }
 };
 

@@ -7,6 +7,6 @@ build/
 
 # env files
 .env
-.env.*z
+.env.*
 serviceAccountKey.json
 .env

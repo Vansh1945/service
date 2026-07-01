@@ -70,7 +70,7 @@ const emitStatsUpdate = async (broadcastId) => {
             clickedCount: result.clickedCount
         });
     } catch (err) {
-        console.error('Error emitting stats update:', err);
+        global.logger.error('Error emitting stats update: ' + err.message, err);
     }
 };
 
@@ -78,7 +78,7 @@ const emitStatsUpdate = async (broadcastId) => {
  * GET /api/notifications
  * Get notifications for logged-in user with unread count
  */
-const getNotifications = async (req, res) => {
+const getNotifications = async (req, res, next) => {
     try {
         const userId = req.userID || req.query.userId;
         const page = parseInt(req.query.page) || 1;
@@ -121,8 +121,8 @@ const getNotifications = async (req, res) => {
             pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
         });
     } catch (error) {
-        console.error('getNotifications error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to get notifications' });
+        global.logger.error(`[NotificationController.getNotifications] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -130,7 +130,7 @@ const getNotifications = async (req, res) => {
  * PATCH /api/notifications/read/:id
  * Mark a single notification as read
  */
-const markRead = async (req, res) => {
+const markRead = async (req, res, next) => {
     try {
         const { id } = req.params;
         const userId = req.userID || req.body.userId;
@@ -158,8 +158,8 @@ const markRead = async (req, res) => {
 
         return res.status(200).json({ success: true, data: existing });
     } catch (error) {
-        console.error('markRead error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to mark notification as read' });
+        global.logger.error(`[NotificationController.markRead] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -167,7 +167,7 @@ const markRead = async (req, res) => {
  * PATCH /api/notifications/read-all
  * Mark all notifications as read for the current user
  */
-const markAllRead = async (req, res) => {
+const markAllRead = async (req, res, next) => {
     try {
         const userId = req.userID || req.body.userId;
 
@@ -219,8 +219,8 @@ const markAllRead = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'All notifications marked as read' });
     } catch (error) {
-        console.error('markAllRead error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to mark all as read' });
+        global.logger.error(`[NotificationController.markAllRead] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -228,7 +228,7 @@ const markAllRead = async (req, res) => {
  * GET /api/notifications/unread-count
  * Get unread notification count
  */
-const getUnreadCount = async (req, res) => {
+const getUnreadCount = async (req, res, next) => {
     try {
         const userId = req.userID || req.query.userId;
 
@@ -253,15 +253,15 @@ const getUnreadCount = async (req, res) => {
         const count = await Notification.countDocuments(query);
         return res.status(200).json({ success: true, count });
     } catch (error) {
-        console.error('getUnreadCount error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to get count' });
+        global.logger.error(`[NotificationController.getUnreadCount] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+        next(error);
     }
 };
 
 /**
  * POST /api/notifications/save-token
  */
-const saveToken = async (req, res) => {
+const saveToken = async (req, res, next) => {
     try {
         const { token, deviceId: bodyDeviceId, platform, appVersion } = req.body;
         const userId = req.userID;
@@ -352,7 +352,7 @@ const saveToken = async (req, res) => {
                 User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
                 Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
                 Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } })
-            ]).catch(err => console.error('[FCM Duplicate Cleanup Error]:', err));
+            ]).catch(err => global.logger.error('[FCM Duplicate Cleanup Error]: ' + err.message, err));
         }
 
         // Cap array to last 10 entries (increased from 3 to support multi-device)
@@ -364,23 +364,15 @@ const saveToken = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Token saved successfully' });
     } catch (error) {
-        if (global.logger) {
-            global.logger.error('saveToken error:', error);
-        } else {
-            console.error('saveToken error:', error);
-        }
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to save token',
-            error: error.message
-        });
+        global.logger.error(`[NotificationController.saveToken] Route: ${req.originalUrl || req.url} - saveToken error: ${error.message}`, error);
+        next(error);
     }
 };
 
 /**
  * POST /api/notifications/remove-token
  */
-const removeToken = async (req, res) => {
+const removeToken = async (req, res, next) => {
     try {
         const { token } = req.body;
         const userId = req.userID;
@@ -398,12 +390,8 @@ const removeToken = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Token removed' });
     } catch (error) {
-        if (global.logger) {
-            global.logger.error('removeToken error:', error);
-        } else {
-            console.error('removeToken error:', error);
-        }
-        return res.status(500).json({ success: false, message: 'Failed to remove token', error: error.message });
+        global.logger.error(`[NotificationController.removeToken] Route: ${req.originalUrl || req.url} - removeToken error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -413,7 +401,7 @@ const removeToken = async (req, res) => {
  * POST /api/notifications/send-broadcast
  * Admin-only: Send FCM broadcast to selected audience
  */
-const sendBroadcast = async (req, res) => {
+const sendBroadcast = async (req, res, next) => {
     try {
         const {
             audience = 'all',
@@ -533,8 +521,8 @@ const sendBroadcast = async (req, res) => {
             data: result
         });
     } catch (error) {
-        console.error('sendBroadcast error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to send broadcast notification' });
+        global.logger.error(`[NotificationController.sendBroadcast] Route: ${req.originalUrl || req.url} - sendBroadcast error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -542,7 +530,7 @@ const sendBroadcast = async (req, res) => {
  * GET /api/notifications/admin
  * Admin-only: Get notification history with filters
  */
-const getAdminNotifications = async (req, res) => {
+const getAdminNotifications = async (req, res, next) => {
     try {
         const { type, audience, status, startDate, endDate, page = 1, limit = 20 } = req.query;
         const query = { isDeletedByAdmin: false, userId: null };
@@ -647,8 +635,8 @@ const getAdminNotifications = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAdminNotifications error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch admin notifications' });
+        global.logger.error(`[NotificationController.getAdminNotifications] Route: ${req.originalUrl || req.url} - getAdminNotifications error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -656,7 +644,7 @@ const getAdminNotifications = async (req, res) => {
  * PATCH /api/notifications/admin/:id
  * Admin-only: Edit notification
  */
-const updateNotification = async (req, res) => {
+const updateNotification = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { title, message, url, scheduledTime, targetZones } = req.body;
@@ -685,8 +673,8 @@ const updateNotification = async (req, res) => {
         await notification.save();
         return res.status(200).json({ success: true, data: notification });
     } catch (error) {
-        console.error('updateNotification error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to update notification' });
+        global.logger.error(`[NotificationController.updateNotification] Route: ${req.originalUrl || req.url} - updateNotification error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -694,7 +682,7 @@ const updateNotification = async (req, res) => {
  * DELETE /api/notifications/admin/:id
  * Admin-only: Delete notification (soft delete for history, cancel if pending)
  */
-const deleteNotification = async (req, res) => {
+const deleteNotification = async (req, res, next) => {
     try {
         const { id } = req.params;
         const notification = await Notification.findById(id);
@@ -712,8 +700,8 @@ const deleteNotification = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Notification deleted/cancelled' });
     } catch (error) {
-        console.error('deleteNotification error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to delete notification' });
+        global.logger.error(`[NotificationController.deleteNotification] Route: ${req.originalUrl || req.url} - deleteNotification error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -721,7 +709,7 @@ const deleteNotification = async (req, res) => {
  * PATCH /api/notifications/admin/cancel/:id
  * Admin-only: Cancel scheduled notification
  */
-const cancelNotification = async (req, res) => {
+const cancelNotification = async (req, res, next) => {
     try {
         const { id } = req.params;
         const notification = await Notification.findOneAndUpdate(
@@ -736,8 +724,8 @@ const cancelNotification = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Notification cancelled', data: notification });
     } catch (error) {
-        console.error('cancelNotification error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to cancel notification' });
+        global.logger.error(`[NotificationController.cancelNotification] Route: ${req.originalUrl || req.url} - cancelNotification error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -745,7 +733,7 @@ const cancelNotification = async (req, res) => {
  * POST /api/notifications/admin/resend/:id
  * Admin-only: Resend a broadcast notification
  */
-const resendNotification = async (req, res) => {
+const resendNotification = async (req, res, next) => {
     try {
         const { id } = req.params;
         const notification = await Notification.findById(id);
@@ -792,8 +780,8 @@ const resendNotification = async (req, res) => {
             data: result
         });
     } catch (error) {
-        console.error('resendNotification error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to resend notification' });
+        global.logger.error(`[NotificationController.resendNotification] Route: ${req.originalUrl || req.url} - resendNotification error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -801,7 +789,7 @@ const resendNotification = async (req, res) => {
  * PATCH /api/notifications/clicked/:id
  * Track notification click
  */
-const markClicked = async (req, res) => {
+const markClicked = async (req, res, next) => {
     try {
         const { id } = req.params;
         const userId = req.userID || req.body.userId;
@@ -849,8 +837,8 @@ const markClicked = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Click tracked' });
     } catch (error) {
-        console.error('markClicked error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to track click' });
+        global.logger.error(`[NotificationController.markClicked] Route: ${req.originalUrl || req.url} - markClicked error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -858,7 +846,7 @@ const markClicked = async (req, res) => {
  * GET /api/notifications/admin/dashboard-stats
  * Admin-only: Get comprehensive FCM notification statistics
  */
-const getAdminDashboardStats = async (req, res) => {
+const getAdminDashboardStats = async (req, res, next) => {
     try {
         const User = require('../models/User-model');
         const Provider = require('../models/Provider-model');
@@ -922,8 +910,8 @@ const getAdminDashboardStats = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAdminDashboardStats error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch dashboard stats' });
+        global.logger.error(`[NotificationController.getAdminDashboardStats] Route: ${req.originalUrl || req.url} - getAdminDashboardStats error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -931,7 +919,7 @@ const getAdminDashboardStats = async (req, res) => {
  * GET /api/notifications/admin/analytics/:id
  * Admin-only: Get analytics for a broadcast notification
  */
-const getAdminAnalytics = async (req, res) => {
+const getAdminAnalytics = async (req, res, next) => {
     try {
         const { id } = req.params;
         const parent = await Notification.findById(id);
@@ -981,8 +969,8 @@ const getAdminAnalytics = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('getAdminAnalytics error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
+        global.logger.error(`[NotificationController.getAdminAnalytics] Route: ${req.originalUrl || req.url} - getAdminAnalytics error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -1021,7 +1009,7 @@ const getActiveEventsList = () => {
         scanDir(serverDir);
         cachedActiveEvents = Array.from(activeEvents);
     } catch (e) {
-        console.error('Error scanning active events:', e);
+        global.logger.error('Error scanning active events: ' + e.message, e);
         cachedActiveEvents = [
             'booking_created',
             'provider_assigned',
@@ -1036,40 +1024,40 @@ const getActiveEventsList = () => {
     return cachedActiveEvents;
 };
 
-const getActiveEvents = async (req, res) => {
+const getActiveEvents = async (req, res, next) => {
     try {
         const activeEvents = getActiveEventsList();
         return res.status(200).json({ success: true, data: activeEvents });
     } catch (error) {
-        console.error('getActiveEvents error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch active events' });
+        global.logger.error(`[NotificationController.getActiveEvents] Route: ${req.originalUrl || req.url} - getActiveEvents error: ${error.message}`, error);
+        next(error);
     }
 };
 
-const getTemplates = async (req, res) => {
+const getTemplates = async (req, res, next) => {
     try {
         const activeEvents = getActiveEventsList();
         const NotificationTemplate = mongoose.model('NotificationTemplate');
         const templates = await NotificationTemplate.find({ eventId: { $in: activeEvents } }).sort({ eventId: 1 });
         return res.status(200).json({ success: true, data: templates });
     } catch (error) {
-        console.error('getTemplates error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch templates' });
+        global.logger.error(`[NotificationController.getTemplates] Route: ${req.originalUrl || req.url} - getTemplates error: ${error.message}`, error);
+        next(error);
     }
 };
 
-const createTemplate = async (req, res) => {
+const createTemplate = async (req, res, next) => {
     try {
         const NotificationTemplate = mongoose.model('NotificationTemplate');
         const template = await NotificationTemplate.create(req.body);
         return res.status(201).json({ success: true, data: template });
     } catch (error) {
-        console.error('createTemplate error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to create template', error: error.message });
+        global.logger.error(`[NotificationController.createTemplate] Route: ${req.originalUrl || req.url} - createTemplate error: ${error.message}`, error);
+        next(error);
     }
 };
 
-const updateTemplate = async (req, res) => {
+const updateTemplate = async (req, res, next) => {
     try {
         const { id } = req.params;
         const NotificationTemplate = mongoose.model('NotificationTemplate');
@@ -1079,12 +1067,12 @@ const updateTemplate = async (req, res) => {
         }
         return res.status(200).json({ success: true, data: template });
     } catch (error) {
-        console.error('updateTemplate error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to update template' });
+        global.logger.error(`[NotificationController.updateTemplate] Route: ${req.originalUrl || req.url} - updateTemplate error: ${error.message}`, error);
+        next(error);
     }
 };
 
-const deleteTemplate = async (req, res) => {
+const deleteTemplate = async (req, res, next) => {
     try {
         const { id } = req.params;
         const NotificationTemplate = mongoose.model('NotificationTemplate');
@@ -1094,8 +1082,8 @@ const deleteTemplate = async (req, res) => {
         }
         return res.status(200).json({ success: true, message: 'Template deleted successfully' });
     } catch (error) {
-        console.error('deleteTemplate error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to delete template' });
+        global.logger.error(`[NotificationController.deleteTemplate] Route: ${req.originalUrl || req.url} - deleteTemplate error: ${error.message}`, error);
+        next(error);
     }
 };
 
@@ -1164,9 +1152,9 @@ const seedDefaultTemplates = async () => {
         const filteredDefaults = allDefaults.filter(d => activeEvents.includes(d.eventId));
 
         await NotificationTemplate.insertMany(filteredDefaults);
-        console.log('[NotificationService] Seeded default notification templates successfully.');
+        global.logger.info('[NotificationService] Seeded default notification templates successfully.');
     } catch (e) {
-        console.error('Error seeding default templates:', e);
+        global.logger.error('Error seeding default templates: ' + e.message, e);
     }
 };
 

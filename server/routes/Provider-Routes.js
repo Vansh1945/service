@@ -16,11 +16,12 @@ const {
 
 const requireProvider = roleMiddleware(['provider']);
 const requireAdmin = roleMiddleware(['admin']);
+const { providerApplyLimiter } = require('../middlewares/rate-limit');
 
 // Registration Routes (Public)
-router.post('/register/initiate', validateBody(initiateRegistrationSchema), providerController.initiateRegistration);
-router.post('/register/complete', validateBody(completeRegistrationSchema), providerController.completeRegistration);
-router.post('/login-for-completion', validateBody(loginForCompletionSchema), providerController.loginForCompletion);
+router.post('/register/initiate', providerApplyLimiter, validateBody(initiateRegistrationSchema), providerController.initiateRegistration);
+router.post('/register/complete', providerApplyLimiter, validateBody(completeRegistrationSchema), providerController.completeRegistration);
+router.post('/login-for-completion', providerApplyLimiter, validateBody(loginForCompletionSchema), providerController.loginForCompletion);
 
 
 // Profile Completion Route (Private)

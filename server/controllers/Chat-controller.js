@@ -66,7 +66,7 @@ const sendChatOpenedAdminNotification = async (room) => {
   const now = new Date();
   const cooldownMs = 5 * 60 * 1000;
   if (room.lastAdminNotificationSentAt && (now - new Date(room.lastAdminNotificationSentAt) < cooldownMs)) {
-    console.log(`[ChatController] Admin notification suppressed due to cooldown for room ${room._id}`);
+    global.logger.info(`[ChatController] Admin notification suppressed due to cooldown for room ${room._id}`);
     return;
   }
 
@@ -104,9 +104,9 @@ const sendChatOpenedAdminNotification = async (room) => {
     // Update lastAdminNotificationSentAt
     room.lastAdminNotificationSentAt = now;
     await room.save();
-    console.log(`[ChatController] Admin notification sent successfully for room ${room._id}`);
+    global.logger.info(`[ChatController] Admin notification sent successfully for room ${room._id}`);
   } catch (nErr) {
-    console.error('Error notifying admins on chat room opening:', nErr);
+    global.logger.error('Error notifying admins on chat room opening: ' + nErr.message, nErr);
   }
 };
 
@@ -276,8 +276,8 @@ const createRoom = async (req, res) => {
       data: roomObj
     });
   } catch (error) {
-    console.error('Error in createRoom:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.createRoom] Route: ${req.originalUrl || req.url} - Error in createRoom: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -387,7 +387,7 @@ const sendMessage = async (req, res) => {
           'chat_message'
         );
       } catch (nErr) {
-        console.error('Error triggering chat push notification in sendMessage:', nErr);
+        global.logger.error('Error triggering chat push notification in sendMessage: ' + nErr.message, nErr);
       }
     }
 
@@ -416,10 +416,10 @@ const sendMessage = async (req, res) => {
             { path: 'providerId', select: 'name email phone profilePicUrl providerId' }
           ]);
           // Call helper asynchronously to not block response
-          sendChatOpenedAdminNotification(room).catch(err => console.error(err));
+          sendChatOpenedAdminNotification(room).catch(err => global.logger.error(err.message, err));
         }
       } catch (nErr) {
-        console.error('Error triggering break notification in sendMessage:', nErr);
+        global.logger.error('Error triggering break notification in sendMessage: ' + nErr.message, nErr);
       }
     }
 
@@ -438,7 +438,7 @@ const sendMessage = async (req, res) => {
         unreadAdmin: room.unreadAdmin
       });
     } catch (sErr) {
-      console.warn('Socket emit failed, message saved to DB:', sErr.message);
+      global.logger.warn('Socket emit failed, message saved to DB: ' + sErr.message, sErr);
     }
 
     res.status(200).json({
@@ -447,8 +447,8 @@ const sendMessage = async (req, res) => {
       data: savedMessage
     });
   } catch (error) {
-    console.error('Error in sendMessage:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.sendMessage] Route: ${req.originalUrl || req.url} - Error in sendMessage: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -499,8 +499,8 @@ const adminGetMessages = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in adminGetMessages:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.adminGetMessages] Route: ${req.originalUrl || req.url} - Error in adminGetMessages: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -556,8 +556,8 @@ const getMessages = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in getMessages:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.getMessages] Route: ${req.originalUrl || req.url} - Error in getMessages: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -618,7 +618,7 @@ const markSeen = async (req, res) => {
           seenRole: userRole
         });
       } catch (sErr) {
-        console.warn('Socket seen emit failed:', sErr.message);
+        global.logger.warn('Socket seen emit failed: ' + sErr.message, sErr);
       }
     }
 
@@ -632,8 +632,8 @@ const markSeen = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in markSeen:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.markSeen] Route: ${req.originalUrl || req.url} - Error in markSeen: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -661,13 +661,13 @@ const typingStatus = async (req, res) => {
         isTyping: !!isTyping
       });
     } catch (sErr) {
-      console.warn('Socket typing emit failed:', sErr.message);
+      global.logger.warn('Socket typing emit failed: ' + sErr.message, sErr);
     }
 
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error in typingStatus:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.typingStatus] Route: ${req.originalUrl || req.url} - Error in typingStatus: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -688,8 +688,8 @@ const adminMonitor = async (req, res) => {
       data: rooms
     });
   } catch (error) {
-    console.error('Error in adminMonitor:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.adminMonitor] Route: ${req.originalUrl || req.url} - Error in adminMonitor: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -742,7 +742,7 @@ const joinAdmin = async (req, res) => {
       });
       io.to(roomId.toString()).emit('chat:admin-joined', { roomId });
     } catch (sErr) {
-      console.warn('Socket admin join emit failed:', sErr.message);
+      global.logger.warn('Socket admin join emit failed: ' + sErr.message, sErr);
     }
 
     res.status(200).json({
@@ -751,8 +751,8 @@ const joinAdmin = async (req, res) => {
       data: room
     });
   } catch (error) {
-    console.error('Error in joinAdmin:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.joinAdmin] Route: ${req.originalUrl || req.url} - Error in joinAdmin: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -776,8 +776,8 @@ const uploadChatFile = async (req, res) => {
       fileUrl
     });
   } catch (error) {
-    console.error('Chat file upload error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.uploadChatFile] Route: ${req.originalUrl || req.url} - Chat file upload error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -812,8 +812,8 @@ const deleteMessageForMe = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Message deleted for you successfully' });
   } catch (error) {
-    console.error('Error in deleteMessageForMe:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.deleteMessageForMe] Route: ${req.originalUrl || req.url} - Error in deleteMessageForMe: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -863,8 +863,8 @@ const searchMessages = async (req, res) => {
       data: matchedMessages
     });
   } catch (error) {
-    console.error('Error in searchMessages:', error);
-    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    global.logger.error(`[ChatController.searchMessages] Route: ${req.originalUrl || req.url} - Error in searchMessages: ${error.message}`, error);
+    next(error);
   }
 };
 

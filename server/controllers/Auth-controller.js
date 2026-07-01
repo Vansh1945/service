@@ -119,10 +119,8 @@ exports.Login = async (req, res) => {
       // Always use bcrypt.compare for consistency across all user types
       isMatch = await bcrypt.compare(trimmedPassword, user.password);
     } catch (error) {
-      return res.status(500).json({
-        success: false,
-        message: 'Error during login'
-      });
+      global.logger.error(`[AuthController.Login] Route: ${req.originalUrl || req.url} - Error during login: ${error.message}`, error);
+      return next(error);
     }
 
     if (!isMatch) {
@@ -272,12 +270,8 @@ exports.Login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    global.logger.error(`[AuthController.Login] Route: ${req.originalUrl || req.url} - Login error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -342,11 +336,8 @@ exports.forgotPassword = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Forgot password error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send OTP"
-    });
+    global.logger.error(`[AuthController.forgotPassword] Route: ${req.originalUrl || req.url} - Forgot password error: ${err.message}`, err);
+    next(err);
   }
 };
 
@@ -472,11 +463,8 @@ exports.resetPassword = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Reset password error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Password reset failed"
-    });
+    global.logger.error(`[AuthController.resetPassword] Route: ${req.originalUrl || req.url} - Reset password error: ${err.message}`, err);
+    next(err);
   }
 };
 
@@ -539,11 +527,8 @@ exports.resendOTP = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Resend OTP error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to resend OTP"
-    });
+    global.logger.error(`[AuthController.resendOTP] Route: ${req.originalUrl || req.url} - Resend OTP error: ${err.message}`, err);
+    next(err);
   }
 };
 
@@ -667,8 +652,8 @@ exports.firebaseLogin = async (req, res) => {
 
     return res.status(200).json({ success: true, message: 'Login successful', token: accessToken, refreshToken: refreshTokenRaw, user: userData });
   } catch (err) {
-    console.error('Firebase login error:', err);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    global.logger.error(`[AuthController.firebaseLogin] Route: ${req.originalUrl || req.url} - Firebase login error: ${err.message}`, err);
+    next(err);
   }
 };
 
@@ -730,8 +715,8 @@ exports.refreshAccessToken = async (req, res) => {
 
     return res.status(200).json({ success: true, token: accessToken, refreshToken: newRefreshRaw });
   } catch (err) {
-    console.error('Refresh token error:', err);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    global.logger.error(`[AuthController.refreshAccessToken] Route: ${req.originalUrl || req.url} - Refresh token error: ${err.message}`, err);
+    next(err);
   }
 };
 
@@ -775,7 +760,7 @@ exports.logout = async (req, res) => {
 
     return res.status(200).json({ success: true, message: allDevices ? 'Logged out from all devices' : 'Logged out successfully' });
   } catch (err) {
-    console.error('Logout error:', err);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    global.logger.error(`[AuthController.logout] Route: ${req.originalUrl || req.url} - Logout error: ${err.message}`, err);
+    next(err);
   }
 };

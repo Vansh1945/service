@@ -70,7 +70,6 @@ const updateQuestion = async (req, res) => {
     const { questionText, options, correctAnswer, category, isActive } = req.body;
     const questionId = req.params.id;
 
-    // पहले question को fetch करें
     const question = await Question.findById(questionId).session(session);
 
     if (!question) {
@@ -125,9 +124,7 @@ const updateQuestion = async (req, res) => {
       }
     }
 
-    // मैन्युअल validation
     if (options) {
-      // Options की लंबाई चेक करें
       if (options.length < 2 || options.length > 5) {
         await session.abortTransaction();
         return res.status(400).json({

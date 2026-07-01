@@ -4,7 +4,7 @@ const User = require('../models/User-model');
 // ADMIN CONTROLLERS
 
 // Create new coupon
-const createCoupon = async (req, res) => {
+const createCoupon = async (req, res, next) => {
   try {
     const { code, discountType, discountValue, expiryDate, minBookingValue, isGlobal, isFirstBooking, assignedTo, usageLimit, applicableZones, scope, selectedZones } = req.body;
 
@@ -55,15 +55,13 @@ const createCoupon = async (req, res) => {
         message: 'Coupon code already exists'
       });
     }
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[CouponController.createCoupon] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // Get all coupons with filters
-const getAllCoupons = async (req, res) => {
+const getAllCoupons = async (req, res, next) => {
   try {
     const { status, type, page, limit: limitQ } = req.query;
     const pageNum = parseInt(page) || 1;
@@ -112,16 +110,14 @@ const getAllCoupons = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[CouponController.getAllCoupons] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 
 // Update coupon
-const updateCoupon = async (req, res) => {
+const updateCoupon = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -178,31 +174,27 @@ const updateCoupon = async (req, res) => {
       data: updatedCoupon
     });
   } catch (error) {
-    console.error('Update coupon error:', error);
-
-    let errorMessage = 'Failed to update coupon';
-    let statusCode = 500;
+    global.logger.error(`[CouponController.updateCoupon] Route: ${req.originalUrl || req.url} - Update coupon error: ${error.message}`, error);
 
     if (error.name === 'ValidationError') {
-      statusCode = 400;
-      errorMessage = Object.values(error.errors).map(val => val.message).join(', ');
+      return res.status(400).json({
+        success: false,
+        message: Object.values(error.errors).map(val => val.message).join(', ')
+      });
     } else if (error.code === 11000) {
-      statusCode = 409;
-      errorMessage = 'Coupon code already exists';
-    } else if (error.message) {
-      errorMessage = error.message;
+      return res.status(409).json({
+        success: false,
+        message: 'Coupon code already exists'
+      });
     }
 
-    res.status(statusCode).json({
-      success: false,
-      message: errorMessage
-    });
+    next(error);
   }
 };
 
 
 // Activate / Deactivate coupon (toggle)
-const deleteCoupon = async (req, res) => {
+const deleteCoupon = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -228,15 +220,13 @@ const deleteCoupon = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    global.logger.error(`[CouponController.deleteCoupon] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
 // Hard delete coupon
-const hardDeleteCoupon = async (req, res) => {
+const hardDeleteCoupon = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -259,7 +249,7 @@ const hardDeleteCoupon = async (req, res) => {
       });
     }
 
-    console.log(`Deleting coupon: ${coupon.code}`);
+    global.logger.info(`Deleting coupon: ${coupon.code}`);
 
     await Coupon.findByIdAndDelete(id);
 
@@ -268,10 +258,8 @@ const hardDeleteCoupon = async (req, res) => {
       message: 'Coupon permanently deleted',
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    global.logger.error(`[CouponController.hardDeleteCoupon] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
   }
 };
 
@@ -355,7 +343,7 @@ const markCouponUsed = async (req, res) => {
   }
 };
 
-const getAvailableCoupons = async (req, res) => {
+const getAvailableCoupons = async (req, res, next) => {
   try {
     const { bookingValue, zoneId } = req.query;
     const userId = req.user?.id; // safe check
@@ -372,11 +360,8 @@ const getAvailableCoupons = async (req, res) => {
       data: coupons
     });
   } catch (error) {
-    console.error('Get Available Coupons Error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    global.logger.error(`[CouponController.getAvailableCoupons] Route: ${req.originalUrl || req.url} - Get Available Coupons Error: ${error.message}`, error);
+    next(error);
   }
 };
 

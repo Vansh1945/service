@@ -42,23 +42,34 @@ router.get('/unread-count', flexAuth, notificationController.getUnreadCount);
 
 
 
+const {
+  validateBody,
+  saveTokenSchema,
+  removeTokenSchema,
+  sendBroadcastSchema,
+  updateNotificationSchema,
+  createTemplateSchema,
+  updateTemplateSchema,
+  anyBodySchema
+} = require('../validation/common.validation');
+
 // PATCH /api/notifications/read-all — mark all as read
-router.patch('/read-all', flexAuth, notificationController.markAllRead);
+router.patch('/read-all', flexAuth, validateBody(anyBodySchema), notificationController.markAllRead);
 
 // PATCH /api/notifications/read/:id — mark one as read
-router.patch('/read/:id', flexAuth, notificationController.markRead);
+router.patch('/read/:id', flexAuth, validateBody(anyBodySchema), notificationController.markRead);
 
 // PATCH /api/notifications/clicked/:id — track click
-router.patch('/clicked/:id', flexAuth, notificationController.markClicked);
+router.patch('/clicked/:id', flexAuth, validateBody(anyBodySchema), notificationController.markClicked);
 
 // POST /api/notifications/save-token
-router.post('/save-token', flexAuth, notificationController.saveToken);
+router.post('/save-token', flexAuth, validateBody(saveTokenSchema), notificationController.saveToken);
 
 // POST /api/notifications/remove-token
-router.post('/remove-token', flexAuth, notificationController.removeToken);
+router.post('/remove-token', flexAuth, validateBody(removeTokenSchema), notificationController.removeToken);
 
 // POST /api/notifications/send-broadcast — Admin only
-router.post('/send-broadcast', flexAuth, adminOnly, notificationController.sendBroadcast);
+router.post('/send-broadcast', flexAuth, adminOnly, validateBody(sendBroadcastSchema), notificationController.sendBroadcast);
 
 // GET /api/notifications/history — Admin only
 router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastHistory);
@@ -67,24 +78,24 @@ router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastH
 router.get('/admin/dashboard-stats', flexAuth, adminOnly, notificationController.getAdminDashboardStats);
 
 // PATCH /api/notifications/admin/:id — Edit (Admin only)
-router.patch('/admin/:id', flexAuth, adminOnly, notificationController.updateNotification);
+router.patch('/admin/:id', flexAuth, adminOnly, validateBody(updateNotificationSchema), notificationController.updateNotification);
 
 // DELETE /api/notifications/admin/:id — Delete/Cancel (Admin only)
 router.delete('/admin/:id', flexAuth, adminOnly, notificationController.deleteNotification);
 
 // PATCH /api/notifications/admin/cancel/:id — Cancel specifically (Admin only)
-router.patch('/admin/cancel/:id', flexAuth, adminOnly, notificationController.cancelNotification);
+router.patch('/admin/cancel/:id', flexAuth, adminOnly, validateBody(anyBodySchema), notificationController.cancelNotification);
 
 // POST /api/notifications/admin/resend/:id — Resend (Admin only)
-router.post('/admin/resend/:id', flexAuth, adminOnly, notificationController.resendNotification);
+router.post('/admin/resend/:id', flexAuth, adminOnly, validateBody(anyBodySchema), notificationController.resendNotification);
 
 // GET /api/notifications/admin/analytics/:id — Analytics (Admin only)
 router.get('/admin/analytics/:id', flexAuth, adminOnly, notificationController.getAdminAnalytics);
 
 // Template CRUD routes (Admin only)
 router.get('/templates', flexAuth, adminOnly, notificationController.getTemplates);
-router.post('/templates', flexAuth, adminOnly, notificationController.createTemplate);
-router.put('/templates/:id', flexAuth, adminOnly, notificationController.updateTemplate);
+router.post('/templates', flexAuth, adminOnly, validateBody(createTemplateSchema), notificationController.createTemplate);
+router.put('/templates/:id', flexAuth, adminOnly, validateBody(updateTemplateSchema), notificationController.updateTemplate);
 router.delete('/templates/:id', flexAuth, adminOnly, notificationController.deleteTemplate);
 router.get('/active-events', flexAuth, adminOnly, notificationController.getActiveEvents);
 
