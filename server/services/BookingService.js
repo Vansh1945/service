@@ -2646,7 +2646,7 @@ static async getProviderBookingById(req, res) {
 
     const cleanBooking = { ...booking };
     if (cleanBooking.statusHistory) {
-      cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
+      cleanBooking.statusHistory = BookingService.sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
     }
 
     const zoneRelation = await getZoneRelation(cleanBooking.zoneId, provider.currentZone);
@@ -2812,7 +2812,7 @@ static async getBookingsByStatus(req, res) {
     const bookingsWithCommission = await Promise.all(bookings.map(async (booking) => {
       const cleanBooking = { ...booking };
       if (cleanBooking.statusHistory) {
-        cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
+        cleanBooking.statusHistory = BookingService.sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
       }
 
       const [zoneRelation, bookingCommissionRule] = await Promise.all([

@@ -516,7 +516,7 @@ static async getAllComplaints(req, res) {
       complaints.map(async (c) => {
         const pId = c.provider?._id || c.provider;
         const providerComplaintsCount = pId ? (countMap[pId.toString()] || 0) : 0;
-        return await enrichComplaintData({ ...c, providerComplaintsCount }, null, false);
+        return await ComplaintService.enrichComplaintData({ ...c, providerComplaintsCount }, null, false);
       })
     );
 
@@ -624,7 +624,7 @@ static async getComplaint(req, res) {
       }
     }
 
-    const enrichedData = await enrichComplaintData(complaint, req, true);
+    const enrichedData = await ComplaintService.enrichComplaintData(complaint, req, true);
 
     res.json({
       success: true,
@@ -1374,7 +1374,7 @@ static async getComplaintDetails(req, res) {
       });
     }
 
-    const enrichedData = await enrichComplaintData(complaint, req, true);
+    const enrichedData = await ComplaintService.enrichComplaintData(complaint, req, true);
 
     // Build Booking timeline and structured response
     let bookingData = null;
