@@ -306,8 +306,7 @@ const deleteService = async (req, res, next) => {
 // Get all services (Admin view)
 const getAllServices = async (req, res, next) => {
     try {
-        const { page = 1, limit = 10, search, category } = req.query;
-        const skip = (page - 1) * limit;
+        const { page, limit, search, category } = req.query;
 
         let query = { createdBy: req.adminID };
 
@@ -319,22 +318,25 @@ const getAllServices = async (req, res, next) => {
             query.category = category;
         }
 
-        const services = await Service.find(query)
+        let dbQuery = Service.find(query)
             .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit))
             .populate('createdBy', 'name email')
-            .populate('category', 'name')
-            .lean();
+            .populate('category', 'name');
 
+        if (page && limit) {
+            const skip = (parseInt(page) - 1) * parseInt(limit);
+            dbQuery = dbQuery.skip(skip).limit(parseInt(limit));
+        }
+
+        const services = await dbQuery.lean();
         const total = await Service.countDocuments(query);
 
         res.json({
             success: true,
             count: services.length,
             total,
-            page: parseInt(page),
-            pages: Math.ceil(total / limit),
+            page: page ? parseInt(page) : 1,
+            pages: limit ? Math.ceil(total / parseInt(limit)) : 1,
             data: services
         });
     } catch (error) {

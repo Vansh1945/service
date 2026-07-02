@@ -200,7 +200,7 @@ const rawPassbookImg = multer({
 const rawServicesFile = multer({
   storage: localStorage,
   limits: { fileSize: maxUploadLimit },
-  fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
+  fileFilter: fileFilterHelper(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'application/octet-stream'], ['xlsx', 'xls'])
 });
 
 const rawSystemLogo = multer({
@@ -262,7 +262,7 @@ module.exports = {
   uploadServiceImage: wrapMulter(rawServiceImage, 'service', 'serviceImage'),
   uploadComplaintImage: wrapMulter(rawComplaintImage, 'work_completion', 'complaintImage'),
   uploadPassbookImg: wrapMulter(rawPassbookImg, 'work_completion', 'passbookImage'),
-  uploadServicesFile: wrapMulter(rawServicesFile, 'service', 'servicesFile'),
+  uploadServicesFile: rawServicesFile,
   uploadSystemLogo: wrapMulter(rawSystemLogo, 'service', 'systemLogo'),
   uploadSystemFavicon: wrapMulter(rawSystemFavicon, 'service', 'systemFavicon'),
   uploadCategoryIcon: wrapMulter(rawCategoryIcon, 'service', 'categoryIcon'),
