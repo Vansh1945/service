@@ -51,12 +51,6 @@ const systemConfigSchema = new mongoose.Schema(
     favicon: {
       type: String, // image url
     },
-    authorizedSignature: {
-      type: String, // image url of authorized signature
-    },
-    companyStamp: {
-      type: String, // image url of company stamp
-    },
     providerBookingRingtone: {
       type: String,
       default: "",

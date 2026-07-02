@@ -427,8 +427,8 @@ const generateLetterheadDocument = async (provider, refPrefix, drawContentCallba
     try {
       const config = await SystemConfig.findOne() || { companyName: 'Raj Electrical Services' };
       const logoBuffer = await fetchImageBuffer(config.logo);
-      const signatureBuffer = await fetchImageBuffer(config.authorizedSignature);
-      const stampBuffer = await fetchImageBuffer(config.companyStamp);
+      const signatureBuffer = null;
+      const stampBuffer = null;
 
       const doc = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
       const chunks = [];

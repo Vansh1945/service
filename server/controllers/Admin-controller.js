@@ -73,6 +73,33 @@ const getCustomerById = async (req, res, next) => {
   }
 };
 
+const updateCustomer = async (req, res, next) => {
+  try {
+    await AdminService.updateCustomer(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.updateCustomer] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const toggleBlockCustomer = async (req, res, next) => {
+  try {
+    await AdminService.toggleBlockCustomer(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.toggleBlockCustomer] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const deleteCustomer = async (req, res, next) => {
+  try {
+    await AdminService.deleteCustomer(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.deleteCustomer] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 const approveProvider = async (req, res, next) => {
   try {
     await AdminService.approveProvider(req, res, next);
@@ -326,6 +353,9 @@ module.exports = {
   getAllAdmins,
   getAllCustomers,
   getCustomerById,
+  updateCustomer,
+  toggleBlockCustomer,
+  deleteCustomer,
   approveProvider,
   getPendingProviders,
   getAllProviders,

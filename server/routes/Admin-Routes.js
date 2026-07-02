@@ -38,6 +38,9 @@ router.delete('/admins/:id', adminController.deleteAdmin);
 // Customer management
 router.get('/customers', adminController.getAllCustomers);
 router.get('/customers/:id', adminController.getCustomerById);
+router.put('/customers/:id', adminController.updateCustomer);
+router.patch('/customers/:id/toggle-block', adminController.toggleBlockCustomer);
+router.delete('/customers/:id', adminController.deleteCustomer);
 
 // Provider management
 router.get('/providers/pending', adminController.getPendingProviders);

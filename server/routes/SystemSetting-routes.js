@@ -29,12 +29,6 @@ const uploadSystemSettings = multer({
         folder = 'systemRingtone';
         allowedFormats = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'mp4'];
         resourceType = 'video';
-      } else if (file.fieldname === 'authorizedSignature') {
-        folder = 'systemSignatures';
-        allowedFormats = ['jpg', 'jpeg', 'png'];
-      } else if (file.fieldname === 'companyStamp') {
-        folder = 'systemStamps';
-        allowedFormats = ['jpg', 'jpeg', 'png'];
       }
 
       return {
@@ -49,9 +43,7 @@ const uploadSystemSettings = multer({
 }).fields([
   { name: 'logo', maxCount: 1 },
   { name: 'favicon', maxCount: 1 },
-  { name: 'providerBookingRingtone', maxCount: 1 },
-  { name: 'authorizedSignature', maxCount: 1 },
-  { name: 'companyStamp', maxCount: 1 }
+  { name: 'providerBookingRingtone', maxCount: 1 }
 ]);
 
 // Combined upload for branding assets (logo, icon, splashScreen, favicon)

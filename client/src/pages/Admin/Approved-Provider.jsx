@@ -230,7 +230,7 @@ const AdminProviders = () => {
 
         showToast(msg, 'success');
         fetchProviders();
-        
+
         // Update local state without closing the modal or refresh to meet "no page refresh required"
         if (data.provider) {
           setSelectedProvider(data.provider);
@@ -845,8 +845,8 @@ const ProviderModal = ({
             <div className="mb-4 bg-white p-3 rounded-xl border border-slate-100 space-y-1">
               <h5 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Actions Guide</h5>
               <p className="text-[10px] text-slate-500">
-                ⚠️ <strong>Restrict:</strong> Disables new bookings. | 
-                🚫 <strong>Suspend:</strong> Restricts login operations. | 
+                ⚠️ <strong>Restrict:</strong> Disables new bookings. |
+                🚫 <strong>Suspend:</strong> Restricts login operations. |
                 ❌ <strong>Block:</strong> Complete block & logout.
               </p>
             </div>

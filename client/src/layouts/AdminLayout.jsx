@@ -75,7 +75,7 @@ const AdminLayout = () => {
       title: 'Financials & Offers',
       items: [
         { name: 'Transactions', path: '/admin/transactions', icon: <FiActivity className="w-5 h-5" /> },
-        { name: 'Earning Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
+        { name: 'Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
         { name: 'Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
         { name: 'Refunds', path: '/admin/refunds', icon: <FiDollarSign className="w-5 h-5" /> },
         { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
@@ -191,9 +191,8 @@ const AdminLayout = () => {
                   >
                     <span>{group.title}</span>
                     <FiChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        isCollapsed ? '-rotate-90' : ''
-                      }`}
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''
+                        }`}
                     />
                   </button>
                   {!isCollapsed && (
@@ -260,9 +259,8 @@ const AdminLayout = () => {
                   >
                     <span>{group.title}</span>
                     <FiChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        isCollapsed ? '-rotate-90' : ''
-                      }`}
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''
+                        }`}
                     />
                   </button>
                   {!isCollapsed && (

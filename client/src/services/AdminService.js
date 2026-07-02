@@ -28,6 +28,18 @@ export const getCustomerById = (id) => {
     return axiosInstance.get(`/admin/customers/${id}`);
 };
 
+export const updateCustomer = (id, data) => {
+    return axiosInstance.put(`/admin/customers/${id}`, data);
+};
+
+export const toggleBlockCustomer = (id, data) => {
+    return axiosInstance.patch(`/admin/customers/${id}/toggle-block`, data);
+};
+
+export const deleteCustomer = (id) => {
+    return axiosInstance.delete(`/admin/customers/${id}`);
+};
+
 export const getPendingProviders = (params) => {
     return axiosInstance.get("/admin/providers/pending", { params });
 };

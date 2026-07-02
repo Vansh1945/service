@@ -7,14 +7,14 @@ import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
 
 import Loader from '../../components/ui-skeletons/Loader';
-import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { useNavigate } from 'react-router-dom';
 import {
   Navigation, Search, Wifi, Layers,
   RefreshCw, AlertCircle, Clock, MessageSquare,
-  X, Ticket, Briefcase, Zap, BarChart3, Users, UserCheck, CalendarCheck
+  X, Ticket, Briefcase, Zap, BarChart3
 } from 'lucide-react';
 
 // Fix for default Leaflet marker assets in Vite
@@ -457,13 +457,15 @@ const LiveTrackingPage = () => {
     if (loc?.coordinates?.length === 2) {
       const lng = loc.coordinates[0];
       const lat = loc.coordinates[1];
-      if (lat !== 0 && lng !== 0) {
+      if (lat !== 0 && lng !== 0 && lat !== null && lng !== null) {
         setMapCenter([lat, lng]);
         setMapZoom(15);
         addLog(`Focusing satellite array: Specialist ${provider.name}`);
-      } else {
-        if (showToast) showToast('Specialist coordinates missing from telemetry channel', 'warning');
+        return;
       }
+    }
+    if (showToast) {
+      showToast(`${provider.name || 'Specialist'} is offline or GPS tracking is not active.`, 'warning');
     }
   };
 
@@ -960,7 +962,8 @@ const LiveTrackingPage = () => {
             </div>
           ) : (
             <div className="w-full h-full absolute inset-0">
-              <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: '100%', width: '100%', zIndex: 10 }}>
+              <MapContainer center={mapCenter} zoom={mapZoom} zoomControl={false} style={{ height: '100%', width: '100%', zIndex: 10 }}>
+                <ZoomControl position="bottomright" />
                 {/* Only Satellite and 3D maps are permitted */}
                 <TileLayer
                   attribution='&copy; Google Maps Telemetry, Esri World Imagery'
