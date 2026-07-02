@@ -562,26 +562,34 @@ const ProviderSupportPage = () => {
               {selectedComplaint.resolutionHistory?.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-3">Resolution History</p>
-                  <div className="relative pl-6">
-                    <div className="absolute left-[10px] top-2 bottom-2 w-px bg-neutral-100" />
-                    <div className="space-y-4">
-                      {selectedComplaint.resolutionHistory.map((step, i) => (
-                        <div key={i} className="relative">
-                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
-                            ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'border-green-500' :
-                            step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit') ? 'border-primary' : 'border-neutral-300'
-                          }`} />
-                          <div className="flex justify-between items-start">
-                            <p className={`text-[11px] font-bold ${
-                              ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'text-green-600' : 'text-secondary'
-                            }`}>{step.event}</p>
-                            <span className="text-[9px] text-neutral-400">{formatDateTime(step.timestamp)}</span>
+                  <div className="space-y-0">
+                    {selectedComplaint.resolutionHistory.map((step, i) => {
+                      const isTerminal = ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s));
+                      const isAction = step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit');
+                      const isLast = i === selectedComplaint.resolutionHistory.length - 1;
+                      const dotColor = isTerminal ? 'bg-green-500 border-green-500' : isAction ? 'bg-primary border-primary' : 'bg-neutral-300 border-neutral-300';
+                      const textColor = isTerminal ? 'text-green-600' : 'text-secondary';
+                      return (
+                        <div key={i} className="flex gap-3">
+                          {/* Timeline column: dot + line */}
+                          <div className="flex flex-col items-center flex-shrink-0">
+                            <div className={`w-2.5 h-2.5 rounded-full border-2 ${dotColor} ${isTerminal ? 'ring-2 ring-green-100' : isAction ? 'ring-2 ring-primary/10' : ''}`} />
+                            {!isLast && <div className="w-px flex-1 bg-neutral-200 min-h-[20px]" />}
                           </div>
-                          {step.note && <p className="text-[10px] text-neutral-500 italic mt-0.5">"{step.note}"</p>}
-                          <p className="text-[9px] text-neutral-400 mt-1 uppercase">By: {step.by}</p>
+                          {/* Content column */}
+                          <div className="pb-4 flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2 -mt-0.5">
+                              <p className={`text-[11px] font-bold ${textColor}`}>{step.event}</p>
+                              <span className="text-[9px] text-neutral-400 whitespace-nowrap flex-shrink-0">{formatDateTime(step.timestamp)}</span>
+                            </div>
+                            {step.note && !/^\*.*variables.*\*$/i.test(step.note.trim()) && step.note.trim().length > 0 && (
+                              <p className="text-[10px] text-neutral-500 italic mt-0.5">"{step.note}"</p>
+                            )}
+                            <p className="text-[9px] text-neutral-400 mt-1 uppercase">By: {step.by}</p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

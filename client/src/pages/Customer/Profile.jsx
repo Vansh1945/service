@@ -9,7 +9,7 @@ import Processing from '../../components/ui-skeletons/Processing';
 import * as NotificationService from '../../services/NotificationService';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield, Bell,
-    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw,
+    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, ArrowUpRight, RotateCcw,
     Tag, Copy, Clock, Zap, Star, Heart
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
@@ -559,41 +559,43 @@ const UserProfile = () => {
                                         {(transactions?.data?.length || 0) > 0 ? (
                                             <div className="space-y-3">
                                                 {transactions.data.map(entry => {
-                                                    const isCredit = entry.type === 'credit';
-                                                    const amountColor = isCredit ? 'text-emerald-600' : 'text-red-500';
-                                                    const IconComponent = isCredit ? ArrowDownLeft : Wallet;
-                                                    const iconBg = isCredit
-                                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                                        : 'bg-red-50 text-red-500 border border-red-100';
+                                                     const isCredit = entry.type === 'credit';
+                                                     const amountColor = isCredit ? 'text-emerald-600' : 'text-rose-600';
+                                                     const IconComponent = isCredit ? ArrowDownLeft : ArrowUpRight;
+                                                     const iconBg = isCredit
+                                                         ? 'bg-emerald-50 text-emerald-600 border border-emerald-100/80 rounded-full'
+                                                         : 'bg-rose-50 text-rose-600 border border-rose-100/80 rounded-full';
 
-                                                    return (
-                                                        <div key={entry._id} className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all bg-white">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-                                                                    <IconComponent className="w-4 h-4" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-sm font-bold text-secondary leading-none mb-1">{entry.reason}</p>
-                                                                    <p className="text-[10px] text-gray-400 mt-0.5 font-mono">
-                                                                        {entry.booking?.bookingId ? `Booking: #${entry.booking.bookingId}` : 'Transaction ID: ' + (entry._id.slice(-8).toUpperCase())}
-                                                                    </p>
-                                                                    <p className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(entry.createdAt)}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="text-right shrink-0 ml-3">
-                                                                <p className={`text-base font-black ${amountColor}`}>
-                                                                    {isCredit ? '+' : '−'}{formatCurrency(entry.amount)}
-                                                                </p>
-                                                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${isCredit
-                                                                    ? 'bg-emerald-50 text-emerald-600'
-                                                                    : 'bg-red-50 text-red-500'
-                                                                    }`}>
-                                                                    {isCredit ? 'Credit' : 'Debit'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                     return (
+                                                         <div key={entry._id} className="flex items-center justify-between p-3.5 rounded-2xl border border-gray-100 hover:border-primary/20 hover:shadow-md hover:shadow-primary/5 transition-all duration-300 bg-white">
+                                                             <div className="flex items-center gap-3.5">
+                                                                 <div className={`w-11 h-11 flex items-center justify-center shrink-0 ${iconBg}`}>
+                                                                     <IconComponent className="w-5 h-5" />
+                                                                 </div>
+                                                                 <div className="space-y-1">
+                                                                     <p className="text-sm font-semibold text-secondary leading-tight">{entry.reason}</p>
+                                                                     <div className="flex flex-wrap items-center gap-2">
+                                                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-150/50 font-mono">
+                                                                             {entry.booking?.bookingId ? `Booking: #${entry.booking.bookingId}` : 'TXN: ' + (entry._id.slice(-8).toUpperCase())}
+                                                                         </span>
+                                                                         <span className="text-[10px] text-gray-400 font-medium">{formatDateTime(entry.createdAt)}</span>
+                                                                     </div>
+                                                                 </div>
+                                                             </div>
+                                                             <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-1">
+                                                                 <p className={`text-base font-extrabold tracking-tight ${amountColor}`}>
+                                                                     {isCredit ? '+' : '−'}{formatCurrency(entry.amount)}
+                                                                 </p>
+                                                                 <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider ${isCredit
+                                                                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                                     : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                                                     }`}>
+                                                                     {isCredit ? 'Credit' : 'Debit'}
+                                                                 </span>
+                                                             </div>
+                                                         </div>
+                                                     );
+                                                 })}
                                             </div>
                                         ) : (
                                             <div className="text-center py-12">

@@ -1586,14 +1586,29 @@ static async enrichComplaintData(complaint, req = null, isDetail = false) {
     }
   }
 
+  // Use cleaned description for "Complaint Created" note (title may contain template text)
+  const cleanedDesc = (complaint.description || '').replace(/^\[.*?\]\n/, '').trim();
+  const createdNote = cleanedDesc.length > 0 && cleanedDesc.length <= 200 ? cleanedDesc : undefined;
   const resolutionHistory = [
-    { event: 'Complaint Created', timestamp: complaint.createdAt, by: complaint.userType === 'customer' ? 'Customer' : 'Provider', note: complaint.title }
+    { event: 'Complaint Created', timestamp: complaint.createdAt, by: complaint.userType === 'customer' ? 'Customer' : 'Provider', note: createdNote }
   ];
   if (complaint.statusHistory && complaint.statusHistory.length > 0) {
+    // Track seen statuses to deduplicate (same status within 60s = duplicate)
+    const seenStatuses = new Map();
     complaint.statusHistory.forEach((h, index) => {
-      if (h.status === 'submitted' && index === 0) {
+      // Skip 'submitted' entries — already covered by "Complaint Created"
+      if (h.status === 'submitted') {
         return;
       }
+
+      // Deduplicate: skip if same status was already added within 60 seconds
+      const ts = new Date(h.updatedAt || h.timestamp).getTime();
+      const prevTs = seenStatuses.get(h.status);
+      if (prevTs && Math.abs(ts - prevTs) < 60000) {
+        return;
+      }
+      seenStatuses.set(h.status, ts);
+
       const isFinalStatus = ['resolved', 'Solved', 'rejected', 'refunded', 'Closed'].includes(h.status);
       const isLatest = index === (complaint.statusHistory.length - 1);
       

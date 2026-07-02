@@ -1613,258 +1613,258 @@ const ProviderRegistration = () => {
         // Substep 4: Professional & Bank Details
         if (profileSubStep === 4) {
           return (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-xl font-bold text-secondary">Step 4 of 4: Professional & Bank Details</h2>
-              <p className="text-sm text-gray-500 mt-1">Complete your service details and bank information</p>
-            </div>
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-secondary">Step 4 of 4: Professional & Bank Details</h2>
+                <p className="text-sm text-gray-500 mt-1">Complete your service details and bank information</p>
+              </div>
 
-            {/* Professional Info */}
-            <Section title="Professional Information" icon={Briefcase}>
-              <Field label="Service Categories (Select 1–3) *">
-                {providerServicesLoading ? (
-                  <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
-                    <div className=" rounded-full h-4 w-4 border-2 border-primary border-t-transparent animate-spin" />
-                    Loading categories...
-                  </div>
-                ) : providerServicesError ? (
-                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    Failed to load categories. Please refresh.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <select
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val && !selectedServices.includes(val) && selectedServices.length < 3) {
-                            handleServiceChange({ _id: val });
-                          }
-                          e.target.value = '';
-                        }}
-                        defaultValue=""
-                        className={`${inputCls} appearance-none pr-10 cursor-pointer`}
-                      >
-                        <option value="" disabled>
-                          {selectedServices.length >= 3 ? 'Max 3 selected' : 'Select a category...'}
-                        </option>
-                        {providerServices.map((svc) => (
-                          <option key={svc.value} value={svc.value} disabled={selectedServices.includes(svc.value)}>
-                            {svc.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              {/* Professional Info */}
+              <Section title="Professional Information" icon={Briefcase}>
+                <Field label="Service Categories (Select 1–3) *">
+                  {providerServicesLoading ? (
+                    <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
+                      <div className=" rounded-full h-4 w-4 border-2 border-primary border-t-transparent animate-spin" />
+                      Loading categories...
                     </div>
+                  ) : providerServicesError ? (
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      Failed to load categories. Please refresh.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <select
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val && !selectedServices.includes(val) && selectedServices.length < 3) {
+                              handleServiceChange({ _id: val });
+                            }
+                            e.target.value = '';
+                          }}
+                          defaultValue=""
+                          className={`${inputCls} appearance-none pr-10 cursor-pointer`}
+                        >
+                          <option value="" disabled>
+                            {selectedServices.length >= 3 ? 'Max 3 selected' : 'Select a category...'}
+                          </option>
+                          {providerServices.map((svc) => (
+                            <option key={svc.value} value={svc.value} disabled={selectedServices.includes(svc.value)}>
+                              {svc.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      </div>
 
-                    {selectedServices.length > 0 && (
-                      <>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedServices.map((id) => {
-                            const svc = providerServices.find((s) => s.value === id) || { label: 'Unknown' };
-                            return (
-                              <span
-                                key={id}
-                                className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full text-xs font-semibold"
-                              >
-                                {svc.label}
-                                <button
-                                  type="button"
-                                  onClick={() => handleServiceChange({ value: id })}
-                                  className="hover:text-primary/60 transition-colors"
+                      {selectedServices.length > 0 && (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedServices.map((id) => {
+                              const svc = providerServices.find((s) => s.value === id) || { label: 'Unknown' };
+                              return (
+                                <span
+                                  key={id}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full text-xs font-semibold"
                                 >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </span>
-                            );
-                          })}
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500 font-medium">
-                            {selectedServices.length}/3 selected
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedServices([])}
-                            className="text-accent font-semibold hover:underline"
-                          >
-                            Clear all
-                          </button>
-                        </div>
-                      </>
-                    )}
+                                  {svc.label}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleServiceChange({ value: id })}
+                                    className="hover:text-primary/60 transition-colors"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500 font-medium">
+                              {selectedServices.length}/3 selected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedServices([])}
+                              className="text-accent font-semibold hover:underline"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                        </>
+                      )}
 
-                    {providerServices.length === 0 && (
-                      <p className="text-sm text-gray-400 py-2">No categories available.</p>
-                    )}
-                  </div>
-                )}
-              </Field>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Years of Experience *">
-                  <input
-                    type="number"
-                    id="experience"
-                    name="experience"
-                    value={formData.experience}
-                    onChange={handleChange}
-                    placeholder="e.g., 5"
-                    min="0"
-                    className={inputCls}
-                  />
+                      {providerServices.length === 0 && (
+                        <p className="text-sm text-gray-400 py-2">No categories available.</p>
+                      )}
+                    </div>
+                  )}
                 </Field>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Service Area *</label>
-                    <div className="relative group cursor-pointer">
-                      <Info className="w-3.5 h-3.5 text-gray-400 hover:text-accent transition-colors" />
-                      <div className="absolute left-0 top-5 z-50 hidden group-hover:block w-60 bg-secondary text-background text-xs rounded-lg px-3 py-2.5 shadow-lg leading-relaxed">
-                        <div className="absolute -top-1.5 left-1 w-3 h-3 bg-secondary rotate-45 rounded-sm" />
-                        Enter the <strong>single city or area</strong> where you will provide services. Example: <em>Mumbai</em> or <em>Andheri West</em>. You can update this later from your profile.
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Years of Experience *">
+                    <input
+                      type="number"
+                      id="experience"
+                      name="experience"
+                      value={formData.experience}
+                      onChange={handleChange}
+                      placeholder="e.g., 5"
+                      min="0"
+                      className={inputCls}
+                    />
+                  </Field>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Service Area *</label>
+                      <div className="relative group cursor-pointer">
+                        <Info className="w-3.5 h-3.5 text-gray-400 hover:text-accent transition-colors" />
+                        <div className="absolute left-0 top-5 z-50 hidden group-hover:block w-60 bg-secondary text-background text-xs rounded-lg px-3 py-2.5 shadow-lg leading-relaxed">
+                          <div className="absolute -top-1.5 left-1 w-3 h-3 bg-secondary rotate-45 rounded-sm" />
+                          Enter the <strong>single city or area</strong> where you will provide services. Example: <em>Mumbai</em> or <em>Andheri West</em>. You can update this later from your profile.
+                        </div>
                       </div>
                     </div>
+                    <input
+                      type="text"
+                      id="serviceArea"
+                      name="serviceArea"
+                      value={formData.serviceArea}
+                      onChange={handleChange}
+                      placeholder="Enter your city (e.g., Mumbai)"
+                      className={inputCls}
+                    />
+                    {formData.serviceArea && (
+                      <p className="text-[10px] text-primary font-medium mt-0.5">📍 {formData.serviceArea}</p>
+                    )}
                   </div>
-                  <input
-                    type="text"
-                    id="serviceArea"
-                    name="serviceArea"
-                    value={formData.serviceArea}
-                    onChange={handleChange}
-                    placeholder="Enter your city (e.g., Mumbai)"
-                    className={inputCls}
-                  />
-                  {formData.serviceArea && (
-                    <p className="text-[10px] text-primary font-medium mt-0.5">📍 {formData.serviceArea}</p>
-                  )}
                 </div>
-              </div>
-            </Section>
+              </Section>
 
 
 
-            {/* Bank Details */}
-            <Section
-              title="Bank Details"
-              icon={CreditCard}
-              accent
-              tooltip="Your bank details are used for secure payment transfers after each completed job. All information is encrypted and never shared. Provide the account where you want to receive your earnings."
-            >
-              <div className="space-y-4">
-                <IfscBankDetails
-                  value={{
-                    ifsc: formData.ifsc,
-                    accountNo: formData.accountNo,
-                    bankName: formData.bankName,
-                    branch: formData.branch,
-                    district: formData.district,
-                    state: formData.state,
-                    city: formData.city,
-                    address: formData.address,
-                  }}
-                  onChange={(updated) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      ifsc: updated.ifsc || '',
-                      accountNo: updated.accountNo || '',
-                      bankName: updated.bankName || '',
-                      branch: updated.branch || '',
-                      district: updated.district || '',
-                      state: updated.state || '',
-                      city: updated.city || '',
-                      address: updated.address || '',
-                    }));
-                  }}
-                  onValidityChange={setIsBankValid}
-                  showAccountName={true}
-                  accountNameValue={formData.accountName || ''}
-                  onAccountNameChange={(name) => setFormData((prev) => ({ ...prev, accountName: name }))}
-                />
+              {/* Bank Details */}
+              <Section
+                title="Bank Details"
+                icon={CreditCard}
+                accent
+                tooltip="Your bank details are used for secure payment transfers after each completed job. All information is encrypted and never shared. Provide the account where you want to receive your earnings."
+              >
+                <div className="space-y-4">
+                  <IfscBankDetails
+                    value={{
+                      ifsc: formData.ifsc,
+                      accountNo: formData.accountNo,
+                      bankName: formData.bankName,
+                      branch: formData.branch,
+                      district: formData.district,
+                      state: formData.state,
+                      city: formData.city,
+                      address: formData.address,
+                    }}
+                    onChange={(updated) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        ifsc: updated.ifsc || '',
+                        accountNo: updated.accountNo || '',
+                        bankName: updated.bankName || '',
+                        branch: updated.branch || '',
+                        district: updated.district || '',
+                        state: updated.state || '',
+                        city: updated.city || '',
+                        address: updated.address || '',
+                      }));
+                    }}
+                    onValidityChange={setIsBankValid}
+                    showAccountName={true}
+                    accountNameValue={formData.accountName || ''}
+                    onAccountNameChange={(name) => setFormData((prev) => ({ ...prev, accountName: name }))}
+                  />
 
+                  <KycFileField
+                    label="Bank Passbook Image *"
+                    fieldName="passbookImage"
+                    accept="image/*"
+                    placeholder="Upload passbook image..."
+                    icon={Camera}
+                    value={formData.passbookImage}
+                    onChange={(e) => handleKycFileChange('passbookImage')(e.target.files[0])}
+                    onRemove={() => setFormData(prev => ({ ...prev, passbookImage: null }))}
+                    progress={uploadProgresses.passbookImage}
+                  />
+                </div>
+              </Section>
+
+              {/* Documents */}
+              <Section
+                title="Profile Picture"
+                icon={FileText}
+                tooltip="Upload a clear face photo. This helps build trust with customers."
+              >
                 <KycFileField
-                  label="Bank Passbook Image *"
-                  fieldName="passbookImage"
+                  label="Profile Picture *"
+                  fieldName="profilePic"
                   accept="image/*"
-                  placeholder="Upload passbook image..."
+                  placeholder="Upload profile photo..."
                   icon={Camera}
-                  value={formData.passbookImage}
-                  onChange={(e) => handleKycFileChange('passbookImage')(e.target.files[0])}
-                  onRemove={() => setFormData(prev => ({ ...prev, passbookImage: null }))}
-                  progress={uploadProgresses.passbookImage}
+                  value={formData.profilePic}
+                  onChange={(e) => handleKycFileChange('profilePic')(e.target.files[0])}
+                  onRemove={() => setFormData(prev => ({ ...prev, profilePic: null }))}
+                  progress={uploadProgresses.profilePic}
                 />
+              </Section>
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setProfileSubStep(formData.addressSame ? 2 : 3)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedServices.length === 0) {
+                      toast.error('Please select at least one service category');
+                      return;
+                    }
+                    if (!formData.experience || formData.experience < 0) {
+                      toast.error('Please enter valid years of experience');
+                      return;
+                    }
+                    if (!formData.serviceArea) {
+                      toast.error('Please enter your service area');
+                      return;
+                    }
+                    if (!formData.accountNo || !formData.ifsc) {
+                      toast.error('Bank account number and IFSC code are required');
+                      return;
+                    }
+                    if (!formData.passbookImage) {
+                      toast.error('Bank passbook image is required');
+                      return;
+                    }
+                    if (!formData.profilePic) {
+                      toast.error('Profile picture is required');
+                      return;
+                    }
+                    setProfileSubStep(5);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 transition-all"
+                >
+                  Next Step
+                </button>
               </div>
-            </Section>
-
-            {/* Documents */}
-            <Section
-              title="Profile Picture"
-              icon={FileText}
-              tooltip="Upload a clear face photo. This helps build trust with customers."
-            >
-              <KycFileField
-                label="Profile Picture *"
-                fieldName="profilePic"
-                accept="image/*"
-                placeholder="Upload profile photo..."
-                icon={Camera}
-                value={formData.profilePic}
-                onChange={(e) => handleKycFileChange('profilePic')(e.target.files[0])}
-                onRemove={() => setFormData(prev => ({ ...prev, profilePic: null }))}
-                progress={uploadProgresses.profilePic}
-              />
-            </Section>
-
-            <div className="flex gap-3 mt-8">
-              <button
-                type="button"
-                onClick={() => setProfileSubStep(formData.addressSame ? 2 : 3)}
-                className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedServices.length === 0) {
-                    toast.error('Please select at least one service category');
-                    return;
-                  }
-                  if (!formData.experience || formData.experience < 0) {
-                    toast.error('Please enter valid years of experience');
-                    return;
-                  }
-                  if (!formData.serviceArea) {
-                    toast.error('Please enter your service area');
-                    return;
-                  }
-                  if (!formData.accountNo || !formData.ifsc) {
-                    toast.error('Bank account number and IFSC code are required');
-                    return;
-                  }
-                  if (!formData.passbookImage) {
-                    toast.error('Bank passbook image is required');
-                    return;
-                  }
-                  if (!formData.profilePic) {
-                    toast.error('Profile picture is required');
-                    return;
-                  }
-                  setProfileSubStep(5);
-                }}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 transition-all"
-              >
-                Next Step
-              </button>
             </div>
-          </div>
-        );
-      }
+          );
+        }
 
-      // Substep 5: Legal Acceptance & Digital Signature
-      if (profileSubStep === 5) {
-        return (
+        // Substep 5: Legal Acceptance & Digital Signature
+        if (profileSubStep === 5) {
+          return (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-bold text-secondary">Step 5 of 5: Legal Agreements</h2>
@@ -2137,14 +2137,14 @@ const ProviderRegistration = () => {
             </div>
           </div>
 
-      </div>
+        </div>
 
-      <ProviderPolicy
-        isOpen={agreementModal.isOpen}
-        type={agreementModal.type}
-        onClose={() => setAgreementModal({ isOpen: false, type: '', hasScrolled: false })}
-        onAccept={acceptAgreement}
-      />
+        <ProviderPolicy
+          isOpen={agreementModal.isOpen}
+          type={agreementModal.type}
+          onClose={() => setAgreementModal({ isOpen: false, type: '', hasScrolled: false })}
+          onAccept={acceptAgreement}
+        />
       </div>
     </div>
   );

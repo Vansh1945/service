@@ -1,25 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-    FiHome, FiCalendar, FiCreditCard, FiMessageSquare,
-    FiBell, FiUser, FiAlertCircle, FiLogOut,
-    FiShoppingBag, FiMenu, FiX, FiChevronDown, FiMapPin, FiGift
+    FiCalendar, FiMessageSquare,
+    FiUser, FiAlertCircle, FiLogOut,
+    FiShoppingBag, FiMenu, FiChevronDown, FiMapPin, FiGift
 } from 'react-icons/fi';
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
 import SearchBar from '../pages/Customer/components/Customer-SearchBar';
 
-import * as SystemService from '../services/SystemService';
-import * as CustomerService from '../services/CustomerService';
-import { detectCurrentLocation, toLegacyAddressFields } from '../utils/format';
 
 const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser, API, token, refreshUser, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
-    const locationRequestedRef = React.useRef(false);
+    const { user, logoutUser, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
 
     const logo = activeBranding?.logo || authSystemSettings?.logo || null;
     const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
@@ -100,8 +97,17 @@ const CustomerLayout = () => {
 
                             <NotificationBell />
 
+                            {/* Logout button next to bell icon on mobile */}
+                            <button
+                                onClick={handleLogout}
+                                className="block md:hidden p-1.5 rounded-lg hover:bg-gray-50 text-red-600 transition-all duration-200 focus:outline-none"
+                                title="Sign Out"
+                            >
+                                <FiLogOut className="h-5 w-5" />
+                            </button>
+
                             {/* Profile Dropdown - Unified for all screens */}
-                            <div className="relative">
+                            <div className="relative hidden md:block">
                                 <button
                                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                                     className="flex items-center space-x-2 p-1.5 rounded-lg hover:bg-gray-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 border border-transparent hover:border-gray-200"
@@ -165,22 +171,22 @@ const CustomerLayout = () => {
                 <div className="block md:hidden sticky top-16 z-40 px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
                     <SearchBar />
                 </div>
-                <div className="w-full py-4 lg:py-6">
+                <div className="w-full pt-1 pb-4 lg:pt-2 lg:pb-6">
                     <Outlet />
                 </div>
             </main>
 
             {/* Mobile Bottom Navigation Bar */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] flex justify-around items-center h-16 px-2">
-                {navigationItems.map((item) => {
+                {navigationItems.slice(0, 4).map((item) => {
                     const active = isActiveRoute(item.path);
                     return (
                         <Link
-                          key={item.name}
-                          to={item.path}
-                          className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-all duration-200 ${
-                            active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
-                          }`}
+                            key={item.name}
+                            to={item.path}
+                            className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-all duration-200 ${active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
+                                }`}
+                            onClick={() => setMobileMenuOpen(false)}
                         >
                             <div className={`p-1 rounded-lg transition-transform duration-200 ${active ? 'scale-110' : ''}`}>
                                 {item.icon}
@@ -191,7 +197,45 @@ const CustomerLayout = () => {
                         </Link>
                     );
                 })}
+
+                {/* Menu Button */}
+                <button
+                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-all duration-200 ${mobileMenuOpen ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                >
+                    <div className={`p-1 rounded-lg transition-transform duration-200 ${mobileMenuOpen ? 'scale-110' : ''}`}>
+                        <FiMenu className="w-5 h-5" />
+                    </div>
+                    <span className="text-[10px] mt-0.5 font-semibold">
+                        Menu
+                    </span>
+                </button>
             </nav>
+
+            {/* Mobile Menu Popup */}
+            {mobileMenuOpen && (
+                <>
+                    <div className="md:hidden fixed bottom-20 right-4 z-50 w-48 bg-white rounded-xl shadow-xl border border-gray-150 py-2 animate-in slide-in-from-bottom-2 duration-200">
+                        {navigationItems.slice(4).map((item) => (
+                            <Link
+                                key={item.name}
+                                to={item.path}
+                                className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                                onClick={() => setMobileMenuOpen(false)}
+                            >
+                                {React.cloneElement(item.icon, { className: "mr-3 h-4 w-4" })}
+                                {item.name}
+                            </Link>
+                        ))}
+                    </div>
+                    {/* Backdrop to close mobile menu */}
+                    <div
+                        className="fixed inset-0 z-40 md:hidden"
+                        onClick={() => setMobileMenuOpen(false)}
+                    />
+                </>
+            )}
 
             {/* Click outside to close dropdowns */}
             {profileDropdownOpen && (

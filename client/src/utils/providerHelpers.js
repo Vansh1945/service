@@ -13,16 +13,8 @@ export const isChatVisible = (b) => {
   if (!b) return false;
   if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
   if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
-  if (['pending', 'cancelled', 'no-show'].includes(b.status)) return false;
+  if (['pending', 'cancelled', 'no-show', 'completed'].includes(b.status)) return false;
 
-  if (b.status === 'completed') {
-    const completedTime = b.serviceCompletedAt || b.completedAt || b.updatedAt;
-    if (completedTime) {
-      const diffMs = Date.now() - new Date(completedTime).getTime();
-      return diffMs <= 24 * 60 * 60 * 1000;
-    }
-    return true;
-  }
   return true;
 };
 

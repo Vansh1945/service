@@ -29,16 +29,8 @@ const isChatVisible = (b) => {
 
   if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
   if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
-  if (['pending', 'cancelled', 'no-show'].includes(b.status)) return false;
+  if (['pending', 'cancelled', 'no-show', 'completed'].includes(b.status)) return false;
 
-  if (b.status === 'completed') {
-    const completedTime = b.serviceCompletedAt || b.completedAt || b.updatedAt;
-    if (completedTime) {
-      const diffMs = Date.now() - new Date(completedTime).getTime();
-      return diffMs <= 24 * 60 * 60 * 1000;
-    }
-    return true;
-  }
   return true;
 };
 
@@ -874,8 +866,13 @@ const CustomerBookingsPage = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
   const debouncedSearch = useDebounce(searchTerm, 500);
+
+  useEffect(() => {
+    const q = searchParams.get('search') || '';
+    setSearchTerm(prev => prev !== q ? q : prev);
+  }, [searchParams]);
   const [showModal, setShowModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [bookingToReschedule, setBookingToReschedule] = useState(null);
@@ -1077,7 +1074,14 @@ const CustomerBookingsPage = () => {
     }
   };
 
-  const clearFilters = () => { setStatusFilter('all'); setTimeFilter('all'); setSearchTerm(''); };
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setTimeFilter('all');
+    setSearchTerm('');
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('search');
+    setSearchParams(newParams, { replace: true });
+  };
   const hasFilters = statusFilter !== 'all' || timeFilter !== 'all' || searchTerm;
 
   return (
@@ -1094,7 +1098,7 @@ const CustomerBookingsPage = () => {
 
         {/* Filters */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
             {/* Status */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
@@ -1121,21 +1125,12 @@ const CustomerBookingsPage = () => {
               </select>
             </div>
 
-            {/* Search */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input type="text" placeholder="Service name…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
-              </div>
-            </div>
-
             {/* Clear */}
-            <div className="flex items-end">
+            <div>
               <button onClick={clearFilters} disabled={!hasFilters}
-                className={`w-full px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${hasFilters ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                Clear Filters
+                className={`w-full px-2 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-colors border ${hasFilters ? 'bg-red-50 text-red-600 hover:bg-red-100 border-red-200' : 'bg-gray-100 text-gray-400 border-transparent cursor-not-allowed'}`}>
+                <span className="hidden sm:inline">Clear Filters</span>
+                <span className="sm:hidden">Clear</span>
               </button>
             </div>
           </div>

@@ -44,10 +44,10 @@ const validateParams = (schema) => validate('params', schema);
 // Chat Schemas
 const createRoomSchema = z.object({
   roomType: z.enum(['provider_customer', 'customer_admin', 'provider_admin', 'complaint_admin']).optional(),
-  bookingId: objectIdSchema.optional(),
-  complaintId: objectIdSchema.optional(),
-  customerId: objectIdSchema.optional(),
-  providerId: objectIdSchema.optional()
+  bookingId: objectIdSchema.optional().nullable().or(z.literal('')),
+  complaintId: objectIdSchema.optional().nullable().or(z.literal('')),
+  customerId: objectIdSchema.optional().nullable().or(z.literal('')),
+  providerId: objectIdSchema.optional().nullable().or(z.literal(''))
 });
 
 const sendMessageSchema = z.object({

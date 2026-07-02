@@ -300,8 +300,25 @@ const ServiceDetailPage = () => {
           <div className="md:grid md:grid-cols-2 gap-10 p-6 lg:p-10">
 
             {/* Left Column: Image Section with Thumbnails */}
-            <div className="flex flex-col">
-              <div className="relative aspect-[4/3] md:aspect-square md:max-h-[400px] w-full mx-auto rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 group">
+            <div className="flex flex-col-reverse md:flex-row gap-4">
+              {/* Thumbnails Column/Row */}
+              {allImages.length > 1 && (
+                <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-y-auto pb-2 md:pb-0 scrollbar-none w-full md:w-20 max-h-[80px] md:max-h-[400px] flex-shrink-0">
+                  {allImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImageIndex(idx)}
+                      className={`w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden border-2 bg-gray-50 flex-shrink-0 transition-all ${currentImageIndex === idx ? 'border-primary shadow-md scale-95' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                    >
+                      <img src={img} alt={`thumbnail-${idx}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Main Image Container */}
+              <div className="relative aspect-[4/3] md:aspect-square md:max-h-[400px] w-full rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 group flex-1">
                 {imageLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-10">
                     <LoadingSpinner />
@@ -316,13 +333,13 @@ const ServiceDetailPage = () => {
 
                 {/* Counter Overlay */}
                 {allImages.length > 1 && (
-                  <div className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-black px-2 py-1 rounded-md backdrop-blur-sm z-20 tracking-widest">
+                  <div className="hidden md:block absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-black px-2 py-1 rounded-md backdrop-blur-sm z-20 tracking-widest">
                     {currentImageIndex + 1} / {allImages.length}
                   </div>
                 )}
 
                 {allImages.length > 1 && (
-                  <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <div className="hidden md:flex absolute inset-x-3 top-1/2 -translate-y-1/2 justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
                       <MdArrowBack size={18} />
                     </button>
@@ -332,22 +349,6 @@ const ServiceDetailPage = () => {
                   </div>
                 )}
               </div>
-
-              {/* Thumbnails Row */}
-              {allImages.length > 1 && (
-                <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-none">
-                  {allImages.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentImageIndex(idx)}
-                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 bg-gray-50 flex-shrink-0 transition-all ${currentImageIndex === idx ? 'border-primary shadow-md scale-95' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                    >
-                      <img src={img} alt={`thumbnail-${idx}`} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Right Column: Service Details */}
@@ -403,16 +404,16 @@ const ServiceDetailPage = () => {
                     </span>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full sm:w-auto">
                     <button
                       onClick={handleBookNow}
-                      className="bg-accent hover:bg-accent/95 text-white font-extrabold py-3 px-6 rounded-xl shadow-md shadow-accent/10 transition-all active:scale-95 text-xs tracking-wider uppercase"
+                      className="flex-1 sm:flex-none text-center bg-accent hover:bg-accent/95 text-white font-extrabold py-3 px-6 rounded-xl shadow-md shadow-accent/10 transition-all active:scale-95 text-xs tracking-wider uppercase whitespace-nowrap"
                     >
                       Book Service Now
                     </button>
                     <button
                       onClick={handleShare}
-                      className="p-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
+                      className="p-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all active:scale-95 flex-shrink-0"
                     >
                       <MdShare size={18} />
                     </button>

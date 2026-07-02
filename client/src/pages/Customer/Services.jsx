@@ -255,7 +255,7 @@ const ServiceListingPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/30 pb-4 md:pb-0 pt-4">
+    <div className="min-h-screen bg-gray-50/30 pb-4 md:pb-0 pt-0">
       {/* Slider Banner Section */}
       <HeroSection noMargin />
 

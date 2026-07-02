@@ -73,7 +73,7 @@ const HeroSection = ({ noMargin = false }) => {
   }
 
   return (
-    <section className={`max-w-7xl mx-auto overflow-hidden px-4 sm:px-6 lg:px-8 pt-4 pb-2 md:pt-6 md:pb-3 relative ${noMargin ? '' : 'mt-16 md:mt-18 lg:mt-20'}`}>
+    <section className={`max-w-7xl mx-auto overflow-hidden px-4 sm:px-6 lg:px-8 pb-2 md:pb-3 relative ${noMargin ? 'pt-0 md:pt-0' : 'pt-4 md:pt-6 mt-16 md:mt-18 lg:mt-20'}`}>
       <div className="relative w-full group">
         <Swiper
           modules={[Autoplay, Pagination]}

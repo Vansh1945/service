@@ -672,32 +672,40 @@ const ComplaintsPage = () => {
               {selectedComplaint.resolutionHistory?.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Resolution History</p>
-                  <div className="relative pl-6">
-                    <div className="absolute left-[10px] top-2 bottom-2 w-px bg-gray-100" />
-                    <div className="space-y-4">
-                      {selectedComplaint.resolutionHistory.map((step, i) => (
-                        <div key={i} className="relative">
-                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
-                            ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'border-green-500' :
-                            step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit') ? 'border-primary' : 'border-gray-300'
-                          }`} />
-                          <div className="flex justify-between items-start mb-0.5">
-                            <p className={`text-[11px] font-bold ${
-                              ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s)) ? 'text-green-600' : 'text-secondary'
-                            }`}>{step.event}</p>
-                            <span className="text-[9px] text-gray-400">{formatDateTime(step.timestamp)}</span>
+                  <div className="space-y-0">
+                    {selectedComplaint.resolutionHistory.map((step, i) => {
+                      const isTerminal = ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s));
+                      const isAction = step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit');
+                      const isLast = i === selectedComplaint.resolutionHistory.length - 1;
+                      const dotColor = isTerminal ? 'bg-green-500 border-green-500' : isAction ? 'bg-primary border-primary' : 'bg-gray-300 border-gray-300';
+                      const textColor = isTerminal ? 'text-green-600' : 'text-secondary';
+                      return (
+                        <div key={i} className="flex gap-3">
+                          {/* Timeline column: dot + line */}
+                          <div className="flex flex-col items-center flex-shrink-0">
+                            <div className={`w-2.5 h-2.5 rounded-full border-2 ${dotColor} ${isTerminal ? 'ring-2 ring-green-100' : isAction ? 'ring-2 ring-primary/10' : ''}`} />
+                            {!isLast && <div className="w-px flex-1 bg-gray-200 min-h-[20px]" />}
                           </div>
-                          {step.note && <p className="text-[10px] text-gray-500 leading-relaxed italic">"{step.note}"</p>}
-                          {step.images?.length > 0 && (
-                            <div className="flex gap-1 mt-1.5">
-                              {step.images.map((img, j) => (
-                                <CDNImage key={j} src={img} width={100} className="w-6 h-6 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Proof" onClick={() => setPreviewImage(img)} />
-                              ))}
+                          {/* Content column */}
+                          <div className="pb-4 flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2 -mt-0.5">
+                              <p className={`text-[11px] font-bold ${textColor}`}>{step.event}</p>
+                              <span className="text-[9px] text-gray-400 whitespace-nowrap flex-shrink-0">{formatDateTime(step.timestamp)}</span>
                             </div>
-                          )}
+                            {step.note && !/^\*.*variables.*\*$/i.test(step.note.trim()) && step.note.trim().length > 0 && (
+                              <p className="text-[10px] text-gray-500 leading-relaxed italic mt-0.5">"{step.note}"</p>
+                            )}
+                            {step.images?.length > 0 && (
+                              <div className="flex gap-1 mt-1.5">
+                                {step.images.map((img, j) => (
+                                  <CDNImage key={j} src={img} width={100} className="w-6 h-6 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Proof" onClick={() => setPreviewImage(img)} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

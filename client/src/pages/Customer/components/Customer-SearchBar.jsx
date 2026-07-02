@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Grid, Shield, Calendar, ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getCategories } from '../../../services/SystemService';
 import { getPublicServices } from '../../../services/ServiceService';
 import { getCustomerBookings } from '../../../services/BookingService';
@@ -8,9 +8,23 @@ import { useAuth } from '../../../context/auth';
 
 const SearchBar = ({ placeholder = "Search services, categories, bookings..." }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+
+  const isBookingsPage = location.pathname === '/customer/bookings';
+  const displayPlaceholder = isBookingsPage ? "Search your bookings by service or ID..." : placeholder;
+
+  useEffect(() => {
+    if (isBookingsPage) {
+      const params = new URLSearchParams(location.search);
+      const searchVal = params.get('search') || '';
+      setQuery(searchVal);
+    } else {
+      setQuery('');
+    }
+  }, [location.search, isBookingsPage]);
 
   // Data states
   const [categories, setCategories] = useState([]);
@@ -124,6 +138,10 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
 
   const handleSearchSubmit = (e) => {
     if (e) e.preventDefault();
+    if (isBookingsPage) {
+      inputRef.current?.blur();
+      return;
+    }
     if (activeIndex >= 0 && activeIndex < flattenedList.length) {
       handleSelectSuggestion(flattenedList[activeIndex]);
       return;
@@ -163,15 +181,28 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
         <input
           ref={inputRef}
           type="text"
-          placeholder={placeholder}
+          placeholder={displayPlaceholder}
           value={query}
           onFocus={() => {
-            fetchData();
-            setIsOpen(true);
+            if (!isBookingsPage) {
+              fetchData();
+              setIsOpen(true);
+            }
           }}
           onChange={(e) => {
-            setQuery(e.target.value);
-            setIsOpen(true);
+            const val = e.target.value;
+            setQuery(val);
+            if (isBookingsPage) {
+              const params = new URLSearchParams(location.search);
+              if (val.trim()) {
+                params.set('search', val);
+              } else {
+                params.delete('search');
+              }
+              navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+            } else {
+              setIsOpen(true);
+            }
           }}
           onKeyDown={handleKeyDown}
           className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all font-inter text-xs text-secondary placeholder-gray-400"
@@ -181,6 +212,11 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
             onClick={() => {
               setQuery('');
               setActiveIndex(-1);
+              if (isBookingsPage) {
+                const params = new URLSearchParams(location.search);
+                params.delete('search');
+                navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+              }
               inputRef.current?.focus();
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 transition-colors"
@@ -193,7 +229,7 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
       </form>
 
       {/* Suggestions Dropdown */}
-      {isOpen && query.trim() && (
+      {isOpen && query.trim() && !isBookingsPage && (
         <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-xl z-[999] overflow-hidden max-h-[420px] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
           {totalSuggestionsCount === 0 ? (
             <div className="p-4 text-center text-xs text-gray-500">

@@ -187,6 +187,13 @@ const ProviderLayout = () => {
         return names.map(name => name[0]).join('').toUpperCase();
     };
 
+    const bottomNavItems = [
+        { name: 'Home', path: '/provider/dashboard', icon: <FiHome className="w-6 h-6" /> },
+        { name: 'Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-6 h-6" />, requireTest: true },
+        { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-6 h-6" />, requireTest: true },
+        { name: 'Support', path: '/provider/support', icon: <FiHeadphones className="w-6 h-6" /> }
+    ].filter(item => !item.requireTest || testPassed);
+
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden">
             {/* Desktop sidebar only */}
@@ -240,24 +247,17 @@ const ProviderLayout = () => {
                 {/* Top navigation bar */}
                 <header className="bg-white border-b border-gray-200 shadow-sm z-10">
                     <div className="flex items-center justify-between px-4 py-4 lg:px-6">
-                        {/* Mobile Header Left - Profile trigger for bottom sheet */}
-                        <div className="flex items-center lg:hidden">
-                            <button
-                                onClick={() => setMoreMenuOpen(true)}
-                                className="flex items-center focus:outline-none"
-                            >
-                                {user?.profilePicUrl ? (
-                                    <img
-                                        src={user.profilePicUrl}
-                                        alt="Profile"
-                                        className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20"
-                                    />
-                                ) : (
-                                    <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-sm shadow">
-                                        {getUserInitials()}
-                                    </div>
-                                )}
-                            </button>
+                        {/* Mobile Header Left - Logo / Brand */}
+                        <div className="flex items-center lg:hidden mr-2">
+                            {logo ? (
+                                <img
+                                    src={logo}
+                                    alt={companyName}
+                                    className="h-8 w-auto object-contain"
+                                />
+                            ) : (
+                                <span className="font-bold text-xs text-secondary truncate">{companyName}</span>
+                            )}
                         </div>
 
                         {/* Page title on desktop only */}
@@ -301,6 +301,15 @@ const ProviderLayout = () => {
 
                             {/* Notifications */}
                             <NotificationBell />
+
+                            {/* Logout button next to bell icon on mobile */}
+                            <button
+                                onClick={handleLogout}
+                                className="block lg:hidden p-1.5 rounded-lg hover:bg-gray-50 text-red-600 transition-all duration-200 focus:outline-none"
+                                title="Sign Out"
+                            >
+                                <FiLogOut className="h-5 w-5" />
+                            </button>
 
                             {/* Profile dropdown (Desktop only) */}
                             <div className="relative z-30 hidden lg:block">
@@ -382,51 +391,33 @@ const ProviderLayout = () => {
             </div>
 
             {/* Sticky bottom navigation for mobile */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] px-4 pt-2.5 pb-safe-nav-bar flex justify-around items-center">
-                {/* Home/Dashboard */}
-                <Link
-                    to="/provider/dashboard"
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${(location.pathname === '/provider/dashboard' || location.pathname === '/provider')
-                        ? 'text-primary'
-                        : 'text-slate-400 hover:text-primary'
-                        }`}
-                >
-                    <FiHome className="w-6 h-6" />
-                    <span className="text-[10px] font-semibold font-inter">Home</span>
-                </Link>
-
-                {/* Requests */}
-                <Link
-                    to="/provider/booking-requests"
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${location.pathname === '/provider/booking-requests'
-                        ? 'text-primary'
-                        : 'text-slate-400 hover:text-primary'
-                        }`}
-                >
-                    <FiCheckCircle className="w-6 h-6" />
-                    <span className="text-[10px] font-semibold font-inter">Requests</span>
-                </Link>
-
-                {/* Earnings */}
-                <Link
-                    to="/provider/earnings"
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${location.pathname === '/provider/earnings'
-                        ? 'text-primary'
-                        : 'text-slate-400 hover:text-primary'
-                        }`}
-                >
-                    <FiDollarSign className="w-6 h-6" />
-                    <span className="text-[10px] font-semibold font-inter">Earnings</span>
-                </Link>
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] px-4 pt-2.5 pb-safe-nav-bar flex justify-around items-center h-16">
+                {bottomNavItems.map((item) => {
+                    const isActive = location.pathname === item.path || (item.name === 'Home' && isDashboardActive);
+                    return (
+                        <Link
+                            key={item.name}
+                            to={item.path}
+                            className={`flex flex-col items-center justify-center flex-1 h-full py-1.5 transition-colors duration-200 ${isActive
+                                ? 'text-primary'
+                                : 'text-slate-400 hover:text-primary'
+                                }`}
+                            onClick={() => setMoreMenuOpen(false)}
+                        >
+                            {item.icon}
+                            <span className="text-[10px] mt-0.5 font-semibold font-inter">{item.name}</span>
+                        </Link>
+                    );
+                })}
 
                 {/* More/Menu button toggling bottom sheet */}
                 <button
-                    onClick={() => setMoreMenuOpen(true)}
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${moreMenuOpen ? 'text-primary' : 'text-slate-400 hover:text-primary'
+                    onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                    className={`flex flex-col items-center justify-center flex-1 h-full py-1.5 transition-colors duration-200 ${moreMenuOpen ? 'text-primary' : 'text-slate-400 hover:text-primary'
                         }`}
                 >
                     <FiMenu className="w-6 h-6" />
-                    <span className="text-[10px] font-semibold font-inter">More</span>
+                    <span className="text-[10px] mt-0.5 font-semibold font-inter">Menu</span>
                 </button>
             </div>
 
