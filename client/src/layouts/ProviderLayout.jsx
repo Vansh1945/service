@@ -543,7 +543,7 @@ const ProviderLayout = () => {
 
             {/* FLOATING MUTE BANNER FOR BOOKING ALERT */}
             {isAlertRinging && (
-                <div 
+                <div
                     onClick={stopBookingAlert}
                     className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] bg-white/95 backdrop-blur-sm border border-neutral-100 text-neutral-800 pl-4 pr-3 py-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] flex items-center justify-between gap-4 w-[92%] max-w-sm cursor-pointer transition-all duration-300 hover:bg-white hover:scale-[1.02] hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)] active:scale-98 select-none"
                     title="Click to Mute Ringtone"

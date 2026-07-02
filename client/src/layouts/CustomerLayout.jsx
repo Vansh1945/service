@@ -129,7 +129,7 @@ const CustomerLayout = () => {
                                             <p className="text-sm font-semibold text-secondary">{user?.name || 'Customer'}</p>
                                             <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                                         </div>
-                                        <div className="py-2">
+                                        <div className="py-2 hidden md:block">
                                             {navigationItems.map((item) => (
                                                 <Link
                                                     key={item.name}
@@ -142,7 +142,7 @@ const CustomerLayout = () => {
                                                 </Link>
                                             ))}
                                         </div>
-                                        <div className="border-t border-gray-100 pt-2">
+                                        <div className="border-t border-gray-100 md:border-t pt-2">
                                             <button
                                                 onClick={handleLogout}
                                                 className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-all duration-200"
@@ -160,7 +160,7 @@ const CustomerLayout = () => {
             </header>
 
             {/* Main Content */}
-            <main className="min-h-[calc(100vh-80px)] pt-16 md:pt-18 lg:pt-20">
+            <main className="min-h-[calc(100vh-80px)] pt-16 md:pt-18 lg:pt-20 pb-20 md:pb-0">
                 {/* Mobile Search Bar */}
                 <div className="block md:hidden sticky top-16 z-40 px-4 py-3 bg-white border-b border-gray-100 shadow-sm">
                     <SearchBar />
@@ -169,6 +169,29 @@ const CustomerLayout = () => {
                     <Outlet />
                 </div>
             </main>
+
+            {/* Mobile Bottom Navigation Bar */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] flex justify-around items-center h-16 px-2">
+                {navigationItems.map((item) => {
+                    const active = isActiveRoute(item.path);
+                    return (
+                        <Link
+                          key={item.name}
+                          to={item.path}
+                          className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-all duration-200 ${
+                            active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                            <div className={`p-1 rounded-lg transition-transform duration-200 ${active ? 'scale-110' : ''}`}>
+                                {item.icon}
+                            </div>
+                            <span className={`text-[10px] mt-0.5 font-semibold transition-all ${active ? 'font-bold' : ''}`}>
+                                {item.name.split(' ')[0]}
+                            </span>
+                        </Link>
+                    );
+                })}
+            </nav>
 
             {/* Click outside to close dropdowns */}
             {profileDropdownOpen && (

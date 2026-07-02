@@ -1158,7 +1158,11 @@ const seedDefaultTemplates = async () => {
     }
 };
 
-setTimeout(seedDefaultTemplates, 5000);
+if (mongoose.connection.readyState === 1) {
+    seedDefaultTemplates();
+} else {
+    mongoose.connection.once('open', seedDefaultTemplates);
+}
 
 module.exports = {
     getNotifications,

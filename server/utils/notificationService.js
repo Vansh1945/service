@@ -543,6 +543,10 @@ const scheduleNotification = async (payload) => {
 cron.schedule('* * * * *', async () => {
     try {
         const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) {
+            console.log('[NotificationService] Database not connected. Skipping cron job execution.');
+            return;
+        }
         const Booking = mongoose.model('Booking');
         const { SystemConfig } = require('../models/SystemSetting');
 
