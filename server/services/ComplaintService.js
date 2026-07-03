@@ -674,7 +674,7 @@ static async resolveComplaint(req, res) {
       resolvedStatus = 'Closed';
     } else if (decision === 'escalate') {
       resolvedStatus = 'admin_review';
-    } else if (decision === 'resolve' || decision === 'Solved') {
+    } else if (decision === 'resolve' || decision === 'resolved' || decision === 'Solved') {
       resolvedStatus = 'resolved';
     } else if (decision === 'reply') {
       // reply action maintains the current status
@@ -986,7 +986,7 @@ static async resolveComplaint(req, res) {
             } catch (e) { }
           }
         }
-      } else if (decision === 'resolve' || decision === 'Solved') {
+      } else if (decision === 'resolve' || decision === 'resolved' || decision === 'Solved') {
         // Release held payout since complaint is resolved without refund/penalty
         await ProviderEarning.findOneAndUpdate(
           { booking: bookingId },

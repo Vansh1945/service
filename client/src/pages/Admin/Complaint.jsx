@@ -805,8 +805,8 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm text-secondary"
                   >
                     <option value="">Select Status</option>
-                    {['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed', 'request_more_evidence', 'under_review'].map(s => (
-                      <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                    {['Open', 'In-Progress', 'resolved', 'Reopened', 'Closed', 'request_more_evidence', 'under_review'].map(s => (
+                      <option key={s} value={s}>{s === 'resolved' ? 'Resolved' : s.replace(/_/g, ' ')}</option>
                     ))}
                   </select>
                   <button
@@ -1245,7 +1245,7 @@ const ComplaintsPage = () => {
     { value: '', label: 'All Status' },
     { value: 'Open', label: 'Open' },
     { value: 'In-Progress', label: 'In Progress' },
-    { value: 'Solved', label: 'Solved' },
+    { value: 'resolved', label: 'Resolved' },
     { value: 'Reopened', label: 'Reopened' },
     { value: 'Closed', label: 'Closed' },
   ];
