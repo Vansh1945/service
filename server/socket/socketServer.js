@@ -165,6 +165,11 @@ async function fetchDrivingRoute(startLng, startLat, endLng, endLat) {
 }
 
 function resolveBookingTargetCoords(booking) {
+    if (booking.location && booking.location.coordinates && 
+        booking.location.coordinates.length === 2 && 
+        (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
+        return { lat: booking.location.coordinates[1], lng: booking.location.coordinates[0] };
+    }
     if (booking.address && typeof booking.address.lat === 'number' && typeof booking.address.lng === 'number') {
         const lat = parseFloat(booking.address.lat);
         const lng = parseFloat(booking.address.lng);

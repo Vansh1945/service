@@ -444,6 +444,14 @@ class BookingService {
   }
 
   static getTargetLocation(booking) {
+    if (booking.location && booking.location.coordinates && 
+        booking.location.coordinates.length === 2 && 
+        (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
+      return {
+        latitude: booking.location.coordinates[1],
+        longitude: booking.location.coordinates[0]
+      };
+    }
     if (booking.statusHistory) {
       for (const history of booking.statusHistory) {
         if (history.note) {
@@ -461,6 +469,14 @@ class BookingService {
   }
 
   static async setTargetLocation(booking, latitude, longitude, session = null) {
+    booking.location = {
+      type: 'Point',
+      coordinates: [longitude, latitude]
+    };
+    if (booking.address) {
+      booking.address.lat = latitude;
+      booking.address.lng = longitude;
+    }
     booking.statusHistory.push({
       status: booking.status,
       timestamp: new Date(),
@@ -471,6 +487,14 @@ class BookingService {
   }
 
   static getBookingAddressLocation(booking) {
+    if (booking.location && booking.location.coordinates && 
+        booking.location.coordinates.length === 2 && 
+        (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
+      return {
+        latitude: booking.location.coordinates[1],
+        longitude: booking.location.coordinates[0]
+      };
+    }
     const target = this.getTargetLocation(booking);
     if (target) return target;
 
@@ -942,6 +966,10 @@ class BookingService {
           date: bookingDate,
           time: time || null,
           address,
+          location: (address && typeof address.lat === 'number' && typeof address.lng === 'number') ? {
+            type: 'Point',
+            coordinates: [address.lng, address.lat]
+          } : undefined,
           notes: notes || null,
           couponApplied: couponDetails,
           totalDiscount,
@@ -4582,7 +4610,7 @@ class BookingService {
       ]);
 
       if (req.query.forRefunds === 'true') {
-        const { enrichComplaintData } = require('./Complaint-controller');
+        const { enrichComplaintData } = require('../controllers/Complaint-controller');
         await Promise.all(bookings.map(async (b) => {
           if (b.complaint) {
             try {
@@ -4730,6 +4758,12 @@ class BookingService {
         };
       });
 
+      // Fetch complaint associated with this booking
+      const Complaint = require('../models/Complaint-model');
+      const complaint = await Complaint.findOne({
+        $or: [{ booking: booking._id }, { bookingId: booking._id }]
+      }).lean();
+
       // Format the response
       const response = {
         booking: {
@@ -4756,7 +4790,7 @@ class BookingService {
           rule: booking.commissionRule
         },
         feedback: booking.feedback,
-        complaint: booking.complaint,
+        complaint: complaint,
         adminRemark: booking.adminRemark,
         payoutHoldUntil: booking.payoutHoldUntil,
         earningHoldStatus: earning ? earning.status : 'N/A',
@@ -4770,7 +4804,7 @@ class BookingService {
 
       if (response.complaint) {
         try {
-          const { enrichComplaintData } = require('./Complaint-controller');
+          const { enrichComplaintData } = require('../controllers/Complaint-controller');
           response.complaint = await enrichComplaintData(response.complaint, req);
         } catch (e) {
           console.error("Error enriching complaint in getBookingDetails response:", e);

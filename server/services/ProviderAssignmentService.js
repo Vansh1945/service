@@ -40,6 +40,14 @@ const checkProviderOverlap = (newBooking, providerBookings, bufferMinutes = 30) 
 };
 
 const getBookingAddressLocation = (booking) => {
+  if (booking.location && booking.location.coordinates && 
+      booking.location.coordinates.length === 2 && 
+      (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
+    return {
+      latitude: booking.location.coordinates[1],
+      longitude: booking.location.coordinates[0]
+    };
+  }
   if (booking.statusHistory) {
     for (const history of booking.statusHistory) {
       if (history.note) {

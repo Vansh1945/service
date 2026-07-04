@@ -1526,6 +1526,44 @@ const AdminBookingsView = () => {
                                                 ))}
                                             </div>
 
+                                            {/* Complaint Details */}
+                                            {selectedBooking.complaint && (
+                                                <div className="mt-2 border-t border-gray-100 pt-2">
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Attached Complaint</p>
+                                                        <button 
+                                                            onClick={() => {
+                                                                setShowModal(false);
+                                                                navigate(`/admin/complaints?search=${selectedBooking.complaint.complaintId || ''}`);
+                                                            }}
+                                                            className="text-[9.5px] font-bold text-primary hover:text-primary-hover flex items-center gap-0.5"
+                                                        >
+                                                            View Details <ExternalLink className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    </div>
+                                                    <div className="bg-rose-50/60 p-2.5 rounded-lg border border-rose-100/80">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-black font-mono text-rose-700 bg-rose-100/70 px-1.5 py-0.5 rounded">
+                                                                {selectedBooking.complaint.complaintId || 'N/A'}
+                                                            </span>
+                                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                                                ['solved', 'resolved', 'closed'].includes(selectedBooking.complaint.status?.toLowerCase()) 
+                                                                    ? 'bg-emerald-100 text-emerald-800' 
+                                                                    : 'bg-rose-100 text-rose-800'
+                                                            }`}>
+                                                                {selectedBooking.complaint.status}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] font-bold text-secondary mb-0.5">{selectedBooking.complaint.title}</p>
+                                                        <p className="text-[10px] text-gray-600 leading-relaxed mb-1">{selectedBooking.complaint.description}</p>
+                                                        <div className="flex justify-between items-center text-[9px] text-gray-400 mt-1.5 pt-1.5 border-t border-rose-100/50">
+                                                            <span>Category: <strong className="text-gray-600">{selectedBooking.complaint.category}</strong></span>
+                                                            <span>Raised: {selectedBooking.complaint.createdAt ? new Date(selectedBooking.complaint.createdAt).toLocaleDateString() : '—'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Complaint Logs */}
                                             {bk.complaintProofs?.length > 0 && (
                                                 <div className="mt-2 border-t border-gray-100 pt-2">
