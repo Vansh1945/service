@@ -6,9 +6,10 @@ import * as AdminService from '../../services/AdminService';
 import StatsCard from '../../components/ui/StatsCard';
 import * as BookingService from '../../services/BookingService';
 import * as ZoneService from '../../services/ZoneService';
-import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents, LayersControl, FeatureGroup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
 import AdminSearchBar from '../../components/AdminSearchBar';
 import {
   MapPin, Users, Zap, Trash2, Edit, X,
@@ -164,6 +165,53 @@ const MapDrawingEvents = ({ isDrawing, onMapClick }) => {
   });
   return null;
 };
+
+// Leaflet Heatmap Layer utilizing leaflet.heat with Green-Yellow-Red density zones
+const HeatmapLayer = ({ points }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !points) return;
+
+    // Clean up any stray heat layers on the map to prevent duplicates
+    map.eachLayer(layer => {
+      if (layer && layer.options && layer.options.blur !== undefined) {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {
+          console.error("Error removing stray heat layer:", e);
+        }
+      }
+    });
+
+    if (points.length === 0) return;
+
+    const heatLayer = L.heatLayer(points, {
+      radius: 40,
+      blur: 25,
+      maxZoom: 15,
+      max: 1.0,
+      gradient: {
+        0.2: '#22c55e', // Green: Low demand
+        0.6: '#eab308', // Yellow: Medium demand
+        1.0: '#ef4444'  // Red: High demand
+      }
+    });
+
+    heatLayer.addTo(map);
+
+    return () => {
+      try {
+        map.removeLayer(heatLayer);
+      } catch (e) {
+        console.error("Error removing heat layer on unmount:", e);
+      }
+    };
+  }, [map, points]);
+
+  return null;
+};
+
 const defaultZones = [];
 
 // Color mapping based on Priority and Status
@@ -179,6 +227,13 @@ const getZoneStyle = (status, priority) => {
   }
   return { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.2, weight: 2 };
 };
+
+const transparentIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: '<div style="width: 40px; height: 40px;"></div>',
+  iconSize: [40, 40],
+  iconAnchor: [20, 20]
+});
 
 const getProviderMarkerIcon = (status) => {
   let color = '#22c55e';
@@ -1097,20 +1152,57 @@ const ZoneManagement = () => {
     ));
   }, [providers]);
 
+  const heatmapPoints = useMemo(() => {
+    return bookings
+      .map(book => {
+        const lat = Number(book.lat);
+        const lng = Number(book.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+          return [lat, lng, 0.85];
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }, [bookings]);
+
   const renderedBookings = useMemo(() => {
     return bookings.map(book => (
-      <Circle
+      <Marker
         key={'heat-' + book._id}
-        center={[book.lat, book.lng]}
-        radius={250}
-        pathOptions={{
-          color: '#ef4444',
-          fillColor: '#ef4444',
-          fillOpacity: 0.12,
-          weight: 1,
-          dashArray: "4,4"
-        }}
-      />
+        position={[book.lat, book.lng]}
+        icon={transparentIcon}
+      >
+        <Popup minWidth={240}>
+          <div className="p-2 font-sans text-xs text-slate-900 text-left">
+            <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+              Demand Point
+            </span>
+            <h4 className="font-extrabold text-slate-900 mt-2 uppercase tracking-wide">
+              Booking ID: {book.bookingId || book._id?.substring(0, 8)}
+            </h4>
+            <div className="mt-2 space-y-1 text-[11px] text-slate-700 border-t border-slate-100 pt-1.5 font-sans">
+              <p className="flex justify-between">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">Client:</span>
+                <span className="font-black text-slate-800">{book.customer?.name || book.customerName || 'N/A'}</span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">Service:</span>
+                <span className="font-black text-slate-800">
+                  {book.services?.[0]?.serviceDetails?.title || book.services?.[0]?.service?.title || 'Premium Service'}
+                </span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">Status:</span>
+                <span className="font-black text-rose-600 uppercase">{book.status || 'PENDING'}</span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">Amount:</span>
+                <span className="font-black text-slate-800">₹{book.totalAmount || book.price || 0}</span>
+              </p>
+            </div>
+          </div>
+        </Popup>
+      </Marker>
     ));
   }, [bookings]);
 
@@ -1723,6 +1815,31 @@ const ZoneManagement = () => {
                   maxZoom={20}
                 />
               </LayersControl.BaseLayer>
+
+              <LayersControl.Overlay checked name="Demand Heatmap">
+                <FeatureGroup>
+                  <HeatmapLayer points={heatmapPoints} />
+                  {renderedBookings}
+                </FeatureGroup>
+              </LayersControl.Overlay>
+
+              <LayersControl.Overlay checked name="Active Zones">
+                <FeatureGroup>
+                  {renderedZones}
+                </FeatureGroup>
+              </LayersControl.Overlay>
+
+              <LayersControl.Overlay checked name="Providers">
+                <FeatureGroup>
+                  {renderedProviders}
+                </FeatureGroup>
+              </LayersControl.Overlay>
+
+              <LayersControl.Overlay name="Demand Circles">
+                <FeatureGroup>
+                  {renderedBookings}
+                </FeatureGroup>
+              </LayersControl.Overlay>
             </LayersControl>
 
             <MapCenterer center={mapCenter} zoom={mapZoom} />
@@ -1769,14 +1886,6 @@ const ZoneManagement = () => {
                 )}
               </>
             )}
-            {/* Render saved zones on the map */}
-            {renderedZones}
-
-            {/* Provider Coverage Check display */}
-            {renderedProviders}
-
-            {/* Booking density Heat circles inside zones */}
-            {renderedBookings}
           </MapContainer>
         </div>
       </div>

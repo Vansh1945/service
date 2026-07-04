@@ -1066,136 +1066,129 @@ const ProviderProfile = () => {
 
                     {editMode.address ? (
                       <form onSubmit={(e) => { e.preventDefault(); updateProfile('address'); }} className="space-y-4">
-                        <div className="space-y-4">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Current Address</h4>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-6">
                             <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">House Number *</label>
-                              <input type="text" value={profileData.currentAddress?.houseNumber || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, houseNumber: e.target.value };
-                                return {
-                                  ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Current Address</h4>
+                              <AddressSelector
+                                address={{
+                                  houseNumber: profileData.currentAddress?.houseNumber || '',
+                                  road: profileData.currentAddress?.road || '',
+                                  landmark: profileData.currentAddress?.landmark || '',
+                                  area: profileData.currentAddress?.area || '',
+                                  city: profileData.currentAddress?.villageCity || profileData.currentAddress?.city || '',
+                                  state: profileData.currentAddress?.state || '',
+                                  pincode: profileData.currentAddress?.pincode || profileData.currentAddress?.postalCode || '',
+                                  postalCode: profileData.currentAddress?.pincode || profileData.currentAddress?.postalCode || '',
+                                  street: profileData.currentAddress?.street || '',
+                                  formattedAddress: profileData.currentAddress?.formattedAddress || '',
+                                  isManuallyEdited: profileData.currentAddress?.isManuallyEdited || false,
+                                }}
+                                onChange={(updatedAddress) => {
+                                  setProfileData((prev) => {
+                                    const mapped = {
+                                      ...prev.currentAddress,
+                                      houseNumber: updatedAddress.houseNumber || '',
+                                      road: updatedAddress.road || '',
+                                      landmark: updatedAddress.landmark || '',
+                                      area: updatedAddress.area || '',
+                                      city: updatedAddress.city || '',
+                                      state: updatedAddress.state || '',
+                                      pincode: updatedAddress.pincode || updatedAddress.postalCode || '',
+                                      postalCode: updatedAddress.postalCode || updatedAddress.pincode || '',
+                                      street: updatedAddress.street || '',
+                                      villageCity: updatedAddress.city || '',
+                                      district: updatedAddress.area || '',
+                                      formattedAddress: updatedAddress.formattedAddress || '',
+                                      isManuallyEdited: updatedAddress.isManuallyEdited || false,
+                                      lat: updatedAddress.lat !== undefined ? updatedAddress.lat : prev.currentAddress?.lat,
+                                      lng: updatedAddress.lng !== undefined ? updatedAddress.lng : prev.currentAddress?.lng,
+                                      s2CellId: updatedAddress.s2CellId || prev.currentAddress?.s2CellId,
+                                      s2CellIdPrecise: updatedAddress.s2CellIdPrecise || prev.currentAddress?.s2CellIdPrecise,
+                                    };
+                                    const updated = {
+                                      ...prev,
+                                      currentAddress: mapped,
+                                      // Sync coordinates to main address
+                                      address: {
+                                        ...prev.address,
+                                        street: mapped.street,
+                                        city: mapped.villageCity,
+                                        state: mapped.state,
+                                        postalCode: mapped.pincode,
+                                        lat: mapped.lat,
+                                        lng: mapped.lng,
+                                        s2CellId: mapped.s2CellId,
+                                        s2CellIdPrecise: mapped.s2CellIdPrecise,
+                                      }
+                                    };
+                                    if (prev.addressSame) {
+                                      updated.permanentAddress = { ...mapped };
+                                    }
+                                    return updated;
+                                  });
+                                }}
+                              />
                             </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">Street *</label>
-                              <input type="text" value={profileData.currentAddress?.street || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, street: e.target.value };
-                                return {
+
+                            <div className="flex items-center gap-2">
+                              <input type="checkbox" id="profileAddressSame" checked={profileData.addressSame} onChange={(e) => {
+                                const checked = e.target.checked;
+                                setProfileData(prev => ({
                                   ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
+                                  addressSame: checked,
+                                  permanentAddress: checked ? { ...prev.currentAddress } : prev.permanentAddress
+                                }));
+                              }} className="w-4 h-4 rounded border-gray-300 text-primary" />
+                              <label htmlFor="profileAddressSame" className="text-xs font-bold text-secondary">Permanent Address same as Current Address</label>
                             </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark *</label>
-                              <input type="text" value={profileData.currentAddress?.landmark || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, landmark: e.target.value };
-                                return {
-                                  ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">Village/City *</label>
-                              <input type="text" value={profileData.currentAddress?.villageCity || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, villageCity: e.target.value };
-                                return {
-                                  ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">District *</label>
-                              <input type="text" value={profileData.currentAddress?.district || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, district: e.target.value };
-                                return {
-                                  ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
-                              <input type="text" value={profileData.currentAddress?.state || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, state: e.target.value };
-                                return {
-                                  ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
-                              <input type="text" value={profileData.currentAddress?.pincode || ''} onChange={(e) => setProfileData(prev => {
-                                const updatedAddr = { ...prev.currentAddress, pincode: e.target.value };
-                                return {
-                                  ...prev,
-                                  currentAddress: updatedAddr,
-                                  permanentAddress: prev.addressSame ? { ...updatedAddr } : prev.permanentAddress
-                                };
-                              })} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input type="checkbox" id="profileAddressSame" checked={profileData.addressSame} onChange={(e) => {
-                              const checked = e.target.checked;
-                              setProfileData(prev => ({
-                                ...prev,
-                                addressSame: checked,
-                                permanentAddress: checked ? { ...prev.currentAddress } : prev.permanentAddress
-                              }));
-                            }} className="w-4 h-4 rounded border-gray-300 text-primary" />
-                            <label htmlFor="profileAddressSame" className="text-xs font-bold text-secondary">Permanent Address same as Current Address</label>
-                          </div>
- 
-                          {!profileData.addressSame && (
-                            <>
-                              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-4">Permanent Address</h4>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">House Number *</label>
-                                  <input type="text" value={profileData.permanentAddress?.houseNumber || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, houseNumber: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Street *</label>
-                                  <input type="text" value={profileData.permanentAddress?.street || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, street: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark *</label>
-                                  <input type="text" value={profileData.permanentAddress?.landmark || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, landmark: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Village/City *</label>
-                                  <input type="text" value={profileData.permanentAddress?.villageCity || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, villageCity: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">District *</label>
-                                  <input type="text" value={profileData.permanentAddress?.district || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, district: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
-                                  <input type="text" value={profileData.permanentAddress?.state || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, state: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
-                                  <input type="text" value={profileData.permanentAddress?.pincode || ''} onChange={(e) => setProfileData(prev => ({ ...prev, permanentAddress: { ...prev.permanentAddress, pincode: e.target.value } }))} required className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                                </div>
+   
+                            {!profileData.addressSame && (
+                              <div>
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 mt-4">Permanent Address</h4>
+                                <AddressSelector
+                                  address={{
+                                    houseNumber: profileData.permanentAddress?.houseNumber || '',
+                                    road: profileData.permanentAddress?.road || '',
+                                    landmark: profileData.permanentAddress?.landmark || '',
+                                    area: profileData.permanentAddress?.area || '',
+                                    city: profileData.permanentAddress?.villageCity || profileData.permanentAddress?.city || '',
+                                    state: profileData.permanentAddress?.state || '',
+                                    pincode: profileData.permanentAddress?.pincode || profileData.permanentAddress?.postalCode || '',
+                                    postalCode: profileData.permanentAddress?.pincode || profileData.permanentAddress?.postalCode || '',
+                                    street: profileData.permanentAddress?.street || '',
+                                    formattedAddress: profileData.permanentAddress?.formattedAddress || '',
+                                    isManuallyEdited: profileData.permanentAddress?.isManuallyEdited || false,
+                                  }}
+                                  onChange={(updatedAddress) => {
+                                    setProfileData((prev) => ({
+                                      ...prev,
+                                      permanentAddress: {
+                                        ...prev.permanentAddress,
+                                        houseNumber: updatedAddress.houseNumber || '',
+                                        road: updatedAddress.road || '',
+                                        landmark: updatedAddress.landmark || '',
+                                        area: updatedAddress.area || '',
+                                        city: updatedAddress.city || '',
+                                        state: updatedAddress.state || '',
+                                        pincode: updatedAddress.pincode || updatedAddress.postalCode || '',
+                                        postalCode: updatedAddress.postalCode || updatedAddress.pincode || '',
+                                        street: updatedAddress.street || '',
+                                        villageCity: updatedAddress.city || '',
+                                        district: updatedAddress.area || '',
+                                        formattedAddress: updatedAddress.formattedAddress || '',
+                                        isManuallyEdited: updatedAddress.isManuallyEdited || false,
+                                        lat: updatedAddress.lat !== undefined ? updatedAddress.lat : prev.permanentAddress?.lat,
+                                        lng: updatedAddress.lng !== undefined ? updatedAddress.lng : prev.permanentAddress?.lng,
+                                        s2CellId: updatedAddress.s2CellId || prev.permanentAddress?.s2CellId,
+                                        s2CellIdPrecise: updatedAddress.s2CellIdPrecise || prev.permanentAddress?.s2CellIdPrecise,
+                                      }
+                                    }));
+                                  }}
+                                />
                               </div>
-                            </>
-                          )}
-                        </div>
- 
+                            )}
+                          </div>
+
                         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-4">Location Coordinates (Map Selector)</h4>
                         <AddressSelector
                           address={profileData.address}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import * as AdminService from '../../services/AdminService';
@@ -7,7 +7,7 @@ import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
 
 import Loader from '../../components/ui-skeletons/Loader';
-import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon, ZoomControl, LayersControl, Circle, FeatureGroup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +28,13 @@ let DefaultIcon = L.icon({
   iconAnchor: [12, 41]
 });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+const transparentIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: '<div style="width: 40px; height: 40px;"></div>',
+  iconSize: [40, 40],
+  iconAnchor: [20, 20]
+});
 
 const legacyZonePopupEnabled = false;
 
@@ -156,7 +163,20 @@ const HeatmapLayer = ({ points }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (!map || !points || points.length === 0) return;
+    if (!map || !points) return;
+
+    // Clean up any stray heat layers on the map to prevent duplicates
+    map.eachLayer(layer => {
+      if (layer && layer.options && layer.options.blur !== undefined) {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {
+          console.error("Error removing stray heat layer:", e);
+        }
+      }
+    });
+
+    if (points.length === 0) return;
 
     const heatLayer = L.heatLayer(points, {
       radius: 40,
@@ -173,7 +193,11 @@ const HeatmapLayer = ({ points }) => {
     heatLayer.addTo(map);
 
     return () => {
-      map.removeLayer(heatLayer);
+      try {
+        map.removeLayer(heatLayer);
+      } catch (e) {
+        console.error("Error removing heat layer on unmount:", e);
+      }
     };
   }, [map, points]);
 
@@ -665,6 +689,98 @@ const LiveTrackingPage = () => {
     .filter(Boolean)
     .map(([lat, lng]) => [lat, lng, 0.85]);
 
+  const renderedBookings = useMemo(() => {
+    return bookings
+      .map(book => {
+        const position = getBookingLatLng(book);
+        if (!position) return null;
+        return (
+          <Marker
+            key={'heat-circle-' + book._id}
+            position={position}
+            icon={transparentIcon}
+          >
+            <Popup minWidth={240}>
+              <div className="p-2 font-sans text-xs text-slate-900 text-left">
+                <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                  Demand Point
+                </span>
+                <h4 className="font-extrabold text-slate-900 mt-2 uppercase tracking-wide">
+                  Booking ID: {book.bookingId || book._id?.substring(0, 8)}
+                </h4>
+                <div className="mt-2 space-y-1 text-[11px] text-slate-700 border-t border-slate-100 pt-1.5 font-sans">
+                  <p className="flex justify-between">
+                    <span className="text-slate-400 font-bold uppercase text-[9px]">Client:</span>
+                    <span className="font-black text-slate-800">{book.customer?.name || book.customerName || 'N/A'}</span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span className="text-slate-400 font-bold uppercase text-[9px]">Service:</span>
+                    <span className="font-black text-slate-800">
+                      {book.services?.[0]?.serviceDetails?.title || book.services?.[0]?.service?.title || 'Premium Service'}
+                    </span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span className="text-slate-400 font-bold uppercase text-[9px]">Status:</span>
+                    <span className="font-black text-rose-600 uppercase">{book.status || 'PENDING'}</span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span className="text-slate-400 font-bold uppercase text-[9px]">Amount:</span>
+                    <span className="font-black text-slate-800">₹{book.totalAmount || book.price || 0}</span>
+                  </p>
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })
+      .filter(Boolean);
+  }, [bookings]);
+
+  const renderedRoutes = useMemo(() => {
+    return activeBookings.map((booking, idx) => {
+      const bookingPosition = getBookingLatLng(booking);
+      if (bookingPosition) {
+        const provId = booking.provider?._id || booking.provider;
+        const provider = providers.find(p => p._id === provId);
+        const providerPosition = provider ? getProviderLatLng(provider) : null;
+        if (providerPosition) {
+          const [pLat, pLng] = providerPosition;
+          const route = (Array.isArray(booking.routeCoordinates) && booking.routeCoordinates.length > 0
+            ? booking.routeCoordinates.map(c => [c.lat ?? c[0], c.lng ?? c[1]])
+            : [[pLat, pLng], bookingPosition])
+            .map(coord => [Number(coord[0]), Number(coord[1])]);
+          const isValidRoute = Array.isArray(route) && route.length >= 2 && route.every(isValidLatLng);
+          if (!isValidRoute) return null;
+          const dist = calculateDistanceKm(pLat, pLng, bookingPosition[0], bookingPosition[1]);
+          const eta = calculateETA(dist);
+          return (
+            <Polyline
+              key={'route-poly-' + booking._id + '-' + idx}
+              positions={route}
+              color="#3b82f6"
+              weight={3.5}
+              opacity={0.85}
+              dashArray="6, 12"
+            >
+              <Popup minWidth={220}>
+                <div className="p-2 font-sans text-slate-900">
+                  <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">Route Telemetry</span>
+                  <h4 className="font-extrabold text-xs text-slate-800 uppercase mt-0.5">Booking ID: {booking.bookingId}</h4>
+                  <div className="space-y-1 text-[11px] text-slate-700 mt-2 border-t border-slate-100 pt-1.5">
+                    <p className="flex justify-between"><span className="text-slate-400">Status:</span> <span className="font-extrabold text-blue-600 uppercase">{booking.status}</span></p>
+                    <p className="flex justify-between"><span className="text-slate-400">Distance Remaining:</span> <span className="font-bold text-slate-800">{dist} km</span></p>
+                    <p className="flex justify-between"><span className="text-slate-400">Calculated ETA:</span> <span className="font-bold text-teal-600">{eta} mins</span></p>
+                  </div>
+                </div>
+              </Popup>
+            </Polyline>
+          );
+        }
+      }
+      return null;
+    }).filter(Boolean);
+  }, [activeBookings, providers]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-150px)] bg-neutral-50 text-neutral-800 overflow-hidden font-sans select-none rounded-xl border border-neutral-200 shadow-sm">
       {/* Top Telemetry Header Bar */}
@@ -926,35 +1042,6 @@ const LiveTrackingPage = () => {
 
         {/* High Definition Map Canvas */}
         <div className="flex-1 h-[60%] lg:h-full relative bg-gray-100 z-0">
-          {/* Heatmap Overlay Toggle */}
-          <div className="absolute top-2 left-2 md:top-4 md:left-4 z-[1000] flex bg-white border border-gray-200 p-1.5 rounded-xl shadow-md">
-            <label className="flex items-center gap-2 px-2.5 py-1 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-primary cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showHeatmap}
-                onChange={(e) => setShowHeatmap(e.target.checked)}
-                className="accent-primary w-3.5 h-3.5 rounded border-gray-300 bg-white"
-              />
-              <span>Demand Heatmap</span>
-            </label>
-          </div>
-
-          {/* Premium Map Layer Toggle (satellite/hybrid ONLY) */}
-          <div className="absolute top-2 right-2 md:top-4 md:right-4 z-[1000] flex bg-white border border-gray-200 p-1 rounded-xl shadow-md">
-            <button
-              onClick={() => setMapStyle('satellite')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${mapStyle === 'satellite' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-gray-800'}`}
-            >
-              Satellite HD
-            </button>
-            <button
-              onClick={() => setMapStyle('hybrid')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${mapStyle === 'hybrid' ? 'bg-primary text-white shadow-sm' : 'text-gray-400 hover:text-gray-800'}`}
-            >
-              3D Hybrid Satellite
-            </button>
-          </div>
-
           {loading ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/95 z-20">
               <Loader />
@@ -964,40 +1051,72 @@ const LiveTrackingPage = () => {
             <div className="w-full h-full absolute inset-0">
               <MapContainer center={mapCenter} zoom={mapZoom} zoomControl={false} style={{ height: '100%', width: '100%', zIndex: 10 }}>
                 <ZoomControl position="bottomright" />
-                {/* Only Satellite and 3D maps are permitted */}
-                <TileLayer
-                  attribution='&copy; Google Maps Telemetry, Esri World Imagery'
-                  url={
-                    mapStyle === 'satellite'
-                      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                      : 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}' // Google Satellite Hybrid with high-density labels & topography lines
-                  }
-                  maxZoom={20}
-                />
+                <LayersControl position="topright">
+                  <LayersControl.BaseLayer checked name="Satellite Hybrid">
+                    <TileLayer
+                      attribution='&copy; Google Satellite'
+                      url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                      maxZoom={20}
+                    />
+                  </LayersControl.BaseLayer>
+
+                  <LayersControl.BaseLayer name="3D Street Map (Google)">
+                    <TileLayer
+                      attribution='&copy; Google Maps'
+                      url="https://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}"
+                      maxZoom={20}
+                    />
+                  </LayersControl.BaseLayer>
+
+                  <LayersControl.BaseLayer name="Fast Street Map">
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      maxZoom={19}
+                    />
+                  </LayersControl.BaseLayer>
+
+                  <LayersControl.Overlay checked={showHeatmap} name="Demand Heatmap">
+                    <FeatureGroup>
+                      <HeatmapLayer points={heatmapPoints} />
+                      {renderedBookings}
+                    </FeatureGroup>
+                  </LayersControl.Overlay>
+
+                  <LayersControl.Overlay checked name="Active Zones">
+                    <FeatureGroup>
+                      {zones.filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length >= 3).map(zone => {
+                        let color = '#22c55e';
+                        if (zone.status === 'inactive') color = '#9ca3af';
+                        else if (zone.priority === 'high') color = '#ef4444';
+                        else if (zone.priority === 'medium') color = '#eab308';
+                        return (
+                          <Polygon
+                            key={'zone-poly-' + getZoneId(zone)}
+                            positions={zone.coordinates}
+                            pathOptions={{ color, fillColor: color, fillOpacity: 0.15, weight: 2 }}
+                          >
+                            <Tooltip sticky>
+                              <span className="font-sans font-bold text-xs uppercase text-slate-800">{zone.name} Zone ({zone.city})</span>
+                            </Tooltip>
+                            <Popup minWidth={288} maxWidth={320} closeButton>
+                              {renderZoneActionPopup(zone)}
+                            </Popup>
+                          </Polygon>
+                        );
+                      })}
+                    </FeatureGroup>
+                  </LayersControl.Overlay>
+
+                  <LayersControl.Overlay checked name="Dispatch Routes">
+                    <FeatureGroup>
+                      {renderedRoutes}
+                    </FeatureGroup>
+                  </LayersControl.Overlay>
+                </LayersControl>
 
                 <MapCenterer center={mapCenter} zoom={mapZoom} />
 
-                {/* Render dispatch zones on the map */}
-                {zones.filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length >= 3).map(zone => {
-                  let color = '#22c55e';
-                  if (zone.status === 'inactive') color = '#9ca3af';
-                  else if (zone.priority === 'high') color = '#ef4444';
-                  else if (zone.priority === 'medium') color = '#eab308';
-                  return (
-                    <Polygon
-                      key={'zone-poly-' + getZoneId(zone)}
-                      positions={zone.coordinates}
-                      pathOptions={{ color, fillColor: color, fillOpacity: 0.15, weight: 2 }}
-                    >
-                      <Tooltip sticky>
-                        <span className="font-sans font-bold text-xs uppercase text-slate-800">{zone.name} Zone ({zone.city})</span>
-                      </Tooltip>
-                      <Popup minWidth={288} maxWidth={320} closeButton>
-                        {renderZoneActionPopup(zone)}
-                      </Popup>
-                    </Polygon>
-                  );
-                })}
                 {/* Action Hub Modal */}
                 {legacyZonePopupEnabled && actionHubModal.open && actionHubModal.zone && (
                   <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-md animate-in fade-in duration-200">
@@ -1036,56 +1155,6 @@ const LiveTrackingPage = () => {
                 )}
 
 
-                {/* Leaflet Heatmap Layer */}
-                {showHeatmap && heatmapPoints.length > 0 && (
-                  <HeatmapLayer points={heatmapPoints} />
-                )}
-
-                {/* Render Connected Route Polylines: Provider -> Customer */}
-                {activeBookings.map((booking, idx) => {
-                  const bookingPosition = getBookingLatLng(booking);
-                  if (bookingPosition) {
-                    const provId = booking.provider?._id || booking.provider;
-                    const provider = providers.find(p => p._id === provId);
-                    const providerPosition = provider ? getProviderLatLng(provider) : null;
-                    if (providerPosition) {
-                      const [pLat, pLng] = providerPosition;
-                      const route = (Array.isArray(booking.routeCoordinates) && booking.routeCoordinates.length > 0
-                        ? booking.routeCoordinates.map(c => [c.lat ?? c[0], c.lng ?? c[1]])
-                        : [[pLat, pLng], bookingPosition])
-                        .map(coord => [Number(coord[0]), Number(coord[1])]);
-                      // Defensive check: ensure route contains valid lat/lng pairs
-                      const isValidRoute = Array.isArray(route) && route.length >= 2 && route.every(isValidLatLng);
-                      if (!isValidRoute) return null;
-                      const dist = calculateDistanceKm(pLat, pLng, bookingPosition[0], bookingPosition[1]);
-                      const eta = calculateETA(dist);
-                      return (
-                        <React.Fragment key={'route-grp-' + booking._id + '-' + idx}>
-                          <Polyline
-                            positions={route}
-                            color="#3b82f6"
-                            weight={3.5}
-                            opacity={0.85}
-                            dashArray="6, 12"
-                          >
-                            <Popup minWidth={220}>
-                              <div className="p-2 font-sans text-slate-900">
-                                <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">Route Telemetry</span>
-                                <h4 className="font-extrabold text-xs text-slate-800 uppercase mt-0.5">Booking ID: {booking.bookingId}</h4>
-                                <div className="space-y-1 text-[11px] text-slate-700 mt-2 border-t border-slate-100 pt-1.5">
-                                  <p className="flex justify-between"><span className="text-slate-400">Status:</span> <span className="font-extrabold text-blue-600 uppercase">{booking.status}</span></p>
-                                  <p className="flex justify-between"><span className="text-slate-400">Distance Remaining:</span> <span className="font-bold text-slate-800">{dist} km</span></p>
-                                  <p className="flex justify-between"><span className="text-slate-400">Calculated ETA:</span> <span className="font-bold text-teal-600">{eta} mins</span></p>
-                                </div>
-                              </div>
-                            </Popup>
-                          </Polyline>
-                        </React.Fragment>
-                      );
-                    }
-                  }
-                  return null;
-                })}
 
                 {/* Render Customer Markers for Active Bookings */}
                 {activeBookings.map((booking, idx) => {
