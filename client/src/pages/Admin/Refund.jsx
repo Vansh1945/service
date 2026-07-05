@@ -556,7 +556,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                           <div className="flex justify-between items-center text-xs font-medium text-gray-500">
                             <span className="uppercase tracking-wider text-[10px] bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{tx.paymentMethod}</span>
                             <span className="font-bold text-secondary text-sm">
-                              <PriceDisplay amount={tx.isRupees || ['cash', 'wallet'].includes(tx.paymentMethod?.toLowerCase()) ? tx.amount : tx.amount / 100} type="bold-secondary" />
+                              <PriceDisplay amount={tx.amount} type="bold-secondary" />
                             </span>
                           </div>
                           {tx.refundStatus && tx.refundStatus !== 'none' && (

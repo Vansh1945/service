@@ -723,9 +723,7 @@ const ComplaintsPage = () => {
                       <span className="text-xs text-gray-500">Amount Refunded</span>
                       <span className="text-base font-black text-primary">
                         ₹{selectedComplaint.transaction?.type === 'refund'
-                          ? (selectedComplaint.transaction.isRupees || ['cash', 'wallet'].includes(selectedComplaint.transaction.paymentMethod?.toLowerCase())
-                            ? selectedComplaint.transaction.amount
-                            : selectedComplaint.transaction.amount / 100)
+                          ? selectedComplaint.transaction.amount
                           : (selectedComplaint.booking.cancellationProgress?.refundAmount || selectedComplaint.booking.totalAmount || '0')}
                       </span>
                     </div>

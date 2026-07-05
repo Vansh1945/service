@@ -3052,8 +3052,8 @@ class BookingService {
             {
               provider: booking.provider,
               providerId: booking.provider.toString(),
-              commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
-              providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+              commission: booking.commissionAmount || 0,
+              providerEarning: booking.providerEarnings || 0,
               commissionRule: booking.commissionRule,
               // Sync payment status if booking is already paid
               ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
@@ -4894,8 +4894,8 @@ class BookingService {
             {
               provider: booking.provider,
               providerId: booking.provider.toString(),
-              commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
-              providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+              commission: booking.commissionAmount || 0,
+              providerEarning: booking.providerEarnings || 0,
               commissionRule: booking.commissionRule,
               ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
                 paymentStatus: isOnline ? 'success' : 'completed'

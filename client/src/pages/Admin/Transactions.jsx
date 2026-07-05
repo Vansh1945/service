@@ -76,23 +76,17 @@ const getStatusIcon = (status) => {
 
 const getAmountInRupees = (txn) => {
     if (!txn) return 0;
-    return txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
-        ? txn.amount
-        : txn.amount / 100;
+    return txn.amount;
 };
 
 const getCommissionInRupees = (txn) => {
     if (!txn) return 0;
-    return txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
-        ? (txn.commission || 0)
-        : (txn.commission || 0) / 100;
+    return txn.commission || 0;
 };
 
 const getProviderEarningInRupees = (txn) => {
     if (!txn) return 0;
-    return txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
-        ? (txn.providerEarning || 0)
-        : (txn.providerEarning || 0) / 100;
+    return txn.providerEarning || 0;
 };
 
 const AdminTransactions = () => {
