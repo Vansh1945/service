@@ -949,6 +949,13 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                           Resolve
                         </button>
                         <button
+                          onClick={() => setConfirmAction('reject')}
+                          disabled={!resolutionNotes.trim()}
+                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-650 text-white' : 'bg-white hover:bg-gray-50 text-red-650 border-red-200'}`}
+                        >
+                          Reject
+                        </button>
+                        <button
                           onClick={() => setConfirmAction('reply')}
                           disabled={!resolutionNotes.trim()}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reply' ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-50 text-blue-600 border-blue-200'}`}

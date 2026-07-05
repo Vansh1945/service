@@ -202,4 +202,39 @@ providerEarningSchema.statics.getAvailableBalance = async function (providerId) 
   return result.length > 0 ? result[0].balance : 0;
 };
 
+const recoveryLedgerSchema = new Schema({
+  provider: {
+    type: Schema.Types.ObjectId,
+    ref: 'Provider',
+    required: true
+  },
+  booking: {
+    type: Schema.Types.ObjectId,
+    ref: 'Booking',
+    required: true
+  },
+  complaint: {
+    type: Schema.Types.ObjectId,
+    ref: 'Complaint',
+    default: null
+  },
+  amount: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  source: {
+    type: String,
+    required: true,
+    enum: ['wallet', 'held_earnings', 'pending_release', 'available', 'platform_credit_reserve', 'platform_absorbed']
+  },
+  reason: {
+    type: String,
+    required: true
+  }
+}, { timestamps: true });
+
+mongoose.model('RecoveryLedger', recoveryLedgerSchema);
+
 module.exports = mongoose.model('ProviderEarning', providerEarningSchema);
+
