@@ -66,28 +66,46 @@ const TermsAndConditions = () => {
     },
     {
       id: 'provider-responsibility',
-      title: 'Provider Responsibility',
+      title: 'Provider Responsibility & Zero Tolerance',
       icon: <ShieldCheck className="w-5 h-5 text-primary" />,
       content: [
-        'Service providers are independent professionals responsible for the quality and execution of the service provided.',
-        'The platform acts as a mediator to connect users with verified providers and does not directly employ the service personnel.'
+        'Service providers are strictly independent professionals and NOT employees, agents, or partners of the platform.',
+        'Providers are solely responsible for their actions, negligence, or misconduct. Under Indian law, they are personally liable for any civil damage or criminal offenses.',
+        'The platform has zero tolerance for theft, robbery, burglary, assault, physical violence, sexual harassment, property damage, fraud, or intimidation. Immediate police FIR filings and account termination will apply.'
       ]
     },
     {
       id: 'liability',
-      title: 'Liability',
+      title: 'Platform Role & Limitation of Liability',
       icon: <AlertTriangle className="w-5 h-5 text-primary" />,
       content: [
-        'The platform is not responsible for the quality of service, damages to property, or any loss incurred during or after the service execution.',
-        'We act only as a mediator between the customer and the service provider to facilitate the connection.'
+        'The platform acts strictly as a matching marketplace and does not directly employ, direct, or encourage any illegal acts or negligent service.',
+        'We do not guarantee the work quality or safety of independent providers. To the maximum extent permitted by law, platform liability is strictly limited to the platform booking fees collected.'
       ]
     },
     {
       id: 'suspension',
-      title: 'Account Suspension',
+      title: 'Immediate Ban & Payout Hold',
       icon: <UserMinus className="w-5 h-5 text-primary" />,
       content: [
-        'Accounts can be suspended or permanently terminated for fraud, platform misuse, violation of any policies, or repeated negative feedback from service providers.'
+        'Accounts will be suspended or permanently banned instantly for complaints of misbehavior, fraud, or platform bypass (offline service bookings).',
+        'We reserve the right to put payouts on hold during active safety investigations and will share all device logs, location data, and chats with police authorities.'
+      ]
+    },
+    {
+      id: 'indemnification',
+      title: 'Indemnification Warning',
+      icon: <ShieldCheck className="w-5 h-5 text-primary" />,
+      content: [
+        'You agree to fully defend, indemnify, and hold harmless the platform and its officers from any claims, losses, or legal liabilities arising from your misconduct, breach of these terms, or negligence.'
+      ]
+    },
+    {
+      id: 'disputes',
+      title: 'Governing Law & Legal Disputes',
+      icon: <FileText className="w-5 h-5 text-primary" />,
+      content: [
+        'These Terms and Conditions are governed by Indian laws. Any legal disputes or claims shall be resolved exclusively within local jurisdiction courts.'
       ]
     },
     {

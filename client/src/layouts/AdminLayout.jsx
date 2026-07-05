@@ -293,7 +293,7 @@ const AdminLayout = () => {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top navigation bar */}
-        <header className="bg-white border-b border-gray-200 shadow-sm z-10">
+        <header className="bg-white border-b border-gray-200 shadow-sm z-20">
           <div className="flex items-center justify-between px-4 py-4 lg:px-6">
             {/* Left side - Mobile menu button & Search bar */}
             <div className="flex items-center flex-1">

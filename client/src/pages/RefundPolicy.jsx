@@ -27,45 +27,48 @@ const RefundPolicy = () => {
 
   const sections = [
     {
-      title: "Refund Eligibility",
+      title: "Refund Eligibility & Protection",
       icon: <CheckCircle2 className="w-5 h-5 text-primary" />,
-      description: "Refund will be provided in the following cases:",
+      description: "Refunds are processed to keep customers safe and protected under the following eligibility criteria:",
       items: [
-        "Service cancelled before execution",
-        "Service provider does not show up",
-        "Poor or unsatisfactory service"
+        "Booking cancelled by customer before provider dispatch.",
+        "Provider No-Show (provider fails to arrive within 30 minutes of scheduled time).",
+        "Critical safety incident, theft, violence, or harassment reported (subject to immediate police and platform review).",
+        "Incomplete services or severe, verified damage caused to customer property during execution.",
+        "Provider fraud (e.g., provider marks job as complete without visiting)."
       ],
       bgColor: "bg-primary/5"
     },
     {
       title: "Non-Refund Cases",
       icon: <XCircle className="w-5 h-5 text-danger" />,
-      description: "Refund will NOT be provided if:",
+      description: "Refunds will not be issued in cases of platform misuse:",
       items: [
-        "Service has been successfully completed",
-        "Cancellation is done at the last moment"
+        "Service is fully completed and signed off.",
+        "Last-minute cancellation after the provider has reached the customer's site.",
+        "Attempt to bypass platform payment systems by paying providers directly in cash/offline."
       ],
       bgColor: "bg-danger/5"
     },
     {
-      title: "Refund Time",
+      title: "Mandatory Incident Verification",
+      icon: <AlertCircle className="w-5 h-5 text-warning" />,
+      description: "For safety, damage, or fraud refund claims, customers must submit verification proof (photos, videos, chats, or a police complaint copy) within 24 hours. The platform will put the provider's payout on hold and assist in filing police reports where necessary.",
+      bgColor: "bg-warning/5"
+    },
+    {
+      title: "Refund Process & Timeline",
       icon: <Clock className="w-5 h-5 text-accent" />,
-      description: "Refunds will be processed within 5–7 working days after approval.",
+      description: "Once an incident is verified and approved, refunds are credited back to the original online payment method within 5–7 working days.",
       bgColor: "bg-accent/5"
     },
     {
-      title: "Payment Method Refund",
-      icon: <CreditCard className="w-5 h-5 text-primary" />,
-      description: "Refund will be credited to the original payment method used during booking.",
-      bgColor: "bg-primary/5"
-    },
-    {
-      title: "Cancellation Charges",
-      icon: <AlertCircle className="w-5 h-5 text-warning" />,
-      description: "Important notes on cancellations:",
+      title: "Late Cancellation Penalty",
+      icon: <AlertCircle className="w-5 h-5 text-danger" />,
+      description: "Important notes on cancellation fees:",
       items: [
-        "Last-minute cancellations may incur partial charges",
-        "Applicable fees will be deducted before processing refund"
+        "Cancellations done after the provider reaches the location will incur a 15% convenience fee to compensate the provider's travel.",
+        "Abusing the cancellation system will result in permanent customer account suspension."
       ],
       bgColor: "bg-warning/5"
     }

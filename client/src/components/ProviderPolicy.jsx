@@ -3,6 +3,7 @@ import { FileText, X, AlertCircle, CheckCircle } from 'lucide-react';
 
 export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
   const [hasScrolled, setHasScrolled] = useState(false);
+  const lastUpdated = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Reset scroll state when modal opens or type changes
   useEffect(() => {
@@ -49,25 +50,34 @@ export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
         >
           {type === 'agreement' && (
             <div className="space-y-4">
-              <p className="font-medium text-secondary">Please read the Provider Agreement and platform SLAs below carefully. Scroll to the bottom to accept.</p>
+              <p className="font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">⚠️ IMPORTANT WARNING: This is a legally binding contract. Any breach, misconduct, or unlawful activity will result in immediate termination, holding of payouts, and immediate criminal prosecution/police complaints.</p>
               <div className="border-l-4 border-primary/40 pl-3 italic text-gray-500 my-2">
-                Last Updated: June 2026
+                Last Updated: {lastUpdated}
               </div>
               
               <h4 className="font-bold text-secondary text-sm mt-3">1. Scope of Services</h4>
-              <p>As a verified provider on the platform, you agree to offer high-quality services matching your chosen categories. You will receive booking requests, and it is your responsibility to respond to them promptly and professionally.</p>
+              <p>As a verified provider on the platform, you agree to offer high-quality services matching your chosen categories. You will receive booking requests, and it is your responsibility to respond to them promptly, safely, and professionally.</p>
               
-              <h4 className="font-bold text-secondary text-sm">2. SLA & Booking Guarantees</h4>
-              <p>You agree to adhere to the booking timings. Cancellations or no-shows without prior notifications of at least 2 hours before the scheduled job time will affect your reliability rating and could lead to fines or temporary account suspension.</p>
+              <h4 className="font-bold text-secondary text-sm">2. SLA, Reliability & Cancellation Penalties</h4>
+              <p>You agree to adhere strictly to booking timings. Unannounced cancellations, delays, or no-shows (failure to arrive within 30 minutes of scheduled time) will lower your reliability rating, lead to fines deducted from your balance, or result in temporary/permanent account suspension.</p>
               
               <h4 className="font-bold text-secondary text-sm">3. Platform Fees & Commission</h4>
               <p>The platform charges a percentage commission on each completed booking as defined in the fee structure. The remainder of the payment, including any convenience fees collected, will be processed and transferred to your registered bank account weekly or instantly depending on terms.</p>
               
-              <h4 className="font-bold text-secondary text-sm">4. Standard of Conduct</h4>
-              <p>You must maintain a professional and respectful attitude with clients. Misbehavior, demand for direct payment bypassing the platform, or safety violations will result in permanent removal from the platform.</p>
+              <h4 className="font-bold text-secondary text-sm">4. Independent Contractor & Personal Liability</h4>
+              <p>You are registered strictly as an independent professional and NOT an employee of the platform. You are personally, financially, and criminally liable under Indian Law for your actions, behavior, negligence, misconduct, or civil/criminal offenses while providing services. The platform is not responsible for your acts.</p>
 
-              <h4 className="font-bold text-secondary text-sm">5. Independent Contractor Status</h4>
-              <p>You acknowledge that you are registered as an independent professional and not an employee of the platform. You are solely responsible for your own taxes, work tools, and general liability.</p>
+              <h4 className="font-bold text-secondary text-sm">5. Zero Tolerance for Criminal Activities</h4>
+              <p>The platform enforces a zero-tolerance policy. Any illegal or criminal acts—including theft, robbery, burglary, assault, physical violence, sexual harassment, property damage, fraud, extortion, intimidation, or any other offenses—committed during or in connection with a service will result in an immediate permanent ban. The platform will file an FIR with local police authorities, surrender your identity, location history, and documents, and fully cooperate with the investigation.</p>
+
+              <h4 className="font-bold text-secondary text-sm">6. KYC and Identity Verification (Aadhaar & PAN)</h4>
+              <p>You must provide genuine, valid, and un-tampered identity documents, including PAN card, Aadhaar card, current address proof, and active bank account details. Submitting fake, forged, or altered documents is a serious criminal offense under Indian Law. Discovery of fake details will lead to immediate account termination, withholding of all pending payouts, and referral to cyber/police cells.</p>
+
+              <h4 className="font-bold text-secondary text-sm">7. Customer Safety & On-site Conduct</h4>
+              <p>You must maintain professional, respectful, and non-intrusive behavior. Any form of harassment, unauthorized entry into rooms, misuse of customer property, or contact of customers post-service (via call or messaging) is strictly prohibited and constitutes grounds for an immediate permanent ban.</p>
+
+              <h4 className="font-bold text-secondary text-sm">8. Account Suspension, Payout Holds & Evidence Preservation</h4>
+              <p>If a safety or fraud incident is reported, the platform reserves the right to immediately suspend your account, hold all pending payouts/earnings during the investigation, and preserve chat histories, device details, and location tracking information to assist law enforcement.</p>
 
               <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg text-xs text-gray-400 text-center mt-6">
                 --- End of Provider Agreement ---
@@ -77,22 +87,22 @@ export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
 
           {type === 'terms' && (
             <div className="space-y-4">
-              <p className="font-medium text-secondary">Please read the Terms and Conditions below carefully. Scroll to the bottom to accept.</p>
+              <p className="font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">⚠️ TERMS OF USE: Strict penalties apply for platform bypass, fraud, or violations of code of conduct.</p>
               <div className="border-l-4 border-primary/40 pl-3 italic text-gray-500 my-2">
-                Last Updated: June 2026
+                Last Updated: {lastUpdated}
               </div>
 
               <h4 className="font-bold text-secondary text-sm mt-3">1. Account Registration & Security</h4>
-              <p>You must keep your credentials secure. Any activity occurring under your registered account is your responsibility. You agree to provide true and accurate documents, including PAN and Aadhaar card details.</p>
+              <p>You are solely responsible for all activities occurring under your registered account. You agree to provide true and accurate documents, including PAN and Aadhaar card details. Lending your account to unverified third parties is strictly banned and results in an immediate lifetime ban.</p>
 
-              <h4 className="font-bold text-secondary text-sm">2. Fair Usage Policy</h4>
-              <p>You agree not to bypass the platform by directly taking customer details or arranging payments offline. All service leads provided through the platform must be processed on-platform.</p>
+              <h4 className="font-bold text-secondary text-sm">2. Fair Usage & Platform Bypass Warning</h4>
+              <p>You agree not to bypass the platform by arranging direct, offline payments or soliciting customers for direct service leads. Offline transactions are highly unsafe, bypass safety monitoring, and will lead to an immediate ban and forfeiture of all platform credits.</p>
 
-              <h4 className="font-bold text-secondary text-sm">3. Direct Liability Limitations</h4>
-              <p>The platform acts as a digital matching service. We are not liable for any direct, indirect, incidental, or consequential damages resulting from transactions, work quality, or interactions between users and providers.</p>
+              <h4 className="font-bold text-secondary text-sm">3. Platform Role & Dispute Resolution</h4>
+              <p>The platform acts solely as a digital matching marketplace and does not authorize, direct, or encourage any illegal or negligent acts. Disputes arising under these terms are governed by the laws of India, subject to exclusive court jurisdiction.</p>
 
-              <h4 className="font-bold text-secondary text-sm">4. Account Verification & Auditing</h4>
-              <p>We reserve the right to verify, audit, or background-check any user or provider profile. Providing falsified identity documents, bank accounts, or credentials is a serious breach of terms.</p>
+              <h4 className="font-bold text-secondary text-sm">4. Mandatory Auditing & Background Verification</h4>
+              <p>We reserve the right to audit, inspect, and run background/police verification on any provider profile. The submission of false documentation or refusal to undergo verification will result in instant termination of platform access.</p>
 
               <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg text-xs text-gray-400 text-center mt-6">
                 --- End of Terms and Conditions ---
@@ -104,20 +114,20 @@ export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
             <div className="space-y-4">
               <p className="font-medium text-secondary">Please read the Privacy Policy below carefully. Scroll to the bottom to accept.</p>
               <div className="border-l-4 border-primary/40 pl-3 italic text-gray-500 my-2">
-                Last Updated: June 2026
+                Last Updated: {lastUpdated}
               </div>
 
-              <h4 className="font-bold text-secondary text-sm mt-3">1. Data We Collect</h4>
-              <p>We collect personal information such as your name, email address, phone number, location history (for routing jobs), bank account details (for payouts), and KYC verification files (PAN/Aadhaar/selfie).</p>
+              <h4 className="font-bold text-secondary text-sm mt-3">1. Data We Collect & Store</h4>
+              <p>We collect and securely store personal information, including your name, email, contact number, real-time location history (to match you with local customer jobs), bank details (for payout processing), and KYC verification documents (PAN, Aadhaar cards, and profile pictures/selfies).</p>
 
-              <h4 className="font-bold text-secondary text-sm">2. Data Usage & Location Tracking</h4>
-              <p>Your location coordinates may be requested to check local availability and dispatch customer requests near you. Your bank details are securely processed only to transfer payments for services you perform.</p>
+              <h4 className="font-bold text-secondary text-sm">2. Location Tracking for Dispatch & Safety</h4>
+              <p>Your location coordinates are tracked to locate and assign jobs near you, as well as to ensure customer safety and live tracking during active bookings. Disabling location permissions will restrict your ability to receive bookings.</p>
 
-              <h4 className="font-bold text-secondary text-sm">3. Information Sharing</h4>
-              <p>We share necessary verification files with background-check agencies and payment providers. We do not sell or lease your personal information to third-party advertisers.</p>
+              <h4 className="font-bold text-secondary text-sm">3. Direct Data Sharing with Law Enforcement</h4>
+              <p>We work closely with law enforcement. In the event of a safety incident, threat, fraud, or criminal report, we will immediately share provider identification documents, contact logs, location records, and bank accounts with police and legal authorities without requiring prior notice to you.</p>
 
-              <h4 className="font-bold text-secondary text-sm">4. Retention and Security</h4>
-              <p>We retain your profile data while your account is active. All communication and personal data details are encrypted in transit and at rest using standard security protocols.</p>
+              <h4 className="font-bold text-secondary text-sm">4. Data Security & Encryption</h4>
+              <p>All sensitive documents and data transactions are fully encrypted in transit and at rest using modern secure protocols to protect information from unauthorized access.</p>
 
               <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg text-xs text-gray-400 text-center mt-6">
                 --- End of Privacy Policy ---

@@ -28,14 +28,12 @@ const PrivacyPolicy = () => {
   const sections = [
     {
       id: "info-collect",
-      title: "Information We Collect",
+      title: "Information We Collect & Store",
       icon: <Database className="w-5 h-5 text-primary" />,
       content: [
-        "Name",
-        "Email Address",
-        "Phone Number",
-        "Location Data",
-        "Payment Information"
+        "Personal details: Name, active email, verified phone number, and location history.",
+        "Provider verification files: Encrypted files of identity documents (PAN, Aadhaar cards), bank account credentials (for automated payouts), and verification selfies.",
+        "Device and activity data: IP address, browser type, device logs, and transaction details to secure profiles."
       ]
     },
     {
@@ -43,28 +41,29 @@ const PrivacyPolicy = () => {
       title: "How We Use Your Data",
       icon: <Eye className="w-5 h-5 text-primary" />,
       content: [
-        "To process and manage your service bookings",
-        "To provide customer support and respond to your inquiries",
-        "To improve our platform services and user experience",
-        "For marketing and communication purposes (optional and based on your preferences)"
+        "To process and manage your service bookings and live-track active providers.",
+        "To perform strict background verification and security auditing.",
+        "To investigate and resolve complaints, disputes, safety incidents, and platform usage violations.",
+        "To process secure, fraud-free payments and payouts through verified gateways."
       ]
     },
     {
       id: "data-sharing",
-      title: "Data Sharing",
+      title: "Data Sharing & Law Enforcement Disclosure",
       icon: <Share2 className="w-5 h-5 text-primary" />,
       content: [
-        "We may share your data with trusted third-party service providers who assist us in operating our platform (e.g. Razorpay for payments).",
-        "We do not sell your personal data to any third parties for marketing purposes."
+        "We share verification data with designated background screening agencies.",
+        "We share payment details with payment processors (e.g. Razorpay) to complete bookings.",
+        "⚠️ CRITICAL: We will share your complete identity details, KYC files, coordinates, and contact records immediately with police and law enforcement authorities to investigate safety incidents, fraud, or criminal acts."
       ]
     },
     {
       id: "data-security",
-      title: "Data Security",
+      title: "Data Security & Fraud Control",
       icon: <Lock className="w-5 h-5 text-primary" />,
       content: [
-        "We implement robust security measures to protect your personal information from unauthorized access.",
-        "Industry-standard encryption and secure storage practices are utilized to ensure data integrity."
+        "We implement modern end-to-end encryption protocols to secure files and details in transit and at rest.",
+        "We deploy robust monitoring and security tools to detect and block fake accounts, forged documents, and fraudulent activities."
       ]
     },
     {
