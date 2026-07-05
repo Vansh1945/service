@@ -435,7 +435,7 @@ const ComplaintsPage = () => {
           role="button"
           tabIndex={0}
           onClick={() => { setOpenNewComplaint(false); resetForm(); }}
-          onKeyUp={(e) => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { setOpenNewComplaint(false); resetForm(); } }}
+          onKeyUp={(e) => { if (e.key === 'Escape') { setOpenNewComplaint(false); resetForm(); } }}
         >
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100">
@@ -568,7 +568,7 @@ const ComplaintsPage = () => {
           role="button"
           tabIndex={0}
           onClick={() => setOpenComplaintDetail(false)}
-          onKeyUp={(e) => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { setOpenComplaintDetail(false); } }}
+          onKeyUp={(e) => { if (e.key === 'Escape') { setOpenComplaintDetail(false); } }}
         >
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
@@ -837,7 +837,7 @@ const ComplaintsPage = () => {
           role="button"
           tabIndex={0}
           onClick={() => setPreviewImage(null)}
-          onKeyUp={(e) => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { setPreviewImage(null); } }}
+          onKeyUp={(e) => { if (e.key === 'Escape') { setPreviewImage(null); } }}
         >
           <button className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full transition-all">
             <X className="w-6 h-6" />
