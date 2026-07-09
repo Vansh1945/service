@@ -376,7 +376,7 @@ const App = () => {
     }
 
     const serverVersion = activeBranding?.appVersion;
-    if (serverVersion) {
+    if (serverVersion && activeBranding?.role === currentRole) {
       const localVersionKey = `app_version_${currentRole}`;
       const localVersion = parseInt(localStorage.getItem(localVersionKey) || '1', 10);
 

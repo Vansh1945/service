@@ -81,7 +81,11 @@ export const AuthProvider = ({ children }) => {
         const currentRole = getCookie("role") || "customer";
         try {
             const cached = localStorage.getItem(`branding_${currentRole}`);
-            return cached ? JSON.parse(cached) : null;
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                return parsed.role ? parsed : { ...parsed, role: currentRole };
+            }
+            return null;
         } catch (error) {
             return null;
         }
@@ -118,7 +122,7 @@ export const AuthProvider = ({ children }) => {
             // Fetch role specific branding
             const brandingRes = await SystemService.getBrandingSettings(roleToFetch);
             if (brandingRes.data?.success) {
-                const brandingData = brandingRes.data.data;
+                const brandingData = { ...brandingRes.data.data, role: roleToFetch };
                 localStorage.setItem(`branding_${roleToFetch}`, JSON.stringify(brandingData));
                 setActiveBranding(brandingData);
                 window.dispatchEvent(new CustomEvent("brandingUpdated", { detail: { role: roleToFetch, data: brandingData } }));
@@ -134,7 +138,8 @@ export const AuthProvider = ({ children }) => {
         const cached = localStorage.getItem(`branding_${currentBrandingRole}`);
         if (cached) {
             try {
-                setActiveBranding(JSON.parse(cached));
+                const parsed = JSON.parse(cached);
+                setActiveBranding(parsed.role ? parsed : { ...parsed, role: currentBrandingRole });
             } catch (e) { }
         }
 
