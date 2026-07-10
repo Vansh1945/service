@@ -201,7 +201,27 @@ const sendMail = async ({ to, subject, html, templateType, variables, attachment
   if (templateType) {
     try {
       const config = await SystemConfig.findOne();
-      let template = config?.emailTemplates?.[templateType];
+      const Template = require('../models/Template');
+      let templateDoc = await Template.findOne({ key: templateType });
+      if (!templateDoc) {
+        templateDoc = await Template.findOne({ key: `email_${templateType}` });
+      }
+
+      let template = null;
+      if (templateDoc) {
+        const activeVersion = templateDoc.versions.find(v => v.isActive);
+        if (activeVersion) {
+          template = {
+            subject: activeVersion.title,
+            body: activeVersion.body,
+            isActive: true
+          };
+        }
+      }
+
+      if (!template) {
+        template = config?.emailTemplates?.[templateType];
+      }
 
       // Fallback to internal default template if not found in database
       if (!template || !template.body) {
@@ -209,6 +229,7 @@ const sendMail = async ({ to, subject, html, templateType, variables, attachment
       }
 
       if (template) {
+
         // If template is explicitly deactivated by admin, skip sending
         if (template.isActive === false) {
           console.log(`[sendMail] Skipped sending template ${templateType} because it is deactivated.`);

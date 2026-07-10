@@ -78,6 +78,17 @@ const updateSystemSetting = async (req, res) => {
       updateData.providerBookingRingtone = req.files.providerBookingRingtone[0].path; // Cloudinary URL
     }
 
+    // Handle digitalSignature upload
+    if (req.files && req.files.digitalSignature && req.files.digitalSignature[0]) {
+      updateData.digitalSignature = req.files.digitalSignature[0].path; // Cloudinary URL
+    }
+
+    // Handle companySeal upload
+    if (req.files && req.files.companySeal && req.files.companySeal[0]) {
+      updateData.companySeal = req.files.companySeal[0].path; // Cloudinary URL
+    }
+
+
     // Sanitize empty ObjectId strings to prevent CastError
     if (updateData.referralSettings) {
       if (updateData.referralSettings.systemReferralOwner === "") {

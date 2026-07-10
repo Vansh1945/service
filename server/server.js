@@ -39,6 +39,8 @@ const chatRoutes = require('./routes/Chat-route');
 const zoneRoutes = require('./routes/Zone-routes');
 const surgeRoutes = require('./routes/Surge-routes');
 const referralRoutes = require('./routes/Referral-routes');
+const templateRoutes = require('./routes/Template-routes');
+
 
 // Initialize express app
 const app = express();
@@ -336,6 +338,8 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/surge', surgeRoutes);
 app.use('/api/referral', referralRoutes);
+app.use('/api/templates', templateRoutes);
+
 
 // Catch-all 404 handler for unknown routes
 app.use((req, res, next) => {

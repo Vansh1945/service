@@ -5,7 +5,7 @@ import {
   FiDollarSign, FiTag, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
-  FiMapPin, FiMail, FiSend, FiClock, FiAward
+  FiMapPin, FiMail, FiSend, FiClock, FiAward, FiFileText
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -119,6 +119,8 @@ const AdminLayout = () => {
         { name: 'Settings', path: '/admin/settings', icon: <FiSettings className="w-5 h-5" /> },
         { name: 'Branding Management', path: '/admin/branding', icon: <FiLayout className="w-5 h-5" /> },
         { name: 'Email Templates', path: '/admin/email-templates', icon: <FiMail className="w-5 h-5" /> },
+        { name: 'PDF Templates', path: '/admin/pdf-templates', icon: <FiFileText className="w-5 h-5" /> },
+
       ]
     }
   ];

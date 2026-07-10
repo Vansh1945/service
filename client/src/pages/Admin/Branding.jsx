@@ -9,6 +9,61 @@ import * as SystemService from '../../services/SystemService';
 import { useConfirm } from '../../context/ConfirmContext';
 import StatsCard from '../../components/ui/StatsCard';
 
+const AssetUploadCard = ({
+  label,
+  subtext,
+  value,
+  field,
+  role,
+  onUpload,
+  onRemove,
+  uploadingField,
+  accept = 'image/*',
+  recommendText = 'Recommended: PNG / SVG',
+  className = ''
+}) => {
+  const isUploading = uploadingField === field;
+  return (
+    <div className={`p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group ${className}`}>
+      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{label}</span>
+      <span className="text-[9px] text-gray-400 mb-2">{subtext}</span>
+      {value ? (
+        <div className="space-y-3 w-full px-2 animate-in zoom-in-95 duration-200">
+          <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center p-2 shadow-sm">
+            <img src={value} alt={label} className="max-h-full max-w-full object-contain rounded-lg" />
+          </div>
+          <button
+            type="button"
+            onClick={() => onRemove(role, field)}
+            className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
+          >
+            <FiTrash2 className="w-3.5 h-3.5" /> Remove {label}
+          </button>
+        </div>
+      ) : (
+        <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
+          <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
+          <span className="text-xs font-bold text-teal-600">Upload {label}</span>
+          <span className="text-[9px] text-gray-400 mt-1">{recommendText}</span>
+          <input
+            type="file"
+            onChange={(e) => onUpload(role, field, e)}
+            className="hidden"
+            accept={accept}
+            disabled={uploadingField !== null}
+          />
+        </label>
+      )}
+      {isUploading && (
+        <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+          <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+          <span className="text-[10px] font-bold text-teal-600">Uploading {field}...</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Branding = () => {
   const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState('customer'); // 'customer' | 'provider' | 'admin'
@@ -382,7 +437,7 @@ const Branding = () => {
               iconColor={c.iconColor}
               subtext={c.subtext}
               onClick={() => setActiveTab(role)}
-              className={`${c.border} transition-all duration-200 shadow-sm hover:shadow-md ${isActive ? 'scale-[1.02] shadow-md' : 'hover:scale-[1.01]'}`}
+              className={`${c.border} transition-all duration-205 shadow-sm hover:shadow-md ${isActive ? 'scale-[1.02] shadow-md' : 'hover:scale-[1.01]'}`}
             />
           );
         })}
@@ -471,169 +526,61 @@ const Branding = () => {
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AssetUploadCard
+                label="Logo Asset"
+                subtext="Navbar, email header, favicon fallback"
+                value={currentBranding.logo}
+                field="logo"
+                role={activeTab}
+                onUpload={handleAssetUpload}
+                onRemove={removeAsset}
+                uploadingField={uploadingField}
+              />
 
-              {/* Logo Box (Common) */}
-              <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Logo Asset</span>
-                <span className="text-[9px] text-gray-400 mb-2">Navbar, email header, favicon fallback</span>
-                {currentBranding.logo ? (
-                  <div className="space-y-3 w-full px-2">
-                    <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center p-2 shadow-sm">
-                      <img src={currentBranding.logo} alt="Logo" className="max-h-full max-w-full object-contain" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAsset(activeTab, 'logo')}
-                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
-                    >
-                      <FiTrash2 className="w-3.5 h-3.5" /> Remove Logo
-                    </button>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
-                    <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
-                    <span className="text-xs font-bold text-teal-600">Upload Image Logo</span>
-                    <span className="text-[9px] text-gray-400 mt-1">Recommended: PNG / SVG</span>
-                    <input
-                      type="file"
-                      onChange={(e) => handleAssetUpload(activeTab, 'logo', e)}
-                      className="hidden"
-                      accept="image/*"
-                      disabled={uploadingField !== null}
-                    />
-                  </label>
-                )}
-                {uploadingField === 'logo' && (
-                  <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                    <FiRefreshCw className="w-6 h-6 text-teal-600 " />
-                    <span className="text-[10px] font-bold text-teal-600">Uploading logo...</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Launcher Icon Box (Customer & Provider only) */}
               {(activeTab === 'customer' || activeTab === 'provider') && (
-                <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group animate-in zoom-in-95 duration-200">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">PWA Icon (Launcher)</span>
-                  <span className="text-[9px] text-gray-400 mb-2">App icon on phone home screen (512x512 PNG)</span>
-                  {currentBranding.icon ? (
-                    <div className="space-y-3 w-full px-2">
-                      <div className="h-16 w-full flex items-center justify-center">
-                        <img src={currentBranding.icon} alt="PWA Icon" className="w-16 h-16 object-cover rounded-2xl border border-gray-100 shadow-sm" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAsset(activeTab, 'icon')}
-                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
-                      >
-                        <FiTrash2 className="w-3.5 h-3.5" /> Remove Icon
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
-                      <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
-                      <span className="text-xs font-bold text-teal-600">Upload PWA Icon</span>
-                      <span className="text-[9px] text-gray-400 mt-1">Required: Square PNG (512x512)</span>
-                      <input
-                        type="file"
-                        onChange={(e) => handleAssetUpload(activeTab, 'icon', e)}
-                        className="hidden"
-                        accept="image/png"
-                        disabled={uploadingField !== null}
-                      />
-                    </label>
-                  )}
-                  {uploadingField === 'icon' && (
-                    <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                      <FiRefreshCw className="w-6 h-6 text-teal-600 " />
-                      <span className="text-[10px] font-bold text-teal-600">Uploading icon...</span>
-                    </div>
-                  )}
-                </div>
+                <AssetUploadCard
+                  label="PWA Icon"
+                  subtext="App icon on phone home screen (512x512 PNG)"
+                  value={currentBranding.icon}
+                  field="icon"
+                  role={activeTab}
+                  onUpload={handleAssetUpload}
+                  onRemove={removeAsset}
+                  uploadingField={uploadingField}
+                  accept="image/png"
+                  recommendText="Required: Square PNG (512x512)"
+                />
               )}
 
-              {/* Splash Image Box (Customer & Provider only) */}
               {(activeTab === 'customer' || activeTab === 'provider') && (
-                <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in zoom-in-95 duration-200">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Splash Screen Overlay</span>
-                  <span className="text-[9px] text-gray-400 mb-2">Full-screen image displayed for 1-2 seconds when the app is opening</span>
-                  {currentBranding.splashScreen ? (
-                    <div className="space-y-3 w-full px-2">
-                      <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shadow-sm">
-                        <img src={currentBranding.splashScreen} alt="Splash Screen" className="h-full w-full object-cover" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAsset(activeTab, 'splashScreen')}
-                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
-                      >
-                        <FiTrash2 className="w-3.5 h-3.5" /> Remove Splash Screen
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
-                      <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
-                      <span className="text-xs font-bold text-teal-600">Upload Splash Screen</span>
-                      <span className="text-[9px] text-gray-400 mt-1">Recommended: 1080x1920 PNG</span>
-                      <input
-                        type="file"
-                        onChange={(e) => handleAssetUpload(activeTab, 'splashScreen', e)}
-                        className="hidden"
-                        accept="image/*"
-                        disabled={uploadingField !== null}
-                      />
-                    </label>
-                  )}
-                  {uploadingField === 'splashScreen' && (
-                    <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                      <FiRefreshCw className="w-6 h-6 text-teal-600 " />
-                      <span className="text-[10px] font-bold text-teal-600">Uploading splash...</span>
-                    </div>
-                  )}
-                </div>
+                <AssetUploadCard
+                  label="Splash Screen"
+                  subtext="Full-screen image displayed when the app is opening"
+                  value={currentBranding.splashScreen}
+                  field="splashScreen"
+                  role={activeTab}
+                  onUpload={handleAssetUpload}
+                  onRemove={removeAsset}
+                  uploadingField={uploadingField}
+                  recommendText="Recommended: 1080x1920 PNG"
+                  className="md:col-span-2"
+                />
               )}
 
-              {/* Favicon Box (Admin Only) */}
               {activeTab === 'admin' && (
-                <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in slide-in-from-top-4 duration-300">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Browser Favicon</span>
-                  <span className="text-[9px] text-gray-400 mb-2">Small icon on the left side of the browser tab (32x32)</span>
-                  {currentBranding.favicon ? (
-                    <div className="space-y-3 w-full px-2">
-                      <div className="h-16 w-full flex items-center justify-center">
-                        <img src={currentBranding.favicon} alt="Favicon" className="w-10 h-10 object-contain" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAsset(activeTab, 'favicon')}
-                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
-                      >
-                        <FiTrash2 className="w-3.5 h-3.5" /> Remove Favicon
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
-                      <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
-                      <span className="text-xs font-bold text-teal-600">Upload Tab Favicon</span>
-                      <span className="text-[9px] text-gray-400 mt-1">Recommended: 32x32 ICO or PNG</span>
-                      <input
-                        type="file"
-                        onChange={(e) => handleAssetUpload(activeTab, 'favicon', e)}
-                        className="hidden"
-                        accept="image/*"
-                        disabled={uploadingField !== null}
-                      />
-                    </label>
-                  )}
-                  {uploadingField === 'favicon' && (
-                    <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                      <FiRefreshCw className="w-6 h-6 text-teal-600 " />
-                      <span className="text-[10px] font-bold text-teal-600">Uploading favicon...</span>
-                    </div>
-                  )}
-                </div>
+                <AssetUploadCard
+                  label="Favicon"
+                  subtext="Small icon on the left side of the browser tab (32x32)"
+                  value={currentBranding.favicon}
+                  field="favicon"
+                  role={activeTab}
+                  onUpload={handleAssetUpload}
+                  onRemove={removeAsset}
+                  uploadingField={uploadingField}
+                  recommendText="Recommended: 32x32 ICO or PNG"
+                  className="md:col-span-2"
+                />
               )}
-
             </div>
           </div>
 

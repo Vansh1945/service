@@ -1,6 +1,9 @@
 const PDFDocument = require('pdfkit');
 const { SystemConfig } = require('../models/SystemSetting');
+const Template = require('../models/Template');
+const Handlebars = require('handlebars');
 const cloudinary = require('./cloudinary');
+
 
 // ─── Brand Colors ───────────────────────────────────────────────
 const TEAL = '#0C7C84';
@@ -419,6 +422,7 @@ const drawAuthorizedSignOff = async (doc, y, config, signatureBuffer, stampBuffe
   return signBoxY + boxHeight + 10;
 };
 
+
 /**
  * Shared layout runner to draw the same letterhead UI for all documents.
  */
@@ -463,6 +467,208 @@ const generateLetterheadDocument = async (provider, refPrefix, drawContentCallba
   });
 };
 
+// ─── Dynamic Template Helper Utilities ────────────────────────────────
+const maskAadhaar = (num) => {
+  if (!num) return 'N/A';
+  const clean = num.toString().replace(/[-\s]/g, '');
+  if (clean.length < 4) return 'XXXX-XXXX-XXXX';
+  return `XXXX-XXXX-${clean.slice(-4)}`;
+};
+
+const maskPan = (num) => {
+  if (!num) return 'N/A';
+  const clean = num.toString().trim();
+  if (clean.length < 4) return 'XXXXX-XXXX';
+  return `XXXXX${clean.slice(-4)}`;
+};
+
+const maskBankAccount = (num) => {
+  if (!num) return 'N/A';
+  const clean = num.toString().trim();
+  if (clean.length < 4) return 'XXXXXX';
+  return `XXXXXX${clean.slice(-4)}`;
+};
+
+const getContext = async (provider, customVars = {}) => {
+  const config = await SystemConfig.findOne() || { companyName: 'Raj Electrical Services' };
+  
+  const cAddr = provider.currentAddress || {};
+  const currentAddressStr = [cAddr.houseNumber, cAddr.street, cAddr.landmark, cAddr.villageCity, cAddr.district, cAddr.state]
+    .filter(Boolean).join(', ') + (cAddr.pincode ? ` - ${cAddr.pincode}` : '');
+
+  const pAddr = provider.permanentAddress || {};
+  const permanentAddressStr = [pAddr.houseNumber, pAddr.street, pAddr.landmark, pAddr.villageCity, pAddr.district, pAddr.state]
+    .filter(Boolean).join(', ') + (pAddr.pincode ? ` - ${pAddr.pincode}` : '');
+
+  return {
+    companyName: config.companyName || 'Raj Electrical Services',
+    companyAddress: config.address || 'N/A',
+    companyEmail: config.email || 'support@rajelectrical.com',
+    companyPhone: config.phone || 'N/A',
+    companyWebsite: config.website || 'N/A',
+    providerName: provider.name || 'N/A',
+    providerId: provider.providerId || 'PENDING',
+    providerEmail: provider.email || 'N/A',
+    providerPhone: provider.phone || 'N/A',
+    providerCategory: provider.category || 'N/A',
+    providerStatus: provider.status || 'N/A',
+    approvalDate: new Date().toLocaleDateString('en-IN'),
+    agreementDate: new Date().toLocaleDateString('en-IN'),
+    documentNumber: provider.providerId ? `AGR-${provider.providerId}` : 'PENDING',
+    verificationStatus: provider.kycDetails?.verificationStatus || 'unverified',
+    aadhaarNumberMasked: maskAadhaar(provider.kycDetails?.aadhaarNumber),
+    panNumberMasked: maskPan(provider.kycDetails?.panNumber),
+    currentAddress: currentAddressStr || 'N/A',
+    permanentAddress: permanentAddressStr || 'N/A',
+    bankName: provider.bankDetails?.bankName || 'N/A',
+    accountNumberMasked: maskBankAccount(provider.bankDetails?.accountNumber),
+    ifsc: provider.bankDetails?.ifsc || 'N/A',
+    branch: provider.bankDetails?.branchName || 'N/A',
+    city: cAddr.villageCity || 'N/A',
+    state: cAddr.state || 'N/A',
+    adminName: 'Administrator',
+    generatedDate: new Date().toLocaleDateString('en-IN'),
+    generatedTime: new Date().toLocaleTimeString('en-IN'),
+    agreementVersion: provider.legalAcceptance?.version || '1.0',
+    supportEmail: config.email || 'support@rajelectrical.com',
+    supportPhone: config.phone || 'N/A',
+    currentYear: new Date().getFullYear(),
+    ...customVars
+  };
+};
+
+const stripHtml = (html) => {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '') // Strip all other HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+};
+
+const drawDynamicTemplate = async (doc, y, config, provider, templateKey, customVars = {}) => {
+  const template = await Template.findOne({ key: templateKey });
+  if (!template) return null;
+
+  const activeVersion = template.versions.find(v => v.isActive);
+  if (!activeVersion) return null;
+
+  const context = await getContext(provider, customVars);
+  const compile = (text) => {
+    if (!text) return '';
+    try {
+      return Handlebars.compile(text)(context);
+    } catch (err) {
+      return text;
+    }
+  };
+
+  const parsedTitle = stripHtml(compile(activeVersion.title));
+  const parsedSubtitle = stripHtml(compile(activeVersion.subtitle));
+  const parsedHeader = stripHtml(compile(activeVersion.headerText));
+  const parsedBody = stripHtml(compile(activeVersion.body));
+  const parsedTerms = stripHtml(compile(activeVersion.terms));
+  const parsedNotes = stripHtml(compile(activeVersion.notes));
+  const parsedSignatory = stripHtml(compile(activeVersion.authorizedSignatory));
+
+
+  const MARGIN_LEFT = 50;
+  const CONTENT_WIDTH = 595.28 - 100;
+  
+  if (parsedTitle) {
+    doc.save();
+    doc.fontSize(13).font('Helvetica-Bold').fillColor('#0C7C84');
+    doc.text(parsedTitle, MARGIN_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
+    doc.restore();
+    y += 18;
+  }
+
+  if (parsedSubtitle) {
+    doc.save();
+    doc.fontSize(9.5).font('Helvetica-Oblique').fillColor('#555555');
+    doc.text(parsedSubtitle, MARGIN_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
+    doc.restore();
+    y += 14;
+  }
+
+  doc.save();
+  doc.moveTo(MARGIN_LEFT, y).lineTo(595.28 - 50, y).lineWidth(0.5).strokeColor('#888888').stroke();
+  doc.restore();
+  y += 12;
+
+  if (parsedHeader) {
+    doc.save();
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#222222');
+    doc.text(parsedHeader, MARGIN_LEFT, y, { width: CONTENT_WIDTH });
+    doc.restore();
+    y += 15;
+  }
+
+  if (parsedBody) {
+    const paragraphs = parsedBody.split('\n');
+    for (const p of paragraphs) {
+      if (p.trim()) {
+        doc.save();
+        doc.fontSize(8.5).font('Helvetica').fillColor('#555555');
+        doc.text(p.trim(), MARGIN_LEFT, y, { width: CONTENT_WIDTH, align: 'justify', lineGap: 1 });
+        const h = doc.heightOfString(p.trim(), { width: CONTENT_WIDTH, lineGap: 1 });
+        doc.restore();
+        y += h + 6;
+      }
+    }
+  }
+
+  if (parsedTerms) {
+    doc.save();
+    doc.fontSize(9.5).font('Helvetica-Bold').fillColor('#0C7C84');
+    doc.text('Terms & Conditions', MARGIN_LEFT, y);
+    doc.restore();
+    y += 14;
+
+    const termsList = parsedTerms.split('\n');
+    for (const t of termsList) {
+      if (t.trim()) {
+        doc.save();
+        doc.fontSize(7.5).font('Helvetica').fillColor('#555555');
+        doc.text(t.trim(), MARGIN_LEFT + 10, y, { width: CONTENT_WIDTH - 10, align: 'justify' });
+        const h = doc.heightOfString(t.trim(), { width: CONTENT_WIDTH - 10 });
+        doc.restore();
+        y += h + 4;
+      }
+    }
+    y += 6;
+  }
+
+  if (parsedNotes) {
+    doc.save();
+    doc.fontSize(7).font('Helvetica-Oblique').fillColor('#888888');
+    doc.text(parsedNotes, MARGIN_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
+    doc.restore();
+    y += 12;
+  }
+
+  if (parsedSignatory || activeVersion.hasCompanySeal) {
+    y += 10;
+    let signatureBuffer = null;
+    let stampBuffer = null;
+    if (config.digitalSignature) {
+      signatureBuffer = await fetchImageBuffer(config.digitalSignature);
+    }
+    if (config.companySeal) {
+      stampBuffer = await fetchImageBuffer(config.companySeal);
+    }
+    y = await drawAuthorizedSignOff(doc, y, config, signatureBuffer, stampBuffer);
+  }
+
+
+  return y;
+};
+
 /**
  * Uploads PDF Buffer to Cloudinary as raw file.
  */
@@ -481,14 +687,17 @@ const uploadPdfBuffer = (buffer, folder, publicId) => {
 // ═══════════════════════════════════════════════════════════════════
 const generateAgreement = async (provider) => {
   return generateLetterheadDocument(provider, 'AGR', async (doc, y, config, signatureBuffer, stampBuffer) => {
-    // Title
+    // Check and draw dynamic template if active
+    const dynamicY = await drawDynamicTemplate(doc, y, config, provider, 'agreement');
+    if (dynamicY !== null) return dynamicY;
+
+    // Fallback to original hardcoded layout
     doc.save();
     doc.fontSize(13).font('Helvetica-Bold').fillColor(TEAL);
     doc.text('PROVIDER SERVICE AGREEMENT', MARGIN_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
     doc.restore();
     y += 18;
 
-    // Provider Details
     y = drawSectionTitle(doc, 'Provider Details', y);
     y = drawInfoLine(doc, 'Full Name', provider.name, y);
     y = drawInfoLine(doc, 'Email', provider.email, y);
@@ -496,7 +705,6 @@ const generateAgreement = async (provider) => {
     y = drawInfoLine(doc, 'Provider ID', provider.providerId || 'PENDING', y);
     y = drawInfoLine(doc, 'Date of Birth', provider.dateOfBirth ? new Date(provider.dateOfBirth).toLocaleDateString('en-IN') : 'N/A', y);
 
-    // Address Details
     if (provider.currentAddress) {
       y = drawSectionTitle(doc, 'Address Details', y);
       const cAddr = provider.currentAddress;
@@ -505,7 +713,6 @@ const generateAgreement = async (provider) => {
       y = drawInfoLine(doc, 'Current Address', fullAddr, y);
     }
 
-    // Self Declaration & Terms
     y = drawSectionTitle(doc, 'Self Declaration & Legal Consent', y);
     const declarations = [
       '1. The provider declares all the information, identity documents (Aadhaar, PAN) and bank details submitted are genuine and verifiable.',
@@ -517,7 +724,6 @@ const generateAgreement = async (provider) => {
       y = drawParagraph(doc, decl, y, { indent: 10 });
     }
 
-    // Digital Consent Log
     y = drawSectionTitle(doc, 'Digital Consent Log', y);
     y = drawInfoLine(doc, 'Consent Accepted', 'Yes (Self-Declaration, Agreement, Terms, and Privacy accepted)', y);
     y = drawInfoLine(doc, 'Consent Version', provider.legalAcceptance?.version || '1.0', y);
@@ -525,11 +731,9 @@ const generateAgreement = async (provider) => {
     y = drawInfoLine(doc, 'IP Address', provider.legalAcceptance?.ipAddress || 'N/A', y);
     y = drawInfoLine(doc, 'User Agent', provider.legalAcceptance?.userAgent || 'N/A', y);
 
-    // Provider Digital Signature
     y = drawSectionTitle(doc, 'Provider Digital Signature', y);
     y = drawInfoLine(doc, 'Signed Name', provider.digitalSignature?.signedName || provider.name, y);
     
-    // Embed provider signature image side-by-side with details
     const signatureImgY = y;
     if (provider.digitalSignature?.signatureUrl) {
       try {
@@ -546,10 +750,8 @@ const generateAgreement = async (provider) => {
     y = drawInfoLine(doc, 'Signing Device', provider.digitalSignature?.deviceInfo || 'N/A', y);
     y += 10;
 
-    // Company Stamp & Authorized Signature
     y = await drawAuthorizedSignOff(doc, y, config, signatureBuffer, stampBuffer);
 
-    // Disclaimer
     doc.save();
     doc.fontSize(6.5).font('Helvetica-Oblique').fillColor(GRAY_LIGHT);
     doc.text(
@@ -566,19 +768,21 @@ const generateAgreement = async (provider) => {
 // ═══════════════════════════════════════════════════════════════════
 const generateApprovalLetter = async (provider, remarks = '') => {
   return generateLetterheadDocument(provider, 'APL', async (doc, y, config, signatureBuffer, stampBuffer) => {
-    // Title
+    // Check and draw dynamic template if active
+    const dynamicY = await drawDynamicTemplate(doc, y, config, provider, 'approval_letter', { reason: remarks });
+    if (dynamicY !== null) return dynamicY;
+
+    // Fallback to original hardcoded layout
     doc.save();
     doc.fontSize(13).font('Helvetica-Bold').fillColor(TEAL);
     doc.text('OFFICIAL PROVIDER APPROVAL LETTER', MARGIN_LEFT, y, { width: CONTENT_WIDTH, align: 'center' });
     doc.restore();
     y += 18;
 
-    // Date & Provider ID
     y = drawInfoLine(doc, 'Date', new Date().toLocaleDateString('en-IN'), y);
     y = drawInfoLine(doc, 'Provider ID', provider.providerId || 'PENDING', y);
     y += 5;
 
-    // To section
     doc.save();
     doc.fontSize(9).font('Helvetica-Bold').fillColor(BLACK);
     doc.text('To,', MARGIN_LEFT, y);
@@ -595,7 +799,6 @@ const generateApprovalLetter = async (provider, remarks = '') => {
     doc.restore();
     y += 15;
 
-    // Subject line
     doc.save();
     doc.fontSize(9.5).font('Helvetica-Bold').fillColor(TEAL);
     doc.text('Subject: Account Activation and Platform Approval', MARGIN_LEFT, y);
@@ -603,7 +806,6 @@ const generateApprovalLetter = async (provider, remarks = '') => {
     doc.restore();
     y += 18;
 
-    // Letter body
     y = drawParagraph(doc, `Dear ${provider.name},`, y, { font: 'Helvetica-Bold', color: BLACK });
 
     y = drawParagraph(doc, `We are pleased to inform you that your application to join ${config.companyName || 'the platform'} as a partner provider has been reviewed and approved. Your profile verification is complete, and your account is now fully active on our platform.`, y, { spacing: 8 });
@@ -623,7 +825,6 @@ const generateApprovalLetter = async (provider, remarks = '') => {
 
     y = drawParagraph(doc, 'Please ensure the highest standards of service quality and professionalism at all times. Your conduct reflects on the reputation of our platform and community of trusted providers.', y, { spacing: 8 });
 
-    // Admin remarks if any
     if (remarks) {
       y = drawSectionTitle(doc, 'Administrator Remarks', y);
       y = drawParagraph(doc, remarks, y, { indent: 5, spacing: 8 });
@@ -633,14 +834,33 @@ const generateApprovalLetter = async (provider, remarks = '') => {
 
     y += 5;
 
-    // Draw official signoff with stamp and signature
     y = await drawAuthorizedSignOff(doc, y, config, signatureBuffer, stampBuffer);
     return y;
+  });
+};
+
+// Generic dynamic PDF generator for other/future templates
+const generatePdfFromTemplate = async (templateKey, provider, customVars = {}) => {
+  return generateLetterheadDocument(provider, templateKey.toUpperCase().slice(0, 3), async (doc, y, config, signatureBuffer, stampBuffer) => {
+    const dynamicY = await drawDynamicTemplate(doc, y, config, provider, templateKey, customVars);
+    if (dynamicY !== null) return dynamicY;
+    
+    // Minimal fallback
+    doc.save();
+    doc.fontSize(12).text(`Dynamic Document: ${templateKey}`, 50, y);
+    doc.restore();
+    return y + 30;
   });
 };
 
 module.exports = {
   generateAgreement,
   generateApprovalLetter,
-  uploadPdfBuffer
+  generatePdfFromTemplate,
+  uploadPdfBuffer,
+  fetchImageBuffer,
+  generateLetterheadDocument,
+  drawAuthorizedSignOff,
+  stripHtml
 };
+

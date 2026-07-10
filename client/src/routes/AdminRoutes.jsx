@@ -23,6 +23,8 @@ const CategoryBanner = lazy(() => import("../pages/Admin/CategoryBanner"));
 const SystemSetting = lazy(() => import("../pages/Admin/System-Setting"));
 const Branding = lazy(() => import("../pages/Admin/Branding"));
 const EmailTemplate = lazy(() => import("../pages/Admin/EmailTemplate"));
+const TemplateManagement = lazy(() => import("../pages/Admin/TemplateManagement"));
+
 const UserContacts = lazy(() => import("../pages/Admin/User-Contacts"));
 const ComposeNotification = lazy(() => import("../pages/Admin/ComposeNotification"));
 const RuleBasedTemplates = lazy(() => import("../pages/Admin/RuleBasedTemplates"));
@@ -67,6 +69,8 @@ const AdminRoutes = () => {
                             <Route path="settings" element={<SystemSetting />} />
                             <Route path="branding" element={<Branding />} />
                             <Route path="email-templates" element={<EmailTemplate />} />
+                            <Route path="pdf-templates" element={<TemplateManagement />} />
+
                             <Route path="user-contacts" element={<UserContacts />} />
                             <Route path="compose-notification" element={<ComposeNotification />} />
                             <Route path="event-templates" element={<RuleBasedTemplates />} />

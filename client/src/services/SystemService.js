@@ -92,3 +92,33 @@ export const testSendEmailTemplate = (data) => {
 export const restoreDefaultTemplate = (data) => {
     return axiosInstance.post("/system-setting/settings/email-templates/restore", data);
 };
+
+// Dynamic Template APIs
+export const getTemplates = () => {
+    return axiosInstance.get("/templates");
+};
+
+export const getTemplateByKey = (key) => {
+    return axiosInstance.get(`/templates/${key}`);
+};
+
+export const saveTemplateVersion = (key, data) => {
+    return axiosInstance.post(`/templates/${key}/version`, data);
+};
+
+export const publishTemplateVersion = (key, version) => {
+    return axiosInstance.post(`/templates/${key}/version/${version}/publish`);
+};
+
+export const restoreTemplateVersion = (key, version) => {
+    return axiosInstance.post(`/templates/${key}/version/${version}/restore`);
+};
+
+export const duplicateTemplateVersion = (key, version) => {
+    return axiosInstance.post(`/templates/${key}/version/${version}/duplicate`);
+};
+
+export const previewTemplate = (key, data) => {
+    return axiosInstance.post(`/templates/${key}/preview`, data, { responseType: 'blob' });
+};
+

@@ -43,7 +43,9 @@ const uploadSystemSettings = multer({
 }).fields([
   { name: 'logo', maxCount: 1 },
   { name: 'favicon', maxCount: 1 },
-  { name: 'providerBookingRingtone', maxCount: 1 }
+  { name: 'providerBookingRingtone', maxCount: 1 },
+  { name: 'digitalSignature', maxCount: 1 },
+  { name: 'companySeal', maxCount: 1 }
 ]);
 
 // Combined upload for branding assets (logo, icon, splashScreen, favicon)

@@ -67,7 +67,17 @@ const systemConfigSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    digitalSignature: {
+      type: String,
+      default: ""
+    },
+    companySeal: {
+      type: String,
+      default: ""
+    },
+
     defaultCurrency: {
+
       type: String,
       default: "INR"
     },
