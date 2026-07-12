@@ -1697,22 +1697,7 @@ const ProviderBooking = () => {
                       )}
                     </div>
 
-                    {/* Cash collection alert if completed & cash method */}
-                    {selectedBooking.paymentMethod === 'cash' && selectedBooking.status === 'completed' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus) && (
-                      <div className="p-4 border-2 border-dashed border-yellow-300 bg-yellow-50 rounded-xl text-center">
-                        <div className="bg-white p-2 inline-block rounded-lg shadow-sm mb-2">
-                          <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=COLLECT_CASH" alt="Collect Cash QR" className="w-20 h-20 opacity-60" />
-                        </div>
-                        <h4 className="text-sm font-bold text-secondary mb-1">Verify Cash Collection</h4>
-                        <p className="text-xs text-gray-500 mb-3">Collect <span className="font-black text-secondary">₹{netReceivable}</span> directly from the customer.</p>
-                        <button
-                          className="w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-xl text-xs font-bold transition-all shadow-sm"
-                          onClick={() => showToast('Payment collection verified!', 'success')}
-                        >
-                          Confirm Payment Received
-                        </button>
-                      </div>
-                    )}
+
 
                     {/* General details */}
                     <div className="space-y-3 text-xs font-semibold text-gray-650 border-t border-gray-150 pt-4">
@@ -2045,7 +2030,20 @@ const ProviderBooking = () => {
         progress={uploadProgress}
         minCompletedImages={systemSettings?.bookingSettings?.minCompletedImages || 1}
         onConfirm={(images, location, pin, notes) => {
-          executeBookingAction(proofModal.bookingId, proofModal.action, { images, location, pin, completionNotes: notes });
+          const booking = selectedBooking || bookings['in-progress']?.find(b => b._id === proofModal.bookingId) || bookings.accepted?.find(b => b._id === proofModal.bookingId);
+          const isCash = booking?.paymentMethod === 'cash' || booking?.paymentType === 'pay_after_service';
+          if (isCash) {
+            setConfirmDialog({
+              isOpen: true,
+              type: 'success',
+              data: { bookingId: proofModal.bookingId, action: proofModal.action, additionalData: { images, location, pin, completionNotes: notes } },
+              title: 'Confirm Cash Collection',
+              message: `This is a Pay After Service booking. Have you collected the total amount of ₹${(booking.totalAmount || 0)} from the customer? Please confirm that you have received the payment before closing the job.`
+            });
+            setProofModal({ isOpen: false, action: null, bookingId: null });
+          } else {
+            executeBookingAction(proofModal.bookingId, proofModal.action, { images, location, pin, completionNotes: notes });
+          }
         }}
       />
 
