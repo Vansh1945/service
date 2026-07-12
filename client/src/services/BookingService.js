@@ -9,6 +9,10 @@ export const confirmBooking = (data) => {
     return axiosInstance.post("/booking/confirm", data);
 };
 
+export const getBookingEstimate = (data) => {
+    return axiosInstance.post("/booking/estimate", data);
+};
+
 export const updateBookingStatus = (id, data) => {
     return axiosInstance.patch(`/booking/${id}/status`, data);
 };

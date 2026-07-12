@@ -19,13 +19,16 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { validateBody } = require('../validation/common.validation');
 const { submitFeedbackSchema, editFeedbackSchema } = require('../validation/feedback.validation');
 
-const { feedbackLimiter } = require('../middlewares/rate-limit');
+
 
 // Customer routes
-router.post('/', userAuthMiddleware, feedbackLimiter, validateBody(submitFeedbackSchema), submitFeedback);
+const { feedbackLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+
+router.post('/', userAuthMiddleware, feedbackLimiter, preventDuplicateSubmissions(5), validateBody(submitFeedbackSchema), submitFeedback);
 router.get('/my-feedbacks', userAuthMiddleware, getCustomerFeedbacks);
 router.get('/:feedbackId', userAuthMiddleware, getFeedback);
-router.put('/edit/:feedbackId', userAuthMiddleware, validateBody(editFeedbackSchema), editFeedback);
+router.put('/edit/:feedbackId', userAuthMiddleware, feedbackLimiter, preventDuplicateSubmissions(5), validateBody(editFeedbackSchema), editFeedback);
 
 
 // Public route to get all feedbacks for a specific service

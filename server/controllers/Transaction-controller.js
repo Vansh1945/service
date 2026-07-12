@@ -238,6 +238,12 @@ const createOrder = async (req, res, next) => {
     const finalCommission = commission;
     const finalProviderEarning = providerEarning;
 
+    // Save the payment splits on the booking
+    booking.walletUsed = walletDeduction;
+    booking.onlinePaid = finalAmount;
+    booking.cashToPay = 0;
+    await booking.save({ session });
+
     // Create transaction record
     const transaction = new Transaction({
       amount: finalAmount,

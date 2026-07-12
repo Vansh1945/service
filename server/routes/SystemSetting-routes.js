@@ -80,18 +80,21 @@ router.get('/settings/branding-favicon', systemSettingController.getBrandingFavi
 router.get('/validate-ifsc/:code', systemSettingController.validateIfsc);
 
 // BRANDING ROUTES (Publicly readable, but updates are admin protected)
+const { adminActionLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+
 router.get('/settings/branding/:role', systemSettingController.getBrandingSettings);
 router.get('/settings/branding/:role/manifest', systemSettingController.getBrandingManifest);
-router.put('/settings/branding/:role', adminAuthMiddleware, systemSettingController.updateBrandingSettings);
-router.post('/settings/branding/:role/upload', adminAuthMiddleware, uploadBrandingSettings, handleUploadErrors, systemSettingController.uploadBrandingAsset);
-router.post('/settings/branding/:role/publish', adminAuthMiddleware, systemSettingController.publishBrandingUpdate);
+router.put('/settings/branding/:role', adminAuthMiddleware, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.updateBrandingSettings);
+router.post('/settings/branding/:role/upload', adminAuthMiddleware, uploadBrandingSettings, handleUploadErrors, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.uploadBrandingAsset);
+router.post('/settings/branding/:role/publish', adminAuthMiddleware, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.publishBrandingUpdate);
 
 // EMAIL TEMPLATE MANAGEMENT ROUTES (Admin protected)
 router.get('/settings/email-templates', adminAuthMiddleware, systemSettingController.getEmailTemplates);
-router.put('/settings/email-templates/:type', adminAuthMiddleware, systemSettingController.updateEmailTemplate);
-router.post('/settings/email-templates/preview', adminAuthMiddleware, systemSettingController.previewEmailTemplate);
-router.post('/settings/email-templates/test', adminAuthMiddleware, systemSettingController.testSendEmailTemplate);
-router.post('/settings/email-templates/restore', adminAuthMiddleware, systemSettingController.restoreDefaultTemplate);
+router.put('/settings/email-templates/:type', adminAuthMiddleware, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.updateEmailTemplate);
+router.post('/settings/email-templates/preview', adminAuthMiddleware, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.previewEmailTemplate);
+router.post('/settings/email-templates/test', adminAuthMiddleware, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.testSendEmailTemplate);
+router.post('/settings/email-templates/restore', adminAuthMiddleware, adminActionLimiter, preventDuplicateSubmissions(3), systemSettingController.restoreDefaultTemplate);
 
 // ADMIN ROUTES (protected by adminAuth middleware)
 router.use('/admin', adminAuthMiddleware);

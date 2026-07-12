@@ -180,6 +180,79 @@ const systemConfigSchema = new mongoose.Schema(
       providerAcceptTimeoutMinutes: {
         type: Number,
         default: 5
+      },
+      bookingMode: {
+        type: String,
+        enum: ['flexible', 'slot-based', 'hybrid'],
+        default: 'hybrid'
+      },
+      emergencyAssignment: {
+        type: Boolean,
+        default: true
+      },
+      instantBooking: {
+        type: Boolean,
+        default: true
+      },
+
+      manualAssignment: {
+        type: Boolean,
+        default: true
+      },
+      offerQueue: {
+        type: Boolean,
+        default: true
+      },
+      autoAssignScheduled: {
+        type: Boolean,
+        default: true
+      },
+      autoAssignInstant: {
+        type: Boolean,
+        default: true
+      },
+      autoAssignEmergency: {
+        type: Boolean,
+        default: true
+      },
+      emergencyResponseTime: {
+        type: Number,
+        default: 60
+      },
+      adminResponseTime: {
+        type: Number,
+        default: 30
+      },
+
+      emergencySurgeCharge: {
+        type: Number,
+        default: 0
+      },
+      chargeVisitingOnEmergency: {
+        type: Boolean,
+        default: false
+      },
+      minCompletedImages: {
+        type: Number,
+        default: 1
+      },
+      trustedProviderRules: {
+        minRating: {
+          type: Number,
+          default: 4.0
+        },
+        minCompletedJobs: {
+          type: Number,
+          default: 5
+        },
+        maxCancellationRate: {
+          type: Number,
+          default: 15
+        },
+        providerResponseTimeMinutes: {
+          type: Number,
+          default: 5
+        }
       }
     },
     walletSettings: {
@@ -222,6 +295,10 @@ const systemConfigSchema = new mongoose.Schema(
       demand: {
         type: Number,
         default: 50
+      },
+      emergency: {
+        type: Number,
+        default: 85
       }
     },
     notificationSettings: {

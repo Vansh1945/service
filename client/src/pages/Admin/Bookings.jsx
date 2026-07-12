@@ -10,6 +10,8 @@ const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
         case 'pending':
             return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+        case 'waiting admin assignment':
+            return 'bg-red-50 text-red-700 border-red-500 font-extrabold animate-pulse';
         case 'accepted':
         case 'new':
             return 'bg-blue-50 text-blue-800 border-blue-200';
@@ -35,6 +37,7 @@ const getStatusIcon = (status) => {
     const baseClass = "w-4 h-4";
     switch (status?.toLowerCase()) {
         case 'pending':
+        case 'waiting admin assignment':
             return <AlertCircle className={baseClass} />;
         case 'accepted':
         case 'new':
@@ -142,18 +145,60 @@ const paymentStatusOptions = [
 
 
 
+const getBookingTypeBadge = (bookingType) => {
+    // EMERGENCY BOOKING ENGINE UPGRADE
+    const type = bookingType || 'scheduled';
+    let colorClass = '';
+    let label = '';
+    switch (type.toLowerCase()) {
+        case 'scheduled':
+            colorClass = 'bg-blue-50 text-blue-700 border-blue-200';
+            label = '📅 Scheduled';
+            break;
+        case 'instant':
+            colorClass = 'bg-orange-50 text-orange-700 border-orange-350';
+            label = '⚡ Instant';
+            break;
+        case 'emergency':
+            colorClass = 'bg-red-100 text-red-700 border-red-500 animate-pulse font-black border-2';
+            label = '🚨 Emergency';
+            break;
+        default:
+            colorClass = 'bg-blue-50 text-blue-700 border-blue-200';
+            label = '📅 Scheduled';
+    }
+    return (
+        <span className={`inline-flex items-center text-[9px] font-extrabold px-1.5 py-0.5 rounded border ${colorClass}`}>
+            {label}
+        </span>
+    );
+    // END EMERGENCY BOOKING ENGINE UPGRADE
+};
+
 // Memoized Booking Row to prevent unnecessary re-renders
 const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel, rowActionStates = {} }) => {
     const isRowLoading = !!rowActionStates[booking._id];
+    // EMERGENCY BOOKING ENGINE UPGRADE
+    const isEmergency = booking.bookingType?.toLowerCase() === 'emergency' || booking.isEmergency;
+    const isInstant = booking.bookingType?.toLowerCase() === 'instant' || booking.isInstant;
+
+    let rowBorderColor = '';
+    if (isEmergency) {
+        rowBorderColor = 'border-2 border-red-500 bg-red-50/20';
+    } else if (isInstant) {
+        rowBorderColor = 'border-l-4 border-orange-500';
+    }
+    // END EMERGENCY BOOKING ENGINE UPGRADE
     return (
-        <tr className={`hover:bg-gray-50 ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <tr className={`hover:bg-gray-50 ${rowBorderColor} ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
             <td className="px-4 py-4 whitespace-nowrap">
                 <div className="text-sm font-medium text-secondary">
                     {booking.bookingId || `#${booking._id?.substring(booking._id.length - 8) || 'N/A'}`}
                 </div>
                 <div className="flex flex-col gap-1 mt-1">
+                    {getBookingTypeBadge(booking.bookingType)}
                     {booking.isRebook ? (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-750 border border-teal-200 px-1.5 py-0.5 rounded w-max" title={`Original Booking: ${booking.originalBooking?.bookingId || booking.originalBooking || 'N/A'}`}>
+                        <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-755 border border-teal-200 px-1.5 py-0.5 rounded w-max" title={`Original Booking: ${booking.originalBooking?.bookingId || booking.originalBooking || 'N/A'}`}>
                             🔄 Rebook
                         </span>
                     ) : (
@@ -242,7 +287,8 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                         </button>
                     )}
 
-                    {booking.status === 'pending' && !booking.provider && (
+                    {/* EMERGENCY BOOKING ENGINE UPGRADE */}
+                    {(booking.status === 'pending' || booking.status === 'Waiting Admin Assignment') && !booking.provider && (
                         <button
                             onClick={() => onAssign(booking)}
                             className="p-1 text-green-600 hover:text-green-800"
@@ -252,15 +298,16 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                         </button>
                     )}
 
-                    {['pending', 'accepted', 'assigned', 'confirmed'].includes(booking.status) && (
+                    {['pending', 'accepted', 'assigned', 'confirmed', 'Waiting Admin Assignment'].includes(booking.status) && (
                         <button
                             onClick={() => onCancel(booking)}
                             className="p-1 text-red-500 hover:text-red-700"
                             title="Cancel Booking"
                         >
-                            <XCircle className="w-4 h-4" />
+                            <X className="w-4 h-4" />
                         </button>
                     )}
+                    {/* END EMERGENCY BOOKING ENGINE UPGRADE */}
 
                     <button
                         onClick={() => onDelete(booking)}
@@ -580,6 +627,7 @@ const AdminBookingsView = () => {
     const [providers, setProviders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
+    const [selectedQueue, setSelectedQueue] = useState('all');
 
     const [pagination, setPagination] = useState(() => {
         const params = new URLSearchParams(window.location.search);
@@ -1042,10 +1090,43 @@ const AdminBookingsView = () => {
         });
     }, [providers]);
 
+    // Memoized display bookings based on queue categorization
+
+    const displayBookings = useMemo(() => {
+        let list = [];
+        if (selectedQueue === 'all') {
+            list = [...bookings];
+        } else if (selectedQueue === 'emergency') {
+            list = bookings.filter(b => (b.bookingType === 'emergency' || b.isEmergency) && ['pending', 'Waiting Admin Assignment'].includes(b.status));
+        } else if (selectedQueue === 'instant') {
+            list = bookings.filter(b => (b.bookingType === 'instant' || b.isInstant) && ['pending', 'Waiting Admin Assignment'].includes(b.status));
+        } else if (selectedQueue === 'scheduled') {
+            list = bookings.filter(b => (b.bookingType === 'scheduled' || (!b.isEmergency && !b.isInstant)) && ['pending', 'Waiting Admin Assignment'].includes(b.status));
+        } else if (selectedQueue === 'accepted') {
+            list = bookings.filter(b => ['accepted', 'assigned'].includes(b.status));
+        } else if (selectedQueue === 'in-progress') {
+            list = bookings.filter(b => ['in-progress', 'started'].includes(b.status));
+        } else if (selectedQueue === 'completed') {
+            list = bookings.filter(b => b.status === 'completed');
+        } else if (selectedQueue === 'cancelled') {
+            list = bookings.filter(b => b.status === 'cancelled');
+        } else {
+            list = [...bookings];
+        }
+
+        // Pinned emergency booking on top
+        return list.sort((a, b) => {
+            const aEmerg = (a.bookingType === 'emergency' || a.isEmergency) ? 1 : 0;
+            const bEmerg = (b.bookingType === 'emergency' || b.isEmergency) ? 1 : 0;
+            return bEmerg - aEmerg;
+        });
+    }, [bookings, selectedQueue]);
+
+
     // Memoized filtered bookings count
     const filteredBookingsCount = useMemo(() => {
-        return bookings.length;
-    }, [bookings]);
+        return displayBookings.length;
+    }, [displayBookings]);
 
     // Stable handlers for BookingRow to prevent breaking memoization
     const handleOnReschedule = useCallback((b) => {
@@ -1071,19 +1152,18 @@ const AdminBookingsView = () => {
             return <TableSkeleton rows={8} cols={7} />;
         }
 
-        if (bookings.length === 0) {
+        if (displayBookings.length === 0) {
             return (
                 <tr>
                     <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                         <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                        <p>No bookings found</p>
-                        <p className="text-sm">Try adjusting your filters</p>
+                        <p>No bookings found in this queue</p>
                     </td>
                 </tr>
             );
         }
 
-        return bookings.map((booking) => (
+        return displayBookings.map((booking) => (
             <BookingRow
                 key={booking._id}
                 booking={booking}
@@ -1201,6 +1281,32 @@ const AdminBookingsView = () => {
 
             {/* Bookings Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                {/* Queue Categories Tab Bar */}
+                <div className="flex border-b border-gray-250 bg-gray-50/50 overflow-x-auto shrink-0 scrollbar-thin">
+                    {[
+                        { id: 'all', label: 'All Bookings', count: bookings.length },
+                        // EMERGENCY BOOKING ENGINE UPGRADE
+                        { id: 'emergency', label: '🚨 Emergency Queue', count: bookings.filter(b => (b.bookingType === 'emergency' || b.isEmergency) && ['pending', 'Waiting Admin Assignment'].includes(b.status)).length },
+                        { id: 'instant', label: '⚡ Instant Queue', count: bookings.filter(b => (b.bookingType === 'instant' || b.isInstant) && ['pending', 'Waiting Admin Assignment'].includes(b.status)).length },
+                        { id: 'scheduled', label: '📅 Scheduled Queue', count: bookings.filter(b => (b.bookingType === 'scheduled' || (!b.isEmergency && !b.isInstant)) && ['pending', 'Waiting Admin Assignment'].includes(b.status)).length }
+                        // END EMERGENCY BOOKING ENGINE UPGRADE
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setSelectedQueue(tab.id)}
+                            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${selectedQueue === tab.id
+                                    ? 'border-primary text-primary bg-white'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'
+                                }`}
+                        >
+                            {tab.label}
+                            <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-bold ${selectedQueue === tab.id ? 'bg-primary/10 text-primary' : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                {tab.count}
+                            </span>
+                        </button>
+                    ))}
+                </div>
                 {/* Table Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-100">
                     <div>
@@ -1531,7 +1637,7 @@ const AdminBookingsView = () => {
                                                 <div className="mt-2 border-t border-gray-100 pt-2">
                                                     <div className="flex items-center justify-between mb-1.5">
                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Attached Complaint</p>
-                                                        <button 
+                                                        <button
                                                             onClick={() => {
                                                                 setShowModal(false);
                                                                 navigate(`/admin/complaints?search=${selectedBooking.complaint.complaintId || ''}`);
@@ -1546,11 +1652,10 @@ const AdminBookingsView = () => {
                                                             <span className="text-[10px] font-black font-mono text-rose-700 bg-rose-100/70 px-1.5 py-0.5 rounded">
                                                                 {selectedBooking.complaint.complaintId || 'N/A'}
                                                             </span>
-                                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
-                                                                ['solved', 'resolved', 'closed'].includes(selectedBooking.complaint.status?.toLowerCase()) 
-                                                                    ? 'bg-emerald-100 text-emerald-800' 
-                                                                    : 'bg-rose-100 text-rose-800'
-                                                            }`}>
+                                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${['solved', 'resolved', 'closed'].includes(selectedBooking.complaint.status?.toLowerCase())
+                                                                ? 'bg-emerald-100 text-emerald-800'
+                                                                : 'bg-rose-100 text-rose-800'
+                                                                }`}>
                                                                 {selectedBooking.complaint.status}
                                                             </span>
                                                         </div>
@@ -1593,89 +1698,45 @@ const AdminBookingsView = () => {
                                                 </div>
                                             )}
                                         </Card>
-
                                         {/* Payment & Financial */}
                                         <Card title="Payment & Financials Summary" icon={<CreditCard className="w-3 h-3 text-primary" />}>
-                                            <>
+                                            {bk.pricingBreakdown ? (
                                                 <div className="space-y-3">
                                                     {/* Customer Invoice Summary */}
                                                     <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Customer Invoice</p>
                                                         <div className="space-y-1 text-xs">
                                                             <div className="flex justify-between">
-                                                                <span className="text-gray-500">Service Price (Gross)</span>
-                                                                <PriceDisplay amount={pay.subtotal} type="secondary" />
+                                                                <span className="text-gray-500">Service Price</span>
+                                                                <PriceDisplay amount={bk.pricingBreakdown.servicePrice} type="secondary" />
                                                             </div>
-                                                            {pay.totalDiscount > 0 && (
+                                                            {bk.pricingBreakdown.visitingCharges > 0 && (
                                                                 <div className="flex justify-between">
-                                                                    <span className="text-gray-500">Coupon Discount</span>
-                                                                    <PriceDisplay amount={pay.totalDiscount} type="negative" prefix="-" />
+                                                                    <span className="text-gray-500">Visiting Charges</span>
+                                                                    <PriceDisplay amount={bk.pricingBreakdown.visitingCharges} type="secondary" prefix="+" />
                                                                 </div>
                                                             )}
-                                                            {(() => {
-                                                                const visiting = bk.visitingCharge || 0;
-                                                                const rain = bk.rainCharge || 0;
-                                                                const traffic = bk.trafficCharge || 0;
-                                                                const night = bk.nightCharge || 0;
-                                                                const demand = bk.demandSurge || 0;
-                                                                const platform = bk.platformFee || 0;
-                                                                const custom = bk.customCharges || 0;
-                                                                const totalSur = visiting + rain + traffic + night + demand + platform + custom;
-                                                                return totalSur > 0 ? (
-                                                                    <div className="space-y-1 pt-1 border-t border-dashed border-gray-100 mt-1">
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Surges & Fees Breakdown</span>
-                                                                        {visiting > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Visiting Charge</span>
-                                                                                <PriceDisplay amount={visiting} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        {rain > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Rain Charge</span>
-                                                                                <PriceDisplay amount={rain} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        {traffic > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Traffic Charge</span>
-                                                                                <PriceDisplay amount={traffic} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        {night > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Night Charge</span>
-                                                                                <PriceDisplay amount={night} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        {demand > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Demand Surge</span>
-                                                                                <PriceDisplay amount={demand} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        {platform > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Platform Fee</span>
-                                                                                <PriceDisplay amount={platform} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        {custom > 0 && (
-                                                                            <div className="flex justify-between pl-2 text-[11px]">
-                                                                                <span className="text-gray-500">Custom Charge</span>
-                                                                                <PriceDisplay amount={custom} type="secondary" prefix="+" />
-                                                                            </div>
-                                                                        )}
-                                                                        <div className="flex justify-between pl-2 text-xs font-semibold pt-1 border-t border-gray-150 mt-1">
-                                                                            <span className="text-gray-600">Total Surges & Fees</span>
-                                                                            <PriceDisplay amount={totalSur} type="secondary" prefix="+" />
-                                                                        </div>
-                                                                    </div>
-                                                                ) : null;
-                                                            })()}
+                                                            {bk.pricingBreakdown.emergencyCharges > 0 && (
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-500">Emergency Charges</span>
+                                                                    <PriceDisplay amount={bk.pricingBreakdown.emergencyCharges} type="secondary" prefix="+" />
+                                                                </div>
+                                                            )}
+                                                            {bk.pricingBreakdown.surgeCharges > 0 && (
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-500">Surge Charges</span>
+                                                                    <PriceDisplay amount={bk.pricingBreakdown.surgeCharges} type="secondary" prefix="+" />
+                                                                </div>
+                                                            )}
+                                                            {bk.pricingBreakdown.discount > 0 && (
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-500">Coupon Discount</span>
+                                                                    <PriceDisplay amount={bk.pricingBreakdown.discount} type="negative" prefix="-" />
+                                                                </div>
+                                                            )}
                                                             <div className="flex justify-between border-t border-gray-100 mt-2 pt-2 text-sm font-bold">
-                                                                <span className="text-secondary">Total Billed to Customer</span>
-                                                                <PriceDisplay amount={pay.totalAmount} type="primary" className="text-sm" />
+                                                                <span className="text-secondary">Grand Total</span>
+                                                                <PriceDisplay amount={bk.pricingBreakdown.customerTotal} type="primary" className="text-sm" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1686,92 +1747,96 @@ const AdminBookingsView = () => {
                                                         <div className="space-y-2 text-xs">
                                                             <div className="flex justify-between items-start">
                                                                 <div>
-                                                                    <p className="font-semibold text-secondary">Provider Settlement</p>
-                                                                    <p className="text-[9px] text-gray-400">₹{(bk.providerEarnings || 0) - (bk.providerSurgeShare || 0)} Service + ₹{bk.providerSurgeShare || 0} Surcharges</p>
+                                                                    <p className="font-semibold text-secondary">Provider Earnings</p>
                                                                 </div>
-                                                                <PriceDisplay amount={bk.providerEarnings} type="green-bold" className="text-sm" />
+                                                                <PriceDisplay amount={bk.pricingBreakdown.providerEarnings} type="green-bold" className="text-sm" />
                                                             </div>
                                                             <div className="flex justify-between border-t border-teal-150 mt-1 pt-1 font-bold text-teal-700">
                                                                 <div>
-                                                                    <p className="font-semibold text-gray-700">Platform Earning</p>
-                                                                    <p className="text-[9px] text-gray-400"><PriceDisplay amount={bk.commissionAmount || 0} type="text-only" /> Commission + <PriceDisplay amount={bk.companySurgeShare || 0} type="text-only" /> Surge + <PriceDisplay amount={bk.platformFee || 0} type="text-only" /> Fee</p>
+                                                                    <p className="font-semibold text-gray-700">Platform Commission</p>
                                                                 </div>
-                                                                <PriceDisplay amount={(bk.commissionAmount || 0) + (bk.companySurgeShare || 0) + (bk.platformFee || 0)} type="text-only" className="text-sm" />
+                                                                <PriceDisplay amount={bk.pricingBreakdown.platformCommission} type="text-only" className="text-sm" />
+                                                            </div>
+                                                            <div className="flex justify-between font-bold text-teal-750">
+                                                                <div>
+                                                                    <p className="font-semibold text-gray-700">Platform Earnings</p>
+                                                                </div>
+                                                                <PriceDisplay amount={bk.pricingBreakdown.platformEarnings} type="text-only" className="text-sm" />
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Payment Sources Info */}
-                                                    {(pay.walletAmountUsed > 0 || pay.onlineAmountPaid > 0) && (
-                                                        <div className="bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 text-[10px]">
-                                                            <p className="font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Payment Sources</p>
-                                                            <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                                                {pay.walletAmountUsed > 0 && <span className="text-gray-500">Wallet: <PriceDisplay amount={pay.walletAmountUsed} type="bold-secondary" className="font-bold text-secondary" /></span>}
-                                                                {pay.onlineAmountPaid > 0 && <span className="text-gray-500">Online: <PriceDisplay amount={pay.onlineAmountPaid} type="bold-secondary" className="font-bold text-secondary" /></span>}
-                                                            </div>
+                                                    {/* Payment Splits details */}
+                                                    <div className="bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 text-[10px]">
+                                                        <p className="font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Payment Breakdown</p>
+                                                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                                            <span>Wallet Used: <PriceDisplay amount={bk.pricingBreakdown.walletUsed} type="bold-secondary" className="font-bold text-secondary" /></span>
+                                                            <span>Online Paid: <PriceDisplay amount={bk.pricingBreakdown.onlinePaid} type="bold-secondary" className="font-bold text-secondary" /></span>
+                                                            <span>Remaining/Cash To Pay: <PriceDisplay amount={bk.pricingBreakdown.cashRemaining} type="bold-secondary" className="font-bold text-secondary" /></span>
                                                         </div>
-                                                    )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-gray-500 italic">No pricing breakdown available</p>
+                                            )}
 
-                                                    {/* Cancellation Info */}
-                                                    {bk.status === 'cancelled' && (
-                                                        <div className="bg-red-50 p-2.5 rounded-xl border border-red-100 space-y-1 text-xs text-secondary mt-2">
-                                                            <p className="text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Cancellation Info</p>
-                                                            <div className="flex justify-between"><span className="text-gray-400">Cancelled By:</span><span className="font-semibold capitalize">{bk.cancelledBy || 'Admin'}</span></div>
-                                                            <div className="flex justify-between"><span className="text-gray-400">Reason:</span><span className="font-semibold text-right max-w-[65%] truncate" title={bk.cancellationReason}>{bk.cancellationReason || '—'}</span></div>
-                                                            {bk.complaintId && <div className="flex justify-between"><span className="text-gray-400">Complaint:</span><span className="font-semibold">{bk.complaintId.complaintId || bk.complaintId}</span></div>}
-                                                            {(bk.cancellationProgress?.refundAmount > 0 || bk.refundAmount > 0) && (
-                                                                <>
-                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund:</span><PriceDisplay amount={bk.refundAmount} type="teal" /></div>
-                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Destination:</span><span className="font-bold text-teal-755 uppercase">Wallet</span></div>
-                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.cancellationProgress?.status || bk.refundStatus || 'Completed'}</span></div>
-                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || '—'}</span></div>
-                                                                    {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{new Date(bk.refundProcessedAt).toLocaleDateString()}</span></div>}
-                                                                    {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><PriceDisplay amount={bk.platformFee || bk.platformFeeRetained} type="red-bold" /></div>}
-                                                                </>
-                                                            )}
-                                                        </div>
+                                            {bk.status === 'cancelled' && (
+                                                <div className="bg-red-50 p-2.5 rounded-xl border border-red-100 space-y-1 text-xs text-secondary mt-2">
+                                                    <p className="text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Cancellation Info</p>
+                                                    <div className="flex justify-between"><span className="text-gray-400">Cancelled By:</span><span className="font-semibold capitalize">{bk.cancelledBy || 'Admin'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-400">Reason:</span><span className="font-semibold text-right max-w-[65%] truncate" title={bk.cancellationReason}>{bk.cancellationReason || '—'}</span></div>
+                                                    {bk.complaintId && <div className="flex justify-between"><span className="text-gray-400">Complaint:</span><span className="font-semibold">{bk.complaintId.complaintId || bk.complaintId}</span></div>}
+                                                    {(bk.cancellationProgress?.refundAmount > 0 || bk.refundAmount > 0) && (
+                                                        <>
+                                                            <div className="flex justify-between"><span className="text-gray-400">Refund:</span><PriceDisplay amount={bk.refundAmount} type="teal" /></div>
+                                                            <div className="flex justify-between"><span className="text-gray-400">Refund Destination:</span><span className="font-bold text-teal-755 uppercase">Wallet</span></div>
+                                                            <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.cancellationProgress?.status || bk.refundStatus || 'Completed'}</span></div>
+                                                            <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || '—'}</span></div>
+                                                            {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{new Date(bk.refundProcessedAt).toLocaleDateString()}</span></div>}
+                                                            {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><PriceDisplay amount={bk.platformFee || bk.platformFeeRetained} type="red-bold" /></div>}
+                                                        </>
                                                     )}
                                                 </div>
+                                            )}
 
-                                                <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
+                                            <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] text-gray-500">Payment Status</span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrow_hold'].includes(pay.status) ? 'bg-green-100 text-green-700' : pay.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {pay.status === 'escrow_hold' ? 'Escrow Hold' : (pay.status || '—')}
+                                                    </span>
+                                                </div>
+                                                {selectedBooking.refundData?.decision && (
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-gray-500">Payment Status</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrow_hold'].includes(pay.status) ? 'bg-green-100 text-green-700' : pay.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                            {pay.status === 'escrow_hold' ? 'Escrow Hold' : (pay.status || '—')}
+                                                        <span className="text-[10px] text-gray-500">Admin Refund</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                            {selectedBooking.refundData.decision}
                                                         </span>
                                                     </div>
-                                                    {selectedBooking.refundData?.decision && (
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-[10px] text-gray-500">Admin Refund</span>
-                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                                {selectedBooking.refundData.decision}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-gray-500">Payout Status</span>
-                                                        <PayoutStatusBadge status={selectedBooking.payoutStatus} />
-                                                    </div>
-                                                    {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
-                                                        <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
-                                                    )}
-                                                    {pay.details?.transactionId ? (
-                                                        <div className="flex justify-between items-center pt-0.5">
-                                                            <span className="text-[10px] text-gray-500">Transaction</span>
-                                                            <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                                                                {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
-                                                            </button>
-                                                        </div>
-                                                    ) : null}
-                                                    {!pay.details?.transactionId && ['paid', 'escrow_hold'].includes(bk.paymentStatus) && (
-                                                        <div className="flex justify-end pt-0.5">
-                                                            <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                                                                View Transaction <ExternalLink className="w-2.5 h-2.5" />
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] text-gray-500">Payout Status</span>
+                                                    <PayoutStatusBadge status={selectedBooking.payoutStatus} />
                                                 </div>
-                                            </>
+                                                {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
+                                                    <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
+                                                )}
+                                                {pay.details?.transactionId ? (
+                                                    <div className="flex justify-between items-center pt-0.5">
+                                                        <span className="text-[10px] text-gray-500">Transaction</span>
+                                                        <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                            {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                                {!pay.details?.transactionId && ['paid', 'escrow_hold'].includes(bk.paymentStatus) && (
+                                                    <div className="flex justify-end pt-0.5">
+                                                        <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                            View Transaction <ExternalLink className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </Card>
                                     </div>
                                 </div>

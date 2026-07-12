@@ -10,10 +10,10 @@ import { readCachedSystemSettings } from './systemSettingsCache';
  * or if there is an active complaint/dispute.
  */
 export const isChatVisible = (b) => {
-  if (!b) return false;
-  if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
-  if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
-  if (['pending', 'cancelled', 'no-show', 'completed'].includes(b.status)) return false;
+  const statusStr = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (b.disputeStatus === 'resolved' || statusStr === 'resolved') return false;
+  if (b.hasComplaint || b.disputeRaised || statusStr === 'complaint') return true;
+  if (['pending', 'cancelled', 'noshow', 'completed', 'refunded', 'rejected', 'expired'].includes(statusStr)) return false;
 
   return true;
 };
@@ -42,7 +42,11 @@ export const calculateSubtotal = (booking) => {
  */
 export const calculateNetAmount = (booking) => {
   if (!booking) return 0;
-  if (booking.status === 'completed' && typeof booking.providerEarnings === 'number' && booking.providerEarnings > 0) {
+  if (booking.pricingBreakdown && typeof booking.pricingBreakdown.providerEarnings === 'number' && booking.pricingBreakdown.providerEarnings > 0) {
+    return booking.pricingBreakdown.providerEarnings.toFixed(2);
+  }
+  const statusStr = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (statusStr === 'completed' && typeof booking.providerEarnings === 'number' && booking.providerEarnings > 0) {
     return booking.providerEarnings.toFixed(2);
   }
   const systemSettings = readCachedSystemSettings();

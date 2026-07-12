@@ -911,7 +911,9 @@ static async updateProviderProfile(req, res) {
             // Bank details
             accountNo, ifsc, bankName, accountName,
             // Update type to determine which section to update
-            updateType
+            updateType,
+            // New settings fields
+            availabilityStatus, trustedProvider, instantBookingEnabled, emergencyBookingEnabled, scheduledBookingEnabled, lastActive, providerReliabilityScore
         } = req.body;
 
         const updates = {};
@@ -946,6 +948,14 @@ static async updateProviderProfile(req, res) {
 
         if (!updateType || updateType === 'basic') {
             // Basic Information Updates
+            if (availabilityStatus !== undefined) updates.availabilityStatus = availabilityStatus;
+            if (trustedProvider !== undefined) updates.trustedProvider = trustedProvider === 'true' || trustedProvider === true;
+            if (instantBookingEnabled !== undefined) updates.instantBookingEnabled = instantBookingEnabled === 'true' || instantBookingEnabled === true;
+            if (emergencyBookingEnabled !== undefined) updates.emergencyBookingEnabled = emergencyBookingEnabled === 'true' || emergencyBookingEnabled === true;
+            if (scheduledBookingEnabled !== undefined) updates.scheduledBookingEnabled = scheduledBookingEnabled === 'true' || scheduledBookingEnabled === true;
+            if (lastActive !== undefined) updates.lastActive = new Date(lastActive);
+            if (providerReliabilityScore !== undefined) updates.providerReliabilityScore = parseFloat(providerReliabilityScore);
+
             if (isOnline !== undefined) {
                 updates.isOnline = isOnline === 'true' || isOnline === true;
                 if (updates.isOnline) {
@@ -1724,7 +1734,8 @@ static async getDashboardData(req, res) {
             upcomingJobs,
             provider,
             pendingPayouts,
-            lastPayout
+            lastPayout,
+            recentBookings
         ] = await Promise.all([
             // 1. Booking Stats
             Booking.aggregate([
@@ -1886,7 +1897,15 @@ static async getDashboardData(req, res) {
             PaymentRecord.findOne({
                 provider: providerId,
                 status: 'completed'
-            }).sort({ updatedAt: -1 }).lean()
+            }).sort({ updatedAt: -1 }).lean(),
+
+            // 12. Recent bookings
+            Booking.find({ provider: providerId })
+                .populate('customer', 'name phone')
+                .populate('services.service', 'title')
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean()
         ]);
 
         // Process summary and booking breakdown
@@ -1957,6 +1976,7 @@ static async getDashboardData(req, res) {
 
         const todayJobsList = await jobsWithPayoutStatus(todayJobs);
         const upcomingJobsList = await jobsWithPayoutStatus(upcomingJobs);
+        const recentJobsList = await jobsWithPayoutStatus(recentBookings);
 
         // Process wallet info
         const availableBalance = provider?.wallet?.availableBalance || 0;
@@ -2025,7 +2045,8 @@ static async getDashboardData(req, res) {
                 },
                 analytics: {
                     todayJobs: todayJobsList,
-                    upcomingJobs: upcomingJobsList
+                    upcomingJobs: upcomingJobsList,
+                    recentBookings: recentJobsList
                 },
                 wallet: {
                     currentBalance: availableBalance,

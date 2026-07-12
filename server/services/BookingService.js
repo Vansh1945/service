@@ -11,7 +11,7 @@ const ProviderEarning = require('../models/ProviderEarning-model');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 const { generateBookingId } = require('../utils/generateUniqueId');
-const { getBookingTimeline } = require('../utils/bookingHelper');
+const { getBookingTimeline, enrichBookingData } = require('../utils/bookingHelper');
 const ProviderAssignmentService = require('./ProviderAssignmentService');
 const { validateBookingTransition } = require('../validation/booking.validation');
 
@@ -342,46 +342,68 @@ class BookingService {
     let startPin = null;
     let completionPin = null;
 
-    if (bookingObj.statusHistory) {
-      for (const history of bookingObj.statusHistory) {
-        if (history.note) {
-          const startMatch = history.note.match(/START_PIN:(\d{4})/);
-          const completionMatch = history.note.match(/COMPLETION_PIN:(\d{4})/);
-          if (startMatch) startPin = startMatch[1];
-          if (completionMatch) completionPin = completionMatch[1];
+    const Booking = mongoose.model('Booking');
+    const dbBooking = session
+      ? await Booking.findById(bookingId).select('+startPin +completionPin').session(session)
+      : await Booking.findById(bookingId).select('+startPin +completionPin');
+
+    if (dbBooking) {
+      startPin = dbBooking.startPin;
+      completionPin = dbBooking.completionPin;
+    }
+
+    if (!startPin || !completionPin) {
+      if (bookingObj.statusHistory) {
+        for (const history of bookingObj.statusHistory) {
+          if (history.note) {
+            const startMatch = history.note.match(/START_PIN:(\d{4})/);
+            const completionMatch = history.note.match(/COMPLETION_PIN:(\d{4})/);
+            if (startMatch) startPin = startMatch[1];
+            if (completionMatch) completionPin = completionMatch[1];
+          }
         }
       }
     }
 
+    let modified = false;
     if (!startPin || !completionPin) {
       if (!startPin) startPin = Math.floor(1000 + Math.random() * 9000).toString();
       if (!completionPin) completionPin = Math.floor(1000 + Math.random() * 9000).toString();
+      modified = true;
+    }
 
-      const dbBooking = bookingObj;
-      if (dbBooking) {
-        if (dbBooking.statusHistory && dbBooking.statusHistory.length > 0) {
-          const firstEntry = dbBooking.statusHistory[0];
-          let note = firstEntry.note || '';
-          if (!note.includes('START_PIN:')) {
-            firstEntry.note = `${note} START_PIN:${startPin} COMPLETION_PIN:${completionPin}`.trim();
-          } else {
-            const startMatch = note.match(/START_PIN:(\d{4})/);
-            const completionMatch = note.match(/COMPLETION_PIN:(\d{4})/);
-            const sp = startMatch ? startMatch[1] : startPin;
-            const cp = completionMatch ? completionMatch[1] : completionPin;
-            firstEntry.note = note.replace(/START_PIN:\d{4}/, `START_PIN:${sp}`).replace(/COMPLETION_PIN:\d{4}/, `COMPLETION_PIN:${cp}`);
-            startPin = sp;
-            completionPin = cp;
+    if (dbBooking) {
+      let firstEntry = dbBooking.statusHistory && dbBooking.statusHistory[0];
+      if (firstEntry) {
+        let note = firstEntry.note || '';
+        if (note.match(/START_PIN:\d{4}/) || !note.includes('START_PIN:')) {
+          firstEntry.note = note.replace(/START_PIN:\d{4}/g, 'START_PIN:****').replace(/COMPLETION_PIN:\d{4}/g, 'COMPLETION_PIN:****');
+          if (!firstEntry.note.includes('START_PIN:')) {
+            firstEntry.note = `${firstEntry.note} START_PIN:**** COMPLETION_PIN:****`.trim();
           }
-        } else {
-          dbBooking.statusHistory = [{
-            status: dbBooking.status || 'pending',
-            timestamp: new Date(),
-            note: `START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
-            updatedBy: 'system'
-          }];
+          dbBooking.markModified('statusHistory');
+          modified = true;
         }
-        if (!session) {
+      } else {
+        dbBooking.statusHistory = [{
+          status: dbBooking.status || 'pending',
+          timestamp: new Date(),
+          note: `START_PIN:**** COMPLETION_PIN:****`,
+          updatedBy: 'system'
+        }];
+        modified = true;
+      }
+
+      if (dbBooking.startPin !== startPin || dbBooking.completionPin !== completionPin) {
+        dbBooking.startPin = startPin;
+        dbBooking.completionPin = completionPin;
+        modified = true;
+      }
+
+      if (modified) {
+        if (session) {
+          await dbBooking.save({ session });
+        } else {
           await dbBooking.save();
         }
       }
@@ -444,9 +466,9 @@ class BookingService {
   }
 
   static getTargetLocation(booking) {
-    if (booking.location && booking.location.coordinates && 
-        booking.location.coordinates.length === 2 && 
-        (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
+    if (booking.location && booking.location.coordinates &&
+      booking.location.coordinates.length === 2 &&
+      (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
       return {
         latitude: booking.location.coordinates[1],
         longitude: booking.location.coordinates[0]
@@ -487,9 +509,9 @@ class BookingService {
   }
 
   static getBookingAddressLocation(booking) {
-    if (booking.location && booking.location.coordinates && 
-        booking.location.coordinates.length === 2 && 
-        (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
+    if (booking.location && booking.location.coordinates &&
+      booking.location.coordinates.length === 2 &&
+      (booking.location.coordinates[0] !== 0 || booking.location.coordinates[1] !== 0)) {
       return {
         latitude: booking.location.coordinates[1],
         longitude: booking.location.coordinates[0]
@@ -557,16 +579,32 @@ class BookingService {
       const provider = await Provider.findById(providerId).session(session);
       if (!provider) return;
 
-      // 1. Get all bookings related to provider
-      const bookings = await Booking.find({ provider: providerId }).session(session).lean();
+      // 1. Get all bookings related to provider (assigned, rejected, or ignored)
+      const bookings = await Booking.find({
+        $or: [
+          { provider: providerId },
+          { rejectedBy: providerId },
+          { 'metadata.ignoredProviders': providerId }
+        ]
+      }).session(session).lean();
 
-      const totalAccepted = bookings.filter(b => ['accepted', 'in-progress', 'completed', 'cancelled'].includes(b.status)).length;
-      const completedCount = bookings.filter(b => b.status === 'completed').length;
+      const totalAccepted = bookings.filter(b => b.provider?.toString() === providerId.toString() && ['accepted', 'in-progress', 'completed', 'cancelled'].includes(b.status)).length;
+      const completedCount = bookings.filter(b => b.provider?.toString() === providerId.toString() && b.status === 'completed').length;
       const providerCancelledCount = bookings.filter(b => b.status === 'cancelled' && b.rejectedBy?.toString() === providerId.toString()).length;
+      const totalRejected = bookings.filter(b => b.rejectedBy?.toString() === providerId.toString() || b.metadata?.ignoredProviders?.map(id => id.toString()).includes(providerId.toString())).length;
 
-      // 2. Completion rate & Cancellation ratio
+      // 2. Rates calculation
+      const totalAssigned = totalAccepted + totalRejected;
+      const acceptanceRate = totalAssigned > 0 ? (totalAccepted / totalAssigned) * 100 : 100;
       const completionPercentage = totalAccepted > 0 ? (completedCount / totalAccepted) * 100 : 100;
+      const completionRate = completionPercentage;
       const cancellationRatio = totalAccepted > 0 ? (providerCancelledCount / totalAccepted) * 100 : 0;
+      const cancellationRate = cancellationRatio;
+
+      const emergencyBookings = bookings.filter(b => (b.bookingType === 'emergency' || b.isEmergency) && b.provider?.toString() === providerId.toString());
+      const emergencyAccepted = emergencyBookings.filter(b => ['accepted', 'in-progress', 'completed', 'cancelled'].includes(b.status)).length;
+      const emergencyCompleted = emergencyBookings.filter(b => b.status === 'completed').length;
+      const emergencySuccessRate = emergencyAccepted > 0 ? (emergencyCompleted / emergencyAccepted) * 100 : 100;
 
       // 3. On-time rate
       let onTimeCompleted = 0;
@@ -661,6 +699,14 @@ class BookingService {
         }
       }
 
+      const lateArrival = Math.max(0, completedJobs.length - onTimeCompleted);
+      const providerReliabilityScore = Math.round(
+        (acceptanceRate * 0.2) +
+        (completionRate * 0.3) +
+        (emergencySuccessRate * 0.3) +
+        ((100 - cancellationRate) * 0.2)
+      );
+
       // Save back to provider doc
       provider.performanceScore = {
         rating: averageRating,
@@ -672,9 +718,16 @@ class BookingService {
         codAbuseRisk,
         restrictionsActive,
         restrictedUntil,
-        restrictionReason
+        restrictionReason,
+        acceptanceRate,
+        completionRate,
+        emergencySuccessRate,
+        cancellationRate,
+        averageRating,
+        lateArrival
       };
 
+      provider.providerReliabilityScore = providerReliabilityScore;
       provider.completedBookings = completedCount;
       provider.canceledBookings = providerCancelledCount;
 
@@ -699,14 +752,40 @@ class BookingService {
         isRebook,
         originalBooking,
         isFavoriteProviderBooking,
-        preferredProviderId
+        preferredProviderId,
+        bookingType,
+        estimatedDuration,
+        travelBufferMinutes,
+        expectedStartTime,
+        expectedEndTime,
+        providerAcceptanceStatus,
+        reassignmentReason,
+        isEmergency,
+        isInstant,
+        surgeCharge,
+        providerBonus,
+        bookingPriority,
+        providerResponseDeadline,
+        trustedProviderOnly
       } = req.body;
+
+      const resolvedBookingType = bookingType || (isEmergency ? 'emergency' : (isInstant ? 'instant' : 'scheduled'));
+      const resolvedIsEmergency = !!(isEmergency || resolvedBookingType === 'emergency');
+      const resolvedIsInstant = !!(isInstant || resolvedBookingType === 'instant');
 
       // Validate required fields
       if (!serviceId || !date || !address || !paymentMethod) {
         return res.status(400).json({
           success: false,
           message: 'Service ID, date, address, and payment method are required'
+        });
+      }
+
+      // Validate customer phone number exists
+      if (!req.user || !req.user.phone) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please update your mobile number in your profile before placing a booking request.'
         });
       }
 
@@ -719,23 +798,10 @@ class BookingService {
       }
 
       let bookingResult = await runInTransactionOrSequential(async (session) => {
-        // Validate if Pay after Service (COD) is allowed
-        if (paymentMethod === 'cash') {
-          const { SystemConfig } = require('../models/SystemSetting');
-          let settings = await SystemConfig.findOne();
-          if (!settings) {
-            settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
-            await settings.save(session ? { session } : {});
-          }
-          const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
-          if (!allowCOD) {
-            throw new Error('Pay After Service is currently disabled for this service. Please proceed with online payment.');
-          }
-        }
-
         // Parallelize lookups
         const ZoneModel = mongoose.model('Zone');
         const SurgeModel = mongoose.model('Surge');
+        const { SystemConfig } = require('../models/SystemSetting');
 
         const promises = [
           session ? Service.findById(serviceId).session(session) : Service.findById(serviceId),
@@ -748,10 +814,24 @@ class BookingService {
             : Promise.resolve(null),
           (isFavoriteProviderBooking && preferredProviderId)
             ? (session ? Provider.findById(preferredProviderId).session(session).lean() : Provider.findById(preferredProviderId).lean())
-            : Promise.resolve(null)
+            : Promise.resolve(null),
+          session ? SystemConfig.findOne().session(session) : SystemConfig.findOne()
         ];
 
-        const [service, detectedZone, allActiveSurges, oldBooking, providerDoc] = await Promise.all(promises);
+        let [service, detectedZone, allActiveSurges, oldBooking, providerDoc, settings] = await Promise.all(promises);
+
+        if (!settings) {
+          settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
+          await settings.save(session ? { session } : {});
+        }
+
+        // Validate if Pay after Service (COD) is allowed
+        if (paymentMethod === 'cash') {
+          const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
+          if (!allowCOD) {
+            throw new Error('Pay After Service is currently disabled for this service. Please proceed with online payment.');
+          }
+        }
 
         if (!service) {
           throw new Error('Service not found');
@@ -806,122 +886,37 @@ class BookingService {
         }
         let detectedZoneId = detectedZone._id;
 
-        // Calculate amounts
-        let subtotal = (service.discountPrice || service.basePrice) * quantity;
-        let totalDiscount = 0;
-        let couponDetails = null;
-        let coupon = null;
-
-        // Process coupon if provided
-        if (couponCode) {
-          coupon = await Coupon.validateCoupon(req.user._id, couponCode, subtotal, detectedZoneId);
-
-          // Calculate discount
-          let discount = 0;
-          if (coupon.discountType === 'percent') {
-            discount = (subtotal * coupon.discountValue) / 100;
-          } else {
-            discount = coupon.discountValue;
-          }
-
-          totalDiscount = discount;
-          couponDetails = {
-            code: coupon.code,
-            discountType: coupon.discountType,
-            discountValue: coupon.discountValue,
-            appliedZone: coupon.matchedZoneId || detectedZoneId || null
-          };
-        }
-
-        // Resolve ancestry
-        const zoneAncestry = [];
-        if (detectedZoneId) {
-          zoneAncestry.push(detectedZoneId.toString());
-          let curr = session
-            ? await ZoneModel.findById(detectedZoneId).select('parentZone').session(session).lean()
-            : await ZoneModel.findById(detectedZoneId).select('parentZone').lean();
-          while (curr && curr.parentZone) {
-            zoneAncestry.push(curr.parentZone.toString());
-            curr = session
-              ? await ZoneModel.findById(curr.parentZone).select('parentZone').session(session).lean()
-              : await ZoneModel.findById(curr.parentZone).select('parentZone').lean();
-          }
-        }
-
-        // Check if current time is within HH:MM window helper
-        const isTimeInWindow = (timeStr, start, end) => {
-          if (!start || !end) return true;
-          const parseTime = (t) => {
-            const [h, m] = t.split(':').map(Number);
-            return h * 60 + m;
-          };
-          const current = parseTime(timeStr);
-          const startTime = parseTime(start);
-          const endTime = parseTime(end);
-          if (startTime <= endTime) {
-            return current >= startTime && current <= endTime;
-          } else {
-            return current >= startTime || current <= endTime;
-          }
-        };
-
-        const currentTimeStr = time || new Date().toTimeString().substring(0, 5); // "HH:MM"
-
-        let totalSurcharge = 0;
-        const surchargeBreakdown = [];
-        let rainCharge = 0;
-        let trafficCharge = 0;
-        let nightCharge = 0;
-        let demandSurge = 0;
-        let visitingCharge = 0;
-        let customCharges = 0;
-        let platformFee = 0;
-
-        const applicableSurges = allActiveSurges.filter(rule => {
-          if (rule.scope === 'zone') {
-            if (!rule.zoneId || !zoneAncestry.includes(rule.zoneId.toString())) {
-              return false;
-            }
-          }
-          if (!isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime)) {
-            return false;
-          }
-          if (rule.maxBookingValue && subtotal > rule.maxBookingValue) {
-            return false;
-          }
-          return true;
+        const PricingService = require('./PricingService');
+        const priceDetails = await PricingService.calculatePriceEstimate({
+          serviceId,
+          quantity,
+          couponCode,
+          date,
+          time,
+          lat: address?.lat,
+          lng: address?.lng,
+          isEmergency: resolvedIsEmergency,
+          isInstant: resolvedIsInstant,
+          userId: req.user._id,
+          session
         });
 
-        applicableSurges.forEach(s => {
-          let chargeAmount = 0;
-          if (s.mode === 'flat') {
-            chargeAmount = s.value;
-          } else if (s.mode === 'percentage') {
-            chargeAmount = (subtotal * s.value) / 100;
-          } else if (s.mode === 'multiplier') {
-            chargeAmount = subtotal * (s.value - 1);
-          }
-          chargeAmount = parseFloat(chargeAmount.toFixed(2));
-          totalSurcharge += chargeAmount;
-
-          if (s.chargeType === 'rain') rainCharge += chargeAmount;
-          else if (s.chargeType === 'traffic') trafficCharge += chargeAmount;
-          else if (s.chargeType === 'night') nightCharge += chargeAmount;
-          else if (s.chargeType === 'demand') demandSurge += chargeAmount;
-          else if (s.chargeType === 'platform') platformFee += chargeAmount;
-          else if (s.chargeType === 'visiting' || s.chargeType === 'festival' || s.chargeType === 'custom') visitingCharge += chargeAmount;
-
-          surchargeBreakdown.push({
-            chargeType: s.chargeType,
-            mode: s.mode,
-            value: s.value,
-            amount: chargeAmount
-          });
-        });
-
-
-
-        const totalAmount = subtotal - totalDiscount + totalSurcharge;
+        const {
+          subtotal,
+          totalDiscount,
+          couponDetails,
+          rainCharge,
+          trafficCharge,
+          nightCharge,
+          demandSurge,
+          visitingCharge,
+          platformFee,
+          customCharges,
+          emergencySurge,
+          totalSurcharge,
+          surchargeBreakdown,
+          totalAmount
+        } = priceDetails;
 
         // CHECK FOR DUPLICATE BOOKING (Idempotency)
         const existingQuery = Booking.findOne({
@@ -981,6 +976,22 @@ class BookingService {
           isFavoriteProviderBooking: !!assignedProviderId,
           provider: assignedProviderId || undefined,
           zoneId: detectedZoneId || undefined,
+          bookingType: resolvedBookingType,
+          isEmergency: resolvedIsEmergency,
+          isInstant: resolvedIsInstant,
+          estimatedDuration: estimatedDuration !== undefined ? estimatedDuration : null,
+          travelBufferMinutes: travelBufferMinutes !== undefined ? travelBufferMinutes : null,
+          expectedStartTime: expectedStartTime ? new Date(expectedStartTime) : null,
+          expectedEndTime: expectedEndTime ? new Date(expectedEndTime) : null,
+          providerAcceptanceStatus: providerAcceptanceStatus !== undefined ? providerAcceptanceStatus : null,
+          reassignmentReason: reassignmentReason !== undefined ? reassignmentReason : null,
+          surgeCharge: surgeCharge !== undefined ? surgeCharge : 0,
+          providerBonus: providerBonus !== undefined ? providerBonus : 0,
+          bookingPriority: bookingPriority || 'medium',
+          providerResponseDeadline: providerResponseDeadline ? new Date(providerResponseDeadline) : null,
+          trustedProviderOnly: trustedProviderOnly !== undefined ? trustedProviderOnly : false,
+          startPin,
+          completionPin,
           status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
           paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
           confirmedBooking: paymentMethod === 'cash',
@@ -989,14 +1000,15 @@ class BookingService {
           nightCharge,
           demandSurge,
           visitingCharge,
+          emergencySurge,
           platformFee,
           customCharges,
           statusHistory: [{
             status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
             timestamp: new Date(),
             note: assignedProviderId
-              ? `Booking created with preferred provider. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`
-              : `Booking created. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
+              ? `Booking created with preferred provider. START_PIN:**** COMPLETION_PIN:****`
+              : `Booking created. START_PIN:**** COMPLETION_PIN:****`,
             updatedBy: 'customer'
           }],
           metadata: {
@@ -1083,7 +1095,7 @@ class BookingService {
 
         return {
           isDuplicate: false,
-          data: booking.toObject(),
+          data: { ...booking.toObject(), startPin, completionPin },
           bookingId: booking.bookingId,
           _id: booking._id
         };
@@ -1093,7 +1105,7 @@ class BookingService {
         return res.status(200).json({
           success: true,
           message: 'Existing booking found. Returning current booking.',
-          data: bookingResult.data,
+          data: enrichBookingData(bookingResult.data),
           bookingId: bookingResult.bookingId,
           _id: bookingResult._id,
           isDuplicate: true
@@ -1103,7 +1115,7 @@ class BookingService {
       res.status(201).json({
         success: true,
         message: 'Booking created successfully. Please confirm payment to complete booking.',
-        data: bookingResult.data,
+        data: enrichBookingData(bookingResult.data),
         bookingId: bookingResult.bookingId,
         _id: bookingResult._id
       });
@@ -1543,15 +1555,15 @@ class BookingService {
 
           // Ensure and persist PINs, then attach based on visibility rules
           const { startPin, completionPin } = await BookingService.ensureAndPersistPins(bookingObj._id, bookingObj);
-          if (bookingObj.status === 'accepted' || bookingObj.status === 'scheduled') {
+          if (['pending', 'accepted', 'scheduled', 'assigned', 'on_the_way', 'arriving', 'arrived'].includes(bookingObj.status)) {
             bookingObj.startPin = startPin;
-          } else if (bookingObj.status === 'in-progress') {
+          } else if (bookingObj.status === 'in-progress' || bookingObj.status === 'inprogress') {
             bookingObj.completionPin = completionPin;
           }
 
           bookingObj.timeline = getBookingTimeline(bookingObj, pStatus);
 
-          return bookingObj;
+          return enrichBookingData(bookingObj, transaction);
         })
       );
 
@@ -2085,7 +2097,7 @@ class BookingService {
       res.status(200).json({
         success: true,
         message: 'Booking details retrieved successfully',
-        data: bookingObj
+        data: enrichBookingData(bookingObj, transactions?.[0])
       });
 
     } catch (error) {
@@ -2213,7 +2225,7 @@ class BookingService {
 
         if (booking.provider) {
           try {
-            await recalculateProviderPerformance(booking.provider);
+            await BookingService.recalculateProviderPerformance(booking.provider);
           } catch (err) {
             console.error("Error recalculating provider performance after customer cancellation commit:", err);
           }
@@ -2306,21 +2318,23 @@ class BookingService {
             const refundToWalletOnly = settings?.walletSettings?.refundToWalletOnly ?? true;
 
             if (refundToWalletOnly) {
-              // Full refund to wallet
-              const user = await User.findById(userId).session(session);
-              if (!user.wallet) {
-                user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
-              }
-              user.wallet.availableBalance += refundAmount;
-              user.wallet.totalRefunded += refundAmount;
-              user.wallet.walletTransactions.push({
-                type: 'credit',
-                amount: refundAmount,
-                reason: 'Booking Refund',
-                booking: booking._id
-              });
-              user.wallet.lastUpdated = new Date();
-              await user.save({ session });
+              // Full refund to wallet atomically
+              await User.findByIdAndUpdate(
+                userId,
+                {
+                  $inc: { 'wallet.availableBalance': refundAmount, 'wallet.totalRefunded': refundAmount },
+                  $push: {
+                    'wallet.walletTransactions': {
+                      type: 'credit',
+                      amount: refundAmount,
+                      reason: 'Booking Refund',
+                      booking: booking._id
+                    }
+                  },
+                  $set: { 'wallet.lastUpdated': new Date() }
+                },
+                { session }
+              );
 
               // Create or update transaction record for audit
               let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
@@ -2445,7 +2459,7 @@ class BookingService {
 
         if (previousStatus === 'accepted' && booking.provider) {
           try {
-            await recalculateProviderPerformance(booking.provider);
+            await BookingService.recalculateProviderPerformance(booking.provider);
           } catch (err) {
             console.error("Error recalculating provider performance after customer cancellation commit:", err);
           }
@@ -2706,7 +2720,7 @@ class BookingService {
 
       res.status(200).json({
         success: true,
-        data: responseData
+        data: enrichBookingData(responseData, transactions?.[0])
       });
     } catch (error) {
       console.error("Error fetching booking:", error);
@@ -2724,25 +2738,44 @@ class BookingService {
       let { status } = req.params;
       const { page = 1, limit = 10 } = req.query;
 
-      // Handle status mapping - convert frontend camelCase to backend kebab-case
-      const statusMapping = {
-        'inProgress': 'in-progress'
+      // BOOKING STATUS STATE MACHINE UPGRADE
+      const normalizeParam = (s) => {
+        if (!s) return 'all';
+        const map = {
+          'pending': 'Pending',
+          'searchingprovider': 'SearchingProvider',
+          'offered': 'Offered',
+          'assigned': 'Assigned',
+          'accepted': 'Accepted',
+          'ontheway': 'OnTheWay',
+          'arrived': 'Arrived',
+          'started': 'Started',
+          'inprogress': 'InProgress',
+          'in-progress': 'InProgress',
+          'in_progress': 'InProgress',
+          'completed': 'Completed',
+          'cancelled': 'Cancelled',
+          'rejected': 'Rejected',
+          'expired': 'Expired',
+          'reassigned': 'Reassigned',
+          'refunded': 'Refunded',
+          'all': 'all'
+        };
+        const clean = s.toLowerCase().replace(/[^a-z]/g, '');
+        return map[clean] || map[s.toLowerCase()] || s;
       };
 
-      // Apply status mapping if needed
-      if (statusMapping[status]) {
-        status = statusMapping[status];
-      }
+      const normalizedStatus = normalizeParam(status);
 
-      const validStatuses = ['pending', 'accepted', 'completed', 'cancelled', 'in-progress', 'scheduled', 'assigned'];
-      if (!validStatuses.includes(status)) {
+      const validStatuses = ['Pending', 'SearchingProvider', 'Offered', 'Assigned', 'Accepted', 'OnTheWay', 'Arrived', 'Started', 'InProgress', 'Completed', 'Cancelled', 'Rejected', 'Expired', 'Reassigned', 'Refunded', 'all'];
+      if (!validStatuses.includes(normalizedStatus)) {
         return res.status(400).json({
           success: false,
           message: 'Invalid status parameter'
         });
       }
 
-      if (status === 'cancelled') {
+      if (normalizedStatus === 'Cancelled') {
         return res.status(200).json({
           success: true,
           count: 0,
@@ -2771,10 +2804,10 @@ class BookingService {
 
       const providerBookingsCount = await Booking.countDocuments({
         provider: providerId,
-        status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+        status: { $in: ['Accepted', 'InProgress', 'Started', 'Assigned', 'Offered', 'OnTheWay', 'Arrived'] }
       });
 
-      if (status === 'pending' && providerBookingsCount >= maxBookings) {
+      if (normalizedStatus === 'Pending' && providerBookingsCount >= maxBookings) {
         return res.status(200).json({
           success: true,
           count: 0,
@@ -2792,16 +2825,16 @@ class BookingService {
       const serviceIds = servicesInCategory.map(s => s._id);
 
       let query;
-      if (status === 'pending') {
+      if (normalizedStatus === 'Pending') {
         query = {
           'services.service': { $in: serviceIds },
           $or: [
-            { status: 'pending', $or: [{ provider: { $exists: false } }, { provider: null }] },
-            { status: 'assigned', provider: providerId },
-            { status: 'scheduled', paymentMethod: 'cash', provider: providerId }
+            { status: { $in: ['Pending', 'SearchingProvider', 'pending', 'searchingprovider'] }, $or: [{ provider: { $exists: false } }, { provider: null }] },
+            { status: { $in: ['Assigned', 'assigned'] }, provider: providerId },
+            { status: { $in: ['Offered', 'offered'] }, provider: providerId }
           ]
         };
-      } else if (status === 'completed') {
+      } else if (normalizedStatus === 'Completed') {
         const heldEarnings = await ProviderEarning.find({
           provider: providerId,
           $or: [
@@ -2817,17 +2850,35 @@ class BookingService {
             { _id: { $in: heldBookingIds } },
             { payoutHoldUntil: { $gt: new Date() } }
           ],
-          status: 'completed',
+          status: 'Completed',
+          provider: providerId,
+          'services.service': { $in: serviceIds }
+        };
+      } else if (normalizedStatus === 'all') {
+        query = {
+          provider: providerId,
+          'services.service': { $in: serviceIds }
+        };
+      } else if (normalizedStatus === 'Accepted') {
+        query = {
+          status: { $in: ['Accepted', 'Assigned', 'Offered'] },
+          provider: providerId,
+          'services.service': { $in: serviceIds }
+        };
+      } else if (normalizedStatus === 'InProgress') {
+        query = {
+          status: { $in: ['InProgress', 'Started', 'OnTheWay', 'Arrived'] },
           provider: providerId,
           'services.service': { $in: serviceIds }
         };
       } else {
         query = {
-          status,
+          status: normalizedStatus,
           provider: providerId,
           'services.service': { $in: serviceIds }
         };
       }
+      // END BOOKING STATUS STATE MACHINE UPGRADE
 
       const bookings = await Booking.find(query)
         .populate('customer', 'name email phone')
@@ -2859,7 +2910,7 @@ class BookingService {
           bookingCommissionRule
         );
 
-        return {
+        const enrichedObj = {
           ...cleanBooking,
           zoneRelation,
           commission: {
@@ -2874,6 +2925,8 @@ class BookingService {
           netAmount,
           providerCommissionRate: bookingCommissionRule ? bookingCommissionRule.value : 0
         };
+
+        return enrichBookingData(enrichedObj);
       }));
 
       const total = await Booking.countDocuments(query);
@@ -2910,93 +2963,203 @@ class BookingService {
         });
       }
 
+      // BOOKING LOCK UPGRADE
+      // DOUBLE CLICK PROTECTION
+      const existingAcceptedBooking = await Booking.findById(id)
+        .populate('customer', 'name email phone')
+        .populate('services.service', 'title description price');
+      if (existingAcceptedBooking && existingAcceptedBooking.status === 'accepted' && existingAcceptedBooking.provider && existingAcceptedBooking.provider.toString() === providerId.toString()) {
+        global.logger.info(`[BookingService.acceptBooking] Double click protection triggered. Provider ${providerId} already accepted booking ${id}. Returning existing accepted booking.`);
+        return res.status(200).json({
+          success: true,
+          message: 'Booking accepted successfully',
+          data: {
+            ...existingAcceptedBooking.toObject(),
+            paymentStatus: existingAcceptedBooking.paymentStatus,
+            paymentMethod: existingAcceptedBooking.paymentMethod
+          }
+        });
+      }
+
+      if (existingAcceptedBooking && (existingAcceptedBooking.status === 'accepted' || (existingAcceptedBooking.provider && existingAcceptedBooking.provider.toString() !== providerId.toString()))) {
+        global.logger.warn(`[BookingService.acceptBooking] Booking conflict. Booking ${id} already accepted by provider ${existingAcceptedBooking.provider}.`);
+        return res.status(409).json({
+          success: false,
+          message: 'Booking already accepted.'
+        });
+      }
+
       const result = await runInTransactionOrSequential(async (session) => {
         // Check if provider exists and get their services and status
         const provider = session
-          ? await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore').session(session)
-          : await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore');
+          ? await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore approved isActive wallet').session(session)
+          : await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore approved isActive wallet');
         if (!provider) {
           throw new Error('Provider not found');
         }
 
-        // Check if provider is suspended, blocked or restricted
-        if (provider.isSuspended) {
-          throw new Error('Your account is suspended. You cannot accept bookings.');
+        global.logger.info(`[BookingService.acceptBooking] Provider ${providerId} (${provider.name}) attempted acceptance for booking ${id}`);
+
+        const lockQuery = {
+          _id: id,
+          status: 'pending',
+          $or: [
+            { provider: null },
+            { provider: { $exists: false } },
+            { provider: providerId }
+          ],
+          $or: [
+            { lockedBy: null },
+            { lockedBy: { $exists: false } },
+            { lockExpiresAt: { $lt: new Date() } }
+          ]
+        };
+
+        const lockUpdate = {
+          $set: {
+            lockedBy: providerId,
+            lockedAt: new Date(),
+            lockExpiresAt: new Date(Date.now() + 30000) // lock expires in 30 seconds
+          },
+          $inc: { bookingVersion: 1 }
+        };
+
+        const lockedBooking = session
+          ? await Booking.findOneAndUpdate(lockQuery, lockUpdate, { new: true, session })
+          : await Booking.findOneAndUpdate(lockQuery, lockUpdate, { new: true });
+
+        if (!lockedBooking) {
+          global.logger.warn(`[BookingService.acceptBooking] Booking conflict or already locked. Lock attempt failed for booking ${id} by provider ${providerId}`);
+          throw new Error('This booking has already been accepted by another provider.');
         }
 
-        if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
-          throw new Error('Your account is blocked. You cannot accept bookings.');
+        global.logger.info(`[BookingService.acceptBooking] Booking ${id} locked successfully by provider ${providerId}`);
+
+        try {
+          // Validate: Provider Approved
+          if (!provider.approved) {
+            throw new Error('Provider account is not approved.');
+          }
+
+          // Validate: Provider Active
+          if (!provider.isActive) {
+            throw new Error('Provider account is not active.');
+          }
+
+          // Validate: Provider Not Blocked
+          if (provider.isSuspended) {
+            throw new Error('Your account is suspended. You cannot accept bookings.');
+          }
+
+          if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
+            throw new Error('Your account is blocked. You cannot accept bookings.');
+          }
+
+          if (provider.performanceScore?.restrictionsActive) {
+            throw new Error('Your account is restricted from accepting new bookings.');
+          }
+
+          // Validate: Booking Not Expired
+          const isExpired = lockedBooking.providerResponseDeadline && new Date(lockedBooking.providerResponseDeadline) < new Date();
+          if (isExpired) {
+            global.logger.info(`[BookingService.acceptBooking] Lock expired or booking response deadline passed for booking ${id}`);
+            throw new Error('Booking has expired.');
+          }
+
+          const populatedLockedBooking = session
+            ? await Booking.findById(id).populate('services.service', 'category').session(session)
+            : await Booking.findById(id).populate('services.service', 'category');
+
+          // Verify provider can service this booking
+          const canService = populatedLockedBooking.services.every(serviceItem =>
+            provider.services.includes(serviceItem.service.category)
+          );
+
+          if (!canService) {
+            throw new Error('Provider is not qualified for all services in this booking');
+          }
+
+          // Validate time format if provided
+          if (time && !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+            throw new Error('Invalid time format (use HH:MM)');
+          }
+
+          // Check parallel bookings limit & scheduling conflict based on system configuration
+          const { SystemConfig } = require('../models/SystemSetting');
+          let settings = session
+            ? await SystemConfig.findOne().session(session)
+            : await SystemConfig.findOne();
+          const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+          const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+          const providerBookings = session
+            ? await Booking.find({
+              provider: providerId,
+              status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned', 'Accepted', 'InProgress', 'Started', 'Confirmed', 'Scheduled', 'Assigned'] }
+            }).session(session)
+            : await Booking.find({
+              provider: providerId,
+              status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned', 'Accepted', 'InProgress', 'Started', 'Confirmed', 'Scheduled', 'Assigned'] }
+            });
+
+          if (providerBookings.length >= maxBookings) {
+            throw new Error(`You have reached the maximum limit of parallel bookings (${maxBookings}). Complete your current jobs first.`);
+          }
+
+          if (checkProviderOverlap(populatedLockedBooking, providerBookings, bufferMinutes)) {
+            throw new Error(`You already have a booking scheduled during this time. Please complete your current booking before accepting a new one. Try again after ${bufferMinutes} minutes.`);
+          }
+
+          // Wallet Balance Check for Cash/PAS Bookings
+          // For cash bookings, provider collects full amount from customer but must remit platform commission.
+          // Ensure provider has sufficient wallet balance to cover the commission before accepting.
+          const isCashBooking = lockedBooking.paymentMethod === 'cash' || lockedBooking.paymentType === 'pay_after_service';
+          if (isCashBooking) {
+            const commissionRequired = lockedBooking.commissionAmount || 0;
+            const providerBalance = provider.wallet?.availableBalance || 0;
+            if (commissionRequired > 0 && providerBalance < commissionRequired) {
+              throw new Error(`Insufficient wallet balance. You need ₹${commissionRequired} in your wallet to accept this cash booking. Your current balance is ₹${providerBalance}. Please add funds to your wallet first.`);
+            }
+          }
+        } catch (validationError) {
+          // Release lock if validation fails (Assignment failed)
+          global.logger.error(`[BookingService.acceptBooking] Assignment failed for booking ${id} by provider ${providerId} due to validation error: ${validationError.message}`);
+
+          const releaseUpdate = {
+            $set: {
+              lockedBy: null,
+              lockedAt: null,
+              lockExpiresAt: null
+            }
+          };
+          if (session) {
+            await Booking.updateOne({ _id: id, lockedBy: providerId }, releaseUpdate, { session });
+          } else {
+            await Booking.updateOne({ _id: id, lockedBy: providerId }, releaseUpdate);
+          }
+          throw validationError;
         }
 
-        if (provider.performanceScore?.restrictionsActive) {
-          throw new Error('Your account is restricted from accepting new bookings.');
-        }
-
-        const booking = session
-          ? await Booking.findById(id).populate('services.service', 'category').session(session)
-          : await Booking.findById(id).populate('services.service', 'category');
-
-        if (!booking) {
-          throw new Error('Booking not found or not available for acceptance');
-        }
-
-        // Verify provider can service this booking
-        const canService = booking.services.every(serviceItem =>
-          provider.services.includes(serviceItem.service.category)
-        );
-
-        if (!canService) {
-          throw new Error('Provider is not qualified for all services in this booking');
-        }
-
-        // Validate time format if provided
-        if (time && !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
-          throw new Error('Invalid time format (use HH:MM)');
-        }
-
-        // Check parallel bookings limit & scheduling conflict based on system configuration
-        const { SystemConfig } = require('../models/SystemSetting');
-        let settings = session
-          ? await SystemConfig.findOne().session(session)
-          : await SystemConfig.findOne();
-        const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
-        const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
-
-        const providerBookings = session
-          ? await Booking.find({
-            provider: providerId,
-            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-          }).session(session)
-          : await Booking.find({
-            provider: providerId,
-            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-          });
-
-        if (providerBookings.length >= maxBookings) {
-          throw new Error(`You have reached the maximum limit of parallel bookings (${maxBookings}). Complete your current jobs first.`);
-        }
-
-        if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
-          throw new Error(`You already have a booking scheduled during this time. Please complete your current booking before accepting a new one. Try again after ${bufferMinutes} minutes.`);
-        }
-
-        /* BACKUP COMMENT: Original acceptBooking saved non-atomically, triggering race conditions. Replacing with atomic findOneAndUpdate. */
+        // Assign provider and unlock atomically after assignment
         const updatedBooking = session
           ? await Booking.findOneAndUpdate(
             {
               _id: id,
-              status: { $in: ['pending', 'scheduled', 'assigned'] },
-              $or: [
-                { provider: { $exists: false } },
-                { provider: null },
-                { provider: providerId }
-              ]
+              lockedBy: providerId,
+              status: 'pending'
             },
             {
               $set: {
                 status: 'accepted',
                 provider: providerId,
+                // EMERGENCY BOOKING ENGINE UPGRADE
+                providerAcceptanceStatus: 'accepted',
+                // END EMERGENCY BOOKING ENGINE UPGRADE
+                acceptedAt: new Date(),
                 updatedAt: new Date(),
+                lockedBy: null,
+                lockedAt: null,
+                lockExpiresAt: null,
                 ...(time && { time })
               },
               $push: {
@@ -3013,18 +3176,21 @@ class BookingService {
           : await Booking.findOneAndUpdate(
             {
               _id: id,
-              status: { $in: ['pending', 'scheduled', 'assigned'] },
-              $or: [
-                { provider: { $exists: false } },
-                { provider: null },
-                { provider: providerId }
-              ]
+              lockedBy: providerId,
+              status: 'pending'
             },
             {
               $set: {
                 status: 'accepted',
                 provider: providerId,
+                // EMERGENCY BOOKING ENGINE UPGRADE
+                providerAcceptanceStatus: 'accepted',
+                // END EMERGENCY BOOKING ENGINE UPGRADE
+                acceptedAt: new Date(),
                 updatedAt: new Date(),
+                lockedBy: null,
+                lockedAt: null,
+                lockExpiresAt: null,
                 ...(time && { time })
               },
               $push: {
@@ -3040,23 +3206,25 @@ class BookingService {
           );
 
         if (!updatedBooking) {
-          throw new Error('This booking has already been accepted by another service provider or is unavailable.');
+          throw new Error('This booking has already been accepted by another provider.');
         }
+
+        global.logger.info(`[BookingService.acceptBooking] Booking accepted successfully for booking ${id} by provider ${providerId}`);
 
         // Sync transaction record with the new provider and calculated commission
         try {
-          const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+          const isOnline = updatedBooking.paymentMethod?.toLowerCase() === 'online' || updatedBooking.paymentMethod?.toLowerCase() === 'upi';
           const transOpts = session ? { session } : {};
           await Transaction.updateMany(
-            { booking: booking._id },
+            { booking: updatedBooking._id },
             {
-              provider: booking.provider,
-              providerId: booking.provider.toString(),
-              commission: booking.commissionAmount || 0,
-              providerEarning: booking.providerEarnings || 0,
-              commissionRule: booking.commissionRule,
+              provider: updatedBooking.provider,
+              providerId: updatedBooking.provider.toString(),
+              commission: updatedBooking.commissionAmount || 0,
+              providerEarning: updatedBooking.providerEarnings || 0,
+              commissionRule: updatedBooking.commissionRule,
               // Sync payment status if booking is already paid
-              ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+              ...((updatedBooking.paymentStatus === 'paid' || updatedBooking.paymentStatus === 'escrow_hold') && {
                 paymentStatus: isOnline ? 'success' : 'completed'
               })
             },
@@ -3068,21 +3236,22 @@ class BookingService {
 
         // Populate booking details for response
         const populatedBooking = session
-          ? await Booking.findById(booking._id)
+          ? await Booking.findById(updatedBooking._id)
             .populate('customer', 'name email phone')
             .populate('services.service', 'title description price')
             .session(session)
-          : await Booking.findById(booking._id)
+          : await Booking.findById(updatedBooking._id)
             .populate('customer', 'name email phone')
             .populate('services.service', 'title description price');
 
         return {
           populatedBooking,
           providerName: provider.name,
-          paymentStatus: booking.paymentStatus,
-          paymentMethod: booking.paymentMethod
+          paymentStatus: updatedBooking.paymentStatus,
+          paymentMethod: updatedBooking.paymentMethod
         };
       });
+      // BOOKING LOCK UPGRADE
 
       // Real-time notification for customer
       try {
@@ -3122,6 +3291,18 @@ class BookingService {
 
     } catch (error) {
       console.error('Error accepting booking:', error);
+      const conflictErrors = [
+        'This booking has already been accepted by another provider.',
+        'Booking already accepted.'
+      ];
+      const isConflictError = conflictErrors.some(errMsg => error.message?.includes(errMsg));
+      if (isConflictError) {
+        return res.status(409).json({
+          success: false,
+          message: error.message
+        });
+      }
+
       const clientErrors = [
         'Provider not found',
         'Your account is suspended. You cannot accept bookings.',
@@ -3132,7 +3313,9 @@ class BookingService {
         'Invalid time format (use HH:MM)',
         'You have reached the maximum limit of parallel bookings',
         'Scheduling conflict',
-        'This booking has already been accepted by another service provider'
+        'Provider account is not approved.',
+        'Provider account is not active.',
+        'Booking has expired.'
       ];
       const isClientError = clientErrors.some(errMsg => error.message?.includes(errMsg));
       if (isClientError) {
@@ -3166,7 +3349,7 @@ class BookingService {
       const booking = await Booking.findOne({
         _id: id,
         provider: providerId,
-        status: { $in: ['accepted', 'assigned'] }
+        status: { $in: ['accepted', 'assigned', 'Accepted', 'Assigned'] }
       }).populate('customer', 'name email phone')
         .populate('services.service', 'title description');
 
@@ -3205,7 +3388,7 @@ class BookingService {
       }
 
       // 2. Check Lockout Cooldown
-      const lockoutTime = getLockoutTime(booking);
+      const lockoutTime = BookingService.getLockoutTime(booking);
       if (lockoutTime && lockoutTime > new Date()) {
         const remainingMinutes = Math.ceil((lockoutTime - new Date()) / (60 * 1000));
         return res.status(403).json({
@@ -3217,7 +3400,7 @@ class BookingService {
       // 3. Verify START PIN
       const { startPin } = await BookingService.ensureAndPersistPins(booking._id, booking);
       if (pin !== startPin) {
-        await recordPinFailure(booking, true);
+        await BookingService.recordPinFailure(booking, true);
         await createFraudLog(booking, 'failed_login', `Incorrect START PIN entered: ${pin}`, 10, req);
 
         return res.status(400).json({
@@ -3237,7 +3420,7 @@ class BookingService {
       const providerLat = parseFloat(latitude);
       const providerLng = parseFloat(longitude);
 
-      const targetLoc = getBookingAddressLocation(booking);
+      const targetLoc = BookingService.getBookingAddressLocation(booking);
       if (!targetLoc) {
         return res.status(400).json({
           success: false,
@@ -3245,8 +3428,8 @@ class BookingService {
         });
       }
 
-      if (!getTargetLocation(booking)) {
-        await setTargetLocation(booking, targetLoc.latitude, targetLoc.longitude);
+      if (!BookingService.getTargetLocation(booking)) {
+        await BookingService.setTargetLocation(booking, targetLoc.latitude, targetLoc.longitude);
       }
 
       const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
@@ -3292,7 +3475,7 @@ class BookingService {
         });
       }
 
-      if (distance > 50) { // Allow start/completion within ~50 meters (≈150 feet)
+      if (distance > 150) { // Allow start/completion within 150 meters
         await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
 
         // Push warning to history
@@ -3311,7 +3494,7 @@ class BookingService {
       }
 
       // Reset failures on success
-      await resetPinFailures(booking);
+      await BookingService.resetPinFailures(booking);
 
       // Update booking status to in-progress
       booking.status = 'in-progress';
@@ -3437,140 +3620,74 @@ class BookingService {
 
       const previousStatus = booking.status;
 
-      // Update booking status to cancelled
-      booking.status = 'cancelled';
-      booking.rejectedBy = providerId;
-      booking.rejectionReason = reason || 'Provider declined';
-      booking.rejectedAt = new Date();
+      // Disassociate provider activeBooking
+      await Provider.findByIdAndUpdate(providerId, { $set: { activeBooking: null } }, { session });
+
+      // Update booking status to pending, clear current provider, and ignore this provider
+      booking.status = 'pending';
+      booking.provider = null;
+      if (!booking.metadata) booking.metadata = {};
+      if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
+      if (!booking.metadata.ignoredProviders.some(p => p.toString() === providerId.toString())) {
+        booking.metadata.ignoredProviders.push(providerId);
+      }
       booking.updatedAt = new Date();
 
-      let refundAmount = 0;
-      let refundDetails = null;
+      booking.statusHistory.push({
+        status: 'pending',
+        timestamp: new Date(),
+        note: `Booking rejected by provider (reason: ${reason || 'Provider declined'}). Seeking reassignment.`,
+        updatedBy: 'system'
+      });
 
-      // Rollback any pending payment transaction wallet deduction
-      const Transaction = mongoose.model('Transaction');
-      const pendingTxn = await Transaction.findOne({ booking: booking._id, paymentStatus: 'pending' }).session(session);
-      if (pendingTxn) {
-        const { rollbackWalletDeduction } = require('./Transaction-controller');
-        if (rollbackWalletDeduction) {
-          await rollbackWalletDeduction(pendingTxn, session);
-        }
-        pendingTxn.paymentStatus = 'failed';
-        pendingTxn.description = (pendingTxn.description || '') + ' (Cancelled due to provider booking rejection)';
-        await pendingTxn.save({ session });
-      }
-
-      // Handle refund if paid
-      if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') {
-        refundAmount = booking.totalAmount;
-
-        if (refundAmount > 0) {
-          // Find existing successful transaction
-          const existingTxn = await Transaction.findOneAndUpdate(
-            { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success', 'escrow_hold'] }, refundStatus: { $ne: 'completed' } },
-            {
-              refundStatus: 'completed',
-              refundReason: reason || 'Provider rejected booking',
-              refundedAt: new Date(),
-              paymentStatus: 'refunded',
-              refundedAmount: refundAmount
-            },
-            { session, new: true }
-          );
-
-          if (!existingTxn) {
-            console.warn(`[Refund Engine] Duplicate or invalid provider rejection refund attempt for booking ${booking._id}`);
-            throw new Error('Transaction already refunded or not found.');
-          }
-
-          // Update customer wallet
-          const customer = await User.findById(booking.customer._id).session(session);
-          if (customer) {
-            if (!customer.wallet) {
-              customer.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
-            }
-            customer.wallet.availableBalance += refundAmount;
-            customer.wallet.totalRefunded += refundAmount;
-            customer.wallet.walletTransactions.push({
-              type: 'credit',
-              amount: refundAmount,
-              reason: `Booking Rejected by Provider: ${reason || 'Provider declined'}`,
-              booking: booking._id
-            });
-            customer.wallet.lastUpdated = new Date();
-            await customer.save({ session });
-          }
-
-          // Create or update transaction record for audit
-          let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
-          if (refundTransaction) {
-            refundTransaction.amount = refundAmount;
-            refundTransaction.paymentStatus = 'refunded';
-            refundTransaction.paymentMethod = 'wallet';
-            refundTransaction.type = 'refund';
-            refundTransaction.description = `Provider rejected booking - Automatic refund to wallet: ${reason || 'Provider declined'}`;
-            refundTransaction.refundReason = reason || 'Provider rejected booking';
-            refundTransaction.updatedAt = new Date();
-            await refundTransaction.save({ session });
-          } else {
-            refundTransaction = new Transaction({
-              booking: booking._id,
-              bookingId: booking.bookingId || booking._id.toString(),
-              user: booking.customer._id,
-              amount: refundAmount,
-              paymentStatus: 'completed',
-              paymentMethod: 'wallet',
-              type: 'refund',
-              description: `Provider rejected booking - Automatic refund to wallet: ${reason || 'Provider declined'}`,
-              refundReason: reason || 'Provider rejected booking'
-            });
-            await refundTransaction.save({ session });
-          }
-
-          booking.paymentStatus = 'refunded';
-
-          refundDetails = {
-            amount: refundAmount,
-            method: 'wallet',
-            status: 'completed'
-          };
-        }
-      }
-
-      await Provider.findByIdAndUpdate(providerId, { $set: { activeBooking: null } }, { session });
       await booking.save({ session });
-
       await safeCommit(session);
       safeEnd(session);
       emitBookingUpdate(booking._id, booking, 'rejected');
 
-      // Recalculate provider stats and trust score dynamically after transaction commits successfully to avoid write conflicts
+      // Trigger auto-reassignment
+      const ProviderAssignmentService = require('./ProviderAssignmentService');
+      const newProvider = await ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
+
+      if (!newProvider) {
+        try {
+          const { notifyAdmins } = require('../utils/notificationHelper');
+          await notifyAdmins({
+            title: `${booking.bookingType ? booking.bookingType.charAt(0).toUpperCase() + booking.bookingType.slice(1) : 'Booking'} Reassignment Failure`,
+            message: `Booking ${booking.bookingId || booking._id} could not be automatically reassigned and is placed in the Admin Queue.`
+          });
+        } catch (adminErr) {
+          console.error("Error notifying admins for booking reassignment failure:", adminErr);
+        }
+      }
+
+      // Recalculate provider stats and trust score dynamically
       try {
-        await recalculateProviderPerformance(providerId);
+        await BookingService.recalculateProviderPerformance(providerId);
       } catch (err) {
-        console.error("Error recalculating provider performance after rejectBooking commit:", err);
+        console.error("Error recalculating provider performance after rejectBooking:", err);
       }
 
       // Add system message to chat
-      await addSystemMessageToChat(booking._id, 'Booking declined by partner');
-
-      // Track cancellation fraud in background (non-blocking)
-      logCancellationFraud(req, booking, providerId, 'provider');
+      try {
+        const { addSystemMessageToChat } = require('../utils/chatHelper');
+        if (addSystemMessageToChat) {
+          await addSystemMessageToChat(booking._id, 'Booking declined by partner');
+        }
+      } catch (chatErr) { }
 
       res.status(200).json({
         success: true,
-        message: booking.paymentStatus === 'refunded'
-          ? 'Booking rejected successfully and customer was fully refunded to wallet.'
-          : 'Booking rejected successfully',
+        message: newProvider
+          ? `Booking rejected by provider and auto-reassigned to provider ${newProvider.name}.`
+          : 'Booking rejected by provider. No other providers available; placed in Admin Queue.',
         data: {
           bookingId: booking._id,
           status: booking.status,
-          paymentStatus: booking.paymentStatus,
-          rejectionReason: booking.rejectionReason,
-          rejectedAt: booking.rejectedAt,
-          refundDetails
+          reassigned: !!newProvider
         }
       });
+
 
     } catch (error) {
       await safeAbort(session);
@@ -3607,13 +3724,13 @@ class BookingService {
       const booking = await Booking.findOne({
         _id: id,
         provider: providerId,
-        status: 'in-progress'
+        status: { $in: ['in-progress', 'InProgress', 'started', 'Started'] }
       }).populate('customer', '_id name').session(session);
 
       if (!booking) {
         const currentBooking = await Booking.findById(id).select('status commissionProcessed').lean();
 
-        if (currentBooking && currentBooking.status === 'completed') {
+        if (currentBooking && ['completed', 'Completed'].includes(currentBooking.status)) {
           await safeCommit(session);
           safeEnd(session);
           return res.json({
@@ -3621,7 +3738,7 @@ class BookingService {
             message: 'Booking already completed.'
           });
         }
-        throw new Error('Booking must be In Progress before it can be completed.');
+        throw new Error('Booking must be In Progress or Started before it can be completed.');
       }
 
       // Map provider performanceScore stats to a tier for commission rule selection
@@ -3656,17 +3773,34 @@ class BookingService {
         });
       }
 
-      // Handle after-work proof images (Required: min 1)
-      if (!req.files || req.files.length === 0) {
+      const { SystemConfig } = require('../models/SystemSetting');
+      let systemConfigDoc = await SystemConfig.findOne().session(session).lean();
+      if (!systemConfigDoc) {
+        systemConfigDoc = { bookingSettings: { minCompletedImages: 1 } };
+      }
+      const minImages = systemConfigDoc.bookingSettings?.minCompletedImages || 1;
+
+      // Handle after-work proof images (Required: minImages)
+      if (!req.files || req.files.length < minImages) {
         await safeAbort(session);
         safeEnd(session);
         return res.status(400).json({
           success: false,
-          message: 'Completion proof images are required before completing service'
+          message: `At least ${minImages} completion proof images are required before completing service`
         });
       }
 
-      const { latitude, longitude, pin } = req.body;
+      const { latitude, longitude, pin, completionNotes } = req.body;
+
+      // Check completionNotes presence
+      if (!completionNotes || !completionNotes.trim()) {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({
+          success: false,
+          message: 'Completion notes are mandatory to complete the service'
+        });
+      }
 
       // 1. Check PIN presence
       if (!pin) {
@@ -3679,7 +3813,7 @@ class BookingService {
       }
 
       // 2. Check Lockout Cooldown
-      const lockoutTime = getLockoutTime(booking);
+      const lockoutTime = BookingService.getLockoutTime(booking);
       if (lockoutTime && lockoutTime > new Date()) {
         const remainingMinutes = Math.ceil((lockoutTime - new Date()) / (60 * 1000));
         await safeAbort(session);
@@ -3693,7 +3827,7 @@ class BookingService {
       // 3. Verify COMPLETION PIN
       const { completionPin } = await BookingService.ensureAndPersistPins(booking._id, booking, session);
       if (pin !== completionPin) {
-        await recordPinFailure(booking, false, session);
+        await BookingService.recordPinFailure(booking, false, session);
         await createFraudLog(booking, 'failed_login', `Incorrect COMPLETION PIN entered: ${pin}`, 15, req);
 
         await safeAbort(session);
@@ -3717,7 +3851,7 @@ class BookingService {
       const providerLat = parseFloat(latitude);
       const providerLng = parseFloat(longitude);
 
-      const targetLoc = getBookingAddressLocation(booking);
+      const targetLoc = BookingService.getBookingAddressLocation(booking);
       if (!targetLoc) {
         return res.status(400).json({
           success: false,
@@ -3727,42 +3861,48 @@ class BookingService {
 
       const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
 
-      // Dual-Layer S2 Precise Geofencing Verification (Level 20)
+      // Dual-Layer S2 Geofencing Verification (Level 16 ~150m cells - realistic for mobile GPS accuracy)
       /* BACKUP COMMENT: Original S2 calculations were synchronous. Offloading to worker threads now. */
       const { latLngToS2CellIdAsync, getNeighborsAsync, getLevelAsync } = require('../utils/s2HelperAsync');
-      const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 20);
+      const S2_LEVEL = 16; // Level 16 = ~150m cells (Level 20 was ~1cm, too strict for GPS drift)
+      const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, S2_LEVEL);
       let targetS2Precise = booking.address?.s2CellIdPrecise;
 
       let isTargetValid = false;
       if (targetS2Precise && targetS2Precise.length === 16) {
         try {
           const lvl = await getLevelAsync('0x' + targetS2Precise);
-          if (lvl === 20) isTargetValid = true;
+          if (lvl === S2_LEVEL) isTargetValid = true;
         } catch (e) { }
       }
 
       if (!isTargetValid) {
-        targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 20);
+        targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, S2_LEVEL);
       }
       const neighborCells = await getNeighborsAsync(targetS2Precise);
       const acceptableCells = [targetS2Precise, ...neighborCells];
       if (!acceptableCells.includes(providerS2Precise)) {
-        await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during completion verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise})`, 25, req);
+        // S2 cell mismatch - but only block if distance is also > 300m (handles edge cases)
+        if (distance > 300) {
+          await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during completion verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise}), Distance: ${Math.round(distance)}m`, 25, req);
 
-        booking.statusHistory.push({
-          status: booking.status,
-          timestamp: new Date(),
-          note: `Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
-          updatedBy: 'system'
-        });
-        await booking.save({ session });
+          booking.statusHistory.push({
+            status: booking.status,
+            timestamp: new Date(),
+            note: `S2 Geofence failed. Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}, Distance: ${Math.round(distance)}m`,
+            updatedBy: 'system'
+          });
+          await booking.save({ session });
 
-        await safeAbort(session);
-        safeEnd(session);
-        return res.status(400).json({
-          success: false,
-          message: `You are outside the precise geofence boundary of the service location.`
-        });
+          await safeAbort(session);
+          safeEnd(session);
+          return res.status(400).json({
+            success: false,
+            message: `You are outside the geofence boundary of the service location. Distance: ${Math.round(distance)}m`
+          });
+        }
+        // S2 mismatch but within 300m - log warning but allow (GPS drift tolerance)
+        console.warn(`[completeBooking] S2 cell mismatch but within distance tolerance (${Math.round(distance)}m). Provider: ${providerS2Precise}, Target: ${targetS2Precise}. Allowing completion.`);
       }
 
       if (distance > 300) {
@@ -3786,6 +3926,7 @@ class BookingService {
       }
 
       // Reset failures on success
+      await BookingService.resetPinFailures(booking, session);
       booking.statusHistory.push({
         status: booking.status,
         timestamp: new Date(),
@@ -3810,7 +3951,6 @@ class BookingService {
         activeCommissionRule
       );
 
-      const { SystemConfig } = require('../models/SystemSetting');
       let settings = await SystemConfig.findOne();
       if (!settings) {
         settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
@@ -3822,6 +3962,7 @@ class BookingService {
       const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
       const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
       const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
+      const splitEmergency = typeof splits.emergency === 'number' && !isNaN(splits.emergency) ? splits.emergency : 85;
 
       // Surcharge amounts on this booking
       const visiting = typeof booking.visitingCharge === 'number' && !isNaN(booking.visitingCharge) ? booking.visitingCharge : 0;
@@ -3829,6 +3970,7 @@ class BookingService {
       const traffic = typeof booking.trafficCharge === 'number' && !isNaN(booking.trafficCharge) ? booking.trafficCharge : 0;
       const night = typeof booking.nightCharge === 'number' && !isNaN(booking.nightCharge) ? booking.nightCharge : 0;
       const demand = typeof booking.demandSurge === 'number' && !isNaN(booking.demandSurge) ? booking.demandSurge : 0;
+      const emergency = typeof booking.emergencySurge === 'number' && !isNaN(booking.emergencySurge) ? booking.emergencySurge : 0;
       const custom = typeof booking.customCharges === 'number' && !isNaN(booking.customCharges) ? booking.customCharges : 0;
 
       // Provider splits
@@ -3837,15 +3979,17 @@ class BookingService {
       const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
       const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
       const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
+      const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
 
-      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2)) || 0;
-      const totalSurcharges = visiting + rain + traffic + night + demand + custom;
+      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provEmergencyShare).toFixed(2)) || 0;
+      const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom;
       const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
       booking.providerWorkProof = {
         ...booking.providerWorkProof,
         afterImages: afterImages,
-        completionLocation: { latitude: providerLat, longitude: providerLng }
+        completionLocation: { latitude: providerLat, longitude: providerLng },
+        completionNotes: completionNotes ? completionNotes.trim() : ''
       };
 
       booking.status = 'completed';
@@ -3865,7 +4009,7 @@ class BookingService {
       if (booking.paymentMethod === 'cash') {
         booking.payoutHoldUntil = null;
       } else {
-        fraudScore = getFraudScore(booking);
+        fraudScore = BookingService.getFraudScore(booking);
         holdPeriodHours = typeof settings?.commissionSettings?.payoutHoldHours === 'number' ? settings.commissionSettings.payoutHoldHours : 48;
         if (fraudScore >= 50) {
           holdPeriodHours = 168; // 7 days (168 hours)
@@ -3892,7 +4036,10 @@ class BookingService {
       // Atomic cross-document write moved from pre-save hook into the transactional session
       /* BACKUP COMMENT: Incrementing customer completed bookings count atomically under active session. */
       const User = mongoose.model('User');
-      await User.findByIdAndUpdate(booking.customer._id || booking.customer, { $inc: { totalBookings: 1 } }, { session });
+      const customerId = booking.customer?._id || booking.customer;
+      if (customerId) {
+        await User.findByIdAndUpdate(customerId, { $inc: { totalBookings: 1 } }, { session });
+      }
 
 
       // ------------------------------
@@ -3978,26 +4125,33 @@ class BookingService {
       // ------------------------------
       //  FIXED WALLET LOGIC (Updated for 48h hold)
       // ------------------------------
-      if (!provider.wallet) {
-        provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
-      }
-
       if (booking.paymentMethod === "cash") {
         // Cash Booking Commission Logic
-        if (provider.wallet.availableBalance < commission) {
-          await safeCommit(session);
+        const updatedProvider = await Provider.findOneAndUpdate(
+          { _id: providerId, 'wallet.availableBalance': { $gte: commission } },
+          {
+            $inc: { 'wallet.availableBalance': -commission, completedBookings: 1 },
+            $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+          },
+          { session, new: true }
+        );
+        if (!updatedProvider) {
+          await safeAbort(session);
           safeEnd(session);
           return res.status(400).json({
             success: false,
             message: "Insufficient wallet balance to cover commission for this cash booking. Please recharge your wallet."
           });
         }
-        // Immediately deduct commission
-        provider.wallet.availableBalance -= commission;
       } else {
-        // Online payment → DO NOT add to availableBalance yet.
-        // It will be added after 48h hold period expires.
-        // We only log the earning in ProviderEarning model with 'held' status.
+        await Provider.findByIdAndUpdate(
+          providerId,
+          {
+            $inc: { completedBookings: 1 },
+            $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+          },
+          { session }
+        );
       }
 
       // Notify provider about payout hold
@@ -4014,18 +4168,13 @@ class BookingService {
         } catch (err) { console.error("Error sending payout hold notification:", err); }
       }
 
-      provider.wallet.lastUpdated = new Date();
-      provider.completedBookings = (provider.completedBookings || 0) + 1;
-      provider.activeBooking = null;
-      await provider.save({ session });
-
       await safeCommit(session);
       safeEnd(session);
       emitBookingUpdate(booking._id, booking, 'completed');
 
       // Trigger Referral & Rewards System
       try {
-        const referralController = require('./Referral-controller');
+        const referralController = require('../controllers/Referral-controller');
         await referralController.triggerCustomerReferralReward(booking);
         if (booking.provider) {
           await referralController.triggerProviderReferralReward(booking.provider);
@@ -4036,7 +4185,7 @@ class BookingService {
 
       // Recalculate performance score and trust score dynamically after transaction commits successfully to avoid write conflicts
       try {
-        await recalculateProviderPerformance(providerId);
+        await BookingService.recalculateProviderPerformance(providerId);
       } catch (err) {
         console.error("Error recalculating provider performance after completeBooking commit:", err);
       }
@@ -4647,7 +4796,7 @@ class BookingService {
         total,
         stats,
         refundStats,
-        data: bookings
+        data: bookings.map(b => enrichBookingData(b))
       });
 
     } catch (error) {
@@ -4686,6 +4835,7 @@ class BookingService {
         .populate('complaint')
         .populate('commissionRule', 'name rate type')
         .populate('zoneId', 'name city status zoneLevel')
+        .select('+startPin +completionPin')
         .lean();
 
       if (!booking) {
@@ -4764,14 +4914,16 @@ class BookingService {
         $or: [{ booking: booking._id }, { bookingId: booking._id }]
       }).lean();
 
-      // Format the response
+      // Format the response — enrich the nested booking object so pricingBreakdown is on response.booking
+      const enrichedBooking = enrichBookingData({
+        ...booking,
+        adminEarning: booking.commissionAmount + (booking.companySurgeShare || 0),
+        providerWorkProof: booking.providerWorkProof || { beforeImages: [], afterImages: [] },
+        complaintProofs: booking.complaintProofs || []
+      }, transactions?.[0]);
+
       const response = {
-        booking: {
-          ...booking,
-          adminEarning: booking.commissionAmount + (booking.companySurgeShare || 0),
-          providerWorkProof: booking.providerWorkProof || { beforeImages: [], afterImages: [] },
-          complaintProofs: booking.complaintProofs || []
-        },
+        booking: enrichedBooking,
         customer: booking.customer,
         provider: booking.provider,
         services: formattedServices,
@@ -4845,9 +4997,11 @@ class BookingService {
           throw new Error('Booking has already been assigned to a provider');
         }
 
-        if (booking.status !== 'pending') {
-          throw new Error('Only pending bookings can be assigned');
+        // EMERGENCY BOOKING ENGINE UPGRADE
+        if (booking.status !== 'pending' && booking.status !== 'Waiting Admin Assignment') {
+          throw new Error('Only pending or waiting admin assignment bookings can be assigned');
         }
+        // END EMERGENCY BOOKING ENGINE UPGRADE
 
         const provider = session ? await Provider.findById(providerId).session(session) : await Provider.findById(providerId);
         if (!provider || !provider.approved || provider.isDeleted) {

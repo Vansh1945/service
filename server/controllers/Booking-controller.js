@@ -273,5 +273,39 @@ module.exports = {
   deleteBooking,
   deleteUserBooking,
   updateBookingDateTime,
-  downloadBookingReport
+  downloadBookingReport,
+  getPriceEstimate: async (req, res, next) => {
+    try {
+      const PricingService = require('../services/PricingService');
+      const { serviceId, quantity, couponCode, date, time, lat, lng, isEmergency, isInstant } = req.body;
+      
+      if (!serviceId) {
+        return res.status(400).json({ success: false, message: 'serviceId is required' });
+      }
+
+      const estimate = await PricingService.calculatePriceEstimate({
+        serviceId,
+        quantity,
+        couponCode,
+        date,
+        time,
+        lat,
+        lng,
+        isEmergency: !!isEmergency,
+        isInstant: !!isInstant,
+        userId: req.user?._id
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: estimate
+      });
+    } catch (error) {
+      global.logger.error(`[BookingController.getPriceEstimate] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
 };

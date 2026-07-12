@@ -34,6 +34,34 @@ const isChatVisible = (b) => {
   return true;
 };
 
+const getBookingTypeBadge = (bookingType) => {
+  const type = bookingType || 'scheduled';
+  let colorClass = '';
+  let label = '';
+  switch (type.toLowerCase()) {
+    case 'scheduled':
+      colorClass = 'bg-blue-50 text-blue-700 border-blue-200';
+      label = 'Scheduled';
+      break;
+    case 'instant':
+      colorClass = 'bg-green-50 text-green-700 border-green-200';
+      label = 'Instant';
+      break;
+    case 'emergency':
+      colorClass = 'bg-red-50 text-red-700 border-red-200';
+      label = 'Emergency';
+      break;
+    default:
+      colorClass = 'bg-blue-50 text-blue-700 border-blue-200';
+      label = 'Scheduled';
+  }
+  return (
+    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${colorClass}`}>
+      {label}
+    </span>
+  );
+};
+
 import { getBookingStatusCfg } from '../../components/ui/StatusConfig';
 const getStatusCfg = getBookingStatusCfg;
 
@@ -47,6 +75,7 @@ const canCancel = (b) => ['pending', 'accepted'].includes(b.status);
 const canReschedule = (b) => b.status === 'pending';
 
 const getStartPin = (booking) => {
+  if (booking.startPin) return booking.startPin;
   if (!booking.statusHistory) return null;
   for (const h of booking.statusHistory) {
     if (h.note) {
@@ -264,16 +293,19 @@ const ProviderCard = ({ provider, status, compact = false }) => {
 // ─── Payment Details ──────────────────────────────────────────────────────────
 
 const PaymentDetails = ({ booking }) => {
-  const mergedServicePrice = (booking.subtotal || 0) + (booking.demandSurge || 0);
-  const visitingCharge = booking.visitingCharge || 0;
-  const customCharges = booking.customCharges || 0;
-  const additional = (booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0);
+  const pb = booking.pricingBreakdown || {};
+  const hasPb = !!booking.pricingBreakdown;
 
-  const additionalBreakdown = [];
-  if (booking.rainCharge > 0) additionalBreakdown.push({ name: 'Rain Charge', amount: booking.rainCharge });
-  if (booking.trafficCharge > 0) additionalBreakdown.push({ name: 'Traffic Charge', amount: booking.trafficCharge });
-  if (booking.nightCharge > 0) additionalBreakdown.push({ name: 'Night Charge', amount: booking.nightCharge });
-  if (booking.platformFee > 0) additionalBreakdown.push({ name: 'Platform Fee', amount: booking.platformFee });
+  const servicePrice = hasPb ? pb.servicePrice : (booking.subtotal || 0);
+  const visitingCharge = hasPb ? pb.visitingCharges : (booking.visitingCharge || 0);
+  const emergencyCharge = hasPb ? pb.emergencyCharges : (booking.emergencySurge || 0);
+  const surgeCharge = hasPb ? pb.surgeCharges : ((booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0) + (booking.demandSurge || 0) + (booking.platformFee || 0));
+  const discount = hasPb ? pb.discount : (booking.totalDiscount || 0);
+  const grandTotal = hasPb ? pb.customerTotal : (booking.totalAmount || 0);
+  const walletUsed = hasPb ? pb.walletUsed : (booking.walletAmountUsed || booking.fullData?.walletAmountUsed || 0);
+  const refundAmount = booking.refundAmount || booking.cancellationProgress?.refundAmount || 0;
+  const cashRemaining = hasPb ? pb.cashRemaining : (booking.paymentMethod === 'cash' ? grandTotal : 0);
+  const onlinePaid = hasPb ? pb.onlinePaid : (booking.paymentMethod === 'online' || booking.paymentMethod === 'mixed' ? (grandTotal - walletUsed) : 0);
 
   return (
     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
@@ -303,71 +335,59 @@ const PaymentDetails = ({ booking }) => {
         </div>
         <div className="flex justify-between items-center animate-fadeIn">
           <span className="text-gray-500">Service Price</span>
-          <PriceDisplay amount={mergedServicePrice} type="default" />
+          <PriceDisplay amount={servicePrice} type="default" />
         </div>
-        {booking.totalDiscount > 0 && (
+        {discount > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500">Discount</span>
-            <PriceDisplay amount={booking.totalDiscount} type="discount" prefix="-" />
+            <span className="text-gray-500">Coupon Discount</span>
+            <PriceDisplay amount={discount} type="discount" prefix="-" />
           </div>
         )}
-        <div className="flex justify-between items-center animate-fadeIn">
-          <span className="text-gray-500">Visiting Charges</span>
-          <PriceDisplay amount={visitingCharge} type="green-bold" freeText="Free" />
-        </div>
-        {booking.platformFee > 0 && (
+        {visitingCharge > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
-              Platform Fee
-              <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
-                Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
-              </span>
-            </span>
-            <PriceDisplay amount={booking.platformFee} type="default" prefix="+" />
+            <span className="text-gray-500">Visiting Charges</span>
+            <PriceDisplay amount={visitingCharge} type="default" prefix="+" />
           </div>
         )}
-        {customCharges > 0 && (
+        {emergencyCharge > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500">Custom Charges</span>
-            <PriceDisplay amount={customCharges} type="charge" prefix="+" />
+            <span className="text-gray-500">Emergency Charge</span>
+            <PriceDisplay amount={emergencyCharge} type="charge" prefix="+" />
           </div>
         )}
-        {additional > 0 && (
+        {surgeCharge > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500">
-              Additional Charges
-            </span>
-            <PriceDisplay amount={additional} type="charge-semibold" prefix="+" />
+            <span className="text-gray-500">Surge Charges</span>
+            <PriceDisplay amount={surgeCharge} type="charge" prefix="+" />
           </div>
         )}
-        {booking.couponApplied?.isValid && (
-          <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500">Coupon</span>
-            <span className="text-blue-600 font-medium">{booking.couponApplied.code}</span>
-          </div>
-        )}
-        {booking.paymentStatus === 'refunded' && (
-          <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500">Refund Status</span>
-            <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3" /> Refunded</span>
-          </div>
-        )}
-        {booking.fullData?.walletAmountUsed > 0 && (
+        {walletUsed > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
             <span className="text-gray-500">Wallet Used</span>
-            <PriceDisplay amount={booking.fullData.walletAmountUsed} type="purple-bold" prefix="-" />
+            <PriceDisplay amount={walletUsed} type="purple-bold" prefix="-" />
           </div>
         )}
-        {booking.fullData?.onlineAmountPaid > 0 && (
+        {onlinePaid > 0 && (
           <div className="flex justify-between items-center animate-fadeIn">
-            <span className="text-gray-500">Paid Online</span>
-            <PriceDisplay amount={booking.fullData.onlineAmountPaid} type="blue-bold" />
+            <span className="text-gray-500">Online Paid</span>
+            <PriceDisplay amount={onlinePaid} type="default" />
+          </div>
+        )}
+        {cashRemaining > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Cash To Pay</span>
+            <PriceDisplay amount={cashRemaining} type="default" />
+          </div>
+        )}
+        {refundAmount > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Refund Amount</span>
+            <PriceDisplay amount={refundAmount} type="purple-bold" />
           </div>
         )}
         <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary text-base">
-          <span>Total Payable</span>
-          <PriceDisplay amount={booking.totalAmount || 0} type="default" />
+          <span>Grand Total</span>
+          <PriceDisplay amount={grandTotal || 0} type="default" />
         </div>
       </div>
 
@@ -478,7 +498,10 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
             <div>
               <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Booking Detail</p>
               <h2 className="text-lg font-bold text-secondary leading-tight">{booking.services?.[0]?.service?.title || 'Booking Details'}</h2>
-              <p className="text-[10px] font-medium text-gray-400 mt-1">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-medium text-gray-400">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</span>
+                {getBookingTypeBadge(booking.bookingType)}
+              </div>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-xl hover:bg-gray-100">
               <X className="w-5 h-5" />
@@ -740,6 +763,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 mt-2">
+              {getBookingTypeBadge(booking.bookingType)}
               <div className="flex items-center gap-1 text-xs text-gray-500">
                 <Calendar className="w-3.5 h-3.5" /> {formatDate(booking.date)}
               </div>

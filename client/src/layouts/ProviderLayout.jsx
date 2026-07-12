@@ -4,7 +4,8 @@ import {
     FiMenu, FiHome, FiDollarSign,
     FiMessageSquare, FiUser, FiChevronDown,
     FiLogOut, FiCheckCircle,
-    FiActivity, FiHeadphones, FiVolumeX, FiAward
+    FiActivity, FiHeadphones, FiVolumeX, FiAward,
+    FiCalendar
 } from 'react-icons/fi';
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
@@ -158,6 +159,7 @@ const ProviderLayout = () => {
     const allMenuItems = [
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" />, requireTest: false },
         { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-5 h-5" />, requireTest: true },
+        { name: 'Job Calendar', path: '/provider/calendar', icon: <FiCalendar className="w-5 h-5" />, requireTest: true },
         { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-5 h-5" />, requireTest: true },
         { name: 'Refer Partners', path: '/provider/refer-providers', icon: <FiAward className="w-5 h-5" />, requireTest: true },
         { name: 'Feedback Viewer', path: '/provider/feedbacks', icon: <FiMessageSquare className="w-5 h-5" />, requireTest: true },

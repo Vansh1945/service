@@ -221,30 +221,34 @@ const BookingConfirmation = () => {
     if (!bookingDetails) return { message: 'Loading...', color: 'text-gray-500', canPay: false };
 
     const isPaid = ['paid', 'escrow_hold'].includes(bookingDetails.paymentStatus);
+    const currentStatus = (bookingDetails.status || 'Pending').toLowerCase().replace(/[^a-z]/g, '');
 
-    switch (bookingDetails.status) {
+    // BOOKING STATUS STATE MACHINE UPGRADE
+    switch (currentStatus) {
       case 'pending':
+      case 'searchingprovider':
+      case 'offered':
+      case 'reassigned':
         return {
           message: 'Pending Provider Acceptance',
           color: 'text-accent',
           canPay: !isPaid,
           description: 'Complete payment to secure your booking.'
         };
+      case 'assigned':
       case 'accepted':
-        return {
-          message: 'Accepted by Provider',
-          color: 'text-primary',
-          canPay: !isPaid,
-          description: 'Provider has accepted your booking!'
-        };
       case 'confirmed':
+      case 'scheduled':
         return {
-          message: 'Booking Confirmed',
+          message: 'Booking Confirmed / Accepted',
           color: 'text-primary',
           canPay: !isPaid,
-          description: 'Your booking is confirmed.'
+          description: 'Provider has accepted/assigned to your booking!'
         };
-      case 'in-progress':
+      case 'ontheway':
+      case 'arrived':
+      case 'started':
+      case 'inprogress':
         return {
           message: 'Service In Progress',
           color: 'text-primary',
@@ -258,23 +262,20 @@ const BookingConfirmation = () => {
           canPay: false,
           description: 'Service completed successfully!'
         };
-      case 'scheduled':
-        return {
-          message: 'Booking Scheduled (Pay after Service)',
-          color: 'text-yellow-600',
-          canPay: !isPaid,
-          description: 'You can pay now online, or pay cash when the provider arrives.'
-        };
       case 'cancelled':
-        return { message: 'Booking Cancelled', color: 'text-red-500', canPay: false, description: 'This booking has been cancelled.' };
+      case 'rejected':
+      case 'expired':
+      case 'refunded':
+        return { message: 'Booking Cancelled / Refunded', color: 'text-red-500', canPay: false, description: 'This booking has been cancelled or refunded.' };
       default:
         return {
           message: bookingDetails.status || 'Unknown',
           color: 'text-gray-500',
-          canPay: !isPaid && !['cancelled', 'completed', 'in-progress'].includes(bookingDetails.status),
+          canPay: !isPaid && !['cancelled', 'completed', 'inprogress', 'started', 'ontheway', 'arrived', 'refunded', 'rejected', 'expired'].includes(currentStatus),
           description: ''
         };
     }
+    // END BOOKING STATUS STATE MACHINE UPGRADE
   };
 
   const handleWalletPayment = async () => {
@@ -484,9 +485,15 @@ const BookingConfirmation = () => {
   const serviceInfo = getServiceInfo();
   const statusInfo = getBookingStatusInfo();
   const quantity = bookingDetails.services?.[0]?.quantity || 1;
-  const subtotal = bookingDetails.subtotal || serviceInfo.basePrice * quantity;
-  const discount = bookingDetails.totalDiscount || 0;
-  const totalAmount = bookingDetails.totalAmount || subtotal - discount;
+  const pb = bookingDetails.pricingBreakdown || {};
+  const hasPb = !!bookingDetails.pricingBreakdown;
+
+  const servicePrice = hasPb ? pb.servicePrice : (bookingDetails.subtotal || serviceInfo.basePrice * quantity);
+  const visitingCharge = hasPb ? pb.visitingCharges : (bookingDetails.visitingCharge || 0);
+  const emergencyCharge = hasPb ? pb.emergencyCharges : (bookingDetails.emergencySurge || 0);
+  const surgeCharge = hasPb ? pb.surgeCharges : ((bookingDetails.rainCharge || 0) + (bookingDetails.trafficCharge || 0) + (bookingDetails.nightCharge || 0) + (bookingDetails.demandSurge || 0) + (bookingDetails.platformFee || 0));
+  const discount = hasPb ? pb.discount : (bookingDetails.totalDiscount || 0);
+  const totalAmount = hasPb ? pb.customerTotal : (bookingDetails.totalAmount || (servicePrice + visitingCharge + emergencyCharge + surgeCharge - discount));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -523,9 +530,8 @@ const BookingConfirmation = () => {
                     onError={(e) => e.target.src = 'https://placehold.co/400x400?text=No+Image'}
                   />
                   {(serviceInfo.serviceType && serviceInfo.serviceType !== 'standard') && (
-                    <span className={`absolute bottom-1 left-1 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${
-                      serviceInfo.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
-                    }`}>
+                    <span className={`absolute bottom-1 left-1 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${serviceInfo.serviceType === 'emergency' ? 'bg-red-500' : 'bg-purple-600'
+                      }`}>
                       {serviceInfo.serviceType}
                     </span>
                   )}
@@ -585,7 +591,7 @@ const BookingConfirmation = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="mt-2">
                     <div className="flex items-baseline gap-1.5">
                       {serviceInfo.discountPrice ? (
@@ -696,55 +702,37 @@ const BookingConfirmation = () => {
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Service Price ({quantity} item)</span>
-                    <PriceDisplay amount={subtotal + (bookingDetails.demandSurge || 0)} type="secondary" />
+                    <span className="text-gray-500">Service Price</span>
+                    <PriceDisplay amount={servicePrice} type="secondary" />
                   </div>
 
-                  {discount > 0 && (
-                    <>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Discount Applied</span>
-                        <PriceDisplay amount={discount} type="discount" prefix="-" />
-                      </div>
-                      <div className="flex justify-between text-xs pt-1 border-t border-gray-50">
-                        <span className="text-gray-600 font-semibold">Price after Discount</span>
-                        <PriceDisplay amount={subtotal + (bookingDetails.demandSurge || 0) - discount} type="bold-secondary" />
-                      </div>
-                    </>
-                  )}
-
-                   {bookingDetails.platformFee > 0 && (
+                  {visitingCharge > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
-                        Platform Fee
-                        <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
-                          Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
-                        </span>
-                      </span>
-                      <PriceDisplay amount={bookingDetails.platformFee} type="secondary" prefix="+" />
+                      <span className="text-gray-500">Visiting Charges</span>
+                      <PriceDisplay amount={visitingCharge} type="secondary" prefix="+" />
                     </div>
                   )}
 
-                  {((bookingDetails.rainCharge || 0) +
-                    (bookingDetails.trafficCharge || 0) +
-                    (bookingDetails.nightCharge || 0) +
-                    (bookingDetails.customCharges || 0)) > 0 && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Additional Service Charges</span>
-                        <PriceDisplay amount={
-                          (bookingDetails.rainCharge || 0) +
-                          (bookingDetails.trafficCharge || 0) +
-                          (bookingDetails.nightCharge || 0) +
-                          (bookingDetails.customCharges || 0)
-                        } type="charge" prefix="+" />
-                      </div>
-                    )}
+                  {emergencyCharge > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-red-655 font-semibold">Emergency Charges</span>
+                      <PriceDisplay amount={emergencyCharge} type="secondary" prefix="+" />
+                    </div>
+                  )}
 
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Visiting Charges</span>
-                    <PriceDisplay amount={bookingDetails.visitingCharge} type="green-bold" freeText="Free" />
-                  </div>
+                  {surgeCharge > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-505">Surge Charges</span>
+                      <PriceDisplay amount={surgeCharge} type="secondary" prefix="+" />
+                    </div>
+                  )}
+
+                  {discount > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Coupon Discount</span>
+                      <PriceDisplay amount={discount} type="discount" prefix="-" />
+                    </div>
+                  )}
 
                   <div className="border-t border-gray-100 pt-3 mt-1">
                     <div className="flex justify-between items-center">
@@ -795,8 +783,8 @@ const BookingConfirmation = () => {
                     {/* Wallet Payment */}
                     <div
                       className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'wallet'
-                          ? 'border-primary bg-primary/5 shadow-sm'
-                          : 'border-gray-100 hover:border-gray-200'
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 hover:border-gray-200'
                         }`}
                       onClick={() => setPaymentMethod('wallet')}
                     >
@@ -818,8 +806,8 @@ const BookingConfirmation = () => {
                     {/* Wallet + Online Mixed */}
                     <div
                       className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'mixed'
-                          ? 'border-primary bg-primary/5 shadow-sm'
-                          : 'border-gray-100 hover:border-gray-200'
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 hover:border-gray-200'
                         }`}
                       onClick={() => setPaymentMethod('mixed')}
                     >
@@ -978,7 +966,7 @@ const BookingConfirmation = () => {
                 <div className="space-y-2 pt-4 border-t border-gray-100">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Service Price</span>
-                    <PriceDisplay amount={subtotal} type="default" />
+                    <PriceDisplay amount={servicePrice} type="default" />
                   </div>
                   {discount > 0 && (
                     <>
@@ -988,13 +976,13 @@ const BookingConfirmation = () => {
                       </div>
                       <div className="flex justify-between text-sm pt-1 border-t border-gray-55">
                         <span className="text-gray-500 font-semibold">Price after Discount</span>
-                        <PriceDisplay amount={subtotal - discount} type="default" />
+                        <PriceDisplay amount={servicePrice - discount} type="default" />
                       </div>
                     </>
                   )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Visiting Charges</span>
-                    <PriceDisplay amount={bookingDetails.visitingCharge} type="green-bold" freeText="Free" />
+                    <PriceDisplay amount={hasPb ? pb.visitingCharges : bookingDetails.visitingCharge} type="green-bold" freeText="Free" />
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-50">
                     <span className="font-bold text-secondary">Total to Pay</span>

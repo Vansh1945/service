@@ -10,22 +10,23 @@ const {
   resendOTPSchema,
   firebaseLoginSchema
 } = require('../validation/auth.validation');
-const { throttleFailedLogins, throttleOtpRequests } = require('../middlewares/fraud-middleware');
+const { throttleFailedLogins, throttleOtpRequests, preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+const { authLimiter } = require('../middlewares/rate-limit');
 
 // ── Existing routes ───────────────────────────────────────────────────────
-router.post('/login', throttleFailedLogins, validateBody(loginSchema), authController.Login);
-router.post('/forgot-password', throttleOtpRequests, validateBody(forgotPasswordSchema), authController.forgotPassword);
-router.post('/verify-otp', validateBody(verifyOTPSchema), authController.verifyResetOTP);
-router.post('/reset-password', validateBody(resetPasswordSchema), authController.resetPassword);
-router.post('/resend-otp', throttleOtpRequests, validateBody(resendOTPSchema), authController.resendOTP);
+router.post('/login', authLimiter, preventDuplicateSubmissions(5), throttleFailedLogins, validateBody(loginSchema), authController.Login);
+router.post('/forgot-password', authLimiter, preventDuplicateSubmissions(5), throttleOtpRequests, validateBody(forgotPasswordSchema), authController.forgotPassword);
+router.post('/verify-otp', authLimiter, preventDuplicateSubmissions(5), validateBody(verifyOTPSchema), authController.verifyResetOTP);
+router.post('/reset-password', authLimiter, preventDuplicateSubmissions(5), validateBody(resetPasswordSchema), authController.resetPassword);
+router.post('/resend-otp', authLimiter, preventDuplicateSubmissions(5), throttleOtpRequests, validateBody(resendOTPSchema), authController.resendOTP);
 
 // ── Firebase / Social login ───────────────────────────────────────────────
 // Body: { firebaseToken: string, role: 'customer'|'provider', deviceId?: string }
-router.post('/firebase-login', validateBody(firebaseLoginSchema), authController.firebaseLogin);
+router.post('/firebase-login', authLimiter, preventDuplicateSubmissions(5), validateBody(firebaseLoginSchema), authController.firebaseLogin);
 
 // ── Refresh token rotation ────────────────────────────────────────────────
 // Body: { refreshToken: string }
-router.post('/refresh-token', authController.refreshAccessToken);
+router.post('/refresh-token', authLimiter, authController.refreshAccessToken);
 
 // ── Secure logout ─────────────────────────────────────────────────────────
 // Body: { refreshToken: string, allDevices?: boolean }

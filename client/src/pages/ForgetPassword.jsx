@@ -244,7 +244,14 @@ const ForgotPassword = () => {
       toast.success('Password reset successfully!');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to reset';
+      let errorMsg = err.response?.data?.message || err.message || 'Failed to reset';
+      if (err.response?.data?.errors) {
+        const errorsObj = err.response.data.errors;
+        const messages = Object.values(errorsObj).flat();
+        if (messages.length > 0) {
+          errorMsg = messages.join('. ');
+        }
+      }
       toast.error(errorMsg);
     } finally {
       setLoading(false);

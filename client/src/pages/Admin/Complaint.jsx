@@ -885,7 +885,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                         <button
                           onClick={() => setConfirmAction('reject')}
                           disabled={!resolutionNotes.trim()}
-                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-650 text-white' : 'bg-white hover:bg-gray-50 text-red-650 border-red-200'}`}
+                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Reject Complaint
                         </button>
@@ -951,7 +951,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                         <button
                           onClick={() => setConfirmAction('reject')}
                           disabled={!resolutionNotes.trim()}
-                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-650 text-white' : 'bg-white hover:bg-gray-50 text-red-650 border-red-200'}`}
+                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Reject
                         </button>
@@ -972,7 +972,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                         <button
                           onClick={() => setConfirmAction('close')}
                           disabled={!resolutionNotes.trim()}
-                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'close' ? 'bg-red-650 text-white' : 'bg-white hover:bg-gray-50 text-red-650 border-red-200'}`}
+                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'close' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Close
                         </button>

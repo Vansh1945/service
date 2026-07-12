@@ -12,10 +12,12 @@ const { requestBulkWithdrawalSchema } = require('../validation/payment.validatio
 router.post('/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 
 // Provider routes
+const { paymentLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
 
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
 router.get('/stats/weekly-monthly', providerAuthMiddleware, paymentController.getWeeklyMonthlyStats);
-router.post('/withdraw', providerAuthMiddleware, validateBody(requestBulkWithdrawalSchema), paymentController.requestBulkWithdrawal);
+router.post('/withdraw', providerAuthMiddleware, paymentLimiter, preventDuplicateSubmissions(5), validateBody(requestBulkWithdrawalSchema), paymentController.requestBulkWithdrawal);
 
 router.get("/earnings-report", providerAuthMiddleware, paymentController.downloadEarningsReport);
 router.get("/withdrawal-report", providerAuthMiddleware, paymentController.downloadWithdrawalReport);

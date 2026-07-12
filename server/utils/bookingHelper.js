@@ -60,227 +60,235 @@ const getBookingProgress = (booking) => {
 const getBookingTimeline = (booking, payoutStatus = '') => {
   if (!booking) return [];
 
-  const timeline = [];
   const statusHistory = booking.statusHistory || [];
 
-  const getStatusTime = (status) => {
-    const history = [...statusHistory].reverse().find(h => h.status === status);
+  const getStatusTime = (statusName) => {
+    const normalize = (s) => s?.toLowerCase().replace(/[^a-z]/g, '') || '';
+    const target = normalize(statusName);
+    const history = [...statusHistory].reverse().find(h => normalize(h.status) === target);
     return history ? history.timestamp : null;
   };
 
-  // 1. Booking Requested
-  timeline.push({
-    title: "Booking Requested",
+  const getOTPVerifiedTime = () => {
+    const history = [...statusHistory].find(h => h.note && h.note.includes('Verification successful'));
+    return history ? history.timestamp : null;
+  };
+
+  const steps = [];
+
+  // 1. Booking Created
+  steps.push({
+    title: "Booking Created",
     completed: true,
     time: booking.createdAt,
     status: 'completed'
   });
 
-  // 2. Payment Confirmed
-  const isPaid = booking.paymentStatus === "paid" || booking.paymentStatus === "escrow_hold" || booking.confirmedBooking === true;
-  timeline.push({
-    title: "Payment Confirmed",
-    completed: isPaid,
-    time: isPaid ? (booking.paymentDate || booking.updatedAt) : null,
-    status: isPaid ? 'completed' : 'pending'
-  });
-
-  // 3. Provider Assigned
+  // 2. Provider Assigned
   const isAssigned = !!booking.provider;
-  timeline.push({
+  steps.push({
     title: isAssigned ? `Provider Assigned: ${booking.provider?.name || 'Assigned'}` : "Provider Assigned",
     completed: isAssigned,
-    time: isAssigned ? (getStatusTime('scheduled') || getStatusTime('assigned') || getStatusTime('accepted') || booking.createdAt) : null,
+    time: isAssigned ? (getStatusTime('assigned') || getStatusTime('scheduled') || booking.updatedAt) : null,
     status: isAssigned ? 'completed' : 'pending'
   });
 
-  // 4. Provider Accepted
-  const isAccepted = ['accepted', 'scheduled', 'in-progress', 'completed'].includes(booking.status);
-  timeline.push({
-    title: "Provider Accepted Booking",
+  // BOOKING STATUS STATE MACHINE UPGRADE
+  const bStatus = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
+
+  // 3. Provider Accepted
+  const isAccepted = ['accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'].includes(bStatus);
+  steps.push({
+    title: "Provider Accepted",
     completed: isAccepted,
     time: isAccepted ? getStatusTime('accepted') : null,
     status: isAccepted ? 'completed' : 'pending'
   });
 
-  // 5. Provider On The Way (status === 'accepted')
-  const isOnTheWay = booking.status === 'accepted';
-  const hasPassedOnTheWay = ['in-progress', 'completed'].includes(booking.status);
-  timeline.push({
-    title: "Provider is on the way",
-    completed: isOnTheWay || hasPassedOnTheWay,
-    time: (isOnTheWay || hasPassedOnTheWay) ? getStatusTime('accepted') : null,
-    status: isOnTheWay ? 'current' : (hasPassedOnTheWay ? 'completed' : 'pending')
+  // 4. Provider Arrived
+  const isArrived = ['arrived', 'started', 'inprogress', 'completed'].includes(bStatus);
+  steps.push({
+    title: "Provider Arrived",
+    completed: isArrived,
+    time: isArrived ? getStatusTime('arrived') : null,
+    status: isArrived ? 'completed' : 'pending'
+  });
+
+  // 5. OTP Verified
+  const isOtpVerified = ['started', 'inprogress', 'completed'].includes(bStatus) || !!getOTPVerifiedTime();
+  steps.push({
+    title: "OTP Verified",
+    completed: isOtpVerified,
+    time: isOtpVerified ? (getOTPVerifiedTime() || getStatusTime('started') || getStatusTime('inprogress')) : null,
+    status: isOtpVerified ? 'completed' : 'pending'
   });
 
   // 6. Work Started
-  const isStarted = booking.status === 'in-progress' || booking.status === 'completed';
-  timeline.push({
+  const isStarted = ['started', 'inprogress', 'completed'].includes(bStatus);
+  steps.push({
     title: "Work Started",
     completed: isStarted,
-    time: booking.serviceStartedAt || getStatusTime('in-progress'),
-    status: booking.status === 'in-progress' ? 'current' : (isStarted ? 'completed' : 'pending')
+    time: booking.serviceStartedAt || getStatusTime('started') || getStatusTime('inprogress'),
+    status: isStarted ? 'completed' : 'pending'
   });
 
-  // 7. Service Completed
-  const isCompleted = booking.status === 'completed';
-  timeline.push({
-    title: "Service Completed Successfully",
+  // 7. Images Uploaded
+  const hasImages = !!((booking.providerWorkProof?.beforeImages?.length > 0) || (booking.providerWorkProof?.afterImages?.length > 0));
+  steps.push({
+    title: "Images Uploaded",
+    completed: hasImages,
+    time: hasImages ? (booking.providerWorkProof?.beforeImages?.[0]?.uploadedAt || booking.providerWorkProof?.afterImages?.[0]?.uploadedAt || booking.serviceStartedAt) : null,
+    status: hasImages ? 'completed' : 'pending'
+  });
+
+  // 8. Work Completed
+  const isCompleted = bStatus === 'completed';
+  steps.push({
+    title: "Work Completed",
     completed: isCompleted,
     time: booking.serviceCompletedAt || getStatusTime('completed'),
     status: isCompleted ? 'completed' : 'pending'
   });
 
-  // 8. Payout Hold Period
-  const isHold = payoutStatus && (payoutStatus.includes('Hold') || payoutStatus.includes('Review'));
-  if (isHold || (isCompleted && booking.payoutHoldUntil)) {
-    let holdText = "Service under review protection";
-    if (booking.payoutHoldUntil && (booking.completedAt || booking.updatedAt)) {
-      const completedTime = new Date(booking.completedAt || booking.updatedAt);
-      const diffHrs = Math.round((new Date(booking.payoutHoldUntil) - completedTime) / (1000 * 60 * 60));
-      if (diffHrs > 0) {
-        holdText = `Service under ${diffHrs}h review protection`;
-      }
-    }
-    timeline.push({
-      title: holdText,
-      completed: isCompleted && !isHold,
-      time: booking.payoutHoldUntil,
-      status: isHold ? 'current' : (isCompleted ? 'completed' : 'pending')
-    });
-  }
+  // 9. Payment Completed
+  const isPaid = ['paid', 'escrow_hold'].includes(booking.paymentStatus);
+  steps.push({
+    title: "Payment Completed",
+    completed: isPaid,
+    time: isPaid ? (booking.paymentDate || booking.updatedAt) : null,
+    status: isPaid ? 'completed' : 'pending'
+  });
 
-  // 9. Dispute Raised
-  const isDisputed = booking.disputeRaised === true || (booking.disputeStatus && booking.disputeStatus !== 'none');
-  if (isDisputed) {
-    timeline.push({
-      title: "Complaint / Dispute Under Review",
-      completed: booking.disputeStatus === 'resolved',
-      time: booking.updatedAt,
-      status: booking.disputeStatus === 'resolved' ? 'completed' : 'error'
-    });
-  }
+  // 10. Commission Calculated
+  steps.push({
+    title: "Commission Calculated",
+    completed: isCompleted,
+    time: isCompleted ? (booking.serviceCompletedAt || getStatusTime('completed')) : null,
+    status: isCompleted ? 'completed' : 'pending'
+  });
 
-  // 10. Cancelled
-  if (booking.status === 'cancelled') {
+  // 11. Provider Earnings Released
+  const isReleased = payoutStatus === 'Released' || payoutStatus === 'paid' || (isCompleted && !booking.payoutHoldUntil);
+  steps.push({
+    title: "Provider Earnings Released",
+    completed: isReleased,
+    time: isReleased ? (booking.payoutHoldUntil || booking.serviceCompletedAt) : null,
+    status: isReleased ? 'completed' : 'pending'
+  });
+
+  // If booking is cancelled, append Cancellation status
+  if (['cancelled', 'refunded'].includes(bStatus)) {
     const isCancelledByAdmin = booking.cancelledBy === 'admin';
-    timeline.push({
+    steps.push({
       title: isCancelledByAdmin ? "Booking Cancelled By Support Team" : "Booking Cancelled",
       completed: true,
       time: booking.cancelledAt || booking.cancellationProgress?.cancelledAt || booking.updatedAt,
       status: 'error',
       note: isCancelledByAdmin
-        ? `Reason: ${booking.cancellationReason || 'N/A'}${booking.complaintId ? '\nComplaint: ' + (booking.complaintId.complaintId || booking.complaintId) : ''}`
+        // END BOOKING STATUS STATE MACHINE UPGRADE
+        ? `Reason: ${booking.cancellationReason || 'N/A'}`
         : (booking.cancellationProgress?.reason || 'N/A')
     });
   }
 
-  // 11. Parse Custom History entries for Security Events
-  const customSteps = [];
-  let hasAddedStartVerification = false;
-  let hasAddedCompletionVerification = false;
+  return steps;
+};
 
-  statusHistory.forEach(h => {
-    if (!h.note) return;
-    const time = h.timestamp || booking.updatedAt;
+/**
+ * Enriches a booking object with the standardized pricingBreakdown and defaults bookingType to scheduled.
+ * Supports both Mongoose documents and plain JavaScript objects.
+ * @param {Object} booking - The booking document or plain object
+ * @param {Object} transaction - Optional active payment transaction to extract mixed payment splits
+ * @returns {Object} - Enriched booking object
+ */
+const enrichBookingData = (booking, transaction = null) => {
+  if (!booking) return booking;
 
-    if (h.note.includes('START_PIN:')) {
-      customSteps.push({
-        title: "Start PIN generated",
-        completed: true,
-        time,
-        status: 'completed'
-      });
-      customSteps.push({
-        title: "Completion PIN generated",
-        completed: true,
-        time,
-        status: 'completed'
-      });
-    }
+  // Convert mongoose doc to plain object if possible, to avoid write restrictions on read-only fields
+  const b = typeof booking.toObject === 'function' ? booking.toObject() : booking;
 
-    if (h.note.includes('Verification successful')) {
-      const isStart = h.status === 'accepted' || h.note.includes('Service started') || h.note.includes('Work proof submitted') || h.note.includes('start');
-      if (isStart) {
-        if (!hasAddedStartVerification) {
-          customSteps.push({
-            title: "Service start verified",
-            completed: true,
-            time,
-            status: 'completed'
-          });
-          if (booking.providerWorkProof?.startLocation) {
-            customSteps.push({
-              title: "Geo verified",
-              completed: true,
-              time,
-              status: 'completed'
-            });
-          }
-          hasAddedStartVerification = true;
-        }
+  // Calculate provider shares for lean queries
+  const split = b.surgeSplitSettings || {};
+  const visitingSplit = typeof split.visiting === 'number' ? split.visiting : 0;
+  const rainSplit = typeof split.rain === 'number' ? split.rain : 0;
+  const trafficSplit = typeof split.traffic === 'number' ? split.traffic : 0;
+  const nightSplit = typeof split.night === 'number' ? split.night : 0;
+  const demandSplit = typeof split.demand === 'number' ? split.demand : 0;
+  const emergencySplit = typeof split.emergency === 'number' ? split.emergency : 0;
+
+  b.providerVisitingShare = parseFloat(((b.visitingCharge || 0) * (visitingSplit / 100)).toFixed(2)) || 0;
+  b.providerRainShare = parseFloat(((b.rainCharge || 0) * (rainSplit / 100)).toFixed(2)) || 0;
+  b.providerTrafficShare = parseFloat(((b.trafficCharge || 0) * (trafficSplit / 100)).toFixed(2)) || 0;
+  b.providerNightShare = parseFloat(((b.nightCharge || 0) * (nightSplit / 100)).toFixed(2)) || 0;
+  b.providerDemandShare = parseFloat(((b.demandSurge || 0) * (demandSplit / 100)).toFixed(2)) || 0;
+  b.providerEmergencyShare = parseFloat(((b.emergencySurge || 0) * (emergencySplit / 100)).toFixed(2)) || 0;
+
+  const servicePrice = b.subtotal || 0;
+  const visitingCharges = b.visitingCharge || 0;
+  const emergencyCharges = b.emergencySurge || 0;
+  const surgeCharges = (b.rainCharge || 0) +
+    (b.trafficCharge || 0) +
+    (b.nightCharge || 0) +
+    (b.demandSurge || 0) +
+    (b.customCharges || 0) +
+    (b.platformFee || 0);
+  const discount = b.totalDiscount || 0;
+  const baseForComm = Math.max(0, servicePrice - discount);
+  const platformCommission = b.commissionAmount || parseFloat(((baseForComm * 10) / 100).toFixed(2));
+  const providerEarnings = b.providerEarnings || parseFloat((baseForComm - platformCommission + (b.providerEmergencyShare || 0) + (b.providerVisitingShare || 0) + (b.providerRainShare || 0) + (b.providerTrafficShare || 0) + (b.providerNightShare || 0) + (b.providerDemandShare || 0)).toFixed(2));
+  const platformEarnings = parseFloat((platformCommission + (b.companySurgeShare || 0)).toFixed(2));
+  const customerTotal = b.totalAmount || 0;
+
+  let walletUsed = b.walletUsed || 0;
+  let onlinePaid = b.onlinePaid || 0;
+  let cashToPay = b.cashToPay || 0;
+
+  if (!b.walletUsed && !b.onlinePaid && !b.cashToPay) {
+    if (b.paymentMethod === 'cash') {
+      cashToPay = customerTotal;
+    } else if (b.paymentMethod === 'wallet') {
+      walletUsed = customerTotal;
+    } else if (b.paymentMethod === 'online') {
+      onlinePaid = customerTotal;
+    } else if (b.paymentMethod === 'mixed') {
+      if (transaction) {
+        const match = transaction.description?.match(/Wallet \(₹([\d.]+)\)/);
+        walletUsed = match ? parseFloat(match[1]) : 0;
+        onlinePaid = parseFloat((customerTotal - walletUsed).toFixed(2));
       } else {
-        if (!hasAddedCompletionVerification) {
-          customSteps.push({
-            title: "Service completion verified",
-            completed: true,
-            time,
-            status: 'completed'
-          });
-          if (booking.providerWorkProof?.completionLocation) {
-            customSteps.push({
-              title: "Geo verified",
-              completed: true,
-              time,
-              status: 'completed'
-            });
-          }
-          hasAddedCompletionVerification = true;
-        }
+        cashToPay = 0;
+        onlinePaid = customerTotal;
+        walletUsed = 0;
       }
     }
-
-    if (h.note.includes('Failed verification attempt')) {
-      const isStart = h.note.includes('START_PIN');
-      customSteps.push({
-        title: `Failed PIN attempt (${isStart ? 'Start' : 'Completion'})`,
-        completed: true,
-        time,
-        status: 'error'
-      });
-    }
-
-    if (h.note.includes('FRAUD_SCORE:') || h.note.includes('[SUSPICIOUS_BOOKING]')) {
-      customSteps.push({
-        title: "Fraud warning generated",
-        completed: true,
-        time,
-        status: 'error'
-      });
-    }
-  });
-
-  // Separate completed/error steps and pending/current steps
-  const allSteps = [...timeline, ...customSteps];
-  const completedSteps = allSteps.filter(step => step.completed === true || step.status === 'completed' || step.status === 'error');
-
-  // Sort completed/error steps chronologically by timestamp
-  completedSteps.sort((a, b) => {
-    const timeA = a.time ? new Date(a.time).getTime() : 0;
-    const timeB = b.time ? new Date(b.time).getTime() : 0;
-    return timeA - timeB;
-  });
-
-  if (booking.status === 'cancelled') {
-    return completedSteps;
   }
 
-  const pendingSteps = allSteps.filter(step => !completedSteps.includes(step));
-  return [...completedSteps, ...pendingSteps];
+  b.pricingBreakdown = {
+    servicePrice,
+    visitingCharges,
+    emergencyCharges,
+    surgeCharges,
+    discount,
+    walletUsed,
+    platformCommission,
+    providerEarnings,
+    platformEarnings,
+    customerTotal,
+    cashRemaining: cashToPay,
+    onlinePaid,
+    finalAmount: customerTotal
+  };
+
+  if (!b.bookingType) {
+    b.bookingType = 'scheduled';
+  }
+
+  return b;
 };
 
 module.exports = {
   getBookingProgress,
-  getBookingTimeline
+  getBookingTimeline,
+  enrichBookingData
 };
 

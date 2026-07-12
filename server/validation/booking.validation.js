@@ -31,13 +31,13 @@ const createBookingSchema = z.object({
   date: z.string().refine((val) => {
     const bookingDate = new Date(val);
     if (isNaN(bookingDate.getTime())) return false;
-    
+
     // Create Date objects represented in local timezone for comparison
     const bookingDateLocal = new Date(bookingDate.getUTCFullYear(), bookingDate.getUTCMonth(), bookingDate.getUTCDate());
     const todayLocal = new Date();
     todayLocal.setDate(todayLocal.getDate() - 1);
     todayLocal.setHours(0, 0, 0, 0);
-    
+
     return bookingDateLocal >= todayLocal;
   }, {
     message: "Booking date must be today or in the future"
@@ -49,7 +49,21 @@ const createBookingSchema = z.object({
   quantity: z.number().int().positive("Quantity must be greater than 0").optional(),
   paymentMethod: z.enum(['online', 'cash', 'wallet', 'mixed'], {
     errorMap: () => ({ message: "Payment method must be either 'online', 'cash', 'wallet' or 'mixed'" })
-  })
+  }),
+  bookingType: z.enum(['scheduled', 'instant', 'emergency']).optional(),
+  estimatedDuration: z.number().min(0).optional(),
+  travelBufferMinutes: z.number().min(0).optional(),
+  expectedStartTime: z.union([z.string(), z.date()]).optional(),
+  expectedEndTime: z.union([z.string(), z.date()]).optional(),
+  providerAcceptanceStatus: z.enum(['pending', 'accepted', 'rejected']).nullable().optional(),
+  reassignmentReason: z.string().optional(),
+  isEmergency: z.boolean().optional(),
+  isInstant: z.boolean().optional(),
+  surgeCharge: z.number().min(0).optional(),
+  providerBonus: z.number().min(0).optional(),
+  bookingPriority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  providerResponseDeadline: z.union([z.string(), z.date()]).optional(),
+  trustedProviderOnly: z.boolean().optional()
 });
 
 const confirmBookingSchema = z.object({
@@ -68,24 +82,60 @@ const updateBookingPaymentSchema = z.object({
 });
 
 const validateBookingTransition = (currentStatus, targetStatus) => {
-  if (currentStatus === targetStatus) return true;
-  const transitions = {
-    'pending': ['accepted', 'rejected', 'cancelled', 'confirmed', 'scheduled', 'assigned'],
-    'confirmed': ['pending', 'scheduled', 'assigned', 'accepted', 'completed', 'cancelled'],
-    'scheduled': ['assigned', 'cancelled', 'rescheduled', 'accepted', 'pending'],
-    'assigned': ['accepted', 'rejected', 'cancelled', 'arrived', 'arriving', 'started', 'in-progress'],
-    'accepted': ['arriving', 'arrived', 'cancelled', 'rejected', 'started', 'in-progress'],
-    'arriving': ['arrived', 'cancelled'],
-    'arrived': ['started', 'in-progress', 'cancelled'],
-    'started': ['in-progress', 'in_progress', 'completed', 'cancelled'],
-    'in-progress': ['completed', 'cancelled'],
-    'in_progress': ['completed', 'cancelled'],
-    'completed': [],
-    'cancelled': []
+  const normalize = (status) => {
+    if (!status) return 'Pending';
+    const statusMap = {
+      'pending': 'Pending',
+      'searchingprovider': 'SearchingProvider',
+      'offered': 'Offered',
+      'assigned': 'Assigned',
+      'accepted': 'Accepted',
+      'ontheway': 'OnTheWay',
+      'arrived': 'Arrived',
+      'started': 'Started',
+      'inprogress': 'InProgress',
+      'in-progress': 'InProgress',
+      'in_progress': 'InProgress',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled',
+      'rejected': 'Rejected',
+      'expired': 'Expired',
+      'reassigned': 'Reassigned',
+      'refunded': 'Refunded',
+      'waiting admin assignment': 'Reassigned',
+      'confirmed': 'Accepted',
+      'scheduled': 'Accepted',
+      'no-show': 'Cancelled'
+    };
+    const cleanKey = status.toLowerCase().replace(/[^a-z]/g, '');
+    return statusMap[cleanKey] || statusMap[status.toLowerCase()] || status;
   };
 
-  const allowed = transitions[currentStatus || 'pending'] || [];
-  return allowed.includes(targetStatus);
+  const curr = normalize(currentStatus);
+  const tgt = normalize(targetStatus);
+
+  if (curr === tgt) return true;
+
+  const transitions = {
+    'Pending': ['SearchingProvider', 'Cancelled', 'Assigned', 'Accepted'],
+    'SearchingProvider': ['Offered', 'Cancelled', 'Expired', 'Reassigned', 'Assigned', 'Accepted'],
+    'Offered': ['Assigned', 'Accepted', 'Rejected', 'Expired', 'Reassigned', 'Cancelled'],
+    'Assigned': ['Accepted', 'Rejected', 'Cancelled', 'Reassigned'],
+    'Accepted': ['OnTheWay', 'Cancelled', 'Started', 'InProgress', 'Completed'],
+    'OnTheWay': ['Arrived', 'Cancelled', 'Started'],
+    'Arrived': ['Started', 'Cancelled'],
+    'Started': ['InProgress', 'Completed', 'Cancelled'],
+    'InProgress': ['Completed', 'Cancelled'],
+    'Completed': ['Refunded'],
+    'Cancelled': ['Refunded'],
+    'Rejected': ['Reassigned', 'SearchingProvider', 'Cancelled', 'Pending'],
+    'Expired': ['Reassigned', 'SearchingProvider', 'Cancelled', 'Pending'],
+    'Reassigned': ['SearchingProvider', 'Offered', 'Assigned', 'Cancelled', 'Pending'],
+    'Refunded': []
+  };
+
+  const allowed = transitions[curr] || [];
+  return allowed.includes(tgt);
 };
 
 module.exports = {

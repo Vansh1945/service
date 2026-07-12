@@ -167,12 +167,35 @@ const SurgeManagement = () => {
     }));
   };
 
+  const handleEmergencySurgeChargeChange = (value) => {
+    setSystemSettings(prev => ({
+      ...prev,
+      bookingSettings: {
+        ...prev?.bookingSettings,
+        emergencySurgeCharge: Number(value)
+      }
+    }));
+  };
+
+  const handleChargeVisitingOnEmergencyToggle = (checked) => {
+    setSystemSettings(prev => ({
+      ...prev,
+      bookingSettings: {
+        ...prev?.bookingSettings,
+        chargeVisitingOnEmergency: checked
+      }
+    }));
+  };
+
   const saveSplitSettings = async () => {
     try {
       setSavingSplits(true);
       const formData = new FormData();
       formData.append('companyName', systemSettings.companyName || 'Raj Electrical Services');
       formData.append('surgeSplitSettings', JSON.stringify(systemSettings.surgeSplitSettings));
+      if (systemSettings.bookingSettings) {
+        formData.append('bookingSettings', JSON.stringify(systemSettings.bookingSettings));
+      }
 
       const response = await SystemService.updateSystemSetting(formData);
       if (response.data?.success) {
@@ -709,7 +732,39 @@ const SurgeManagement = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
+            {/* Flat Emergency Charge Setting */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100 max-w-sm space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Emergency Surcharge Flat Rate (₹)</label>
+                <div className="relative col-span-1">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings?.emergencySurgeCharge ?? 0}
+                    onChange={(e) => handleEmergencySurgeChargeChange(e.target.value)}
+                    min="0"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-205 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5 leading-normal">Flat rate surcharge added to emergency bookings by default.</p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200/50">
+                <div>
+                  <label htmlFor="chargeVisitingOnEmergency" className="block text-xs font-bold text-gray-700 uppercase cursor-pointer select-none">Charge Visiting Fee</label>
+                  <p className="text-[9px] text-gray-400 mt-0.5">Apply standard visiting charges on emergency bookings.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  id="chargeVisitingOnEmergency"
+                  checked={systemSettings.bookingSettings?.chargeVisitingOnEmergency ?? false}
+                  onChange={(e) => handleChargeVisitingOnEmergencyToggle(e.target.checked)}
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Visiting Share (%)</label>
                 <div className="relative">
@@ -773,6 +828,20 @@ const SurgeManagement = () => {
                     type="number"
                     value={systemSettings.surgeSplitSettings?.demand ?? 50}
                     onChange={(e) => handleSplitChange('demand', e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Emergency Share (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={systemSettings.surgeSplitSettings?.emergency ?? 85}
+                    onChange={(e) => handleSplitChange('emergency', e.target.value)}
                     min="0"
                     max="100"
                     className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"

@@ -32,9 +32,14 @@ const requireCustomerOrProvider = roleMiddleware(['customer', 'provider']);
 const requireAdmin = roleMiddleware(['admin']);
 
 // Customer & Provider routes
+const { feedbackLimiter } = require("../middlewares/rate-limit");
+const { preventDuplicateSubmissions } = require("../middlewares/fraud-middleware");
+
 router.post(
   "/",
   sharedAuthMiddleware,
+  feedbackLimiter,
+  preventDuplicateSubmissions(5),
   uploadComplaintImage.array("images", 5),
   validateBody(submitComplaintSchema),
   submitComplaint
@@ -43,12 +48,14 @@ router.post(
 // Shared routes ( Customer and Provider )
 router.get("/my-complaints", sharedAuthMiddleware, getMyComplaints);
 router.get("/:id", sharedAuthMiddleware, getComplaint);
-router.put("/:id/reopen", sharedAuthMiddleware, validateBody(reopenComplaintSchema), reopenComplaint);
+router.put("/:id/reopen", sharedAuthMiddleware, feedbackLimiter, preventDuplicateSubmissions(5), validateBody(reopenComplaintSchema), reopenComplaint);
 
 // Reply route (Admin and Provider)
 router.post(
   "/:id/reply",
   sharedAuthMiddleware,
+  feedbackLimiter,
+  preventDuplicateSubmissions(5),
   uploadComplaintImage.array("images", 5),
   validateBody(replyToComplaintSchema),
   replyToComplaint

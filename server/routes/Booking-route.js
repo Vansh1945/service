@@ -15,21 +15,25 @@ const { roleMiddleware } = require('../middlewares/role-middleware');
 const requireCustomer = roleMiddleware(['customer']);
 const requireProvider = roleMiddleware(['provider']);
 const requireAdmin = roleMiddleware(['admin']);
-const { bookingLimiter } = require('../middlewares/rate-limit');
+
 
 // USER ROUTES
-router.post('/', userAuthMiddleware, requireCustomer, bookingLimiter, validateBody(createBookingSchema), bookingController.createBooking);
-router.post('/confirm', userAuthMiddleware, requireCustomer, validateBody(confirmBookingSchema), bookingController.confirmBooking);
+const { bookingLimiter, bookingCancelLimiter, providerActionLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+
+router.post('/', userAuthMiddleware, requireCustomer, bookingLimiter, preventDuplicateSubmissions(5), validateBody(createBookingSchema), bookingController.createBooking);
+router.post('/confirm', userAuthMiddleware, requireCustomer, bookingLimiter, preventDuplicateSubmissions(5), validateBody(confirmBookingSchema), bookingController.confirmBooking);
+router.post('/estimate', userAuthMiddleware, requireCustomer, bookingController.getPriceEstimate);
 router.patch('/:id/status', userAuthMiddleware, requireCustomer, validateBody(updateBookingStatusSchema), bookingController.updateBookingStatus);
 router.get('/user', userAuthMiddleware, requireCustomer, bookingController.getUserBookings);
 router.get('/customer', userAuthMiddleware, requireCustomer, bookingController.getCustomerBookings);
 router.patch('/:id/payment', userAuthMiddleware, requireCustomer, validateBody(updateBookingPaymentSchema), bookingController.updateBookingPayment);
 
-router.post('/pay/:id', userAuthMiddleware, requireCustomer, bookingController.payBooking);
+router.post('/pay/:id', userAuthMiddleware, requireCustomer, bookingLimiter, preventDuplicateSubmissions(5), bookingController.payBooking);
 router.get('/providers/:id', userAuthMiddleware, requireCustomer, bookingController.getProviderById);
 router.get('/services/:id', userAuthMiddleware, requireCustomer, bookingController.getServiceById);
 router.get('/:id', userAuthMiddleware, requireCustomer, bookingController.getBooking);
-router.patch('/bookings/:id/cancel', userAuthMiddleware, requireCustomer, bookingController.cancelBooking);
+router.patch('/bookings/:id/cancel', userAuthMiddleware, requireCustomer, bookingCancelLimiter, preventDuplicateSubmissions(5), bookingController.cancelBooking);
 router.patch('/bookings/:id/reschedule', userAuthMiddleware, requireCustomer, bookingController.userUpdateBookingDateTime);
 
 const { uploadComplaintImage, handleUploadErrors } = require('../middlewares/upload');
@@ -37,10 +41,10 @@ const { uploadComplaintImage, handleUploadErrors } = require('../middlewares/upl
 // PROVIDER ROUTES
 router.get('/provider-booking/:id', providerAuthMiddleware, requireProvider, bookingController.getProviderBookingById);
 router.get('/provider/status/:status', providerAuthMiddleware, requireProvider, bookingController.getBookingsByStatus);
-router.patch('/provider/:id/accept', providerAuthMiddleware, requireProvider, providerTestPassedMiddleware, bookingController.acceptBooking);
-router.patch('/provider/:id/start', providerAuthMiddleware, requireProvider, providerTestPassedMiddleware, uploadComplaintImage.array('images', 5), handleUploadErrors, bookingController.startBooking);
-router.patch('/provider/:id/reject', providerAuthMiddleware, requireProvider, providerTestPassedMiddleware, bookingController.rejectBooking);
-router.patch('/provider/:id/complete', providerAuthMiddleware, requireProvider, providerTestPassedMiddleware, uploadComplaintImage.array('images', 5), handleUploadErrors, bookingController.completeBooking);
+router.patch('/provider/:id/accept', providerAuthMiddleware, requireProvider, providerActionLimiter, preventDuplicateSubmissions(5), providerTestPassedMiddleware, bookingController.acceptBooking);
+router.patch('/provider/:id/start', providerAuthMiddleware, requireProvider, providerActionLimiter, preventDuplicateSubmissions(5), providerTestPassedMiddleware, uploadComplaintImage.array('images', 5), handleUploadErrors, bookingController.startBooking);
+router.patch('/provider/:id/reject', providerAuthMiddleware, requireProvider, providerActionLimiter, preventDuplicateSubmissions(5), providerTestPassedMiddleware, bookingController.rejectBooking);
+router.patch('/provider/:id/complete', providerAuthMiddleware, requireProvider, providerActionLimiter, preventDuplicateSubmissions(5), providerTestPassedMiddleware, uploadComplaintImage.array('images', 5), handleUploadErrors, bookingController.completeBooking);
 router.get('/provider/booking-report', providerAuthMiddleware, requireProvider, providerTestPassedMiddleware, bookingController.providerBookingReport);
 
 

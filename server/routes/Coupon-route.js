@@ -19,7 +19,10 @@ router.delete('/admin/coupons/:id', adminAuthMiddleware, couponController.delete
 router.delete('/admin/coupons/:id/hard', adminAuthMiddleware, couponController.hardDeleteCoupon);
 
 // USER ROUTES
-router.post('/coupons/apply', userAuthMiddleware, validateBody(applyCouponSchema), couponController.applyCoupon);
+const { feedbackLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+
+router.post('/coupons/apply', userAuthMiddleware, feedbackLimiter, preventDuplicateSubmissions(5), validateBody(applyCouponSchema), couponController.applyCoupon);
 router.post('/coupons/mark-used', userAuthMiddleware, validateBody(markCouponUsedSchema), couponController.markCouponUsed);
 router.get('/coupons/available', userAuthMiddleware, couponController.getAvailableCoupons);
 

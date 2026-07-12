@@ -13,10 +13,12 @@ const {
   replyToContactSchema
 } = require('../validation/common.validation');
 
-const { contactLimiter } = require('../middlewares/rate-limit');
+
 
 // Public routes
-router.post('/', contactLimiter, validateBody(submitContactSchema), submitContact);
+const { contactLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+router.post('/', contactLimiter, preventDuplicateSubmissions(5), validateBody(submitContactSchema), submitContact);
 
 // Admin only routes
 router.get('/admin', AdminMiddleware, getAllContacts);

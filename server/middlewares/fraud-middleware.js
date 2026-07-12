@@ -170,25 +170,52 @@ const parseFraudHeaders = async (req, res, next) => {
 const throttleFailedLogins = async (req, res, next) => {
   try {
     const ip = req.clientIp || getClientIp(req);
-    if (isPrivateIp(ip)) {
-      return next();
+    
+    // 1. IP-based lockout check
+    if (!isPrivateIp(ip)) {
+      const failedAttempts = await FraudLog.countDocuments({
+        ip,
+        actionType: 'failed_login',
+        createdAt: { $gte: new Date(Date.now() - 15 * 60 * 1000) } // 15 mins
+      });
+
+      if (failedAttempts >= 5) {
+        if (global.logger) {
+          global.logger.warn(`Throttled login attempt from blocked IP: ${ip} (Failed attempts: ${failedAttempts})`);
+        }
+        return res.status(429).json({
+          success: false,
+          message: 'Too many failed login attempts. Please try again after 15 minutes.',
+          error: 'TOO_MANY_FAILED_LOGINS'
+        });
+      }
     }
 
-    const failedAttempts = await FraudLog.countDocuments({
-      ip,
-      actionType: 'failed_login',
-      createdAt: { $gte: new Date(Date.now() - 15 * 60 * 1000) } // 15 mins
-    });
+    // 2. Account-based lockout check
+    if (req.body && req.body.email) {
+      const email = req.body.email.trim().toLowerCase();
+      const User = require('../models/User-model');
+      const Provider = require('../models/Provider-model');
+      const Admin = require('../models/Admin-model');
 
-    if (failedAttempts >= 5) {
-      if (global.logger) {
-        global.logger.warn(`Throttled login attempt from blocked IP: ${ip} (Failed attempts: ${failedAttempts})`);
+      let user = await User.findOne({ email });
+      if (!user) {
+        user = await Provider.findOne({ email });
       }
-      return res.status(429).json({
-        success: false,
-        message: 'Too many failed login attempts. Please try again after 15 minutes.',
-        error: 'TOO_MANY_FAILED_LOGINS'
-      });
+      if (!user) {
+        user = await Admin.findOne({ email });
+      }
+
+      if (user && user.lockUntil && user.lockUntil > Date.now()) {
+        if (global.logger) {
+          global.logger.warn(`Throttled login attempt for locked account: ${email}`);
+        }
+        return res.status(429).json({
+          success: false,
+          message: 'Too many failed login attempts. Please try again after 15 minutes.',
+          error: 'TOO_MANY_FAILED_LOGINS'
+        });
+      }
     }
 
     next();
@@ -196,6 +223,48 @@ const throttleFailedLogins = async (req, res, next) => {
     console.error('throttleFailedLogins Middleware Error:', error);
     next();
   }
+};
+
+/**
+ * Middleware to prevent duplicate requests (accidental double-click)
+ */
+const preventDuplicateSubmissions = (ttlSeconds = 5) => {
+  return async (req, res, next) => {
+    try {
+      if (!['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        return next();
+      }
+
+      const cache = require('../utils/cache');
+      const ip = req.clientIp || getClientIp(req);
+      const userId = req.userID || req.user?._id || req.provider?._id || req.admin?._id || 'guest';
+      
+      const bodyHash = crypto.createHash('md5').update(JSON.stringify(req.body || {})).digest('hex');
+      const key = `dup:${userId}:${ip}:${req.originalUrl || req.url}:${bodyHash}`;
+
+      if (cache.has(key)) {
+        await trackEvent({
+          req,
+          actionType: 'duplicate_submission',
+          flagReason: `Blocked duplicate submission: ${req.originalUrl || req.url}`,
+          userId: req.userID || req.user?._id || req.provider?._id || req.admin?._id,
+          userModel: req.user ? 'User' : (req.provider ? 'Provider' : (req.admin ? 'Admin' : undefined)),
+          role: req.role || req.user?.role || req.provider?.role || (req.admin ? 'admin' : undefined)
+        });
+
+        return res.status(409).json({
+          success: false,
+          message: 'Too many requests. Please wait a moment and try again.'
+        });
+      }
+
+      cache.set(key, true, ttlSeconds);
+      next();
+    } catch (error) {
+      console.error('preventDuplicateSubmissions Middleware Error:', error);
+      next();
+    }
+  };
 };
 
 /**
@@ -303,5 +372,6 @@ module.exports = {
   trackEvent,
   calculateIpReputation,
   getClientIp,
-  isPrivateIp
+  isPrivateIp,
+  preventDuplicateSubmissions
 };

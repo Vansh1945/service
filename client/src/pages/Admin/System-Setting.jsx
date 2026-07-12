@@ -403,6 +403,196 @@ const BookingTab = ({ systemSettings, handleNestedChange }) => (
         placeholder="21:00"
         description="Daily deadline time limit for final booking slots."
       />
+
+      <div className="space-y-2">
+        <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Booking Mode</label>
+        <select
+          value={systemSettings.bookingSettings.bookingMode || 'hybrid'}
+          onChange={(e) => handleNestedChange('bookingSettings', 'bookingMode', e.target.value)}
+          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary bg-white"
+        >
+          <option value="flexible">Flexible</option>
+          <option value="slot-based">Slot Based</option>
+          <option value="hybrid">Hybrid</option>
+        </select>
+        <p className="text-xs text-gray-500 mt-1.5 font-inter">Determine how appointment times are matched and resolved.</p>
+      </div>
+
+
+      <ToggleSwitch
+        label="Emergency Booking"
+        description="Allow system to dispatch emergency bookings."
+        checked={systemSettings.bookingSettings?.emergencyAssignment !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'emergencyAssignment', val)}
+      />
+
+      <ToggleSwitch
+        label="Instant Booking Option"
+        description="Allow customers to select instant booking options."
+        checked={systemSettings.bookingSettings?.instantBooking !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'instantBooking', val)}
+      />
+
+      <ToggleSwitch
+        label="Auto Assignment"
+        description="Enable auto assignment globally."
+        checked={systemSettings.bookingSettings?.autoAssignProvider !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'autoAssignProvider', val)}
+      />
+
+      <ToggleSwitch
+        label="Manual Assignment"
+        description="Allow admin manual assignment."
+        checked={systemSettings.bookingSettings?.manualAssignment !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'manualAssignment', val)}
+      />
+
+      <ToggleSwitch
+        label="Offer Queue"
+        description="Enable provider job offer queueing."
+        checked={systemSettings.bookingSettings?.offerQueue !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'offerQueue', val)}
+      />
+
+      <ToggleSwitch
+        label="Slot Based Mode"
+        description="Enable slot based appointment matching."
+        checked={systemSettings.bookingSettings?.slotBased !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'slotBased', val)}
+      />
+
+      <ToggleSwitch
+        label="Flexible Mode"
+        description="Enable flexible appointment scheduling."
+        checked={systemSettings.bookingSettings?.flexible !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'flexible', val)}
+      />
+
+      <ToggleSwitch
+        label="Hybrid Mode"
+        description="Enable hybrid matching strategy."
+        checked={systemSettings.bookingSettings?.hybrid !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'hybrid', val)}
+      />
+
+      <ToggleSwitch
+        label="Auto Assign Scheduled"
+        description="Auto assign for scheduled bookings."
+        checked={systemSettings.bookingSettings?.autoAssignScheduled !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'autoAssignScheduled', val)}
+      />
+
+      <ToggleSwitch
+        label="Auto Assign Instant"
+        description="Auto assign for instant bookings."
+        checked={systemSettings.bookingSettings?.autoAssignInstant !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'autoAssignInstant', val)}
+      />
+
+      <ToggleSwitch
+        label="Auto Assign Emergency"
+        description="Auto assign for emergency bookings."
+        checked={systemSettings.bookingSettings?.autoAssignEmergency !== false}
+        onChange={(val) => handleNestedChange('bookingSettings', 'autoAssignEmergency', val)}
+      />
+
+      <div>
+        <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Emergency Response Time</label>
+        <select
+          value={systemSettings.bookingSettings?.emergencyResponseTime || 60}
+          onChange={(e) => handleNestedChange('bookingSettings', 'emergencyResponseTime', Number(e.target.value))}
+          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary bg-white"
+        >
+          <option value={30}>30 sec</option>
+          <option value={60}>60 sec</option>
+          <option value={90}>90 sec</option>
+          <option value={120}>120 sec</option>
+        </select>
+        <p className="text-xs text-gray-500 mt-1.5 font-inter">Time provider has to accept before escalating.</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Admin Response Time</label>
+        <select
+          value={systemSettings.bookingSettings?.adminResponseTime || 30}
+          onChange={(e) => handleNestedChange('bookingSettings', 'adminResponseTime', Number(e.target.value))}
+          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary bg-white"
+        >
+          <option value={10}>10 min</option>
+          <option value={30}>30 min</option>
+          <option value={60}>1 hour</option>
+          <option value={120}>2 hour</option>
+          <option value={360}>6 hour</option>
+          <option value={720}>12 hour</option>
+        </select>
+        <p className="text-xs text-gray-500 mt-1.5 font-inter">Timeout for admin reassignment before cancellation.</p>
+      </div>
+
+
+
+
+      <SettingInput
+        label="Minimum Completion Images Required"
+        value={systemSettings.bookingSettings.minCompletedImages || 1}
+        onChange={(e) => handleNestedChange('bookingSettings', 'minCompletedImages', Number(e.target.value))}
+        type="number"
+        min="1"
+        description="The minimum number of completion proof photos a provider must upload to resolve a job."
+      />
+
+      <div className="md:col-span-2 border border-gray-100 rounded-2xl p-6 bg-gray-50/50 space-y-4">
+        <h4 className="text-sm font-bold text-secondary font-poppins flex items-center gap-2">
+          <ShieldAlert className="w-4.5 h-4.5 text-primary" /> Trusted Provider Rules
+        </h4>
+        <p className="text-xs text-gray-500 font-inter">
+          Criteria that a provider must satisfy to be automatically designated as a trusted provider.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SettingInput
+            label="Minimum Average Rating"
+            value={systemSettings.bookingSettings.trustedProviderRules?.minRating || 4.0}
+            onChange={(e) => {
+              const rules = systemSettings.bookingSettings.trustedProviderRules || {};
+              handleNestedChange('bookingSettings', 'trustedProviderRules', { ...rules, minRating: Number(e.target.value) });
+            }}
+            type="number"
+            min="0"
+            max="5"
+            step="0.1"
+          />
+          <SettingInput
+            label="Minimum Completed Jobs"
+            value={systemSettings.bookingSettings.trustedProviderRules?.minCompletedJobs || 5}
+            onChange={(e) => {
+              const rules = systemSettings.bookingSettings.trustedProviderRules || {};
+              handleNestedChange('bookingSettings', 'trustedProviderRules', { ...rules, minCompletedJobs: Number(e.target.value) });
+            }}
+            type="number"
+            min="0"
+          />
+          <SettingInput
+            label="Maximum Cancellation Rate (%)"
+            value={systemSettings.bookingSettings.trustedProviderRules?.maxCancellationRate || 15}
+            onChange={(e) => {
+              const rules = systemSettings.bookingSettings.trustedProviderRules || {};
+              handleNestedChange('bookingSettings', 'trustedProviderRules', { ...rules, maxCancellationRate: Number(e.target.value) });
+            }}
+            type="number"
+            min="0"
+            max="100"
+          />
+          <SettingInput
+            label="Emergency Provider Response Time (Minutes)"
+            value={systemSettings.bookingSettings.trustedProviderRules?.providerResponseTimeMinutes || 5}
+            onChange={(e) => {
+              const rules = systemSettings.bookingSettings.trustedProviderRules || {};
+              handleNestedChange('bookingSettings', 'trustedProviderRules', { ...rules, providerResponseTimeMinutes: Number(e.target.value) });
+            }}
+            type="number"
+            min="1"
+          />
+        </div>
+      </div>
     </div>
   </div>
 );
@@ -746,11 +936,22 @@ const SystemSetting = () => {
       startTime: '09:00',
       endTime: '21:00',
       enableProviderAcceptTimeout: true,
-      providerAcceptTimeoutMinutes: 5
+      providerAcceptTimeoutMinutes: 5,
+      bookingMode: 'hybrid',
+      emergencyAssignment: true,
+      instantBooking: true,
+      emergencySurgeCharge: 0,
+      minCompletedImages: 1,
+      trustedProviderRules: {
+        minRating: 4.0,
+        minCompletedJobs: 5,
+        maxCancellationRate: 15,
+        providerResponseTimeMinutes: 5
+      }
     },
     walletSettings: { minWithdrawal: 500, refundToWalletOnly: true },
     commissionSettings: { defaultCommission: 10, payoutHoldHours: 48 },
-    surgeSplitSettings: { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 },
+    surgeSplitSettings: { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50, emergency: 85 },
     notificationSettings: { pushEnabled: true, emailEnabled: true, smsEnabled: false, providerAlerts: true, customerAlerts: true },
     maintenanceMode: {
       customer: { enabled: false, message: 'Customer services are under maintenance.' },

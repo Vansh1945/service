@@ -21,11 +21,11 @@ const { sharedAuthMiddleware } = require('../middlewares/sharedAuth-middleware')
 
 const requireAdmin = roleMiddleware(['admin']);
 const requireCustomerOrProviderOrAdmin = roleMiddleware(['customer', 'provider', 'admin']);
-const { chatLimiter } = require('../middlewares/rate-limit');
+
 
 // Chat endpoints
 router.post('/create-room', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(createRoomSchema), chatController.createRoom);
-router.post('/send', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, chatLimiter, validateBody(sendMessageSchema), chatController.sendMessage);
+router.post('/send', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(sendMessageSchema), chatController.sendMessage);
 router.get('/messages/:roomId', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, chatController.getMessages);
 router.patch('/mark-seen', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(markSeenSchema), chatController.markSeen);
 router.post('/typing', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(typingStatusSchema), chatController.typingStatus);

@@ -1,15 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/Admin-controller');
-const rateLimit = require('express-rate-limit');
 
-const analyticsLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20, // max 20 requests per minute
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many analytics requests. Please try again after a minute.' }
-});
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { roleMiddleware } = require('../middlewares/role-middleware');
 const { uploadProfilePic } = require('../middlewares/upload');
@@ -26,6 +18,8 @@ router.post('/register', uploadProfilePic.single('profilePic'), validateBody(reg
 
 // Protected routes
 const adminRoleCheck = roleMiddleware(['admin']);
+const { adminActionLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
 router.use(adminAuthMiddleware, adminRoleCheck);
 
 
@@ -51,15 +45,15 @@ router.get('/providers', adminController.getAllProviders);
 router.get('/providers/:id', adminController.getProviderDetails);
 
 // Dashboard
-router.get('/dashboard/stats', analyticsLimiter, adminController.getDashboardStats);
-router.get('/dashboard/summary', analyticsLimiter, adminController.getDashboardSummary);
-router.get('/dashboard/revenue', analyticsLimiter, adminController.getDashboardRevenue);
-router.get('/dashboard/bookings-status', analyticsLimiter, adminController.getDashboardBookingsStatus);
-router.get('/dashboard/top-providers', analyticsLimiter, adminController.getDashboardTopProviders);
-router.get('/dashboard/pending-actions', analyticsLimiter, adminController.getDashboardPendingActions);
-router.get('/dashboard/live-stats', analyticsLimiter, adminController.getDashboardLiveStats);
-router.get('/dashboard/recent-activity', analyticsLimiter, adminController.getDashboardRecentActivity);
-router.get('/dashboard/analytics', analyticsLimiter, adminController.getDashboardAnalytics);
+router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/dashboard/summary', adminController.getDashboardSummary);
+router.get('/dashboard/revenue', adminController.getDashboardRevenue);
+router.get('/dashboard/bookings-status', adminController.getDashboardBookingsStatus);
+router.get('/dashboard/top-providers', adminController.getDashboardTopProviders);
+router.get('/dashboard/pending-actions', adminController.getDashboardPendingActions);
+router.get('/dashboard/live-stats', adminController.getDashboardLiveStats);
+router.get('/dashboard/recent-activity', adminController.getDashboardRecentActivity);
+router.get('/dashboard/analytics', adminController.getDashboardAnalytics);
 // Refund management
 router.post('/refund/:bookingId/process', validateBody(adminRefundSchema), adminController.processAdminRefund);
 router.post('/refund/:bookingId/reject', adminController.rejectAdminRefund);

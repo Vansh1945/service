@@ -18,11 +18,12 @@ const optimizeAndUploadImage = async (localFilePath, type = 'general', folder = 
       throw new Error('File does not exist');
     }
 
-    const originalSize = fs.statSync(localFilePath).size;
+    const fileBuffer = fs.readFileSync(localFilePath);
+    const originalSize = fileBuffer.length;
 
     let metadata;
     try {
-      metadata = await sharp(localFilePath).metadata();
+      metadata = await sharp(fileBuffer).metadata();
     } catch (err) {
       // Delete corrupt/invalid temp file for security
       try { fs.unlinkSync(localFilePath); } catch (e) {}
@@ -50,7 +51,7 @@ const optimizeAndUploadImage = async (localFilePath, type = 'general', folder = 
     }
 
     // 3. Initialize Sharp Pipeline with Resize if > 1920px width
-    let pipeline = sharp(localFilePath);
+    let pipeline = sharp(fileBuffer);
     if (metadata.width > 1920) {
       pipeline = pipeline.resize({ width: 1920, withoutEnlargement: true });
     }
@@ -64,6 +65,7 @@ const optimizeAndUploadImage = async (localFilePath, type = 'general', folder = 
     do {
       compressedBuffer = await pipeline
         .clone()
+        .withMetadata()
         .webp({ quality, effort: 4 })
         .toBuffer();
 

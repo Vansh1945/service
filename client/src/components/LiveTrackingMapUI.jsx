@@ -214,38 +214,12 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         />
 
 
-        {/* Customer Target Pulse Ring */}
-        {targetLat && targetLng && (
-          <Circle
-            center={[targetLat, targetLng]}
-            radius={200}
-            pathOptions={{
-              color: '#EF4444',
-              fillColor: '#EF4444',
-              weight: 2,
-              className: 'live-pulse-ring'
-            }}
-          />
-        )}
 
         {/* Customer Marker */}
         {targetLat && targetLng && (
           <Marker position={[targetLat, targetLng]} icon={customerIcon} />
         )}
 
-        {/* Provider Pulse Ring */}
-        {providerPos && (
-          <Circle
-            center={providerPos}
-            radius={250}
-            pathOptions={{
-              color: '#10B981',
-              fillColor: '#10B981',
-              weight: 2,
-              className: 'live-pulse-ring'
-            }}
-          />
-        )}
 
         {/* Smooth Moving Provider Marker */}
         {providerPos && (

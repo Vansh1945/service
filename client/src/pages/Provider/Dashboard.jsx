@@ -89,7 +89,7 @@ const Dashboard = () => {
         todaysEarnings: summary?.todaysEarnings || 0,
         pendingRequests: new Array(summary?.pendingBookings || 0),
         activeJobs: combinedBookings,
-        recentBookings: sortedBookings.slice(0, 5),
+        recentBookings: analytics?.recentBookings || sortedBookings.slice(0, 5),
         heldPayouts,
         disputesCount,
         pendingReviews

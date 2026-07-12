@@ -10,7 +10,7 @@ const {
   anyBodySchema
 } = require('../validation/common.validation');
 
-// Admin routes for managing commission rules
+
 router.post('/rules', adminAuthMiddleware, validateBody(createCommissionRuleSchema), commissionController.createCommissionRule);
 router.get('/rules', adminAuthMiddleware, commissionController.listCommissionRules);
 router.get('/rules/:id', adminAuthMiddleware, commissionController.getCommissionRuleById);

@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const compression = require("compression");
 const helmet = require("helmet");
-const rateLimit = require('express-rate-limit');
+
 const http = require('http');
 const mongoSanitize = require("./middlewares/mongo-sanitize");
 
@@ -187,32 +187,7 @@ app.use(cors(corsOptions));
 app.use("/uploads", express.static("uploads"));
 app.use("/assets", express.static("assets"));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 3️⃣ RATE LIMITERS
-// ─────────────────────────────────────────────────────────────────────────────
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many login attempts. Try again in 15 minutes.' }
-});
-
-const otpLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many OTP requests. Try again in 10 minutes.' }
-});
-
-// Apply rate limiters to auth endpoints
-app.use("/api/auth/login", loginLimiter);
-app.use("/api/auth/firebase-login", loginLimiter);
-app.use("/api/auth/forgot-password", otpLimiter);
-app.use("/api/auth/resend-otp", otpLimiter);
-app.use("/api/auth/verify-otp", otpLimiter);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4️⃣ MAINTENANCE MODE MIDDLEWARE

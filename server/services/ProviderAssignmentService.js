@@ -6,31 +6,60 @@ const { sendNotification } = require('../utils/notificationHelper');
 const { calculateDistance } = require('../utils/geoUtils');
 const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
 
-const checkProviderOverlap = (newBooking, providerBookings, bufferMinutes = 30) => {
-  const newStart = new Date(newBooking.date);
-  if (newBooking.time) {
-    const [h, m] = newBooking.time.split(':').map(Number);
-    newStart.setHours(h, m, 0, 0);
+const getAbsoluteIstDate = (dateObj, timeStr) => {
+  const d = new Date(dateObj);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const day = d.getUTCDate();
+  
+  let h = 12; // default to noon
+  let m = 0;
+  if (timeStr) {
+    const parts = timeStr.split(':').map(Number);
+    if (parts.length >= 2) {
+      h = parts[0];
+      m = parts[1];
+    }
   }
-  let newDurationHours = 1;
-  if (newBooking.services && newBooking.services.length > 0) {
+  // Convert IST (h:m) to UTC by subtracting 5 hours and 30 minutes
+  return new Date(Date.UTC(year, month, day, h - 5, m - 30, 0, 0));
+};
+
+const checkProviderOverlap = (newBooking, providerBookings, defaultBufferMinutes = 30) => {
+  const newStart = getAbsoluteIstDate(newBooking.date, newBooking.time);
+  
+  let newDurationMs = 60 * 60 * 1000; // 1 hour default
+  if (newBooking.estimatedDuration !== null && newBooking.estimatedDuration !== undefined) {
+    newDurationMs = newBooking.estimatedDuration * 60 * 1000;
+  } else if (newBooking.services && newBooking.services.length > 0) {
     const firstService = newBooking.services[0];
-    newDurationHours = firstService.service?.duration || firstService.serviceDetails?.duration || 1;
+    const durationHours = firstService.service?.duration || firstService.serviceDetails?.duration || 1;
+    newDurationMs = durationHours * 60 * 60 * 1000;
   }
-  const newEnd = new Date(newStart.getTime() + newDurationHours * 60 * 60 * 1000 + bufferMinutes * 60 * 1000);
+
+  const newBufferMs = (newBooking.travelBufferMinutes !== null && newBooking.travelBufferMinutes !== undefined)
+    ? newBooking.travelBufferMinutes * 60 * 1000
+    : defaultBufferMinutes * 60 * 1000;
+
+  const newEnd = new Date(newStart.getTime() + newDurationMs + newBufferMs);
 
   for (const pb of providerBookings) {
-    const start = new Date(pb.date);
-    if (pb.time) {
-      const [h, m] = pb.time.split(':').map(Number);
-      start.setHours(h, m, 0, 0);
-    }
-    let durationHours = 1;
-    if (pb.services && pb.services.length > 0) {
+    const start = getAbsoluteIstDate(pb.date, pb.time);
+    
+    let durationMs = 60 * 60 * 1000;
+    if (pb.estimatedDuration !== null && pb.estimatedDuration !== undefined) {
+      durationMs = pb.estimatedDuration * 60 * 1000;
+    } else if (pb.services && pb.services.length > 0) {
       const firstService = pb.services[0];
-      durationHours = firstService.service?.duration || firstService.serviceDetails?.duration || 1;
+      const durationHours = firstService.service?.duration || firstService.serviceDetails?.duration || 1;
+      durationMs = durationHours * 60 * 60 * 1000;
     }
-    const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000 + bufferMinutes * 60 * 1000);
+
+    const bufferMs = (pb.travelBufferMinutes !== null && pb.travelBufferMinutes !== undefined)
+      ? pb.travelBufferMinutes * 60 * 1000
+      : defaultBufferMinutes * 60 * 1000;
+
+    const end = new Date(start.getTime() + durationMs + bufferMs);
 
     if (newStart < end && start < newEnd) {
       return true;
@@ -88,25 +117,47 @@ class ProviderAssignmentService {
         await settings.save();
       }
 
-      if (!settings || !settings.bookingSettings || !settings.bookingSettings.autoAssignProvider) {
-        const booking = await Booking.findById(bookingId).populate('services.service');
-        if (booking && !booking.provider) {
-          const { triggerEventNotification } = require('../utils/notificationHelper');
-          await triggerEventNotification('booking_created', {
-            serviceName: booking.services?.[0]?.serviceDetails?.title || 'service',
-            street: booking.address?.street || 'your area',
-            booking
-          });
-        }
-        return null;
-      }
-
       const booking = await Booking.findById(bookingId).populate('services.service');
       if (!booking || booking.provider) {
         return null;
       }
 
-      const maxDistanceKm = settings.bookingSettings.autoAssignRadius || 15;
+      // EMERGENCY BOOKING ENGINE UPGRADE
+      const isEmergency = booking.bookingType === 'emergency' || booking.isEmergency;
+      const isInstant = booking.bookingType === 'instant' || booking.isInstant;
+      const isScheduled = !isEmergency && !isInstant;
+
+      let isAutoAssignEnabled = false;
+      if (isEmergency) {
+        isAutoAssignEnabled = settings.bookingSettings?.autoAssignEmergency !== false;
+      } else if (isInstant) {
+        isAutoAssignEnabled = settings.bookingSettings?.autoAssignInstant !== false;
+      } else {
+        isAutoAssignEnabled = settings.bookingSettings?.autoAssignProvider !== false && settings.bookingSettings?.autoAssignScheduled !== false;
+      }
+
+      if (!isAutoAssignEnabled) {
+        if (isEmergency || isInstant) {
+          await ProviderAssignmentService.escalateToAdmin(booking._id, isEmergency ? 'Emergency auto-assign disabled' : 'Instant auto-assign disabled');
+        } else {
+          if (booking && !booking.provider) {
+            const { triggerEventNotification } = require('../utils/notificationHelper');
+            await triggerEventNotification('booking_created', {
+              serviceName: booking.services?.[0]?.serviceDetails?.title || 'service',
+              street: booking.address?.street || 'your area',
+              booking
+            });
+          }
+        }
+        return null;
+      }
+      // END EMERGENCY BOOKING ENGINE UPGRADE
+
+      let maxDistanceKm = settings.bookingSettings.autoAssignRadius || 15;
+      if (isInstant && booking.metadata?.ignoredProviders?.length > 0) {
+        maxDistanceKm += (booking.metadata.ignoredProviders.length * 10);
+        maxDistanceKm = Math.min(maxDistanceKm, 50);
+      }
       const maxDistanceMeters = maxDistanceKm * 1000;
 
       let lat = booking.address?.lat;
@@ -231,15 +282,51 @@ class ProviderAssignmentService {
           const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
           const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
 
+          const isEmergency = booking.bookingType === 'emergency' || booking.isEmergency;
+          const isInstant = booking.bookingType === 'instant' || booking.isInstant;
+          const isTrustedOnly = !!booking.trustedProviderOnly;
+
+          let strategy = 'scheduled';
+          if (isEmergency || isTrustedOnly) {
+            strategy = 'emergency';
+          } else if (isInstant) {
+            strategy = 'instant';
+          }
+
           const scoredProviders = providersWithDetails.map(item => {
             const p = item.provider;
             const pIdStr = p._id.toString();
             const workload = workloadMap[pIdStr] || 0;
 
+            // 1. Basic workload capacity check
             if (workload >= maxBookings) {
               return null;
             }
 
+            // 2. Online & status check
+            if (strategy === 'emergency' || strategy === 'instant') {
+              if (p.isOnline !== true || p.availabilityStatus !== 'online') {
+                return null;
+              }
+            }
+
+            // 3. Permissions check
+            if (strategy === 'emergency' && p.emergencyBookingEnabled === false) {
+              return null;
+            }
+            if (strategy === 'instant' && p.instantBookingEnabled === false) {
+              return null;
+            }
+            if (strategy === 'scheduled' && p.scheduledBookingEnabled === false) {
+              return null;
+            }
+
+            // 4. Trusted provider constraint
+            if (isTrustedOnly && p.trustedProvider !== true) {
+              return null;
+            }
+
+            // 5. Calendar conflict check (using custom duration & buffers)
             const providerBookings = providerBookingsMap[pIdStr] || [];
             if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
               return null;
@@ -267,58 +354,156 @@ class ProviderAssignmentService {
             };
           }).filter(Boolean);
 
-          scoredProviders.sort((a, b) => {
-            if (a.tier !== b.tier) {
-              return a.tier - b.tier;
-            }
-            if (a.distance !== b.distance) {
-              return a.distance - b.distance;
-            }
-            if (a.workload !== b.workload) {
-              return a.workload - b.workload;
-            }
-            // Onboarding priority listing boost
-            const priorityA = (a.provider.onboardingPriorityExpiresAt && new Date(a.provider.onboardingPriorityExpiresAt) > new Date()) ? 1 : 0;
-            const priorityB = (b.provider.onboardingPriorityExpiresAt && new Date(b.provider.onboardingPriorityExpiresAt) > new Date()) ? 1 : 0;
-            if (priorityB !== priorityA) {
-              return priorityB - priorityA;
-            }
-            const ratingA = a.provider.performanceScore?.rating || 0;
-            const ratingB = b.provider.performanceScore?.rating || 0;
-            if (ratingB !== ratingA) {
-              return ratingB - ratingA;
-            }
-            return 0;
-          });
-
-          const matched = scoredProviders[0];
-          selectedProvider = matched.provider;
-
-          const pZoneStr = selectedProvider.currentZone ? selectedProvider.currentZone.toString() : null;
-          if (matched.tier === 1) {
-            selectedSource = 'Same Zone';
-          } else if (matched.tier === 2) {
-            if (pZoneStr && adjacentZoneIds.includes(pZoneStr)) {
-              selectedSource = 'Adjacent Zone';
-            } else if (pZoneStr && parentZoneIds.includes(pZoneStr)) {
-              selectedSource = 'Parent Zone';
-            } else if (pZoneStr && childZoneIds.includes(pZoneStr)) {
-              selectedSource = 'Child Zone';
-            } else {
-              selectedSource = 'Adjacent Zone';
-            }
+          if (strategy === 'emergency' || strategy === 'instant') {
+            // Priority 1 & 2: Nearest available provider
+            scoredProviders.sort((a, b) => a.distance - b.distance);
           } else {
-            selectedSource = 'Distance-based Fallback';
+            // Priority 3: Scheduled / Existing logic
+            scoredProviders.sort((a, b) => {
+              if (a.tier !== b.tier) {
+                return a.tier - b.tier;
+              }
+              if (a.distance !== b.distance) {
+                return a.distance - b.distance;
+              }
+              if (a.workload !== b.workload) {
+                return a.workload - b.workload;
+              }
+              // Onboarding priority listing boost
+              const priorityA = (a.provider.onboardingPriorityExpiresAt && new Date(a.provider.onboardingPriorityExpiresAt) > new Date()) ? 1 : 0;
+              const priorityB = (b.provider.onboardingPriorityExpiresAt && new Date(b.provider.onboardingPriorityExpiresAt) > new Date()) ? 1 : 0;
+              if (priorityB !== priorityA) {
+                return priorityB - priorityA;
+              }
+              const ratingA = a.provider.performanceScore?.rating || 0;
+              const ratingB = b.provider.performanceScore?.rating || 0;
+              if (ratingB !== ratingA) {
+                return ratingB - ratingA;
+              }
+              return 0;
+            });
+          }
+
+          if (scoredProviders.length > 0) {
+            const matched = scoredProviders[0];
+            selectedProvider = matched.provider;
+
+            const pZoneStr = selectedProvider.currentZone ? selectedProvider.currentZone.toString() : null;
+            if (matched.tier === 1) {
+              selectedSource = 'Same Zone';
+            } else if (matched.tier === 2) {
+              if (pZoneStr && adjacentZoneIds.includes(pZoneStr)) {
+                selectedSource = 'Adjacent Zone';
+              } else if (pZoneStr && parentZoneIds.includes(pZoneStr)) {
+                selectedSource = 'Parent Zone';
+              } else if (pZoneStr && childZoneIds.includes(pZoneStr)) {
+                selectedSource = 'Child Zone';
+              } else {
+                selectedSource = 'Adjacent Zone';
+              }
+            } else {
+              selectedSource = 'Distance-based Fallback';
+            }
           }
         }
       }
 
       if (!selectedProvider) {
         console.log(`[AutoAssign] No nearby or zone providers found for booking ${booking._id} within ${maxDistanceKm}km`);
+        // EMERGENCY BOOKING ENGINE UPGRADE
+        if (isEmergency || isInstant) {
+          await ProviderAssignmentService.escalateToAdmin(booking._id, 'No nearby providers found');
+        }
+        // END EMERGENCY BOOKING ENGINE UPGRADE
         return null;
       }
 
       const nearestProvider = selectedProvider;
+
+      // EMERGENCY BOOKING ENGINE UPGRADE
+      if (isEmergency || isInstant) {
+        booking.provider = nearestProvider._id;
+        booking.assignmentSource = selectedSource;
+        booking.status = 'pending';
+        booking.providerAcceptanceStatus = 'pending';
+        
+        const responseTimeoutSec = isEmergency 
+          ? (settings.bookingSettings?.emergencyResponseTime || 60) 
+          : 120; // 120s for instant
+          
+        booking.providerResponseDeadline = new Date(Date.now() + responseTimeoutSec * 1000);
+        booking.updatedAt = new Date();
+        if (!booking.metadata) booking.metadata = {};
+        booking.metadata.assignedAt = new Date();
+
+        booking.statusHistory.push({
+          status: 'pending',
+          timestamp: new Date(),
+          note: `Auto-assigned candidate provider: ${nearestProvider.name}. Waiting for provider acceptance within ${responseTimeoutSec} seconds.`,
+          updatedBy: 'system'
+        });
+
+        await booking.save();
+
+        // Start Provider Response Timer
+        setTimeout(async () => {
+          try {
+            const currentBooking = await Booking.findById(booking._id);
+            if (currentBooking && currentBooking.status === 'pending' && currentBooking.provider?.toString() === nearestProvider._id.toString() && currentBooking.providerAcceptanceStatus === 'pending') {
+              console.log(`[Provider Timeout] Provider ${nearestProvider.name} failed to respond to booking ${booking._id} in time. Escalating...`);
+              await ProviderAssignmentService.escalateToAdmin(booking._id, 'Provider response timeout');
+            }
+          } catch (err) {
+            console.error('Error in Provider Response Timer:', err);
+          }
+        }, responseTimeoutSec * 1000);
+
+        try {
+          const { triggerEventNotification, sendNotification } = require('../utils/notificationHelper');
+          
+          await triggerEventNotification('booking_created', {
+            serviceName: booking.services?.[0]?.serviceDetails?.title || 'service',
+            street: booking.address?.street || 'your area',
+            booking
+          }, nearestProvider._id);
+
+          sendNotification(
+            nearestProvider._id,
+            'provider',
+            isEmergency ? '🚨 Emergency Booking Request' : '⚡ Instant Booking Request',
+            `New ${booking.bookingType || 'Instant'} request. Please accept within ${responseTimeoutSec} seconds.`,
+            'booking',
+            booking._id
+          );
+
+          const { getIO } = require('../socket/socketServer');
+          const io = getIO();
+          if (io) {
+            // Broadcast emergency/instant alerts to candidate provider
+            io.to(`provider_${nearestProvider._id}`).emit('new-booking-offer', {
+              bookingId: booking._id,
+              bookingType: booking.bookingType || (isEmergency ? 'emergency' : 'instant'),
+              priority: isEmergency ? 'critical' : 'medium',
+              deadline: booking.providerResponseDeadline,
+              distance: matched ? matched.distance : 0,
+              totalAmount: booking.totalAmount
+            });
+
+            io.to('admin_live_room').emit('admin-booking-update', {
+              bookingId: booking._id,
+              event: 'provider-offered',
+              providerId: nearestProvider._id,
+              status: 'pending'
+            });
+          }
+        } catch (socketErr) {
+          console.error('Error sending offered sockets/notifications:', socketErr);
+        }
+
+        console.log(`[AutoAssign] Booking ${booking._id} offered to candidate provider ${nearestProvider.name}`);
+        return nearestProvider;
+      }
+      // END EMERGENCY BOOKING ENGINE UPGRADE
 
       booking.provider = nearestProvider._id;
       booking.assignmentSource = selectedSource;
@@ -412,6 +597,193 @@ class ProviderAssignmentService {
       return null;
     }
   }
+
+  // EMERGENCY BOOKING ENGINE UPGRADE
+  static async escalateToAdmin(bookingId, reason) {
+    try {
+      console.log(`[Escalation] Escalating booking ${bookingId} to Admin. Reason: ${reason}`);
+      const booking = await Booking.findById(bookingId).populate('customer');
+      if (!booking || ['accepted', 'in-progress', 'started', 'completed', 'cancelled', 'Waiting Admin Assignment'].includes(booking.status)) {
+        return;
+      }
+
+      booking.status = 'Waiting Admin Assignment';
+      booking.provider = undefined;
+      booking.providerAcceptanceStatus = null;
+      booking.providerResponseDeadline = null;
+      booking.statusHistory.push({
+        status: 'Waiting Admin Assignment',
+        timestamp: new Date(),
+        note: `Escalated to Admin: ${reason}`,
+        updatedBy: 'system'
+      });
+
+      await booking.save();
+
+      const { SystemConfig } = require('../models/SystemSetting');
+      let settings = await SystemConfig.findOne();
+      const adminTimeoutMin = settings?.bookingSettings?.adminResponseTime || 30;
+
+      // Start Admin Response Timer
+      setTimeout(async () => {
+        try {
+          const currentBooking = await Booking.findById(bookingId);
+          if (currentBooking && currentBooking.status === 'Waiting Admin Assignment') {
+            console.log(`[Admin Timeout] Admin failed to respond to escalated booking ${bookingId} within ${adminTimeoutMin} minutes. Auto-cancelling...`);
+            await ProviderAssignmentService.autoCancelBooking(bookingId, 'Admin response timeout');
+          }
+        } catch (err) {
+          console.error('Error in Admin Response Timer:', err);
+        }
+      }, adminTimeoutMin * 60 * 1000);
+
+      // Notify Admins
+      try {
+        const { getIO } = require('../socket/socketServer');
+        const io = getIO();
+        if (io) {
+          io.to('admin_live_room').emit('admin-booking-update', {
+            bookingId: booking._id,
+            event: 'booking-escalated',
+            status: 'Waiting Admin Assignment',
+            bookingType: booking.bookingType,
+            reason
+          });
+          io.to('role_admin').emit('booking-escalated-alert', {
+            bookingId: booking._id,
+            message: `Booking ${booking.bookingId || booking._id} escalated to Admin queue!`,
+            sound: true
+          });
+        }
+        
+        const { sendNotification } = require('../utils/notificationHelper');
+        // Notify any system admin or admin role
+        const Admin = require('../models/Admin-model');
+        const admins = await Admin.find().select('_id').lean();
+        for (const admin of admins) {
+          sendNotification(
+            admin._id,
+            'admin',
+            '🚨 Booking Escalated to Admin Queue',
+            `Booking ${booking.bookingId || booking._id} has escalated due to: ${reason}`,
+            'booking',
+            booking._id
+          );
+        }
+      } catch (notifErr) {
+        console.error('Error broadcasting escalation notifications:', notifErr);
+      }
+
+    } catch (err) {
+      console.error('Error in escalateToAdmin:', err);
+    }
+  }
+
+  static async autoCancelBooking(bookingId, reason) {
+    try {
+      console.log(`[AutoCancel] Auto-cancelling booking ${bookingId}. Reason: ${reason}`);
+      const booking = await Booking.findById(bookingId);
+      if (!booking || ['completed', 'cancelled', 'accepted', 'in-progress', 'started'].includes(booking.status)) {
+        return;
+      }
+
+      booking.status = 'cancelled';
+      if (!booking.cancellationProgress) booking.cancellationProgress = {};
+      booking.cancellationProgress.status = 'cancelled';
+      booking.cancellationProgress.reason = reason || 'No provider available';
+      booking.cancellationProgress.cancelledAt = new Date();
+      booking.statusHistory.push({
+        status: 'cancelled',
+        timestamp: new Date(),
+        note: `System Auto-Cancelled: ${reason}`,
+        updatedBy: 'system'
+      });
+
+      // Handle refunds for online/prepaid bookings
+      if (['paid', 'escrow_hold'].includes(booking.paymentStatus) || ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
+        try {
+          const User = require('../models/User-model');
+          const Transaction = require('../models/Transaction-model');
+          
+          await User.findByIdAndUpdate(
+            booking.customer,
+            {
+              $inc: { 'wallet.availableBalance': booking.totalAmount, 'wallet.totalRefunded': booking.totalAmount },
+              $push: {
+                'wallet.walletTransactions': {
+                  type: 'credit',
+                  amount: booking.totalAmount,
+                  reason: `System Auto-cancellation refund: ${reason}`,
+                  booking: booking._id,
+                  createdAt: new Date()
+                }
+              },
+              $set: { 'wallet.lastUpdated': new Date() }
+            }
+          );
+
+          const refundTxn = new Transaction({
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id.toString(),
+            user: booking.customer,
+            customerId: booking.customer.toString(),
+            amount: booking.totalAmount,
+            paymentStatus: 'completed',
+            paymentMethod: 'wallet',
+            type: 'refund',
+            description: `System auto-cancelled booking - Automatic refund to wallet: ${reason}`,
+            refundReason: reason,
+            completedAt: new Date()
+          });
+          await refundTxn.save();
+
+          booking.paymentStatus = 'refunded';
+          booking.cancellationProgress.status = 'refund_completed';
+          booking.cancellationProgress.refundAmount = booking.totalAmount;
+          booking.cancellationProgress.refundCompletedAt = new Date();
+        } catch (refundErr) {
+          console.error('[Refund Error] Failed to process auto-refund:', refundErr);
+        }
+      }
+
+      await booking.save();
+
+      // Broadcast Socket events and push notifications
+      try {
+        const { getIO } = require('../socket/socketServer');
+        const io = getIO();
+        if (io) {
+          io.to(booking.customer.toString()).emit('booking-status-updated', {
+            bookingId: booking._id,
+            status: 'cancelled',
+            reason
+          });
+          io.to('admin_live_room').emit('admin-booking-update', {
+            bookingId: booking._id,
+            event: 'auto-cancelled',
+            status: 'cancelled',
+            reason
+          });
+        }
+
+        const { sendNotification } = require('../utils/notificationHelper');
+        sendNotification(
+          booking.customer,
+          'customer',
+          'Booking Cancelled',
+          `Your booking was cancelled: ${reason}. Refund has been processed if paid.`,
+          'booking',
+          booking._id
+        );
+      } catch (notifErr) {
+        console.error('Error broadcasting cancellation alerts:', notifErr);
+      }
+
+    } catch (err) {
+      console.error('Error in autoCancelBooking:', err);
+    }
+  }
+  // END EMERGENCY BOOKING ENGINE UPGRADE
 }
 
 module.exports = ProviderAssignmentService;

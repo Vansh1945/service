@@ -10,7 +10,7 @@ import Loader from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
 import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
-import { createBooking } from '../../services/BookingService';
+import { createBooking, getBookingEstimate } from '../../services/BookingService';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
 import { calculateSurchargeAmount, getMergedPrice } from '../../utils/surge';
 import * as CustomerService from '../../services/CustomerService';
@@ -40,6 +40,7 @@ const BookService = () => {
   const [activeSurcharges, setActiveSurcharges] = useState([]);
   const [detectedZoneId, setDetectedZoneId] = useState(null);
   const [zoneAncestry, setZoneAncestry] = useState([]);
+  const [outsideServiceArea, setOutsideServiceArea] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -68,7 +69,9 @@ const BookService = () => {
     quantity: 1,
     couponCode: '',
     appliedCoupon: null,
-    paymentMethod: 'online'
+    paymentMethod: 'online',
+    isEmergency: false,
+    isInstant: false
   });
 
 
@@ -281,9 +284,11 @@ const BookService = () => {
     }
   };
 
-  // Fetch active surcharges
+  const [pricingEstimate, setPricingEstimate] = useState(null);
+
+  // Fetch pricing estimate from backend
   useEffect(() => {
-    const fetchSurcharges = async () => {
+    const fetchEstimate = async () => {
       try {
         let lat = null;
         let lng = null;
@@ -292,126 +297,126 @@ const BookService = () => {
           lat = formData.customAddress.lat;
           lng = formData.customAddress.lng;
         } else if (addresses.length > 0) {
-          lat = addresses[0].lat;
-          lng = addresses[0].lng;
+          const selectedAddr = addresses.find(a => a._id === formData.addressId) || addresses[0];
+          lat = selectedAddr?.lat;
+          lng = selectedAddr?.lng;
         }
 
-        const params = {
+        // If custom address but coordinates aren't set yet, do not trigger outside area alert
+        if (formData.useCustomAddress && (!lat || !lng)) {
+          setOutsideServiceArea(false);
+          return;
+        }
+
+        const estimatePayload = {
+          serviceId,
+          quantity: formData.quantity,
+          couponCode: formData.appliedCoupon?.code || undefined,
+          date: formData.date,
           time: formData.time || undefined,
-          subtotal: service ? service.basePrice * formData.quantity : undefined
+          lat,
+          lng,
+          isEmergency: !!formData.isEmergency,
+          isInstant: !!formData.isInstant
         };
-        if (lat && lng) {
-          params.lat = lat;
-          params.lng = lng;
-        }
 
-        const response = await resolveActiveSurcharges(params);
+        const response = await getBookingEstimate(estimatePayload);
         if (response.data?.success) {
-          setActiveSurcharges(response.data.data || []);
-          setDetectedZoneId(response.data.zoneId || null);
-          setZoneAncestry(response.data.zoneAncestry || []);
+          setPricingEstimate(response.data.data || null);
+          const zoneId = response.data.data?.detectedZoneId || null;
+          setDetectedZoneId(zoneId);
+          setOutsideServiceArea(!zoneId);
+        } else {
+          setOutsideServiceArea(true);
         }
       } catch (err) {
-        console.error("Error fetching active surcharges:", err);
+        console.error("Error fetching pricing estimate:", err);
+        setOutsideServiceArea(true);
       }
     };
 
     if (service) {
-      const handler = setTimeout(() => {
-        fetchSurcharges();
-      }, 350);
-      return () => clearTimeout(handler);
+      fetchEstimate();
     }
-  }, [formData.date, formData.time, formData.customAddress.lat, formData.customAddress.lng, addresses, formData.useCustomAddress, service, formData.quantity]);
+  }, [
+    formData.date,
+    formData.time,
+    formData.customAddress.lat,
+    formData.customAddress.lng,
+    addresses,
+    formData.addressId,
+    formData.useCustomAddress,
+    service,
+    formData.quantity,
+    formData.appliedCoupon,
+    formData.isEmergency,
+    formData.isInstant
+  ]);
 
   // Calculate surcharges
   const calculateSurcharges = () => {
-    let totalSurcharge = 0;
-    const breakdowns = [];
-    const baseAmount = service ? (service.discountPrice || service.basePrice) * (formData.quantity || 1) : 0;
-
-    activeSurcharges.forEach(s => {
-      const chargeAmount = calculateSurchargeAmount(baseAmount, s);
-      if (chargeAmount > 0) {
-        totalSurcharge += chargeAmount;
-        breakdowns.push({
-          id: s._id,
-          name: s.chargeType === 'platform' ? 'Platform Fee' : `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Charge`,
-          amount: chargeAmount,
-          mode: s.mode,
-          value: s.value
-        });
-      }
-    });
-
-    return { totalSurcharge, breakdowns };
+    if (!pricingEstimate) return { totalSurcharge: 0, breakdowns: [] };
+    const breakdowns = (pricingEstimate.surchargeBreakdown || []).map((s, idx) => ({
+      id: s.chargeType || idx,
+      name: s.chargeType === 'platform' ? 'Platform Fee' : `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Surcharge`,
+      amount: s.amount,
+      mode: s.mode,
+      value: s.value
+    }));
+    return {
+      totalSurcharge: pricingEstimate.totalSurcharge || 0,
+      breakdowns
+    };
   };
 
   // Calculate discount
   const calculateDiscount = () => {
-    if (!service?.basePrice || !formData.appliedCoupon) return 0;
-    const baseAmount = (service.discountPrice || service.basePrice) * (formData.quantity || 1);
-    if (formData.appliedCoupon.discountType === 'percent') {
-      return (baseAmount * formData.appliedCoupon.discountValue) / 100;
-    } else {
-      return Math.min(formData.appliedCoupon.discountValue, baseAmount);
-    }
+    return pricingEstimate ? pricingEstimate.totalDiscount : 0;
   };
 
   const calculateTotal = () => {
-    if (!service?.basePrice) return 0;
-    const baseAmount = (service.discountPrice || service.basePrice) * (formData.quantity || 1);
-    const discount = calculateDiscount();
-    const { totalSurcharge } = calculateSurcharges();
-    return Math.max(0, baseAmount - discount + totalSurcharge);
+    return pricingEstimate ? pricingEstimate.totalAmount : 0;
   };
 
   const getVisitingAndAdditionalCharges = () => {
-    let visiting = 0;
-    let additional = 0;
-    const { breakdowns } = calculateSurcharges();
-
-    breakdowns.forEach(s => {
-      const type = s.name.toLowerCase();
-      if (type.includes('visiting') || type.includes('festival') || type.includes('custom')) {
-        visiting += s.amount;
-      } else {
-        additional += s.amount;
-      }
-    });
-
-    return { visiting, additional };
+    if (!pricingEstimate) return { visiting: 0, additional: 0 };
+    return {
+      visiting: pricingEstimate.visitingCharge || 0,
+      additional: (pricingEstimate.rainCharge || 0) +
+        (pricingEstimate.trafficCharge || 0) +
+        (pricingEstimate.nightCharge || 0) +
+        (pricingEstimate.emergencySurge || 0)
+    };
   };
 
   const getCustomerPricingBreakdown = () => {
-    const { breakdowns } = calculateSurcharges();
-    let demand = 0;
-    let visiting = 0;
-    let platformFee = 0;
-    let additional = 0;
-    const additionalBreakdown = [];
+    if (!pricingEstimate) return {
+      mergedServicePrice: 0,
+      visiting: 0,
+      platformFee: 0,
+      additional: 0,
+      additionalBreakdown: [],
+      demand: 0
+    };
 
-    breakdowns.forEach(s => {
-      const type = s.name.toLowerCase();
-      if (type.includes('demand')) {
-        demand += s.amount;
-      } else if (type.includes('visiting') || type.includes('festival') || type.includes('custom')) {
-        visiting += s.amount;
-      } else if (type.includes('platform')) {
-        platformFee += s.amount;
-      } else {
-        additional += s.amount;
-        additionalBreakdown.push({ name: s.name, amount: s.amount });
-      }
-    });
-
-    const localBaseAmount = service ? (service.discountPrice || service.basePrice) * (formData.quantity || 1) : 0;
+    const localBaseAmount = pricingEstimate.subtotal || 0;
+    const demand = pricingEstimate.demandSurge || 0;
     const mergedServicePrice = localBaseAmount + demand;
+
+    const additionalBreakdown = [];
+    if (pricingEstimate.rainCharge > 0) additionalBreakdown.push({ name: 'Rain Charge', amount: pricingEstimate.rainCharge });
+    if (pricingEstimate.trafficCharge > 0) additionalBreakdown.push({ name: 'Traffic Charge', amount: pricingEstimate.trafficCharge });
+    if (pricingEstimate.nightCharge > 0) additionalBreakdown.push({ name: 'Night Charge', amount: pricingEstimate.nightCharge });
+    if (pricingEstimate.emergencySurge > 0) additionalBreakdown.push({ name: 'Emergency Surcharge', amount: pricingEstimate.emergencySurge });
+
     return {
       mergedServicePrice,
-      visiting,
-      platformFee,
-      additional,
+      visiting: pricingEstimate.visitingCharge || 0,
+      platformFee: pricingEstimate.platformFee || 0,
+      additional: (pricingEstimate.rainCharge || 0) +
+        (pricingEstimate.trafficCharge || 0) +
+        (pricingEstimate.nightCharge || 0) +
+        (pricingEstimate.emergencySurge || 0),
       additionalBreakdown,
       demand
     };
@@ -557,6 +562,11 @@ const BookService = () => {
   };
 
   const validateForm = () => {
+    if (!user?.phone) {
+      toast.error('Please update your mobile number in your profile before placing a booking.');
+      return false;
+    }
+
     if (!service) {
       toast.error('Service information is not loaded');
       return false;
@@ -646,7 +656,11 @@ const BookService = () => {
         isRebook: !!prefillBooking,
         originalBooking: prefillBooking ? prefillBooking._id : null,
         isFavoriteProviderBooking: bookingPreference === 'favorite' && !!selectedFavoriteProviderId,
-        preferredProviderId: (bookingPreference === 'favorite' && selectedFavoriteProviderId) ? selectedFavoriteProviderId : null
+        preferredProviderId: (bookingPreference === 'favorite' && selectedFavoriteProviderId) ? selectedFavoriteProviderId : null,
+        bookingType: formData.isEmergency ? 'emergency' : (formData.isInstant ? 'instant' : 'scheduled'),
+        isEmergency: !!formData.isEmergency,
+        isInstant: !!formData.isInstant,
+        trustedProviderOnly: !!formData.isEmergency
       };
 
       const response = await createBooking(bookingData);
@@ -719,7 +733,7 @@ const BookService = () => {
 
       <div className="w-full max-w-[98%] mx-auto px-2 md:px-4 lg:px-4 py-4">
         {/* Out of Service Zone Alert */}
-        {!detectedZoneId && (
+        {outsideServiceArea && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 animate-fade-in mb-4">
             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
@@ -852,33 +866,196 @@ const BookService = () => {
               </h3>
 
               <div className="space-y-4">
-                {/* Date & Time */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-1.5">Select Date</label>
-                    <DatePicker
-                      selected={formData.date}
-                      onChange={handleDateChange}
-                      minDate={new Date()}
-                      maxDate={maxDate}
-                      dateFormat="dd/MM/yyyy"
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    />
+                {/* Booking Type Selector */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                  {/* Scheduled Card */}
+                  <div
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        isEmergency: false,
+                        isInstant: false
+                      }));
+                    }}
+                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
+                      (!formData.isEmergency && !formData.isInstant)
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 bg-white hover:border-gray-200'
+                    }`}
+                  >
+                    {(!formData.isEmergency && !formData.isInstant) && (
+                      <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
+                        ✓
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">📅</span>
+                        <h4 className="text-sm font-bold text-secondary">Scheduled Booking</h4>
+                      </div>
+                      <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">
+                        Choose your preferred date and time.
+                      </p>
+                    </div>
+                    <div className="mt-3">
+                      <span className="inline-block bg-primary/10 text-primary text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                        Recommended
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-1.5">Select Time</label>
-                    <select
-                      value={formData.time}
-                      onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    >
-                      <option value="">Select time</option>
-                      {timeSlots.map((time, idx) => (
-                        <option key={idx} value={time.value}>{time.display}</option>
-                      ))}
-                    </select>
+
+                  {/* Instant Card */}
+                  <div
+                    onClick={() => {
+                      const nextDate = new Date();
+                      const slots = generateTimeSlotsForDate(nextDate);
+                      const nextTime = (slots.length > 0) ? slots[0].value : '';
+                      setFormData(prev => ({
+                        ...prev,
+                        isEmergency: false,
+                        isInstant: true,
+                        date: nextDate,
+                        time: nextTime
+                      }));
+                    }}
+                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
+                      formData.isInstant
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 bg-white hover:border-gray-200'
+                    }`}
+                  >
+                    {formData.isInstant && (
+                      <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
+                        ✓
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">⚡</span>
+                        <h4 className="text-sm font-bold text-secondary">Instant Booking</h4>
+                      </div>
+                      <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">
+                        Get connected with the nearest available electrician.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                        60–90 mins
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Emergency Card */}
+                  <div
+                    onClick={() => {
+                      const nextDate = new Date();
+                      const slots = generateTimeSlotsForDate(nextDate);
+                      const nextTime = (slots.length > 0) ? slots[0].value : '';
+                      setFormData(prev => ({
+                        ...prev,
+                        isEmergency: true,
+                        isInstant: false,
+                        date: nextDate,
+                        time: nextTime
+                      }));
+                    }}
+                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
+                      formData.isEmergency
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 bg-white hover:border-gray-200'
+                    }`}
+                  >
+                    {formData.isEmergency && (
+                      <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
+                        ✓
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🚨</span>
+                        <h4 className="text-sm font-bold text-secondary">Emergency Booking</h4>
+                      </div>
+                      <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">
+                        Priority assistance for urgent electrical issues.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded">
+                        30–60 mins
+                      </span>
+                      <span className="inline-block bg-red-100 text-red-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                        Priority
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Dynamic Booking Section */}
+                {(!formData.isEmergency && !formData.isInstant) && (
+                  <div className="grid grid-cols-2 gap-4 animate-fade-in relative z-20">
+                    <div className="relative z-30">
+                      <label className="block text-sm font-semibold text-secondary mb-1.5">Select Date</label>
+                      <DatePicker
+                        selected={formData.date}
+                        onChange={handleDateChange}
+                        minDate={new Date()}
+                        maxDate={maxDate}
+                        dateFormat="dd/MM/yyyy"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        popperClassName="!z-[9999]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary mb-1.5">Select Time</label>
+                      <select
+                        value={formData.time}
+                        onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      >
+                        <option value="">Select time</option>
+                        {timeSlots.map((time, idx) => (
+                          <option key={idx} value={time.value}>{time.display}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {formData.isInstant && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl shadow-sm animate-fade-in space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-250/10 rounded-full blur-xl pointer-events-none"></div>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-xl">⚡</span>
+                        <div>
+                          <h4 className="text-sm font-bold text-blue-900">Instant Booking</h4>
+                          <p className="text-xs text-blue-850/90 leading-relaxed mt-1">
+                            We'll connect you with the nearest available electrician as quickly as possible.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-right shrink-0">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Estimated Arrival</p>
+                        <p className="text-xs font-black">60–90 mins</p>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t border-blue-200/60 pt-2">
+                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-blue-800/90 font-medium">
+                        <li className="flex items-center gap-2">
+                          <span className="text-blue-500">•</span> Fast service
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="text-blue-500">•</span> Nearest available verified electrician
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="text-blue-500">•</span> Standard service charges apply
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
 
                 {/* Quantity */}
                 <div>
@@ -1096,7 +1273,9 @@ const BookService = () => {
                   )}
                   {getCustomerPricingBreakdown().additional > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Additional Service Charges</span>
+                      <span className="text-gray-500">
+                        {formData.isEmergency ? "Emergency Charges" : "Additional Service Charges"}
+                      </span>
                       <span className="text-red-500 font-semibold">
                         +{formatCurrency(getCustomerPricingBreakdown().additional)}
                       </span>

@@ -19,7 +19,9 @@ const requireCustomer = roleMiddleware(['customer']);
 const { uploadProfilePic } = require('../middlewares/upload');
 
 // Public routes (no authentication required)
-router.post("/register", validateBody(registerSchema), register);
+const { signupLimiter } = require('../middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
+router.post("/register", signupLimiter, preventDuplicateSubmissions(5), validateBody(registerSchema), register);
 
 router.get('/profile', userAuthMiddleware, requireCustomer, getProfile);
 router.put('/profile-update', userAuthMiddleware, requireCustomer, updateProfile);

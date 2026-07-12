@@ -43,7 +43,7 @@ const registerDevice = (user, deviceInfo) => {
  * @route   POST /api/auth/login
  * @access  Public
  */
-exports.Login = async (req, res) => {
+exports.Login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -97,19 +97,21 @@ exports.Login = async (req, res) => {
       });
     }
 
-    // Load security settings
-    const { SystemConfig } = require('../models/SystemSetting');
-    const settings = await SystemConfig.findOne();
-    const maxLoginAttempts = settings?.securitySettings?.maxLoginAttempts || 5;
-    const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
-
-    // Check if user is locked out
-    if (user.lockUntil && user.lockUntil > new Date()) {
-      const remainingMs = user.lockUntil - new Date();
-      const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
-      return res.status(403).json({
+    // Check if account is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const { trackEvent } = require('../middlewares/fraud-middleware');
+      await trackEvent({
+        req,
+        actionType: 'login_lockout',
+        userId: user._id,
+        userModel: userType === 'admin' ? 'Admin' : (userType === 'provider' ? 'Provider' : 'User'),
+        role: userType === 'admin' ? 'admin' : (userType === 'provider' ? 'provider' : 'customer'),
+        flagReason: `Blocked login attempt: Account locked until ${user.lockUntil}`
+      });
+      return res.status(429).json({
         success: false,
-        message: `Your account is temporarily locked due to too many failed login attempts. Please try again in ${remainingMinutes} minute(s).`
+        message: 'Too many failed login attempts. Please try again after 15 minutes.',
+        error: 'TOO_MANY_FAILED_LOGINS'
       });
     }
 
@@ -124,12 +126,11 @@ exports.Login = async (req, res) => {
     }
 
     if (!isMatch) {
-      // Increment attempts
       user.loginAttempts = (user.loginAttempts || 0) + 1;
-      let isLockedNow = false;
-      if (user.loginAttempts >= maxLoginAttempts) {
-        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
-        isLockedNow = true;
+      let locked = false;
+      if (user.loginAttempts >= 5) {
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+        locked = true;
       }
       await user.save();
 
@@ -140,26 +141,22 @@ exports.Login = async (req, res) => {
         userId: user._id,
         userModel: userType === 'admin' ? 'Admin' : (userType === 'provider' ? 'Provider' : 'User'),
         role: userType === 'admin' ? 'admin' : (userType === 'provider' ? 'provider' : 'customer'),
-        flagReason: `Failed login attempt: Incorrect password for ${trimmedEmail}. Attempts: ${user.loginAttempts}`
+        flagReason: `Failed login attempt: Incorrect password for ${trimmedEmail}. Attempts: ${user.loginAttempts}${locked ? ' - Account locked for 15 mins' : ''}`
       });
-      if (global.logger) global.logger.warn(`Failed login attempt: Incorrect password for ${trimmedEmail}`);
-
-      if (isLockedNow) {
-        return res.status(403).json({
-          success: false,
-          message: 'Too many incorrect password attempts. Your account has been temporarily locked for 15 minutes.'
-        });
-      }
+      if (global.logger) global.logger.warn(`Failed login attempt: Incorrect password for ${trimmedEmail}. Attempts: ${user.loginAttempts}`);
 
       return res.status(401).json({
         success: false,
-        message: `Invalid credentials. ${maxLoginAttempts - user.loginAttempts} attempt(s) remaining.`
+        message: 'Invalid email or password'
       });
     }
 
-    // Reset login attempts on success
-    user.loginAttempts = 0;
-    user.lockUntil = undefined;
+    // Reset attempts on successful login
+    if ((user.loginAttempts && user.loginAttempts > 0) || user.lockUntil) {
+      user.loginAttempts = 0;
+      user.lockUntil = undefined;
+      // We don't call save here yet because it is saved later in the controller logic (e.g. line 220: await user.save())
+    }
 
     // Check if user is suspended
     if (user.isSuspended) {
@@ -228,7 +225,7 @@ exports.Login = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: `${sessionTimeoutHours}h` }
+      { expiresIn: '24h' }
     );
 
     // Prepare response data

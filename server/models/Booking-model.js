@@ -125,8 +125,36 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'in-progress', 'started', 'completed', 'cancelled', 'confirmed', 'scheduled', 'no-show', 'assigned'],
-    default: 'pending'
+    enum: ['Pending', 'SearchingProvider', 'Offered', 'Assigned', 'Accepted', 'OnTheWay', 'Arrived', 'Started', 'InProgress', 'Completed', 'Cancelled', 'Rejected', 'Expired', 'Reassigned', 'Refunded'],
+    default: 'Pending',
+    set: function (v) {
+      if (!v) return v;
+      const statusMap = {
+        'pending': 'Pending',
+        'searchingprovider': 'SearchingProvider',
+        'offered': 'Offered',
+        'assigned': 'Assigned',
+        'accepted': 'Accepted',
+        'ontheway': 'OnTheWay',
+        'arrived': 'Arrived',
+        'started': 'Started',
+        'inprogress': 'InProgress',
+        'in-progress': 'InProgress',
+        'in_progress': 'InProgress',
+        'completed': 'Completed',
+        'cancelled': 'Cancelled',
+        'rejected': 'Rejected',
+        'expired': 'Expired',
+        'reassigned': 'Reassigned',
+        'refunded': 'Refunded',
+        'waiting admin assignment': 'Reassigned',
+        'confirmed': 'Accepted',
+        'scheduled': 'Accepted',
+        'no-show': 'Cancelled'
+      };
+      const cleanKey = v.toLowerCase().replace(/[^a-z]/g, '');
+      return statusMap[cleanKey] || statusMap[v.toLowerCase()] || v;
+    }
   },
   rating: {
     type: Number,
@@ -319,6 +347,18 @@ const bookingSchema = new Schema({
     required: true,
     min: [0, 'Total amount cannot be negative']
   },
+  walletUsed: {
+    type: Number,
+    default: 0
+  },
+  onlinePaid: {
+    type: Number,
+    default: 0
+  },
+  cashToPay: {
+    type: Number,
+    default: 0
+  },
   commissionAmount: {
     type: Number,
     default: 0,
@@ -358,6 +398,10 @@ const bookingSchema = new Schema({
     default: 0
   },
   demandSurge: {
+    type: Number,
+    default: 0
+  },
+  emergencySurge: {
     type: Number,
     default: 0
   },
@@ -443,6 +487,11 @@ const bookingSchema = new Schema({
     completionLocation: {
       latitude: Number,
       longitude: Number
+    },
+    completionNotes: {
+      type: String,
+      trim: true,
+      default: null
     }
   },
 
@@ -501,6 +550,76 @@ const bookingSchema = new Schema({
     default: false
   },
 
+  bookingType: {
+    type: String,
+    enum: ['scheduled', 'instant', 'emergency'],
+    default: 'scheduled'
+  },
+  estimatedDuration: {
+    type: Number,
+    default: null
+  },
+  travelBufferMinutes: {
+    type: Number,
+    default: null
+  },
+  expectedStartTime: {
+    type: Date,
+    default: null
+  },
+  expectedEndTime: {
+    type: Date,
+    default: null
+  },
+  providerAcceptanceStatus: {
+    type: String,
+    enum: ['pending', 'accepted', 'rejected', null],
+    default: null
+  },
+  reassignmentReason: {
+    type: String,
+    default: null
+  },
+  isEmergency: {
+    type: Boolean,
+    default: false
+  },
+  isInstant: {
+    type: Boolean,
+    default: false
+  },
+  surgeCharge: {
+    type: Number,
+    default: 0
+  },
+  providerBonus: {
+    type: Number,
+    default: 0
+  },
+  bookingPriority: {
+    type: String,
+    enum: ['low', 'medium', 'high', 'critical'],
+    default: 'medium'
+  },
+  providerResponseDeadline: {
+    type: Date,
+    default: null
+  },
+  trustedProviderOnly: {
+    type: Boolean,
+    default: false
+  },
+  startPin: {
+    type: String,
+    select: false,
+    default: null
+  },
+  completionPin: {
+    type: String,
+    select: false,
+    default: null
+  },
+
   location: {
     type: {
       type: String,
@@ -518,7 +637,26 @@ const bookingSchema = new Schema({
     userAgent: String,
     ignoredProviders: [{ type: Schema.Types.ObjectId, ref: 'Provider' }],
     assignedAt: Date
+  },
+  // BOOKING LOCK UPGRADE
+  lockedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'Provider',
+    default: null
+  },
+  lockedAt: {
+    type: Date,
+    default: null
+  },
+  lockExpiresAt: {
+    type: Date,
+    default: null
+  },
+  bookingVersion: {
+    type: Number,
+    default: 0
   }
+  // BOOKING LOCK UPGRADE
 }, {
   toJSON: {
     virtuals: true,
@@ -538,8 +676,77 @@ const bookingSchema = new Schema({
   timestamps: false
 });
 
+// Virtual fields for provider splits (calculated dynamically on the backend without extra DB storage)
+bookingSchema.virtual('providerVisitingShare').get(function () {
+  const split = this.surgeSplitSettings?.visiting ?? 0;
+  return parseFloat(((this.visitingCharge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerRainShare').get(function () {
+  const split = this.surgeSplitSettings?.rain ?? 0;
+  return parseFloat(((this.rainCharge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerTrafficShare').get(function () {
+  const split = this.surgeSplitSettings?.traffic ?? 0;
+  return parseFloat(((this.trafficCharge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerNightShare').get(function () {
+  const split = this.surgeSplitSettings?.night ?? 0;
+  return parseFloat(((this.nightCharge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerDemandShare').get(function () {
+  const split = this.surgeSplitSettings?.demand ?? 0;
+  return parseFloat(((this.demandSurge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerEmergencyShare').get(function () {
+  const split = this.surgeSplitSettings?.emergency ?? 0;
+  return parseFloat(((this.emergencySurge || 0) * (split / 100)).toFixed(2));
+});
+
 bookingSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
+
+  // EMERGENCY BOOKING ENGINE UPGRADE
+  if (this.bookingType) {
+    this.bookingType = this.bookingType.toLowerCase();
+  }
+  if (this.isModified('bookingType') || this.isNew) {
+    this.bookingType = this.bookingType || 'scheduled';
+    this.isEmergency = this.bookingType === 'emergency';
+    this.isInstant = this.bookingType === 'instant';
+  } else if (this.isModified('isEmergency') || this.isModified('isInstant')) {
+    this.bookingType = this.isEmergency ? 'emergency' : (this.isInstant ? 'instant' : 'scheduled');
+  }
+
+  if (this.isEmergency) {
+    this.bookingPriority = 'critical';
+  } else if (this.isInstant) {
+    this.bookingPriority = 'medium';
+  } else {
+    this.bookingPriority = 'low';
+  }
+  // END EMERGENCY BOOKING ENGINE UPGRADE
+
+  // Populate payment splits automatically
+  if (this.isModified('paymentMethod') || this.isModified('totalAmount') || this.isNew) {
+    if (this.paymentMethod === 'cash') {
+      this.walletUsed = 0;
+      this.onlinePaid = 0;
+      this.cashToPay = this.totalAmount;
+    } else if (this.paymentMethod === 'wallet') {
+      this.walletUsed = this.totalAmount;
+      this.onlinePaid = 0;
+      this.cashToPay = 0;
+    } else if (this.paymentMethod === 'online') {
+      this.walletUsed = 0;
+      this.onlinePaid = this.totalAmount;
+      this.cashToPay = 0;
+    }
+  }
 
   // If a provider is assigned and the status is pending, transition to accepted
   if (this.provider && this.status === 'pending') {
@@ -663,6 +870,7 @@ bookingSchema.pre('save', async function (next) {
       const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
       const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
       const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
+      const splitEmergency = typeof splits.emergency === 'number' && !isNaN(splits.emergency) ? splits.emergency : 85;
       this.surgeSplitSettings = splits;
 
       // Surcharge amounts on this booking
@@ -671,6 +879,7 @@ bookingSchema.pre('save', async function (next) {
       const traffic = typeof this.trafficCharge === 'number' && !isNaN(this.trafficCharge) ? this.trafficCharge : 0;
       const night = typeof this.nightCharge === 'number' && !isNaN(this.nightCharge) ? this.nightCharge : 0;
       const demand = typeof this.demandSurge === 'number' && !isNaN(this.demandSurge) ? this.demandSurge : 0;
+      const emergency = typeof this.emergencySurge === 'number' && !isNaN(this.emergencySurge) ? this.emergencySurge : 0;
       const custom = typeof this.customCharges === 'number' && !isNaN(this.customCharges) ? this.customCharges : 0;
       const platformFee = typeof this.platformFee === 'number' && !isNaN(this.platformFee) ? this.platformFee : 0;
 
@@ -680,9 +889,10 @@ bookingSchema.pre('save', async function (next) {
       const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
       const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
       const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
+      const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
 
-      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2)) || 0;
-      const totalSurcharges = visiting + rain + traffic + night + demand + custom + platformFee;
+      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provEmergencyShare).toFixed(2)) || 0;
+      const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom + platformFee;
       const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
       this.providerSurgeShare = providerSurgeShare;
@@ -710,10 +920,6 @@ bookingSchema.pre('save', async function (next) {
     }
   }
 
-  /* BACKUP COMMENT: Removed non-atomic totalBookings pre-save increment hook.
-     Moved to transactional completeBooking block in Booking-controller.js.
-  */
-
   next();
 });
 
@@ -729,6 +935,59 @@ bookingSchema.virtual('progressStatus').get(function () {
 // Virtual for admin earning
 bookingSchema.virtual('adminEarning').get(function () {
   return parseFloat(((this.commissionAmount || 0) + (this.companySurgeShare || 0)).toFixed(2));
+});
+
+// Virtual for standardized pricing breakdown response
+bookingSchema.virtual('pricingBreakdown').get(function () {
+  const servicePrice = this.subtotal;
+  const visitingCharges = this.visitingCharge || 0;
+  const emergencyCharges = this.emergencySurge || 0;
+  const surgeCharges = (this.rainCharge || 0) +
+    (this.trafficCharge || 0) +
+    (this.nightCharge || 0) +
+    (this.demandSurge || 0) +
+    (this.customCharges || 0) +
+    (this.platformFee || 0);
+  const discount = this.totalDiscount || 0;
+  const platformCommission = this.commissionAmount || 0;
+  const providerEarnings = this.providerEarnings || 0;
+  const platformEarnings = parseFloat((platformCommission + (this.companySurgeShare || 0)).toFixed(2));
+  const customerTotal = this.totalAmount;
+
+  let walletUsed = this.walletUsed || 0;
+  let onlinePaid = this.onlinePaid || 0;
+  let cashToPay = this.cashToPay || 0;
+
+  // Fallback calculation for older bookings where these fields might be undefined or 0
+  if (!this.walletUsed && !this.onlinePaid && !this.cashToPay) {
+    if (this.paymentMethod === 'cash') {
+      cashToPay = customerTotal;
+    } else if (this.paymentMethod === 'wallet') {
+      walletUsed = customerTotal;
+    } else if (this.paymentMethod === 'online') {
+      onlinePaid = customerTotal;
+    } else if (this.paymentMethod === 'mixed') {
+      cashToPay = 0;
+      onlinePaid = customerTotal;
+      walletUsed = 0;
+    }
+  }
+
+  return {
+    servicePrice,
+    visitingCharges,
+    emergencyCharges,
+    surgeCharges,
+    discount,
+    walletUsed,
+    platformCommission,
+    providerEarnings,
+    platformEarnings,
+    customerTotal,
+    cashRemaining: cashToPay,
+    onlinePaid,
+    finalAmount: customerTotal
+  };
 });
 
 bookingSchema.index({ location: '2dsphere' });

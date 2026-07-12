@@ -204,6 +204,42 @@ const providerSchema = new mongoose.Schema({
         default: false
     },
 
+    availabilityStatus: {
+        type: String,
+        enum: ['online', 'busy', 'break', 'leave'],
+        default: 'online'
+    },
+    calendarBookings: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Booking'
+    }],
+    trustedProvider: {
+        type: Boolean,
+        default: false
+    },
+    instantBookingEnabled: {
+        type: Boolean,
+        default: true
+    },
+    emergencyBookingEnabled: {
+        type: Boolean,
+        default: true
+    },
+    scheduledBookingEnabled: {
+        type: Boolean,
+        default: true
+    },
+    lastActive: {
+        type: Date,
+        default: Date.now
+    },
+    providerReliabilityScore: {
+        type: Number,
+        default: 100,
+        min: 0,
+        max: 100
+    },
+
     activeBooking: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Booking",
@@ -311,7 +347,13 @@ const providerSchema = new mongoose.Schema({
         codAbuseRisk: { type: String, default: 'LOW' },
         restrictionsActive: { type: Boolean, default: false },
         restrictedUntil: { type: Date, default: null },
-        restrictionReason: { type: String, default: null }
+        restrictionReason: { type: String, default: null },
+        acceptanceRate: { type: Number, default: 100 },
+        completionRate: { type: Number, default: 100 },
+        emergencySuccessRate: { type: Number, default: 100 },
+        cancellationRate: { type: Number, default: 0 },
+        averageRating: { type: Number, default: 5 },
+        lateArrival: { type: Number, default: 0 }
     },
 
     completedBookings: {

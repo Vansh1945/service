@@ -54,7 +54,7 @@ const syncEarningsStatus = async (providerId) => {
     let heldBalance = 0;
 
     earnings.forEach((earning) => {
-      const amount = parseFloat(earning.amount) || 0;
+      const amount = parseFloat(earning.netAmount) || parseFloat(earning.amount) || 0;
       if (earning.status === 'paid' || earning.status === 'withdrawn') {
         totalWithdrawn += amount;
       } else if (earning.status === 'held') {
@@ -1006,7 +1006,7 @@ static async downloadEarningsReport(req, res) {
               {
                 $ifNull: [
                   "$systemSettings.surgeSplitSettings",
-                  { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 }
+                  { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50, emergency: 85 }
                 ]
               }
             ]
@@ -2848,28 +2848,36 @@ static async releaseHeldEarnings() {
           continue;
         }
 
-        // Update provider wallet
-        const providerQuery = Provider.findById(earning.provider);
-        const provider = currentSession ? await providerQuery.session(currentSession) : await providerQuery;
-        if (provider) {
-          if (!provider.wallet) {
-            provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
-          }
-          provider.wallet.availableBalance += earning.netAmount;
-          provider.wallet.lastUpdated = new Date();
-          if (currentSession) {
-            await provider.save({ session: currentSession });
-          } else {
-            await provider.save();
-          }
+        // Update provider wallet atomically
+        const providerId = earning.provider;
+        const netAmount = earning.netAmount;
+        
+        const updatedProvider = currentSession
+          ? await Provider.findByIdAndUpdate(
+              providerId,
+              {
+                $inc: { 'wallet.availableBalance': netAmount },
+                $set: { 'wallet.lastUpdated': new Date() }
+              },
+              { session: currentSession, new: true }
+            )
+          : await Provider.findByIdAndUpdate(
+              providerId,
+              {
+                $inc: { 'wallet.availableBalance': netAmount },
+                $set: { 'wallet.lastUpdated': new Date() }
+              },
+              { new: true }
+            );
 
+        if (updatedProvider) {
           // Notify provider
           try {
             sendNotification(
-              provider._id,
+              providerId,
               'provider',
               'Earnings Released',
-              `Your earning of ₹${earning.netAmount} for booking ${earning.booking?.bookingId || earning.booking?._id} has been released and is now available in your wallet.`,
+              `Your earning of ₹${netAmount} for booking ${earning.booking?.bookingId || earning.booking?._id} has been released and is now available in your wallet.`,
               'earning_released',
               earning.booking?._id
             );
