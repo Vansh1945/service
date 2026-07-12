@@ -993,7 +993,7 @@ const ProviderBooking = () => {
               <div>
                 <span className="block text-[9px] text-gray-400 uppercase font-medium">Payment Type</span>
                 {(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? (
-                  <span className="font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded border border-amber-100">PAS</span>
+                  <span className="font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded border border-amber-100">Pay After Service</span>
                 ) : (
                   <span className="font-bold text-primary bg-primary/5 px-1 py-0.5 rounded border border-primary/10">Online</span>
                 )}
@@ -1374,50 +1374,42 @@ const ProviderBooking = () => {
 
       {/* ── Booking Details Modal ── */}
       {showModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full border border-gray-100 max-h-[90vh] overflow-y-auto flex flex-col">
 
             {/* Modal Header */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-xl">
-                    <ClipboardList className="w-5 h-5 text-primary" />
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-t-2xl">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="hidden sm:block p-1 bg-primary/10 rounded-lg">
+                    <ClipboardList className="w-4 h-4 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-secondary font-black">Booking Details</h2>
-                    <p className="text-xs text-gray-400">ID: {selectedBooking.bookingId || selectedBooking._id}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base sm:text-lg font-bold text-secondary font-black leading-tight">Booking Details</h2>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold ${getStatusColor(selectedBooking.status)}`}>
+                        {getStatusIcon(selectedBooking.status)}
+                        <span className="capitalize">{selectedBooking.status}</span>
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                      ID: {selectedBooking.bookingId || selectedBooking._id} · <Calendar className="w-3 h-3 inline-block mx-0.5 text-primary align-text-top" /> {formatDate(selectedBooking.date)} · {formatTime(selectedBooking.time)}
+                    </p>
                   </div>
                 </div>
-                <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedBooking.status)}`}>
-                    {getStatusIcon(selectedBooking.status)}
-                    <span className="capitalize">{selectedBooking.status}</span>
-                  </span>
-                  <span className="text-sm text-gray-500 font-bold">
-                    <Calendar className="w-3.5 h-3.5 inline mr-1 text-primary" />
-                    {formatDate(selectedBooking.date)} · {formatTime(selectedBooking.time)}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-gray-400 block uppercase font-bold">Total Receivables</span>
-                  <PriceDisplay amount={calculateNetAmount(selectedBooking)} type="large-bold-primary" freeText={null} />
+                <div className="text-right shrink-0">
+                  <span className="text-[9px] text-gray-400 block uppercase font-bold tracking-wider mb-0.5">You'll Receive</span>
+                  <span className="text-lg sm:text-xl font-black text-primary"><PriceDisplay amount={calculateNetAmount(selectedBooking)} type="text-only" /></span>
                 </div>
               </div>
 
               {/* Tabs Selector Row - instant loaded */}
-              <div className="flex border-b border-gray-200 mt-4 overflow-x-auto">
+              <div className="flex border-b border-gray-200 mt-2 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {selectedBookingTabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setModalActiveTab(tab.id)}
-                    className={`px-4 py-2.5 font-black text-xs border-b-2 transition-all whitespace-nowrap uppercase tracking-wider ${selectedActiveTabId === tab.id
+                    className={`px-3 py-1.5 font-black text-[11px] border-b-2 transition-all whitespace-nowrap uppercase tracking-wider ${selectedActiveTabId === tab.id
                       ? 'border-primary text-primary'
                       : 'border-transparent text-gray-400 hover:text-gray-600'
                       }`}

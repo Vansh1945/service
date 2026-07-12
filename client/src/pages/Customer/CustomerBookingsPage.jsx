@@ -99,192 +99,70 @@ const getCompletionPin = (booking) => {
 
 
 
-// ─── Timeline ─────────────────────────────────────────────────────────────────
-
-const BookingTimeline = ({ booking }) => {
-  const rawTimeline = Array.isArray(booking.timeline) ? booking.timeline : [];
-  const timeline = rawTimeline.filter(
-    (step) =>
-      !step.title.includes('Start PIN generated') &&
-      !step.title.includes('Completion PIN generated')
-  );
-
-  if (timeline.length === 0) return null;
-
-  const getStepIcon = (title) => {
-    const t = title.toLowerCase();
-    if (t.includes('requested')) return ShoppingCart;
-    if (t.includes('payment')) return CreditCard;
-    if (t.includes('assigned')) return User;
-    if (t.includes('accepted')) return CheckCircle;
-    if (t.includes('way')) return Home;
-    if (t.includes('pin generated')) return ShieldCheck;
-    if (t.includes('verified')) return ShieldCheck;
-    if (t.includes('geo')) return MapPin;
-    if (t.includes('started')) return Wrench;
-    if (t.includes('completed')) return CheckCircle;
-    if (t.includes('protection') || t.includes('review')) return ShieldAlert;
-    if (t.includes('cancelled')) return XCircle;
-    if (t.includes('dispute') || t.includes('complaint')) return AlertCircle;
-    return Activity;
-  };
-
-  return (
-    <div className="pt-2 pb-4">
-      <div className="relative">
-        {/* Vertical Line */}
-        <div className="absolute left-[18px] top-6 bottom-6 w-0.5 bg-gray-100" />
-
-        <div className="space-y-8">
-          {timeline.map((step, idx) => {
-            const Icon = getStepIcon(step.title);
-            const isCompleted = step.status === 'completed';
-            const isCurrent = step.status === 'current';
-            const isError = step.status === 'error';
-
-            return (
-              <div key={idx} className="relative flex items-start group">
-                {/* Icon Container */}
-                <div className={`relative z-20 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${isCompleted
-                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100'
-                  : isCurrent
-                    ? 'bg-orange-500 text-white animate-pulse shadow-md shadow-orange-100'
-                    : isError
-                      ? 'bg-red-500 text-white shadow-md shadow-red-100'
-                      : 'bg-white border-2 border-gray-100 text-gray-300'
-                  }`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-
-                {/* Content */}
-                <div className="ml-4 pt-1 min-w-0">
-                  <h4 className={`text-sm font-bold leading-none mb-1.5 transition-colors ${isCompleted ? 'text-secondary font-black' : isCurrent ? 'text-orange-600 font-black' : isError ? 'text-red-600 font-black' : 'text-gray-400'
-                    }`}>
-                    {step.title}
-                  </h4>
-                  {step.time && (
-                    <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-400 mt-1">
-                      <Clock className="w-3 h-3" />
-                      {formatDateTime(step.time)}
-                    </div>
-                  )}
-                  {isCurrent && (
-                    <span className="inline-block mt-1 px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-bold rounded-full border border-orange-100 animate-pulse">
-                      {step.title.toLowerCase().includes('way') ? 'On The Way' :
-                        step.title.toLowerCase().includes('protection') || step.title.toLowerCase().includes('review') ? 'Active' :
-                          step.title.toLowerCase().includes('dispute') || step.title.toLowerCase().includes('complaint') ? 'Under Review' :
-                            'In Progress'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
 // ─── Provider Card ────────────────────────────────────────────────────────────
 
-const ProviderCard = ({ provider, status, compact = false }) => {
+const ProviderCard = ({ provider, status, compact = false, onCall, onChat, bookingId }) => {
   if (!provider) return null;
-  const rating = provider.performanceScore?.rating;
 
-  if (compact) return (
-    <div className={`mt-3 flex items-center gap-3 p-3 rounded-xl border ${status === 'completed'
-      ? 'bg-emerald-50 border-emerald-100'
-      : 'bg-blue-50 border-blue-100'
-      }`}>
-      <div className={`w-9 h-9 bg-white rounded-full overflow-hidden flex items-center justify-center border flex-shrink-0 ${status === 'completed' ? 'border-emerald-200' : 'border-blue-200'
-        }`}>
-        {provider.profilePicUrl ? (
-          <img src={provider.profilePicUrl} alt={provider.name} className="w-full h-full object-cover" />
-        ) : (
-          <User className={`w-4 h-4 ${status === 'completed' ? 'text-emerald-600' : 'text-blue-600'}`} />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] text-gray-500 font-medium leading-none mb-0.5">
-          {status === 'completed' ? 'Served By' : 'Assigned Provider'}
-        </p>
-        <p className="text-sm font-bold text-gray-900 truncate leading-tight">{provider.name}</p>
-        <div className="flex flex-wrap items-center gap-x-1.5 mt-0.5">
-          <span className={`text-[10px] font-bold uppercase tracking-wider ${status === 'completed' ? 'text-emerald-600' : 'text-primary'
-            }`}>ID: {provider.providerId || 'N/A'}</span>
-          <span className="text-gray-300 text-[10px]">•</span>
-          <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-black border border-emerald-100 flex items-center gap-0.5 shrink-0">
-            <CheckCircle className="w-2.5 h-2.5" /> {provider.completedBookings || 0} Jobs
-          </span>
-        </div>
-      </div>
-      {rating > 0 && (
-        <div className="ml-auto flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-yellow-100 flex-shrink-0">
-          <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-          <span className="text-xs font-bold">{rating.toFixed(1)}</span>
-        </div>
-      )}
-      {status === 'completed' && (
-        <div className="ml-auto flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 flex-shrink-0">
-          <CheckCircle className="w-4 h-4 text-white" />
-        </div>
-      )}
-    </div>
-  );
+  const rating = provider.rating || provider.averageRating || 4.5;
+  const experience = provider.experience || provider.yearsOfExperience;
 
   return (
-    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-        {status === 'completed' ? 'Service Completed By' : 'Assigned Provider'}
-      </p>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 bg-primary/10 rounded-full overflow-hidden flex items-center justify-center border-2 border-primary/20">
+    <div className="flex items-center justify-between p-3 rounded-xl border bg-slate-50 border-slate-100 mt-2">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-10 h-10 bg-white rounded-full overflow-hidden flex items-center justify-center border border-slate-200 shrink-0 shadow-sm">
           {provider.profilePicUrl ? (
             <img src={provider.profilePicUrl} alt={provider.name} className="w-full h-full object-cover" />
           ) : (
-            <User className="w-6 h-6 text-primary" />
+            <User className="w-5 h-5 text-slate-400" />
           )}
         </div>
-        <div>
-          <p className="font-bold text-gray-900">{provider.name}</p>
-          <div className="flex flex-wrap items-center gap-x-2 text-xs font-bold text-primary uppercase mt-0.5">
-            <span>ID: {provider.providerId || 'N/A'}</span>
-            <span className="text-gray-300">•</span>
-            <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1 font-black">
-              <CheckCircle className="w-3 h-3" /> {provider.completedBookings || 0} Completed {provider.completedBookings === 1 ? 'Booking' : 'Bookings'}
-            </span>
+        <div className="min-w-0">
+          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider leading-none mb-1">
+            {status === 'completed' ? 'Served By' : 'Your Professional'}
+          </p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs font-bold text-slate-800 truncate">{provider.name}</p>
+            {provider.isVerified && (
+              <CheckCircle className="w-3 h-3 text-emerald-500 fill-emerald-50" />
+            )}
           </div>
-          {rating > 0 && (
-            <div className="flex items-center gap-1 mt-1">
-              <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-              <span className="text-xs font-semibold">{rating.toFixed(1)}/5</span>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 font-medium">
+            {rating > 0 && (
+              <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 px-1 py-0.5 rounded font-bold">
+                <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                {Number(rating).toFixed(1)}
+              </span>
+            )}
+            {experience && (
+              <span>• {experience} Years Exp</span>
+            )}
+          </div>
         </div>
       </div>
-      {status !== 'completed' && (
-        <>
-          {provider.phone && (
-            <a href={`tel:${provider.phone}`} className="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-xl text-sm font-bold hover:bg-primary/90 transition-all active:scale-95 shadow-sm">
-              <Phone className="w-4 h-4" />
-              Call Provider
-            </a>
+
+      {/* Contact Actions */}
+      {!['completed', 'cancelled'].includes(status) && (
+        <div className="flex items-center gap-1.5">
+          {provider.phone && onCall && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCall(provider.phone); }}
+              className="p-1.5 text-slate-600 hover:text-primary bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-all shadow-sm"
+              title="Call"
+            >
+              <Phone className="w-3.5 h-3.5" />
+            </button>
           )}
-          {provider.performanceScore && (
-            <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-              <div className="flex justify-between bg-white p-2 rounded-lg border border-gray-100">
-                <span className="text-gray-500">On-Time</span>
-                <span className="font-bold">{(provider.performanceScore.onTimePercentage || 0).toFixed(0)}%</span>
-              </div>
-              <div className="flex justify-between bg-white p-2 rounded-lg border border-gray-100">
-                <span className="text-gray-500">Completion</span>
-                <span className="font-bold">{(provider.performanceScore.completionPercentage || 0).toFixed(0)}%</span>
-              </div>
-            </div>
+          {onChat && bookingId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onChat(bookingId, 'provider_customer'); }}
+              className="p-1.5 text-white bg-primary hover:bg-primary/90 rounded-lg transition-all shadow-sm"
+              title="Chat"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -489,8 +367,26 @@ const AddressBlock = ({ address, phone }) => {
 const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const provider = booking.provider || booking.providerDetails;
+  
+  const steps = [
+    { label: 'Booking Created', statuses: ['pending'] },
+    { label: 'Provider Accepted', statuses: ['assigned', 'accepted'] },
+    { label: 'On The Way', statuses: ['on_the_way', 'arriving', 'arrived'] },
+    { label: 'Work Started', statuses: ['in-progress', 'in_progress', 'started'] },
+    { label: 'Completed', statuses: ['completed'] }
+  ];
+
+  const currentStatus = (booking.status || 'pending').toLowerCase().replace(/[^a-z]/g, '');
+  let activeIndex = 0;
+  if (['assigned', 'accepted'].includes(currentStatus)) activeIndex = 1;
+  else if (['ontheway', 'arriving', 'arrived'].includes(currentStatus)) activeIndex = 2;
+  else if (['inprogress', 'started'].includes(currentStatus)) activeIndex = 3;
+  else if (['completed'].includes(currentStatus)) activeIndex = 4;
+
+  const visibleSteps = steps.slice(0, activeIndex + 1);
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100] animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl z-30">
@@ -511,7 +407,22 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
 
         {/* Body */}
         <div className="p-6 space-y-5">
-          <BookingTimeline booking={booking} />
+          {/* Booking Stages */}
+          {!['cancelled', 'rejected', 'expired'].includes(currentStatus) && (
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center justify-center gap-1.5 flex-wrap">
+              {visibleSteps.map((step, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 animate-fadeIn">
+                  <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-full border border-emerald-100 shadow-sm">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-700">{step.label}</span>
+                  </div>
+                  {idx < visibleSteps.length - 1 && (
+                    <span className="text-slate-300 text-xs font-bold">➔</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Dispute & Refund Info */}
           {(booking.disputeRaised || booking.paymentStatus === 'refunded' || booking.adminRefundDecision) && (
