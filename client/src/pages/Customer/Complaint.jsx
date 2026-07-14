@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
-  HelpCircle, MessageSquare, Phone, Plus, Eye, Calendar,
-  Clock, AlertCircle, CheckCircle, X, Upload, Loader2,
-  ChevronRight, FileText, ShieldCheck, Headphones, ArrowLeft, Tag,
-  Wallet, ImageIcon, BadgeCheck, RotateCcw, Star
+  MessageSquare, Phone, Plus,
+  Clock, AlertCircle, CheckCircle, Check, X, Upload,
+  ChevronRight, FileText, Headphones, ArrowLeft,
+  Wallet, RotateCcw
 } from 'lucide-react';
 import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
@@ -273,8 +273,8 @@ const ComplaintsPage = () => {
         <div className="max-w-4xl mx-auto px-4 py-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => navigate(-1)} 
+              <button
+                onClick={() => navigate(-1)}
                 className="p-1 rounded-full hover:bg-neutral-100 transition-colors"
                 aria-label="Go back"
               >
@@ -331,7 +331,7 @@ const ComplaintsPage = () => {
           <div className="flex flex-col gap-3.5">
             {complaints.map((complaint) => {
               const s = getStatusStyle(complaint.status);
-              
+
               // Priority / Category Badge mapping
               let catBadgeColor = "bg-neutral-100 text-neutral-600 border-neutral-200";
               if (complaint.category === "Refund request" || complaint.category === "Payment issue") {
@@ -349,11 +349,11 @@ const ComplaintsPage = () => {
                 <div
                   key={complaint._id}
                   onClick={() => viewComplaintDetails(complaint._id)}
-                  className="bg-white rounded-xl border border-neutral-200/80 p-4 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
+                  className="bg-white rounded-xl border border-neutral-200/80 p-3 hover:border-neutral-300 transition-colors duration-150 cursor-pointer flex flex-col justify-between group"
                 >
                   <div>
                     {/* Ticket Header: Complaint ID & Status / Category badges */}
-                    <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
                       <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tight">
                         #{complaint.complaintId || complaint._id.slice(-8)}
                       </span>
@@ -368,18 +368,18 @@ const ComplaintsPage = () => {
                     </div>
 
                     {/* Title & Service Details */}
-                    <h4 className="text-xs font-bold text-neutral-800 line-clamp-1 mb-1 group-hover:text-primary transition-colors">
+                    <h4 className="text-xs font-bold text-neutral-800 line-clamp-1 mb-0.5 group-hover:text-primary transition-colors">
                       {complaint.title || 'Support Request'}
                     </h4>
-                    
+
                     {bId && (
-                      <div className="flex flex-col gap-0.5 mb-2 text-[10px] text-neutral-500 bg-neutral-50 p-2 rounded-lg border border-neutral-100/50">
+                      <div className="flex flex-col gap-0.5 mb-1.5 text-[10px] text-neutral-500 bg-neutral-50 p-1.5 rounded-lg border border-neutral-100/50">
                         <p className="font-semibold text-neutral-700 truncate">{bTitle}</p>
                         <p className="opacity-80">Booking: #{complaint.booking?.bookingId || bId.slice(-8)}</p>
                       </div>
                     )}
 
-                    <p className="text-[10px] text-neutral-500 line-clamp-2 leading-relaxed mb-3">
+                    <p className="text-[10px] text-neutral-500 line-clamp-2 leading-relaxed mb-2">
                       {complaint.description?.includes(']')
                         ? complaint.description.split(']').slice(1).join(']').trim()
                         : complaint.description}
@@ -387,12 +387,12 @@ const ComplaintsPage = () => {
                   </div>
 
                   {/* Bottom row: Created date & View Action */}
-                  <div className="flex items-center justify-between pt-2 border-t border-neutral-100 text-[10px]">
+                  <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100 text-[10px]">
                     <span className="text-neutral-400 flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
                       {formatDate(complaint.createdAt)}
                     </span>
-                    <button 
+                    <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); viewComplaintDetails(complaint._id); }}
                       className="text-primary font-bold hover:underline flex items-center gap-0.5"
@@ -510,7 +510,7 @@ const ComplaintsPage = () => {
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {/* Category */}
               <div>
                 <label className="block text-xs font-semibold text-secondary mb-1.5">Category *</label>
@@ -630,9 +630,9 @@ const ComplaintsPage = () => {
                     {formData.previewImages.map((preview, idx) => (
                       <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-neutral-200 shadow-sm group">
                         <img src={preview} className="w-full h-full object-cover" alt="" />
-                        <button 
+                        <button
                           type="button"
-                          onClick={() => removeImage(idx)} 
+                          onClick={() => removeImage(idx)}
                           className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white"
                         >
                           <X className="h-4 w-4" />
@@ -672,7 +672,7 @@ const ComplaintsPage = () => {
               <button onClick={() => setOpenComplaintDetail(false)} className="p-1.5 hover:bg-gray-100 rounded-full"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 
               {/* ── Support Status Card ── */}
               <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 shadow-sm space-y-3">
@@ -738,7 +738,7 @@ const ComplaintsPage = () => {
                       ) : <span className="text-[9px] text-neutral-450 italic">None</span>}
                     </div>
                   </div>
-                  
+
                   {/* After */}
                   <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 flex flex-col items-center">
                     <span className="text-[8px] font-bold text-neutral-400 uppercase mb-1.5">After</span>
@@ -783,29 +783,29 @@ const ComplaintsPage = () => {
                 {(() => {
                   const status = (selectedComplaint.status || '').toLowerCase();
                   const b = selectedComplaint.booking || {};
-                  
+
                   const timelineSteps = [
                     { label: 'Complaint Created', done: true, active: false, color: 'bg-success' },
-                    { 
-                      label: 'Under Review', 
+                    {
+                      label: 'Under Review',
                       done: ['under_review', 'in-progress', 'provider_responded', 'admin_review', 'resolved', 'solved', 'refunded', 'rejected', 'closed'].includes(status),
                       active: ['open', 'submitted'].includes(status),
                       color: 'bg-info'
                     },
-                    { 
-                      label: 'Assigned', 
+                    {
+                      label: 'Assigned',
                       done: ['provider_responded', 'admin_review', 'resolved', 'solved', 'refunded', 'rejected', 'closed'].includes(status) || b.complaintProofs?.some(p => p.uploadedBy === 'provider'),
                       active: ['under_review', 'in-progress'].includes(status),
                       color: 'bg-primary'
                     },
-                    { 
-                      label: 'Resolved', 
+                    {
+                      label: 'Resolved',
                       done: ['resolved', 'solved', 'refunded', 'rejected', 'closed'].includes(status),
                       active: ['provider_responded', 'admin_review'].includes(status),
                       color: 'bg-success'
                     },
-                    { 
-                      label: 'Closed', 
+                    {
+                      label: 'Closed',
                       done: ['closed'].includes(status),
                       active: ['resolved', 'solved', 'refunded', 'rejected'].includes(status),
                       color: 'bg-neutral-500'
@@ -826,20 +826,20 @@ const ComplaintsPage = () => {
                   }
 
                   return (
-                    <div className="relative pl-6">
-                      <div className="absolute left-[9px] top-2 bottom-2 w-px bg-neutral-200" />
-                      <div className="space-y-4">
+                    <div className="relative">
+                      <div className="absolute left-2.5 top-2.5 bottom-2.5 w-0.5 bg-neutral-200" />
+                      <div className="space-y-4.5">
                         {timelineSteps.map((step, i) => {
                           const isDone = step.done;
                           const isActive = step.active;
-                          const dotColor = isDone ? step.color : 'bg-neutral-300';
+                          const dotColor = isDone ? step.color : 'bg-neutral-200';
                           return (
                             <div key={i} className="relative flex items-center gap-3">
-                              <div className={`relative z-10 w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border-2 ${isDone ? 'border-transparent' : 'border-neutral-305 bg-white'} ${dotColor}`}>
+                              <div className={`relative z-10 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? dotColor + ' text-white' : 'border-2 border-neutral-300 bg-white'}`}>
                                 {isDone ? (
-                                  <CheckCircle className="w-2.5 h-2.5 text-white" />
+                                  <Check className="w-3 h-3 stroke-[3]" />
                                 ) : (
-                                  <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-primary animate-pulse' : 'bg-neutral-400'}`} />
+                                  <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-primary animate-pulse' : 'bg-neutral-300'}`} />
                                 )}
                               </div>
                               <p className={`text-xs ${isActive ? 'text-primary font-bold' : isDone ? 'text-neutral-800 font-semibold' : 'text-neutral-450'}`}>
