@@ -48,7 +48,7 @@ const PwaInstallBanner = ({ role = 'customer' }) => {
   const buttonBg = role === 'provider' ? 'bg-accent hover:bg-accent/90' : 'bg-primary hover:bg-primary/90';
 
   return (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[999] w-[92%] max-w-lg animate-in slide-in-from-top-6 duration-350 ease-out">
+    <div className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[999] w-[92%] max-w-lg animate-in slide-in-from-top-6 duration-350 ease-out">
       <div className="relative overflow-hidden bg-white/95 backdrop-blur-md border border-slate-150 rounded-2xl shadow-[0_15px_30px_rgba(0,0,0,0.12)] p-4 pr-10 flex flex-col sm:flex-row items-center justify-between gap-4">
 
         {/* Close Button */}

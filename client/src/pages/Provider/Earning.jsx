@@ -635,44 +635,38 @@ const ProviderEarningsDashboard = () => {
                               </td>
                               <td className="px-6 py-4 text-right relative group">
                                 <span
-                                  onClick={(evt) => {
-                                    evt.stopPropagation();
-                                    setSurchargeOpenId(surchargeOpenId === e._id ? null : e._id);
-                                  }}
                                   className="text-sm font-medium text-emerald-600 border-b border-dashed border-emerald-450 cursor-pointer flex items-center justify-end gap-1 select-none"
                                 >
                                   {formatCurrency(otherIncome)}
                                   <Info className="w-3.5 h-3.5 text-emerald-600/70" />
                                 </span>
-                                {surchargeOpenId === e._id && (
-                                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
-                                    <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
-                                    <div className="flex justify-between py-0.5">
-                                      <span>Rain Charge</span>
-                                      <span>{formatCurrency(rainShare)}</span>
-                                    </div>
-                                    <div className="flex justify-between py-0.5">
-                                      <span>Traffic Charge</span>
-                                      <span>{formatCurrency(trafficShare)}</span>
-                                    </div>
-                                    <div className="flex justify-between py-0.5">
-                                      <span>Night Charge</span>
-                                      <span>{formatCurrency(nightShare)}</span>
-                                    </div>
-                                    <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                      <span>Vis. Charge</span>
-                                      <span>{formatCurrency(visitingShare)}</span>
-                                    </div>
-                                    <div className="flex justify-between py-0.5 font-bold">
-                                      <span>Demand Charge</span>
-                                      <span>{formatCurrency(demandShare)}</span>
-                                    </div>
-                                    <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                      <span>Total Surcharge</span>
-                                      <span>{formatCurrency(otherIncome)}</span>
-                                    </div>
+                                <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200">
+                                  <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
+                                  <div className="flex justify-between py-0.5">
+                                    <span>Rain Charge</span>
+                                    <span>{formatCurrency(rainShare)}</span>
                                   </div>
-                                )}
+                                  <div className="flex justify-between py-0.5">
+                                    <span>Traffic Charge</span>
+                                    <span>{formatCurrency(trafficShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5">
+                                    <span>Night Charge</span>
+                                    <span>{formatCurrency(nightShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                    <span>Vis. Charge</span>
+                                    <span>{formatCurrency(visitingShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5 font-bold">
+                                    <span>Demand Charge</span>
+                                    <span>{formatCurrency(demandShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                    <span>Total Surcharge</span>
+                                    <span>{formatCurrency(otherIncome)}</span>
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
                                 {formatCurrency(e.netAmount)}
@@ -744,15 +738,11 @@ const ProviderEarningsDashboard = () => {
                               <p className="text-secondary/40">Commission</p>
                               <p className="font-semibold text-red-500">-{formatCurrency(e.commissionAmount)} ({e.commissionRate}%)</p>
                             </div>
-                            <div className="relative">
+                            <div className="relative group">
                               <p className="text-secondary/40 flex items-center gap-1 select-none">
                                 Other
                                 <button
                                   type="button"
-                                  onClick={(evt) => {
-                                    evt.stopPropagation();
-                                    setSurchargeOpenId(surchargeOpenId === e._id ? null : e._id);
-                                  }}
                                   className="text-emerald-600 hover:text-emerald-700 focus:outline-none"
                                 >
                                   <Info className="w-3 h-3 inline" />
@@ -761,42 +751,41 @@ const ProviderEarningsDashboard = () => {
                               <p className="font-semibold text-emerald-600">
                                 {formatCurrency(otherIncome)}
                               </p>
-                              {/* Tap Popover for Mobile */}
-                              {surchargeOpenId === e._id && (
-                                <div className="absolute left-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
-                                  <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
-                                  <div className="flex justify-between py-0.5">
-                                    <span>Rain Charge</span>
-                                    <span>{formatCurrency(rainShare)}</span>
-                                  </div>
-                                  <div className="flex justify-between py-0.5">
-                                    <span>Traffic Charge</span>
-                                    <span>{formatCurrency(trafficShare)}</span>
-                                  </div>
-                                  <div className="flex justify-between py-0.5">
-                                    <span>Night Charge</span>
-                                    <span>{formatCurrency(nightShare)}</span>
-                                  </div>
-                                  <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                    <span>Vis. Charge</span>
-                                    <span>{formatCurrency(visitingShare)}</span>
-                                  </div>
-                                  <div className="flex justify-between py-0.5 font-bold">
-                                    <span>Demand Charge</span>
-                                    <span>{formatCurrency(demandShare)}</span>
-                                  </div>
-                                  <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                    <span>Total Surcharge</span>
-                                    <span>{formatCurrency(otherIncome)}</span>
-                                  </div>
+                              {/* Surcharge Details Popover on Hover */}
+                              <div className="absolute left-0 bottom-full mb-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200">
+                                <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
+                                <div className="flex justify-between py-0.5">
+                                  <span>Rain Charge</span>
+                                  <span>{formatCurrency(rainShare)}</span>
                                 </div>
-                              )}
+                                <div className="flex justify-between py-0.5">
+                                  <span>Traffic Charge</span>
+                                  <span>{formatCurrency(trafficShare)}</span>
+                                </div>
+                                <div className="flex justify-between py-0.5">
+                                  <span>Night Charge</span>
+                                  <span>{formatCurrency(nightShare)}</span>
+                                </div>
+                                <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                  <span>Vis. Charge</span>
+                                  <span>{formatCurrency(visitingShare)}</span>
+                                </div>
+                                <div className="flex justify-between py-0.5 font-bold">
+                                  <span>Demand Charge</span>
+                                  <span>{formatCurrency(demandShare)}</span>
+                                </div>
+                                <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                  <span>Total Surcharge</span>
+                                  <span>{formatCurrency(otherIncome)}</span>
+                                </div>
+                              </div>
                             </div>
                             <div>
                               <p className="text-secondary/40">Net Amt</p>
                               <p className="font-bold text-green-600">+{formatCurrency(e.netAmount)}</p>
                             </div>
                           </div>
+
                           <div className="flex justify-between items-center text-[10px] text-secondary/40 border-t border-gray-50 pt-2">
                             <span>Method: <span className="font-semibold capitalize text-secondary/60">{e.paymentMethod || '—'}</span></span>
                           </div>
@@ -1079,91 +1068,85 @@ const ProviderEarningsDashboard = () => {
 
       {/* Withdrawal Modal */}
       {showWithdrawalModal && (
-        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-scale-up">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-secondary">Withdraw Funds</h3>
+        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden animate-scale-up">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-semibold text-secondary">Withdraw Funds</h3>
               <button onClick={() => setShowWithdrawalModal(false)} className="p-1 hover:bg-gray-100 rounded-lg text-secondary/40">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-4 sm:p-5 space-y-4">
               <div>
-                <p className="text-sm text-secondary/50 mb-1">Available Balance</p>
-                <p className="text-3xl font-bold text-primary">{formatCurrency(summary.availableBalance)}</p>
+                <p className="text-[11px] sm:text-xs text-secondary/50 mb-0.5">Available Balance</p>
+                <p className="text-2xl sm:text-3xl font-bold text-primary">{formatCurrency(summary.availableBalance)}</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-secondary/70 mb-2">Amount (₹)</label>
+                <label className="block text-xs sm:text-sm font-medium text-secondary/70 mb-1.5">Amount (₹)</label>
                 <input
                   type="number"
                   value={withdrawalForm.amount}
                   onChange={e => setWithdrawalForm({ amount: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-base sm:text-lg font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
                   placeholder="Enter amount"
                 />
-                <p className="mt-2 text-xs text-secondary/40">* Minimum ₹{summary.minWithdrawalLimit ?? 500} required</p>
+                <p className="mt-1 text-[10px] sm:text-xs text-secondary/40">* Minimum ₹{summary.minWithdrawalLimit ?? 500} required</p>
               </div>
 
               {providerBankDetails && (
                 <Link
                   to="/provider/profile"
-                  className="block p-4 bg-gray-50 hover:bg-gray-100/70 border border-gray-200 hover:border-teal-200 rounded-xl space-y-3 transition-all cursor-pointer group"
+                  className="block p-3 bg-gray-50 hover:bg-gray-100/70 border border-gray-200 hover:border-teal-200 rounded-xl transition-all cursor-pointer group"
                 >
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs font-semibold text-secondary/40 uppercase tracking-wider">Destination Account</p>
-                    <span className="text-[10px] text-primary group-hover:underline font-bold">Edit Details →</span>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-[9px] sm:text-[10px] font-semibold text-secondary/40 uppercase tracking-wider">Destination Account</p>
+                    <span className="text-[9px] sm:text-[10px] text-primary group-hover:underline font-bold">Edit Details →</span>
                   </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-lg text-primary shadow-sm border border-gray-100 group-hover:bg-primary/5">
-                        <Building className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Account Holder</p>
-                        <p className="text-sm font-bold text-secondary truncate">{providerBankDetails.accountName || providerBankDetails.accountHolderName || 'N/A'}</p>
-                      </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-white rounded-lg text-primary shadow-sm border border-gray-100 group-hover:bg-primary/5 mt-0.5">
+                      <Building className="w-4 h-4 text-primary" />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4 pl-11">
-                      <div>
-                        <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Bank Name</p>
-                        <p className="text-xs font-semibold text-secondary truncate">{providerBankDetails.bankName}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">IFSC Code</p>
-                        <p className="text-xs font-semibold text-secondary uppercase tracking-wider">{providerBankDetails.ifscCode || providerBankDetails.ifsc || 'N/A'}</p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Account Number</p>
-                        <p className="text-xs font-bold text-secondary tracking-widest">{providerBankDetails.accountNo?.replace(/.(?=.{4})/g, '•')}</p>
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-secondary truncate">
+                        {providerBankDetails.bankName || 'Your Bank'}
+                      </p>
+                      <p className="text-[11px] sm:text-xs text-secondary/60 font-semibold mt-0.5">
+                        A/C: {providerBankDetails.accountNo?.replace(/.(?=.{4})/g, '•') || 'N/A'}
+                      </p>
+                      <p className="text-[9px] sm:text-[10px] text-secondary/40 font-mono mt-0.5 uppercase">
+                        IFSC: {providerBankDetails.ifsc || 'N/A'}
+                      </p>
+                      <p className="text-[9px] sm:text-[10px] text-secondary/40 font-medium mt-0.5">
+                        Holder: {providerBankDetails.accountName || providerBankDetails.accountHolderName || 'N/A'}
+                      </p>
                     </div>
                   </div>
 
                   {/* Verification Status Banner */}
-                  <div className="pt-2 border-t border-gray-200">
+                  <div className="pt-1.5 border-t border-gray-200">
                     {providerBankDetails.verified ? (
-                      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-100 text-green-700 rounded-lg text-xs font-medium animate-fadeIn">
-                        <CheckCircle className="w-4 h-4 shrink-0 text-green-600" />
+                      <div className="flex items-center gap-1.5 p-1.5 bg-green-50 border border-green-100 text-green-700 rounded-lg text-[10px] sm:text-xs font-medium animate-fadeIn">
+                        <CheckCircle className="w-3.5 h-3.5 shrink-0 text-green-600" />
                         <span>Bank details verified and active.</span>
                       </div>
                     ) : providerBankDetails.verificationStatus === 'rejected' ? (
-                      <div className="flex flex-col gap-1 p-2 bg-red-50 border border-red-100 text-red-700 rounded-lg text-xs font-medium animate-fadeIn">
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <XCircle className="w-4 h-4 shrink-0 text-red-600" />
+                      <div className="flex flex-col gap-0.5 p-1.5 bg-red-50 border border-red-100 text-red-700 rounded-lg text-[10px] sm:text-xs font-medium animate-fadeIn">
+                        <div className="flex items-center gap-1 font-bold">
+                          <XCircle className="w-3.5 h-3.5 shrink-0 text-red-600" />
                           <span>Bank Details Rejected</span>
                         </div>
-                        <p className="text-[10px] text-red-650/80">Please update bank details in profile to resubmit.</p>
+                        <p className="text-[9px] text-red-650/80">Please update bank details in profile to resubmit.</p>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-1 p-2 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-xs font-medium animate-fadeIn">
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <Clock className="w-4 h-4 shrink-0 text-amber-600" />
+                      <div className="flex flex-col gap-0.5 p-1.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-[10px] sm:text-xs font-medium animate-fadeIn">
+                        <div className="flex items-center gap-1 font-bold">
+                          <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
                           <span>Pending Verification</span>
                         </div>
-                        <p className="text-[10px] text-amber-650/80">Withdrawals are locked until details are approved.</p>
+                        <p className="text-[9px] text-amber-650/80">Withdrawals are locked until details are approved.</p>
                       </div>
                     )}
                   </div>
@@ -1173,7 +1156,7 @@ const ProviderEarningsDashboard = () => {
               <button
                 onClick={handleWithdrawalRequest}
                 disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < (summary.minWithdrawalLimit ?? 500) || !providerBankDetails?.verified}
-                className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+                className="w-full py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
                 {processingWithdrawal ? 'Processing...' : 'Request Payout'}
               </button>
@@ -1184,43 +1167,43 @@ const ProviderEarningsDashboard = () => {
 
       {/* Withdrawal Details Modal */}
       {selectedWithdrawal && (
-        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] overflow-y-auto animate-scale-up border border-gray-100">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto scrollbar-hide animate-scale-up border border-gray-100" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-lg font-bold text-secondary">Payout Details</h3>
-                <p className="text-xs text-secondary/40 font-mono mt-0.5">Ref: {selectedWithdrawal.transactionReference || 'N/A'}</p>
+                <h3 className="text-base sm:text-lg font-bold text-secondary">Payout Details</h3>
+                <p className="text-[10px] sm:text-xs text-secondary/40 font-mono mt-0.5">Ref: {selectedWithdrawal.transactionReference || 'N/A'}</p>
               </div>
               <button onClick={() => setSelectedWithdrawal(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-secondary/40 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
-              <div className="flex items-center justify-between bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/50">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+              <div className="flex items-center justify-between bg-emerald-50/50 p-3 sm:p-4 rounded-xl border border-emerald-100/50">
                 <div>
-                  <p className="text-[10px] font-bold text-emerald-700/75 uppercase tracking-wider">Net Disbursed</p>
-                  <p className="text-2xl font-black text-emerald-600 mt-0.5">{formatCurrency(selectedWithdrawal.netAmount || selectedWithdrawal.amount)}</p>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-emerald-700/75 uppercase tracking-wider">Net Disbursed</p>
+                  <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5">{formatCurrency(selectedWithdrawal.netAmount || selectedWithdrawal.amount)}</p>
                 </div>
                 <Badge className="capitalize" status={selectedWithdrawal.status} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100/50">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50/50 p-3 sm:p-4 rounded-xl border border-slate-100/50">
                 <div>
-                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Status</p>
-                  <p className="text-sm font-semibold text-secondary capitalize">{selectedWithdrawal.status?.replace('_', ' ')}</p>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-0.5">Status</p>
+                  <p className="text-xs sm:text-sm font-semibold text-secondary capitalize">{selectedWithdrawal.status?.replace('_', ' ')}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Requested Amount</p>
-                  <p className="text-sm font-semibold text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-0.5">Requested Amount</p>
+                  <p className="text-xs sm:text-sm font-semibold text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Request Date</p>
-                  <p className="text-sm font-semibold text-secondary">{formatDate(selectedWithdrawal.createdAt)}</p>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-0.5">Request Date</p>
+                  <p className="text-xs sm:text-sm font-semibold text-secondary">{formatDate(selectedWithdrawal.createdAt)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-1">Transfer Info</p>
-                  <p className="text-sm font-semibold text-secondary">
+                  <p className="text-[9px] sm:text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-0.5">Transfer Info</p>
+                  <p className="text-xs sm:text-sm font-semibold text-secondary">
                     {selectedWithdrawal.transferDate ? (
                       selectedWithdrawal.transferTime 
                         ? `${formatDate(selectedWithdrawal.transferDate)} at ${formatTime(selectedWithdrawal.transferTime)}`
@@ -1230,26 +1213,26 @@ const ProviderEarningsDashboard = () => {
                 </div>
               </div>
 
-              <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-                <p className="text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-2.5">Bank Destination</p>
+              <div className="p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                <p className="text-[9px] sm:text-[10px] font-bold text-secondary/45 uppercase tracking-wider mb-2">Bank Destination</p>
                 <div className="flex items-start gap-3">
-                  <div className="p-2.5 bg-white rounded-lg text-primary border border-slate-100 shadow-sm mt-0.5">
-                    <Building className="w-5 h-5 text-primary" />
+                  <div className="p-2 bg-white rounded-lg text-primary border border-slate-100 shadow-sm mt-0.5">
+                    <Building className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-secondary truncate">
-                      {selectedWithdrawal.paymentDetails?.bankName || providerBankDetails?.bankName || 'Your Bank'}
+                    <p className="text-xs sm:text-sm font-bold text-secondary truncate">
+                       {selectedWithdrawal.paymentDetails?.bankName || providerBankDetails?.bankName || 'Your Bank'}
                     </p>
-                    <p className="text-xs text-secondary/60 font-semibold mt-0.5">
+                    <p className="text-[11px] sm:text-xs text-secondary/60 font-semibold mt-0.5">
                       A/C: {selectedWithdrawal.paymentDetails?.accountNumber || providerBankDetails?.accountNo || 'N/A'}
                     </p>
                     {(selectedWithdrawal.paymentDetails?.ifscCode || providerBankDetails?.ifscCode || providerBankDetails?.ifsc) && (
-                      <p className="text-[10px] text-secondary/40 font-mono mt-0.5 uppercase">
+                      <p className="text-[9px] sm:text-[10px] text-secondary/40 font-mono mt-0.5 uppercase">
                         IFSC: {selectedWithdrawal.paymentDetails?.ifscCode || providerBankDetails?.ifscCode || providerBankDetails?.ifsc}
                       </p>
                     )}
                     {(selectedWithdrawal.paymentDetails?.accountName || providerBankDetails?.accountName || providerBankDetails?.accountHolderName) && (
-                      <p className="text-[10px] text-secondary/40 font-medium mt-0.5">
+                      <p className="text-[9px] sm:text-[10px] text-secondary/40 font-medium mt-0.5">
                         Holder: {selectedWithdrawal.paymentDetails?.accountName || providerBankDetails?.accountName || providerBankDetails?.accountHolderName}
                       </p>
                     )}
@@ -1258,17 +1241,17 @@ const ProviderEarningsDashboard = () => {
               </div>
 
               {(selectedWithdrawal.adminRemark || selectedWithdrawal.paymentDetails) && (
-                <div className="p-4 bg-amber-50/70 border border-amber-100/70 rounded-xl">
-                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2">Notes from Admin/System</p>
-                  {selectedWithdrawal.adminRemark && <p className="text-sm font-medium text-amber-900">{selectedWithdrawal.adminRemark}</p>}
+                <div className="p-3 sm:p-4 bg-amber-50/70 border border-amber-100/70 rounded-xl">
+                  <p className="text-[9px] sm:text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1.5">Notes from Admin/System</p>
+                  {selectedWithdrawal.adminRemark && <p className="text-xs sm:text-sm font-medium text-amber-900">{selectedWithdrawal.adminRemark}</p>}
                   {selectedWithdrawal.paymentDetails && (
-                    <div className="text-xs text-amber-850 mt-2 space-y-1">
+                    <div className="text-[11px] sm:text-xs text-amber-855 mt-2 space-y-1">
                       {typeof selectedWithdrawal.paymentDetails === 'object' ? (
                         Object.entries(selectedWithdrawal.paymentDetails).map(([k, v]) => {
                           if (!v) return null;
                           return (
                             <div key={k} className="flex justify-between py-0.5 border-b border-amber-100/30 last:border-0">
-                              <span className="capitalize text-amber-700 font-medium">{k.replace(/([A-Z])/g, ' $1')}:</span>
+                              <span className="capitalize text-amber-750 font-medium">{k.replace(/([A-Z])/g, ' $1')}:</span>
                               <span className="font-semibold text-amber-900">{v?.toString()}</span>
                             </div>
                           );
@@ -1282,7 +1265,7 @@ const ProviderEarningsDashboard = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+            <div className="px-5 py-3 sm:px-6 sm:py-4 border-t border-gray-100 bg-gray-50/50">
               <button
                 onClick={() => setSelectedWithdrawal(null)}
                 className="w-full py-3 bg-white border border-gray-250 text-secondary/70 rounded-xl font-bold hover:bg-gray-50 transition-colors shadow-sm text-sm"
@@ -1296,7 +1279,7 @@ const ProviderEarningsDashboard = () => {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-secondary/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-secondary/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center animate-scale-up">
             <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <Info className="w-7 h-7 text-amber-500" />

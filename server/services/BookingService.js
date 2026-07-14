@@ -1491,7 +1491,7 @@ class BookingService {
           })
           .populate({
             path: 'provider',
-            select: 'name email phone completedBookings performanceScore providerId profilePicUrl'
+            select: 'name email phone completedBookings performanceScore providerId profilePicUrl rating averageRating experience yearsOfExperience isVerified completionRate'
           })
           .populate('customer', 'name email phone')
           .sort({ createdAt: -1 })
@@ -2022,7 +2022,7 @@ class BookingService {
       const booking = await Booking.findById(id)
         .populate('services.service', 'title description basePrice category images duration')
         .populate('customer', 'name email phone')
-        .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings activeBooking')
+        .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings activeBooking experience')
         .populate('feedback')
         .lean();
 

@@ -18,16 +18,52 @@ import Processing from '../../components/ui-skeletons/Processing';
 import ChatModal from '../../components/chat/ChatModal';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
-import {
-  COMPLAINT_STATUS_CONFIG,
-  getComplaintStatusStyle,
-  COMPLAINT_STATUS_LABELS,
-  COMPLAINT_STATUS_DETAIL_LABELS
-} from '../../components/ui/StatusConfig';
+const CATEGORY_MAP = {
+  "Service issue": { label: "Service Issue", icon: "🛠" },
+  "Payment issue": { label: "Payment", icon: "💳" },
+  "Refund request": { label: "Refund", icon: "💰" },
+  "Suggestion": { label: "Suggestion", icon: "💡" },
+  "Other": { label: "Other", icon: "📞" },
+};
 
-const STATUS_CONFIG = COMPLAINT_STATUS_CONFIG;
-const STATUS_LABELS = COMPLAINT_STATUS_LABELS;
-const STATUS_DETAIL_LABELS = COMPLAINT_STATUS_DETAIL_LABELS;
+const getCustomStatusStyle = (status) => {
+  const norm = (status || '').toLowerCase();
+  if (['pending', 'open', 'reopened', 'submitted'].includes(norm)) {
+    return { bg: 'bg-warning/10', text: 'text-warning', border: 'border-warning/20', dot: 'bg-warning', label: 'Pending' };
+  }
+  if (['under_review', 'in-progress', 'under-review', 'provider_responded', 'admin_review'].includes(norm)) {
+    return { bg: 'bg-info/10', text: 'text-info', border: 'border-info/20', dot: 'bg-info', label: 'Under Review' };
+  }
+  if (['resolved', 'solved', 'refunded'].includes(norm)) {
+    return { bg: 'bg-success/10', text: 'text-success', border: 'border-success/20', dot: 'bg-success', label: 'Resolved' };
+  }
+  if (['rejected'].includes(norm)) {
+    return { bg: 'bg-danger/10', text: 'text-danger', border: 'border-danger/20', dot: 'bg-danger', label: 'Rejected' };
+  }
+  return { bg: 'bg-neutral-100', text: 'text-neutral-600', border: 'border-neutral-200', dot: 'bg-neutral-400', label: 'Closed' };
+};
+
+const getStatusEmoji = (status) => {
+  const norm = (status || '').toLowerCase();
+  if (['resolved', 'solved', 'refunded'].includes(norm)) return '🟢';
+  if (['rejected'].includes(norm)) return '🔴';
+  if (['closed'].includes(norm)) return '⚫';
+  return '🟡';
+};
+
+const formatCustomDateTime = (dateString) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  const day = d.getDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[d.getMonth()];
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${day} ${month} • ${hours}:${minutes} ${ampm}`;
+};
 
 const ComplaintsPage = () => {
   const { token, user, logoutUser, isAuthenticated, API, API_URL_IMAGE } = useAuth();
@@ -223,7 +259,7 @@ const ComplaintsPage = () => {
 
 
 
-  const getStatusStyle = getComplaintStatusStyle;
+  const getStatusStyle = getCustomStatusStyle;
 
   const isFormDisabled =
     ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) ||
@@ -233,117 +269,143 @@ const ComplaintsPage = () => {
     <div className="min-h-screen bg-gray-50 font-inter">
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-100">
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </button>
-            <div>
-              <h1 className="text-base font-poppins font-bold text-secondary">Help & Support</h1>
-              <p className="text-xs text-gray-400">We're here to help</p>
+      <div className="bg-white border-b border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] sticky top-0 z-30">
+        <div className="max-w-4xl mx-auto px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => navigate(-1)} 
+                className="p-1 rounded-full hover:bg-neutral-100 transition-colors"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="w-4 h-4 text-neutral-600" />
+              </button>
+              <div>
+                <h1 className="text-sm font-extrabold text-neutral-900 tracking-tight font-poppins">Complaint Center</h1>
+                <p className="text-[10px] text-neutral-400">Need help? We're here for you.</p>
+              </div>
             </div>
+            <button
+              onClick={() => setOpenNewComplaint(true)}
+              className="flex items-center gap-1 px-3 py-1 bg-primary text-white rounded-full text-xs font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" /> Create Ticket
+            </button>
           </div>
-          <button
-            onClick={() => setOpenNewComplaint(true)}
-            className="bg-primary text-white px-4 py-1.5 rounded-full text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            + New Ticket
-          </button>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
 
-        {/* My Support History Section - Moved to Top */}
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-            <div>
-              <h2 className="text-sm font-bold text-secondary flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-primary" />
-                My Support History
-              </h2>
-              <p className="text-[10px] text-gray-400">Track and manage your previous tickets</p>
-            </div>
-            <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-              {complaints.length} Total
-            </span>
+        {/* My Support History Header */}
+        <div className="flex justify-between items-center bg-transparent">
+          <div>
+            <h2 className="text-sm font-bold text-secondary flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              My Support History
+            </h2>
+            <p className="text-[10px] text-neutral-400">Track and manage your previous tickets</p>
           </div>
+          <span className="text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+            {complaints.length} Total
+          </span>
+        </div>
 
-          {loading ? (
-            <LoadingSpinner />
-          ) : error ? (
-            <div className="text-center py-12">
-              <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-2" />
-              <p className="text-xs text-red-500">{error}</p>
+        {/* Support History Content */}
+        {loading ? (
+          <div className="bg-white rounded-xl border border-neutral-100 p-6 shadow-sm"><LoadingSpinner /></div>
+        ) : error ? (
+          <div className="bg-white rounded-xl border border-neutral-100 p-6 text-center shadow-sm">
+            <AlertCircle className="h-8 w-8 text-red-400 mx-auto mb-2" />
+            <p className="text-xs text-red-500">{error}</p>
+          </div>
+        ) : complaints.length === 0 ? (
+          <div className="bg-white rounded-xl border border-neutral-100 p-8 text-center shadow-sm">
+            <div className="w-10 h-10 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-2.5">
+              <MessageSquare className="h-5 w-5 text-neutral-400" />
             </div>
-          ) : complaints.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <MessageSquare className="h-5 w-5 text-gray-400" />
-              </div>
-              <p className="text-sm font-medium text-secondary">No history found</p>
-              <p className="text-[10px] text-gray-400">Tickets you create will appear here</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
-              {complaints.map((complaint) => {
-                const s = getStatusStyle(complaint.status);
-                return (
-                  <div
-                    key={complaint._id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => viewComplaintDetails(complaint._id)}
-                    onKeyUp={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viewComplaintDetails(complaint._id); } }}
-                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors flex items-center justify-between group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 ${complaint.status === 'Solved' ? 'bg-green-50' : 'bg-primary/5'} rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                        <FileText className={`h-4 w-4 ${complaint.status === 'Solved' ? 'text-green-600' : 'text-primary'}`} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-semibold text-secondary truncate max-w-[150px]">{complaint.title || 'Support Request'}</p>
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-tighter ${s.bg} ${s.text}`}>
-                            {STATUS_LABELS[complaint.status] || complaint.status}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-gray-400 flex items-center gap-1">
-                          <Tag className="h-3 w-3" />
-                          #{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}
-                        </p>
-                        <p className="text-[10px] text-gray-500 mt-0.5 opacity-60 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDateTime(complaint.createdAt)}
-                        </p>
+            <p className="text-xs font-semibold text-secondary">No history found</p>
+            <p className="text-[10px] text-neutral-400">Tickets you create will appear here</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3.5">
+            {complaints.map((complaint) => {
+              const s = getStatusStyle(complaint.status);
+              
+              // Priority / Category Badge mapping
+              let catBadgeColor = "bg-neutral-100 text-neutral-600 border-neutral-200";
+              if (complaint.category === "Refund request" || complaint.category === "Payment issue") {
+                catBadgeColor = "bg-danger/10 text-danger border-danger/20";
+              } else if (complaint.category === "Service issue") {
+                catBadgeColor = "bg-primary/10 text-primary border-primary/20";
+              } else if (complaint.category === "Suggestion") {
+                catBadgeColor = "bg-success/10 text-success border-success/20";
+              }
 
-                        {/* Refund outcome pill — customer-friendly */}
-                        {complaint.booking?.adminRefundDecision && complaint.booking.adminRefundDecision !== 'none' && (
-                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                            {complaint.booking.adminRefundDecision === 'approved' && (
-                              <span className="text-[9px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100 font-bold">✓ Refund Approved</span>
-                            )}
-                            {complaint.booking.adminRefundDecision === 'partial' && (
-                              <span className="text-[9px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100 font-bold">◑ Partial Refund</span>
-                            )}
-                            {complaint.booking.adminRefundDecision === 'rejected' && (
-                              <span className="text-[9px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full border border-red-100 font-bold">✗ No Refund</span>
-                            )}
-                            {complaint.booking.cancellationProgress?.refundAmount > 0 && (
-                              <span className="text-[9px] font-black text-primary">₹{complaint.booking.cancellationProgress.refundAmount} credited</span>
-                            )}
-                          </div>
-                        )}
+              const bId = complaint.bookingId || complaint.booking?._id;
+              const bTitle = complaint.booking?.services?.[0]?.service?.title || 'Service';
+
+              return (
+                <div
+                  key={complaint._id}
+                  onClick={() => viewComplaintDetails(complaint._id)}
+                  className="bg-white rounded-xl border border-neutral-200/80 p-4 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
+                >
+                  <div>
+                    {/* Ticket Header: Complaint ID & Status / Category badges */}
+                    <div className="flex items-center justify-between gap-2 mb-2.5">
+                      <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tight">
+                        #{complaint.complaintId || complaint._id.slice(-8)}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border ${catBadgeColor}`}>
+                          {complaint.category}
+                        </span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${s.bg} ${s.text} ${s.border}`}>
+                          {s.label}
+                        </span>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-primary transition-colors" />
+
+                    {/* Title & Service Details */}
+                    <h4 className="text-xs font-bold text-neutral-800 line-clamp-1 mb-1 group-hover:text-primary transition-colors">
+                      {complaint.title || 'Support Request'}
+                    </h4>
+                    
+                    {bId && (
+                      <div className="flex flex-col gap-0.5 mb-2 text-[10px] text-neutral-500 bg-neutral-50 p-2 rounded-lg border border-neutral-100/50">
+                        <p className="font-semibold text-neutral-700 truncate">{bTitle}</p>
+                        <p className="opacity-80">Booking: #{complaint.booking?.bookingId || bId.slice(-8)}</p>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-neutral-500 line-clamp-2 leading-relaxed mb-3">
+                      {complaint.description?.includes(']')
+                        ? complaint.description.split(']').slice(1).join(']').trim()
+                        : complaint.description}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+
+                  {/* Bottom row: Created date & View Action */}
+                  <div className="flex items-center justify-between pt-2 border-t border-neutral-100 text-[10px]">
+                    <span className="text-neutral-400 flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatDate(complaint.createdAt)}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); viewComplaintDetails(complaint._id); }}
+                      className="text-primary font-bold hover:underline flex items-center gap-0.5"
+                    >
+                      View Details
+                      <ChevronRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-3 gap-3">
@@ -431,7 +493,7 @@ const ComplaintsPage = () => {
       {/* New Complaint Modal */}
       {openNewComplaint && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[9999]"
           role="button"
           tabIndex={0}
           onClick={() => { setOpenNewComplaint(false); resetForm(); }}
@@ -452,24 +514,19 @@ const ComplaintsPage = () => {
               {/* Category */}
               <div>
                 <label className="block text-xs font-semibold text-secondary mb-1.5">Category *</label>
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {COMPLAINT_CATEGORIES.map(cat => {
-                    let subLabel = "";
-                    if (cat === "Service issue") subLabel = "Work defects, quality issues, incomplete work, or provider behavior";
-                    else if (cat === "Refund request") subLabel = "Cancellations, refunds, or wallet payout disputes";
-                    else if (cat === "Payment issue") subLabel = "Double charge, incorrect billing, or payment failure";
-                    else if (cat === "Suggestion") subLabel = "Ideas or suggestions to improve our services";
-                    else if (cat === "Other") subLabel = "General questions and other support issues";
-
+                    const item = CATEGORY_MAP[cat] || { label: cat, icon: "❓" };
+                    const isSelected = formData.category === cat;
                     return (
                       <button
                         key={cat}
                         type="button"
                         onClick={() => { setFormData(prev => ({ ...prev, category: cat, bookingId: '' })); setFormErrors(prev => ({ ...prev, category: '' })); }}
-                        className={`text-left p-3 rounded-xl border transition-all flex flex-col gap-0.5 ${formData.category === cat ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                        className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${isSelected ? 'border-primary bg-primary/5 text-primary shadow-sm font-semibold scale-[1.02]' : 'border-neutral-200 hover:border-neutral-300 text-neutral-600'}`}
                       >
-                        <span className="text-xs font-bold">{cat}</span>
-                        {subLabel && <span className="text-[10px] text-gray-400 font-normal leading-relaxed">{subLabel}</span>}
+                        <span className="text-xl">{item.icon}</span>
+                        <span className="text-[10px] md:text-xs tracking-tight">{item.label}</span>
                       </button>
                     );
                   })}
@@ -485,7 +542,7 @@ const ComplaintsPage = () => {
                     name="complaintType"
                     value={formData.complaintType}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 bg-white"
                   >
                     <option value="">Select Reason</option>
                     <option value="poor_quality">Poor Quality</option>
@@ -504,20 +561,49 @@ const ComplaintsPage = () => {
               {(formData.category === 'Service issue' || formData.category === 'Refund request') && (
                 <div>
                   <label className="block text-xs font-semibold text-secondary mb-1.5">Select Booking *</label>
-                  <select name="bookingId" value={formData.bookingId} onChange={handleInputChange} className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20">
-                    <option value="">Select a booking</option>
-                    {bookings.flatMap(b => (b.status === 'completed' || b.status === 'cancelled') ? [
-                      <option key={b._id} value={b._id}>{b.services?.[0]?.service?.title || 'Service'} - {formatDate(b.date)}</option>
-                    ] : [])}
-                  </select>
-                  {formErrors.bookingId && <p className="text-xs text-red-500 mt-1">{formErrors.bookingId}</p>}
+                  {formData.bookingId ? (
+                    (() => {
+                      const selectedBooking = bookings.find(b => b._id === formData.bookingId);
+                      return (
+                        <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-100 flex items-center justify-between">
+                          <div className="grid grid-cols-2 gap-4 flex-1">
+                            <div>
+                              <span className="block text-[9px] uppercase font-bold text-neutral-400">Booking ID</span>
+                              <span className="text-xs font-semibold text-neutral-700">#{selectedBooking?.bookingId || selectedBooking?._id?.slice(-8) || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[9px] uppercase font-bold text-neutral-400">Service Name</span>
+                              <span className="text-xs font-semibold text-neutral-700 truncate block">{selectedBooking?.services?.[0]?.service?.title || 'Service'}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, bookingId: '' }))}
+                            className="text-primary text-[10px] font-bold hover:underline ml-2"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div>
+                      <select name="bookingId" value={formData.bookingId} onChange={handleInputChange} className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 bg-white">
+                        <option value="">Select a booking</option>
+                        {bookings.flatMap(b => (b.status === 'completed' || b.status === 'cancelled') ? [
+                          <option key={b._id} value={b._id}>{b.services?.[0]?.service?.title || 'Service'} - {formatDate(b.date)}</option>
+                        ] : [])}
+                      </select>
+                      {formErrors.bookingId && <p className="text-xs text-red-500 mt-1">{formErrors.bookingId}</p>}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Title */}
               <div>
                 <label className="block text-xs font-semibold text-secondary mb-1.5">Title *</label>
-                <input type="text" name="title" value={formData.title} onChange={handleInputChange} placeholder="Brief summary of your issue" className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20" />
+                <input type="text" name="title" value={formData.title} onChange={handleInputChange} placeholder="Brief summary of your issue" className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
                 {formErrors.title && <p className="text-xs text-red-500 mt-1">{formErrors.title}</p>}
               </div>
 
@@ -526,24 +612,31 @@ const ComplaintsPage = () => {
                 <label className="block text-xs font-semibold text-secondary mb-1.5">
                   {formData.category === 'Refund request' ? 'Reason for Refund *' : 'Description *'}
                 </label>
-                <textarea name="description" rows="4" value={formData.description} onChange={handleInputChange} placeholder={formData.category === 'Refund request' ? "Please provide the reason for your refund request (min 20 chars)" : "Please provide detailed information about your issue (min 20 chars)"} className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20 resize-none" />
+                <textarea name="description" rows="4" value={formData.description} onChange={handleInputChange} placeholder={formData.category === 'Refund request' ? "Please provide the reason for your refund request (min 20 chars)" : "Please provide detailed information about your issue (min 20 chars)"} className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 resize-none" />
                 {formErrors.description && <p className="text-xs text-red-500 mt-1">{formErrors.description}</p>}
               </div>
 
               {/* Images */}
               <div>
                 <label className="block text-xs font-semibold text-secondary mb-1.5">Attachments (Optional)</label>
-                <label className="flex items-center gap-2 border-2 border-dashed border-gray-200 rounded-lg px-4 py-3 cursor-pointer hover:border-primary/50">
-                  <Upload className="h-4 w-4 text-gray-400" />
-                  <span className="text-xs text-gray-500">Upload images (JPG, PNG up to 5MB)</span>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-neutral-200 rounded-xl px-4 py-6 cursor-pointer hover:border-primary/50 hover:bg-neutral-50/50 transition-all text-center">
+                  <Upload className="h-5 w-5 text-neutral-400 mb-1.5" />
+                  <span className="text-xs font-semibold text-neutral-700">Upload images</span>
+                  <span className="text-[10px] text-neutral-400 mt-0.5">JPG, PNG up to 5MB (Max 5)</span>
                   <input type="file" multiple className="sr-only" onChange={handleImageUpload} accept="image/*" />
                 </label>
                 {formData.previewImages.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
                     {formData.previewImages.map((preview, idx) => (
-                      <div key={idx} className="relative w-16 h-16">
-                        <img src={preview} className="w-full h-full object-cover rounded-lg border" alt="" />
-                        <button onClick={() => removeImage(idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"><X className="h-3 w-3" /></button>
+                      <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-neutral-200 shadow-sm group">
+                        <img src={preview} className="w-full h-full object-cover" alt="" />
+                        <button 
+                          type="button"
+                          onClick={() => removeImage(idx)} 
+                          className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -564,7 +657,7 @@ const ComplaintsPage = () => {
       {/* Complaint Detail Modal */}
       {openComplaintDetail && selectedComplaint && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[9999]"
           role="button"
           tabIndex={0}
           onClick={() => setOpenComplaintDetail(false)}
@@ -581,134 +674,185 @@ const ComplaintsPage = () => {
 
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
-              {/* ── Status Header ── */}
-              <div className={`rounded-xl p-4 border ${getStatusStyle(selectedComplaint.status).bg} ${getStatusStyle(selectedComplaint.status).border}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{selectedComplaint.category}</p>
-                    <p className="text-sm font-bold text-secondary truncate">{selectedComplaint.title}</p>
-                    <p className="text-[10px] text-gray-400 mt-1">Submitted {formatDateTime(selectedComplaint.createdAt)}</p>
-                  </div>
-                  <span className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${getStatusStyle(selectedComplaint.status).bg} ${getStatusStyle(selectedComplaint.status).text} border ${getStatusStyle(selectedComplaint.status).border}`}>
-                    {STATUS_DETAIL_LABELS[selectedComplaint.status] || '○ Open'}
+              {/* ── Support Status Card ── */}
+              <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 shadow-sm space-y-3">
+                <div className="flex items-center gap-1.5 border-b border-neutral-200/50 pb-2">
+                  <span className="text-sm">{getStatusEmoji(selectedComplaint.status)}</span>
+                  <span className={`text-xs font-extrabold uppercase tracking-wider ${getStatusStyle(selectedComplaint.status).text}`}>
+                    {getStatusStyle(selectedComplaint.status).label}
                   </span>
+                </div>
+                <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-[10px]">
+                  <div>
+                    <span className="block text-neutral-400 font-medium mb-0.5">Complaint ID</span>
+                    <span className="font-bold text-neutral-800 font-mono">
+                      {selectedComplaint.complaintId || `CMP-2026-${selectedComplaint._id.slice(-4).toUpperCase()}`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-neutral-400 font-medium mb-0.5">Expected Response</span>
+                    <span className="font-bold text-neutral-800">Within 24 Hours</span>
+                  </div>
+                  <div>
+                    <span className="block text-neutral-400 font-medium mb-0.5">Assigned To</span>
+                    <span className="font-bold text-neutral-800">Support Team</span>
+                  </div>
+                  <div>
+                    <span className="block text-neutral-400 font-medium mb-0.5">Last Updated</span>
+                    <span className="font-bold text-neutral-800">
+                      {formatCustomDateTime(selectedComplaint.updatedAt || selectedComplaint.createdAt)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* ── Your Message ── */}
-              <div className="bg-gray-50 rounded-xl p-4">
+              <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
                 <div className="flex justify-between items-center mb-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Your Message</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Your Message</p>
                   {selectedComplaint.complaintType && selectedComplaint.complaintType !== 'N/A' && (
-                    <span className="text-[10px] font-bold bg-red-50 text-red-600 px-2 py-0.5 rounded-full border border-red-100 uppercase">
+                    <span className="text-[9px] font-bold bg-danger/10 text-danger px-2 py-0.5 rounded-full border border-danger/20 uppercase">
                       {selectedComplaint.complaintType.replace('_', ' ')}
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
+                <p className="text-xs text-neutral-750 leading-relaxed">
                   {selectedComplaint.description?.includes(']')
                     ? selectedComplaint.description.split(']').slice(1).join(']').trim()
                     : selectedComplaint.description}
                 </p>
               </div>
 
-              {/* ── Your Attachments ── */}
-              {selectedComplaint.images?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
-                    <ImageIcon className="w-3 h-3" /> Your Attachments
-                  </p>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {selectedComplaint.images.map((img, idx) => (
-                      <CDNImage key={idx} src={img} width={200} className="w-20 h-20 flex-shrink-0 object-cover rounded-xl border-2 border-gray-100 cursor-pointer hover:border-primary transition-all" alt="attachment" onClick={() => setPreviewImage(img)} />
-                    ))}
+              {/* ── Evidence Section ── */}
+              <div className="bg-white rounded-xl border border-neutral-200/80 p-4 shadow-sm space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Evidence Comparison</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {/* Before */}
+                  <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 flex flex-col items-center">
+                    <span className="text-[8px] font-bold text-neutral-400 uppercase mb-1.5">Before</span>
+                    <div className="flex gap-1 flex-wrap justify-center">
+                      {selectedComplaint.evidenceComparison?.beforeWorkImages?.length > 0 ? (
+                        selectedComplaint.evidenceComparison.beforeWorkImages.map((img, i) => (
+                          <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Before" onClick={() => setPreviewImage(img)} />
+                        ))
+                      ) : <span className="text-[9px] text-neutral-450 italic">None</span>}
+                    </div>
                   </div>
-                </div>
-              )}
+                  
+                  {/* After */}
+                  <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 flex flex-col items-center">
+                    <span className="text-[8px] font-bold text-neutral-400 uppercase mb-1.5">After</span>
+                    <div className="flex gap-1 flex-wrap justify-center">
+                      {selectedComplaint.evidenceComparison?.afterWorkImages?.length > 0 ? (
+                        selectedComplaint.evidenceComparison.afterWorkImages.map((img, i) => (
+                          <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="After" onClick={() => setPreviewImage(img)} />
+                        ))
+                      ) : <span className="text-[9px] text-neutral-455 italic">None</span>}
+                    </div>
+                  </div>
 
-              {/* ── Evidence Comparison ── */}
-              {selectedComplaint.evidenceComparison && (
-                <div className="rounded-xl border border-gray-100 overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Evidence Comparison</p>
-                    <span className="text-[9px] text-primary font-bold">Before | After | Complaint</span>
+                  {/* Customer Upload */}
+                  <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 flex flex-col items-center">
+                    <span className="text-[8px] font-bold text-neutral-400 uppercase mb-1.5">Customer Upload</span>
+                    <div className="flex gap-1 flex-wrap justify-center">
+                      {selectedComplaint.images?.length > 0 ? (
+                        selectedComplaint.images.map((img, i) => (
+                          <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Customer" onClick={() => setPreviewImage(img)} />
+                        ))
+                      ) : <span className="text-[9px] text-neutral-450 italic">None</span>}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 divide-x divide-gray-100 h-24">
-                    <div className="p-2 flex flex-col items-center">
-                      <p className="text-[8px] font-bold text-gray-400 mb-1 uppercase">Before</p>
-                      <div className="flex gap-1 overflow-x-auto w-full justify-center">
-                        {selectedComplaint.evidenceComparison.beforeWorkImages?.length > 0 ? (
-                          selectedComplaint.evidenceComparison.beforeWorkImages.map((img, i) => (
-                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Before" onClick={() => setPreviewImage(img)} />
-                          ))
-                        ) : <span className="text-[8px] text-gray-300 italic">None</span>}
-                      </div>
-                    </div>
-                    <div className="p-2 flex flex-col items-center">
-                      <p className="text-[8px] font-bold text-gray-400 mb-1 uppercase">After</p>
-                      <div className="flex gap-1 overflow-x-auto w-full justify-center">
-                        {selectedComplaint.evidenceComparison.afterWorkImages?.length > 0 ? (
-                          selectedComplaint.evidenceComparison.afterWorkImages.map((img, i) => (
-                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="After" onClick={() => setPreviewImage(img)} />
-                          ))
-                        ) : <span className="text-[8px] text-gray-300 italic">None</span>}
-                      </div>
-                    </div>
-                    <div className="p-2 flex flex-col items-center bg-red-50/30">
-                      <p className="text-[8px] font-bold text-red-400 mb-1 uppercase">Proof</p>
-                      <div className="flex gap-1 overflow-x-auto w-full justify-center">
-                        {selectedComplaint.evidenceComparison.complaintImages?.length > 0 ? (
-                          selectedComplaint.evidenceComparison.complaintImages.map((img, i) => (
-                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border border-red-100 cursor-pointer hover:border-primary transition-all" alt="Proof" onClick={() => setPreviewImage(img)} />
-                          ))
-                        ) : <span className="text-[8px] text-gray-300 italic">None</span>}
-                      </div>
+
+                  {/* Provider Upload */}
+                  <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 flex flex-col items-center">
+                    <span className="text-[8px] font-bold text-neutral-400 uppercase mb-1.5">Provider Upload</span>
+                    <div className="flex gap-1 flex-wrap justify-center">
+                      {selectedComplaint.booking?.complaintProofs?.filter(p => p.uploadedBy === 'provider')?.length > 0 ? (
+                        selectedComplaint.booking.complaintProofs.filter(p => p.uploadedBy === 'provider').map((proof, i) => (
+                          <CDNImage key={i} src={proof.secure_url || proof.url} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Provider" onClick={() => setPreviewImage(proof.secure_url || proof.url)} />
+                        ))
+                      ) : <span className="text-[9px] text-neutral-450 italic">None</span>}
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* ── Resolution Timeline ── */}
-              {selectedComplaint.resolutionHistory?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Resolution History</p>
-                  <div className="space-y-0">
-                    {selectedComplaint.resolutionHistory.map((step, i) => {
-                      const isTerminal = ['resolved', 'solved', 'refunded', 'rejected', 'closed'].some(s => step.event.toLowerCase().includes(s));
-                      const isAction = step.event.toLowerCase().includes('replied') || step.event.toLowerCase().includes('audit');
-                      const isLast = i === selectedComplaint.resolutionHistory.length - 1;
-                      const dotColor = isTerminal ? 'bg-green-500 border-green-500' : isAction ? 'bg-primary border-primary' : 'bg-gray-300 border-gray-300';
-                      const textColor = isTerminal ? 'text-green-600' : 'text-secondary';
-                      return (
-                        <div key={i} className="flex gap-3">
-                          {/* Timeline column: dot + line */}
-                          <div className="flex flex-col items-center flex-shrink-0">
-                            <div className={`w-2.5 h-2.5 rounded-full border-2 ${dotColor} ${isTerminal ? 'ring-2 ring-green-100' : isAction ? 'ring-2 ring-primary/10' : ''}`} />
-                            {!isLast && <div className="w-px flex-1 bg-gray-200 min-h-[20px]" />}
-                          </div>
-                          {/* Content column */}
-                          <div className="pb-4 flex-1 min-w-0">
-                            <div className="flex justify-between items-start gap-2 -mt-0.5">
-                              <p className={`text-[11px] font-bold ${textColor}`}>{step.event}</p>
-                              <span className="text-[9px] text-gray-400 whitespace-nowrap flex-shrink-0">{formatDateTime(step.timestamp)}</span>
-                            </div>
-                            {step.note && !/^\*.*variables.*\*$/i.test(step.note.trim()) && step.note.trim().length > 0 && (
-                              <p className="text-[10px] text-gray-500 leading-relaxed italic mt-0.5">"{step.note}"</p>
-                            )}
-                            {step.images?.length > 0 && (
-                              <div className="flex gap-1 mt-1.5">
-                                {step.images.map((img, j) => (
-                                  <CDNImage key={j} src={img} width={100} className="w-6 h-6 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Proof" onClick={() => setPreviewImage(img)} />
-                                ))}
+              <div className="bg-white rounded-xl border border-neutral-200/80 p-4 shadow-sm space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Resolution Timeline</p>
+                {(() => {
+                  const status = (selectedComplaint.status || '').toLowerCase();
+                  const b = selectedComplaint.booking || {};
+                  
+                  const timelineSteps = [
+                    { label: 'Complaint Created', done: true, active: false, color: 'bg-success' },
+                    { 
+                      label: 'Under Review', 
+                      done: ['under_review', 'in-progress', 'provider_responded', 'admin_review', 'resolved', 'solved', 'refunded', 'rejected', 'closed'].includes(status),
+                      active: ['open', 'submitted'].includes(status),
+                      color: 'bg-info'
+                    },
+                    { 
+                      label: 'Assigned', 
+                      done: ['provider_responded', 'admin_review', 'resolved', 'solved', 'refunded', 'rejected', 'closed'].includes(status) || b.complaintProofs?.some(p => p.uploadedBy === 'provider'),
+                      active: ['under_review', 'in-progress'].includes(status),
+                      color: 'bg-primary'
+                    },
+                    { 
+                      label: 'Resolved', 
+                      done: ['resolved', 'solved', 'refunded', 'rejected', 'closed'].includes(status),
+                      active: ['provider_responded', 'admin_review'].includes(status),
+                      color: 'bg-success'
+                    },
+                    { 
+                      label: 'Closed', 
+                      done: ['closed'].includes(status),
+                      active: ['resolved', 'solved', 'refunded', 'rejected'].includes(status),
+                      color: 'bg-neutral-500'
+                    }
+                  ];
+
+                  let activeIndex = -1;
+                  for (let i = 0; i < timelineSteps.length; i++) {
+                    if (!timelineSteps[i].done) {
+                      activeIndex = i;
+                      break;
+                    }
+                  }
+                  if (activeIndex !== -1) {
+                    timelineSteps[activeIndex].active = true;
+                  } else {
+                    timelineSteps[timelineSteps.length - 1].active = true;
+                  }
+
+                  return (
+                    <div className="relative pl-6">
+                      <div className="absolute left-[9px] top-2 bottom-2 w-px bg-neutral-200" />
+                      <div className="space-y-4">
+                        {timelineSteps.map((step, i) => {
+                          const isDone = step.done;
+                          const isActive = step.active;
+                          const dotColor = isDone ? step.color : 'bg-neutral-300';
+                          return (
+                            <div key={i} className="relative flex items-center gap-3">
+                              <div className={`relative z-10 w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border-2 ${isDone ? 'border-transparent' : 'border-neutral-305 bg-white'} ${dotColor}`}>
+                                {isDone ? (
+                                  <CheckCircle className="w-2.5 h-2.5 text-white" />
+                                ) : (
+                                  <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-primary animate-pulse' : 'bg-neutral-400'}`} />
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                              <p className={`text-xs ${isActive ? 'text-primary font-bold' : isDone ? 'text-neutral-800 font-semibold' : 'text-neutral-450'}`}>
+                                {step.label}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* ── Refund Summary Card ── */}
               {(selectedComplaint.booking?.paymentStatus === 'refunded' || (selectedComplaint.booking?.cancellationProgress?.refundAmount > 0)) && (
@@ -718,83 +862,58 @@ const ComplaintsPage = () => {
                     <p className="text-xs font-bold text-primary">Refund Summary</p>
                   </div>
                   <div className="px-4 py-3 space-y-2.5">
-                    {/* Amount — from transaction, cancellationProgress or totalAmount fallback */}
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Amount Refunded</span>
-                      <span className="text-base font-black text-primary">
+                      <span className="text-xs text-neutral-500">Amount Refunded</span>
+                      <span className="text-sm font-black text-primary">
                         ₹{selectedComplaint.transaction?.type === 'refund'
                           ? selectedComplaint.transaction.amount
                           : (selectedComplaint.booking.cancellationProgress?.refundAmount || selectedComplaint.booking.totalAmount || '0')}
                       </span>
                     </div>
-                    {/* Refund Type — from adminRefundDecision */}
                     {selectedComplaint.booking.adminRefundDecision && selectedComplaint.booking.adminRefundDecision !== 'none' && (
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">Refund Type</span>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${selectedComplaint.booking.adminRefundDecision === 'approved'
-                          ? 'bg-green-50 text-green-700 border-green-100'
+                        <span className="text-xs text-neutral-500">Refund Type</span>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${selectedComplaint.booking.adminRefundDecision === 'approved'
+                          ? 'bg-success/10 text-success border-success/20'
                           : selectedComplaint.booking.adminRefundDecision === 'partial'
-                            ? 'bg-amber-50 text-amber-700 border-amber-100'
-                            : 'bg-red-50 text-red-600 border-red-100'
+                            ? 'bg-warning/10 text-warning border-warning/20'
+                            : 'bg-danger/10 text-danger border-danger/20'
                           }`}>
-                          {selectedComplaint.booking.adminRefundDecision === 'approved' ? '✓ Full Refund'
-                            : selectedComplaint.booking.adminRefundDecision === 'partial' ? '◑ Partial Refund'
-                              : '✗ No Refund'}
+                          {selectedComplaint.booking.adminRefundDecision === 'approved' ? 'Full Refund'
+                            : selectedComplaint.booking.adminRefundDecision === 'partial' ? 'Partial Refund'
+                              : 'No Refund'}
                         </span>
                       </div>
                     )}
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Refund Method</span>
-                      <span className="text-xs font-bold text-secondary">Wallet Balance</span>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-neutral-500">Refund Method</span>
+                      <span className="font-semibold text-neutral-700">Wallet Balance</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Status</span>
-                      <span className="text-xs font-bold text-primary flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Completed</span>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-neutral-500">Status</span>
+                      <span className="font-bold text-primary flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Completed</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ── Resolution Journey Timeline ── */}
-              {selectedComplaint.booking?.disputeRaised && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Resolution Journey</p>
-                  {(() => {
-                    const b = selectedComplaint.booking;
-                    const steps = [
-                      { label: 'Complaint Submitted', done: true, icon: FileText },
-                      { label: 'Provider Response', done: b.complaintProofs?.some(p => p.uploadedBy === 'provider'), icon: MessageSquare },
-                      { label: 'Under Review by Support', done: ['resolved', 'closed'].includes(b.disputeStatus), active: b.disputeStatus === 'pending', icon: ShieldCheck },
-                      { label: b.adminRefundDecision === 'approved' ? 'Full Refund Approved' : b.adminRefundDecision === 'partial' ? 'Partial Refund Approved' : b.adminRefundDecision === 'rejected' ? 'No Refund Applicable' : 'Decision Pending', done: !!b.adminRefundDecision && b.adminRefundDecision !== 'none', icon: BadgeCheck },
-                      { label: b.paymentStatus === 'refunded' ? 'Refund Credited to Wallet' : 'Awaiting Refund', done: b.paymentStatus === 'refunded', icon: Wallet },
-                    ];
-                    return (
-                      <div className="relative pl-6">
-                        <div className="absolute left-[10px] top-2.5 bottom-2.5 w-px bg-gray-200" />
-                        <div className="space-y-4">
-                          {steps.map((step, i) => {
-                            const Icon = step.icon;
-                            return (
-                              <div key={i} className="relative flex items-start gap-3">
-                                <div className={`relative z-10 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border-2 ${step.done ? 'bg-primary border-primary' : step.active ? 'bg-white border-primary animate-pulse' : 'bg-white border-gray-200'}`}>
-                                  {step.done ? <CheckCircle className="w-3 h-3 text-white" /> : <div className={`w-1.5 h-1.5 rounded-full ${step.active ? 'bg-primary' : 'bg-gray-300'}`} />}
-                                </div>
-                                <p className={`text-xs pt-0.5 ${step.done ? 'text-secondary font-semibold' : step.active ? 'text-primary font-semibold' : 'text-gray-400'}`}>{step.label}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* ── Support Response ── */}
+              {/* ── Support Response (Admin Response Chat Card) ── */}
               {selectedComplaint.resolutionNotes && (
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500 mb-2">Our Response</p>
-                  <p className="text-sm text-blue-700 leading-relaxed">{selectedComplaint.resolutionNotes}</p>
+                <div className="bg-white rounded-xl border border-neutral-200 p-4 shadow-sm max-w-[90%] mr-auto">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                      ST
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-neutral-800">Support Team</span>
+                      <span className="text-[8px] text-neutral-450 ml-2">
+                        {selectedComplaint.updatedAt ? formatDateTime(selectedComplaint.updatedAt) : 'Just now'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-neutral-700 leading-relaxed pl-8">
+                    {selectedComplaint.resolutionNotes}
+                  </p>
                 </div>
               )}
 

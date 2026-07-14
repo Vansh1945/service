@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import {
-  MapPin, Phone, Star, Shield, ArrowLeft, Navigation, Clock, ShieldCheck, HelpCircle, PhoneCall
+  MapPin, Phone, Star, Shield, ArrowLeft, Navigation, Clock, ShieldCheck, HelpCircle, PhoneCall, MessageSquare
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Loader from '../../components/ui-skeletons/Loader';
@@ -407,185 +407,117 @@ const LiveTrackingPage = () => {
         routeCoords={routeCoords}
         loadingRoute={loadingRoute}
       />
-      {/* Info Card (Customer vs Provider specific layouts) */}
-      <div className="absolute bottom-0 left-0 right-0 md:top-6 md:bottom-6 md:right-6 md:left-auto w-full md:w-[420px] z-20 flex flex-col justify-end p-3 md:p-0 pointer-events-none max-h-max h-auto md:max-h-full">
-        <div className="w-full bg-white/95 backdrop-blur-md border border-gray-100 shadow-2xl rounded-3xl p-3 md:p-5 pointer-events-auto flex flex-col h-auto overflow-hidden">
 
-          {/* 1. FIXED HEADER */}
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2 md:pb-3 shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${providerReached ? 'bg-green-500 animate-ping' : 'bg-primary animate-pulse'}`} />
-              <span className="text-[11px] font-black text-secondary uppercase tracking-wider truncate">
-                {isProvider ? 'LIVE NAVIGATION ACTIVE' : (
-                  providerReached ? 'Arrived' :
-                    (booking.status === 'in-progress' || booking.status === 'in_progress') ? 'In Progress' : 'Professional En Route'
-                )}
-              </span>
-            </div>
-            {isProvider ? (
-              <div className="bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0">
-                GPS ON
-              </div>
-            ) : (
-              <span className="text-[10px] font-black font-mono text-gray-500 bg-gray-100/70 px-2 py-1 rounded-lg shrink-0 border border-gray-200/50 shadow-sm select-all">
-                ID: #{booking?.bookingId || booking?._id?.slice(-8).toUpperCase()}
-              </span>
-            )}
+      {/* Floating Bottom Sheet Card (Mobile & Web responsive) */}
+      <div className="absolute bottom-6 left-4 right-4 md:right-6 md:left-auto md:w-[400px] z-[1000] pointer-events-auto bg-white/95 backdrop-blur-md rounded-[28px] shadow-2xl border border-gray-100 p-4 space-y-4">
+        
+        {/* 1. Provider Status Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">
+              {isProvider ? 'Navigation Active' : (providerReached ? 'Arrived at Location' : 'Professional En Route')}
+            </span>
           </div>
+          <span className="text-[9.5px] font-black font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-250/30">
+            ID: #{booking?.bookingId || booking?._id?.slice(-8).toUpperCase()}
+          </span>
+        </div>
 
-          {/* 2. SCROLLABLE MIDDLE BODY */}
-          <div className="flex-grow overflow-hidden md:overflow-y-auto py-2.5 md:py-3 space-y-2.5 md:space-y-3 pr-0.5 pointer-events-auto">
-
-            {/* Time & Distance */}
-            <div className={`grid grid-cols-2 gap-3 rounded-2xl p-2.5 md:p-3 ${isProvider ? 'bg-gray-50 border border-gray-100' : 'bg-gradient-to-r from-primary/5 to-blue-500/5 border border-primary/10'}`}>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Estimated ETA</span>
-                <span className="text-base md:text-lg font-black text-primary">{eta || '--'}</span>
-              </div>
-              <div className="flex flex-col border-l border-gray-200 pl-3">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Distance</span>
-                <span className="text-base md:text-lg font-black text-secondary">{distance || '--'}</span>
-              </div>
-            </div>
-
-            {/* Customer Specific PIN Block */}
-            {!isProvider && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-3 md:p-4">
-                <div className="flex items-center gap-2 mb-1.5 md:mb-2">
-                  <ShieldCheck className="w-4 md:w-4.5 h-4 md:h-4.5 text-blue-600 animate-pulse" />
-                  <span className="text-xs font-bold text-secondary">
-                    {['in-progress', 'in_progress'].includes(booking?.status) ? 'Service Completion PIN' : 'Service Start PIN'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 md:p-3 border border-blue-50/50 flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black text-blue-600/60 uppercase tracking-widest mb-0.5">Share with provider</p>
-                    <p className="text-xl md:text-2xl font-black text-secondary tracking-widest font-mono">
-                      {['in-progress', 'in_progress'].includes(booking?.status) ? getCompletionPin(booking) : getStartPin(booking)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* User Details (Provider seeing Customer OR Customer seeing Provider) */}
-            {otherUser ? (
-              <div className={`flex flex-col gap-2.5 md:gap-3 ${isProvider ? 'p-3 md:p-4 border border-gray-100 rounded-2xl bg-white shadow-sm' : 'border-t border-gray-100 pt-3 md:pt-4'}`}>
-                <div className="flex gap-3 md:gap-4 items-center w-full">
-                  <div className="relative shrink-0">
-                    {isProvider ? (
-                      <div className="w-10 h-10 md:w-12 md:h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold text-sm md:text-base shadow-sm">
-                        {otherUser.name?.charAt(0).toUpperCase()}
-                      </div>
-                    ) : (
-                      <>
-                        <img src={otherUser.profilePicUrl || 'https://placehold.co/100x100?text=Avatar'} alt={otherUser.name} className="w-10 h-10 md:w-14 md:h-14 object-cover rounded-full border-2 border-primary/20 shadow-md" />
-                        <div className="absolute -bottom-0.5 -right-0.5 bg-green-500 w-3 md:w-4.5 h-3 md:h-4.5 rounded-full border-2 border-white flex items-center justify-center" />
-                      </>
-                    )}
-                  </div>
-                  <div className="flex-grow min-w-0 flex flex-col">
-                    {isProvider && <span className="text-[10px] font-black text-primary uppercase tracking-widest">CUSTOMER</span>}
-                    <h4 className="font-black text-secondary text-sm truncate">{otherUser.name}</h4>
-                    {!isProvider && (
-                      <div className="flex items-center gap-1.5 text-xs mb-1 mt-0.5 flex-wrap">
-                        <div className="flex items-center gap-0.5 font-bold text-amber-500 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded-md">
-                          <Star className="w-3 h-3 fill-amber-500" />
-                          <span>{(otherUser.performanceScore?.rating || otherUser.rating || 5.0).toFixed(1)}</span>
-                        </div>
-                        {otherUser.completedBookings !== undefined && (
-                          <div className="flex items-center gap-1 font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">
-                            <span>💼</span>
-                            <span>{otherUser.completedBookings} Completed</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {(!isProvider && otherUser.address) && (
-                      <p className="text-[10px] text-gray-500 font-bold flex items-center gap-1 truncate">
-                        <MapPin className="w-3 h-3 text-primary shrink-0" />
-                        <span title={otherUser.address.formattedAddress || [otherUser.address.street, otherUser.address.city, otherUser.address.state, otherUser.address.postalCode].filter(Boolean).join(', ')}>
-                          {otherUser.address.formattedAddress || [otherUser.address.street, otherUser.address.city].filter(Boolean).join(', ')}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-
-                  {(otherUser.phone && booking?.status !== 'completed') && (
-                    <a href={`tel:${otherUser.phone}`} className={`${isProvider ? 'px-3 py-1.5 bg-gray-50 text-secondary text-xs rounded-xl shadow-sm border border-gray-200 flex items-center justify-center font-bold hover:bg-gray-100 shrink-0' : 'w-9 h-9 md:w-11 md:h-11 bg-primary text-white rounded-full flex items-center justify-center shadow-md shrink-0'}`}>
-                      <PhoneCall className={isProvider ? "w-3 h-3 mr-1.5" : "w-4 h-4 md:w-5 md:h-5"} />
-                      {isProvider ? 'Call' : ''}
-                    </a>
-                  )}
-                </div>
-
-                {/* Provider View: Customer Full Address Block */}
-                {isProvider && (
-                  <div className="text-xs text-gray-600 bg-gray-50/50 p-3 rounded-2xl border border-gray-100 flex flex-col space-y-1 w-full pointer-events-auto">
-                    <div className="flex items-center gap-1.5 text-primary mb-1">
-                      <MapPin className="w-3.5 h-3.5 shrink-0" />
-                      <span className="text-[10px] font-black uppercase tracking-wider">Customer Delivery Address</span>
-                    </div>
-                    {booking.address?.houseNumber && (
-                      <p className="text-secondary text-[11px] font-bold">
-                        House/Flat No: <span className="font-semibold text-gray-700">{booking.address.houseNumber}</span>
-                      </p>
-                    )}
-                    {booking.address?.landmark && (
-                      <p className="text-secondary text-[11px] font-bold">
-                        Landmark: <span className="font-semibold text-gray-700">{booking.address.landmark}</span>
-                      </p>
-                    )}
-                    <p className="font-semibold text-gray-700 leading-relaxed text-[11px] whitespace-pre-wrap select-text">
-                      {booking.address?.formattedAddress || [
-                        booking.address?.street,
-                        booking.address?.area,
-                        booking.address?.city,
-                        booking.address?.state,
-                        booking.address?.postalCode || booking.address?.pincode
-                      ].filter(Boolean).join(', ')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              !isProvider && (
-                <div className="py-4 text-center border border-dashed border-gray-100 rounded-2xl">
-                  <HelpCircle className="w-8 h-8 text-gray-300 mx-auto mb-1" />
-                  <p className="text-xs font-semibold text-gray-500">Assigning service professional...</p>
-                </div>
-              )
-            )}
+        {/* 2. ETA & Distance Side by Side Cards */}
+        <div className="grid grid-cols-2 gap-3 bg-slate-50/80 border border-slate-100/50 rounded-2xl p-3">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider">Estimated ETA</span>
+            <span className="text-lg font-black text-primary mt-0.5">{eta || '8 min'}</span>
           </div>
-
-          {/* 3. FIXED FOOTER */}
-          <div className="pt-3 border-t border-gray-100 flex flex-col gap-2 shrink-0 pointer-events-auto">
-            {!isProvider ? (
-              <button onClick={() => navigate('/customer/complaints')} className="w-full py-2 text-xs font-bold text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-700 transition-colors flex items-center justify-center gap-2">
-                <Shield className="w-4 h-4" /> Need Help? Contact Support
-              </button>
-            ) : (
-              <div className="flex flex-col gap-2 w-full">
-                {booking?.status !== 'completed' && (
-                  <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}&travelmode=driving`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2.5 bg-primary text-white font-bold rounded-2xl text-xs hover:bg-primary/95 shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <Navigation className="w-4 h-4 animate-bounce" /> Open Google Maps Navigation
-                  </a>
-                )}
-                <button
-                  onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/bookings')}
-                  className="w-full py-2.5 bg-secondary text-white font-bold rounded-2xl text-xs hover:bg-secondary/90 shadow-lg transition-all"
-                >
-                  Return to Dashboard
-                </button>
-              </div>
-            )}
+          <div className="flex flex-col border-l border-gray-200 pl-3">
+            <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider">Distance</span>
+            <span className="text-lg font-black text-secondary mt-0.5">{distance || '1.2 km'}</span>
           </div>
         </div>
+
+        {/* 3. Secure Service PIN (Customer Only) */}
+        {!isProvider && ['scheduled', 'accepted', 'inprogress', 'assigned', 'ontheway', 'arrived', 'started'].includes((booking?.status || '').toLowerCase().replace(/[^a-z]/g, '')) && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-3 flex items-center justify-between gap-3">
+            <div>
+              <span className="text-[9px] font-black text-blue-600/60 uppercase tracking-wider block mb-0.5">
+                {['in-progress', 'in_progress'].includes(booking?.status) ? 'Completion PIN' : 'Start PIN'}
+              </span>
+              <span className="text-xl font-black text-secondary tracking-widest font-mono">
+                {['in-progress', 'in_progress'].includes(booking?.status) ? getCompletionPin(booking) : getStartPin(booking)}
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 font-semibold max-w-[170px] text-right">
+              Share only when provider arrives.
+            </p>
+          </div>
+        )}
+
+        {/* 4. Provider / Customer Detail Card */}
+        {otherUser && (
+          <div className="flex items-center gap-3 bg-white/50 border border-gray-50 p-2.5 rounded-2xl shadow-sm">
+            <img 
+              src={otherUser.profilePicUrl || 'https://placehold.co/100x100?text=Avatar'} 
+              alt={otherUser.name} 
+              className="w-11 h-11 object-cover rounded-full border-2 border-primary/10 shadow-sm shrink-0" 
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h4 className="font-black text-slate-800 text-sm truncate leading-none">{otherUser.name}</h4>
+                <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase px-1 py-0.5 rounded border border-emerald-100">Verified</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-500 flex-wrap leading-none">
+                <span className="flex items-center gap-0.5 text-amber-500"><Star className="w-3 h-3 fill-amber-500 text-amber-500" /> {(otherUser.rating || otherUser.performanceScore?.rating || 4.8).toFixed(1)}</span>
+                <span>•</span>
+                <span>{(otherUser.completedBookings || 125)} Jobs Completed</span>
+                <span>•</span>
+                <span>{distance || '1.2 km'} away</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. Emergency Actions & Map Navigation (Provider Specific) */}
+        {isProvider && booking?.status !== 'completed' && (
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}&travelmode=driving`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-2.5 bg-primary text-white font-bold rounded-2xl text-xs hover:bg-primary/95 shadow-md transition-all flex items-center justify-center gap-2"
+          >
+            <Navigation className="w-4 h-4 animate-bounce" /> Open Google Maps Navigation
+          </a>
+        )}
+
+        {/* 6. Quick Action Buttons */}
+        <div className="grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+          {otherUser?.phone && (
+            <a 
+              href={`tel:${otherUser.phone}`}
+              className="flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+            >
+              <Phone className="w-3.5 h-3.5" /> Call
+            </a>
+          )}
+          {!isProvider && (
+            <button 
+              onClick={() => navigate('/customer/bookings')}
+              className="flex items-center justify-center gap-1.5 py-2.5 bg-primary hover:bg-primary/95 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Bookings
+            </button>
+          )}
+          <button 
+            onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/complaints')}
+            className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+          >
+            <Shield className="w-3.5 h-3.5" /> Support
+          </button>
+        </div>
+
       </div>
     </div>
   );

@@ -158,6 +158,7 @@ const ProviderLayout = () => {
 
     const allMenuItems = [
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" />, requireTest: false },
+        { name: 'Profile Settings', path: '/provider/profile', icon: <FiUser className="w-5 h-5" />, requireTest: false },
         { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-5 h-5" />, requireTest: true },
         { name: 'Job Calendar', path: '/provider/calendar', icon: <FiCalendar className="w-5 h-5" />, requireTest: true },
         { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-5 h-5" />, requireTest: true },

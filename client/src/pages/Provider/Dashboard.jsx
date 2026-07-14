@@ -411,22 +411,30 @@ const Dashboard = () => {
               </h3>
             </div>
             {isReady && Recharts && (
-              <div className="h-[200px] w-full mt-4">
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={earnings?.chartData || []}>
-                    <defs>
-                      <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0D9488" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#0D9488" stopOpacity={0.01} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                    <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} fillOpacity={1} fill="url(#colorEarnings)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div className="h-[200px] w-full mt-4 flex items-center justify-center">
+                {!earnings?.chartData || earnings.chartData.length < 2 ? (
+                  <div className="text-center py-4">
+                    <FiTrendingUp className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                    <p className="text-xs text-slate-400 font-medium">No trend data for this period</p>
+                    <p className="text-[10px] text-slate-400/70 mt-0.5">Select a longer range (e.g. 7 days) to view trend chart</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={earnings.chartData}>
+                      <defs>
+                        <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#0D9488" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#0D9488" stopOpacity={0.01} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                      <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '12px' }} />
+                      <Area type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} fillOpacity={1} fill="url(#colorEarnings)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             )}
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -493,38 +501,23 @@ const Dashboard = () => {
         {/* Bottom Section: Links & Recent Bookings */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Quick Action Navigation Links */}
-          <div className="flex flex-col gap-4">
-            <Link to="/provider/booking-requests" className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending</p>
-                <p className="text-2xl font-extrabold text-orange-500 mt-1">{pendingRequests?.length || 0}</p>
-                <p className="text-xs text-slate-400 mt-1.5">Awaiting response</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 border border-orange-100/50">
-                <FiClock className="w-6 h-6" />
-              </div>
+          <div className="grid grid-cols-3 lg:flex lg:flex-col gap-2 sm:gap-4">
+            <Link to="/provider/booking-requests" className="bg-white rounded-xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all block min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Pending</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-orange-500 mt-0.5 sm:mt-1">{pendingRequests?.length || 0}</p>
+              <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden sm:block">Awaiting response</p>
             </Link>
 
-            <Link to="/provider/active-jobs" className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Jobs</p>
-                <p className="text-2xl font-extrabold text-emerald-600 mt-1">{dashboardData.activeJobs?.length || 0}</p>
-                <p className="text-xs text-slate-400 mt-1.5">In progress</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100/50">
-                <FiBriefcase className="w-6 h-6" />
-              </div>
+            <Link to="/provider/active-jobs" className="bg-white rounded-xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all block min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Active Jobs</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-emerald-600 mt-0.5 sm:mt-1">{dashboardData.activeJobs?.length || 0}</p>
+              <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden sm:block">In progress</p>
             </Link>
 
-            <Link to="/provider/earnings" className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Balance</p>
-                <p className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCurrency(wallet?.currentBalance || 0)}</p>
-                <p className="text-xs text-slate-400 mt-1.5">Ready to withdraw</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100/50">
-                <FiCreditCard className="w-6 h-6" />
-              </div>
+            <Link to="/provider/earnings" className="bg-white rounded-xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all block min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Available</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-emerald-600 mt-0.5 sm:mt-1">{formatCurrency(wallet?.currentBalance || 0)}</p>
+              <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden sm:block">Ready to withdraw</p>
             </Link>
           </div>
 
