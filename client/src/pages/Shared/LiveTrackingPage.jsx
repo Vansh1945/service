@@ -410,7 +410,7 @@ const LiveTrackingPage = () => {
 
       {/* Floating Bottom Sheet Card (Mobile & Web responsive) */}
       <div className="absolute bottom-6 left-4 right-4 md:right-6 md:left-auto md:w-[400px] z-[1000] pointer-events-auto bg-white/95 backdrop-blur-md rounded-[28px] shadow-2xl border border-gray-100 p-4 space-y-4">
-        
+
         {/* 1. Provider Status Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex items-center gap-2">
@@ -459,24 +459,38 @@ const LiveTrackingPage = () => {
         {/* 4. Provider / Customer Detail Card */}
         {otherUser && (
           <div className="flex items-center gap-3 bg-white/50 border border-gray-50 p-2.5 rounded-2xl shadow-sm">
-            <img 
-              src={otherUser.profilePicUrl || 'https://placehold.co/100x100?text=Avatar'} 
-              alt={otherUser.name} 
-              className="w-11 h-11 object-cover rounded-full border-2 border-primary/10 shadow-sm shrink-0" 
+            <img
+              src={otherUser.profilePicUrl}
+              alt={otherUser.name}
+              className="w-11 h-11 object-cover rounded-full border-2 border-primary/10 shadow-sm shrink-0"
             />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h4 className="font-black text-slate-800 text-sm truncate leading-none">{otherUser.name}</h4>
-                <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase px-1 py-0.5 rounded border border-emerald-100">Verified</span>
+            {isProvider ? (
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="font-black text-slate-800 text-sm truncate leading-none">{otherUser.name}</h4>
+                  <span className="bg-blue-50 text-blue-600 text-[8px] font-black uppercase px-1 py-0.5 rounded border border-blue-100">Customer</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-500 flex-wrap leading-none">
+                  <span>{otherUser.phone || 'No Phone Number'}</span>
+                  <span>•</span>
+                  <span>{booking?.address?.city || 'Nearby'}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-500 flex-wrap leading-none">
-                <span className="flex items-center gap-0.5 text-amber-500"><Star className="w-3 h-3 fill-amber-500 text-amber-500" /> {(otherUser.rating || otherUser.performanceScore?.rating || 4.8).toFixed(1)}</span>
-                <span>•</span>
-                <span>{(otherUser.completedBookings || 125)} Jobs Completed</span>
-                <span>•</span>
-                <span>{distance || '1.2 km'} away</span>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="font-black text-slate-800 text-sm truncate leading-none">{otherUser.name}</h4>
+                  <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase px-1 py-0.5 rounded border border-emerald-100">Verified</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-gray-500 flex-wrap leading-none">
+                  <span className="flex items-center gap-0.5 text-amber-500"><Star className="w-3 h-3 fill-amber-500 text-amber-500" /> {(otherUser.rating || otherUser.performanceScore?.rating || 4.8).toFixed(1)}</span>
+                  <span>•</span>
+                  <span>{(otherUser.completedBookings || 125)} Jobs Completed</span>
+                  <span>•</span>
+                  <span>{distance || '1.2 km'} away</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -495,7 +509,7 @@ const LiveTrackingPage = () => {
         {/* 6. Quick Action Buttons */}
         <div className="grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
           {otherUser?.phone && (
-            <a 
+            <a
               href={`tel:${otherUser.phone}`}
               className="flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md"
             >
@@ -503,14 +517,14 @@ const LiveTrackingPage = () => {
             </a>
           )}
           {!isProvider && (
-            <button 
+            <button
               onClick={() => navigate('/customer/bookings')}
               className="flex items-center justify-center gap-1.5 py-2.5 bg-primary hover:bg-primary/95 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md"
             >
               <MessageSquare className="w-3.5 h-3.5" /> Bookings
             </button>
           )}
-          <button 
+          <button
             onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/complaints')}
             className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md"
           >

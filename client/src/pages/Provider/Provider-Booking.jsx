@@ -814,7 +814,15 @@ const ProviderBooking = () => {
         b._id?.toLowerCase().includes(q));
     }
     const todayStr = new Date().toISOString().split('T')[0];
-    if (filter === 'today') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] === todayStr);
+    if (filter === 'today') {
+      filtered = filtered.filter(b => {
+        const bookingDateStr = new Date(b.date).toISOString().split('T')[0];
+        if (bookingDateStr === todayStr) return true;
+        const s = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
+        const isActive = ['accepted', 'scheduled', 'confirmed', 'inprogress', 'started', 'ontheway', 'arrived'].includes(s);
+        return isActive && bookingDateStr < todayStr;
+      });
+    }
     else if (filter === 'upcoming') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] >= todayStr);
     else if (filter === 'past') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] < todayStr);
     else if (filter === 'emergency') filtered = filtered.filter(b => b.bookingType === 'emergency' || b.isEmergency);

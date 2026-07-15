@@ -255,7 +255,7 @@ const ServiceListingPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/30 pb-4 md:pb-0 pt-0">
+    <div className="min-h-screen bg-gray-50/30 pb-36 md:pb-0 pt-0">
       {/* Slider Banner Section */}
       <HeroSection noMargin />
 
@@ -476,7 +476,7 @@ const ServiceListingPage = () => {
         </div>
 
         {/* Sticky Bottom Bar for Mobile */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 px-3 py-3 shadow-lg flex items-center gap-2 z-40">
+        <div className="lg:hidden fixed bottom-16 left-0 right-0 bg-white border-t border-gray-150 px-3 py-3 shadow-lg flex items-center gap-2 z-40">
           {/* Category Select Dropdown */}
           <div className="flex-1 relative">
             <select

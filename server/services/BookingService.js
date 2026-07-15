@@ -1493,7 +1493,7 @@ class BookingService {
             path: 'provider',
             select: 'name email phone completedBookings performanceScore providerId profilePicUrl rating averageRating experience yearsOfExperience isVerified completionRate'
           })
-          .populate('customer', 'name email phone')
+          .populate('customer', 'name email phone profilePicUrl')
           .sort({ createdAt: -1 })
           .skip((currentPage - 1) * itemsPerPage)
           .limit(itemsPerPage)
@@ -2021,7 +2021,7 @@ class BookingService {
 
       const booking = await Booking.findById(id)
         .populate('services.service', 'title description basePrice category images duration')
-        .populate('customer', 'name email phone')
+        .populate('customer', 'name email phone profilePicUrl')
         .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings activeBooking experience')
         .populate('feedback')
         .lean();
@@ -2658,7 +2658,7 @@ class BookingService {
           { provider: providerId }
         ]
       })
-        .populate('customer', 'name email phone createdAt')
+        .populate('customer', 'name email phone profilePicUrl' + ' createdAt')
         .populate('services.service', 'title description duration price basePrice images serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed')
         .lean();
 
@@ -2881,7 +2881,7 @@ class BookingService {
       // END BOOKING STATUS STATE MACHINE UPGRADE
 
       const bookings = await Booking.find(query)
-        .populate('customer', 'name email phone')
+        .populate('customer', 'name email phone profilePicUrl')
         .populate('services.service', 'title price duration category')
         .sort({ date: 1, time: 1 })
         .skip((page - 1) * limit)
@@ -2966,7 +2966,7 @@ class BookingService {
       // BOOKING LOCK UPGRADE
       // DOUBLE CLICK PROTECTION
       const existingAcceptedBooking = await Booking.findById(id)
-        .populate('customer', 'name email phone')
+        .populate('customer', 'name email phone profilePicUrl')
         .populate('services.service', 'title description price');
       if (existingAcceptedBooking && existingAcceptedBooking.status === 'accepted' && existingAcceptedBooking.provider && existingAcceptedBooking.provider.toString() === providerId.toString()) {
         global.logger.info(`[BookingService.acceptBooking] Double click protection triggered. Provider ${providerId} already accepted booking ${id}. Returning existing accepted booking.`);
@@ -3237,11 +3237,11 @@ class BookingService {
         // Populate booking details for response
         const populatedBooking = session
           ? await Booking.findById(updatedBooking._id)
-            .populate('customer', 'name email phone')
+            .populate('customer', 'name email phone profilePicUrl')
             .populate('services.service', 'title description price')
             .session(session)
           : await Booking.findById(updatedBooking._id)
-            .populate('customer', 'name email phone')
+            .populate('customer', 'name email phone profilePicUrl')
             .populate('services.service', 'title description price');
 
         return {
@@ -3350,7 +3350,7 @@ class BookingService {
         _id: id,
         provider: providerId,
         status: { $in: ['accepted', 'assigned', 'Accepted', 'Assigned'] }
-      }).populate('customer', 'name email phone')
+      }).populate('customer', 'name email phone profilePicUrl')
         .populate('services.service', 'title description');
 
       if (!booking) {
@@ -4285,7 +4285,7 @@ class BookingService {
         provider: providerId,
         date: { $gte: start, $lte: end },
       })
-        .populate("customer", "name email phone createdAt")
+        .populate("customer", "name email phone profilePicUrl createdAt")
         .populate("services.service", "title")
         .sort({ date: -1 })
         .lean();
@@ -4814,7 +4814,7 @@ class BookingService {
       const { id } = req.params;
 
       const booking = await Booking.findById(id)
-        .populate('customer', 'name email phone')
+        .populate('customer', 'name email phone profilePicUrl')
         .populate({
           path: 'provider',
           select: 'providerId name email phone experience serviceArea rating services profilePicUrl bankDetails currentLocation isOnline',
