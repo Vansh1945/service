@@ -19,7 +19,7 @@ const NotificationBell = () => {
         if (!token) return;
         try {
             setLoading(true);
-            const res = await NotificationService.getNotifications({ limit: 15 });
+            const res = await NotificationService.getNotifications({ limit: 10 });
             if (res.data?.success) {
                 setNotifications(res.data.data || []);
                 setUnreadCount(res.data.unreadCount || 0);
@@ -39,7 +39,7 @@ const NotificationBell = () => {
         const socket = getSocket();
         if (socket) {
             socket.on('new_notification', (notification) => {
-                setNotifications(prev => [notification, ...prev].slice(0, 15));
+                setNotifications(prev => [notification, ...prev].slice(0, 10));
                 setUnreadCount(c => c + 1);
             });
         }
@@ -169,7 +169,7 @@ const NotificationBell = () => {
                                 <p className="text-sm text-gray-500">No notifications yet</p>
                             </div>
                         ) : (
-                            notifications.map(n => (
+                            notifications.slice(0, 10).map(n => (
                                 <div
                                     key={n._id}
                                     onClick={async () => {
