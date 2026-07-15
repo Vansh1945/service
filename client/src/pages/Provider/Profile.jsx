@@ -462,7 +462,7 @@ const ProviderProfile = () => {
   return (
     <>
       <div className="min-h-screen bg-neutral-50/50 pb-12 font-sans">
-      <div className="max-w-6xl mx-auto px-4 py-4 md:py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           
           {/* Desktop Sidebar Layout */}

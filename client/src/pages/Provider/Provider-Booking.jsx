@@ -873,316 +873,232 @@ const ProviderBooking = () => {
     const isEmergency = booking.bookingType?.toLowerCase() === 'emergency' || booking.isEmergency;
     const isInstant = booking.bookingType?.toLowerCase() === 'instant' || booking.isInstant;
 
-    // Smart variables
     const calculatedEarnings = calculateNetAmount(booking);
-    // BOOKING STATUS STATE MACHINE UPGRADE
     const distanceText = booking.liveDistance
       ? `${booking.liveDistance} km${booking.liveDuration ? ` (${booking.liveDuration})` : ''}`
       : (booking.distanceText || 'Nearby');
 
-    // Approximate Area: e.g. "Urban Estate Phase 1"
     const approxArea = booking.address?.area || booking.address?.suburb || booking.address?.locality || booking.address?.city || 'Nearby Area';
-
-    // Customer Rating
     const customerRating = booking.customer?.rating || booking.customer?.averageRating || booking.customer?.performanceScore?.rating || 4.8;
-
-    // Service Image
-
-    // Duration
     const durationText = booking.estimatedDuration ? `${booking.estimatedDuration} hrs` : (booking.services?.[0]?.service?.duration ? `${booking.services[0].service.duration} hrs` : '1 hr');
 
-    // Dynamic borders & animations
-    let borderStyle = "border-gray-200";
-    let glowStyle = "";
+    let borderStyle = "border-neutral-200";
+    let glowStyle = "shadow-sm";
     if (isEmergency) {
-      borderStyle = "border-2 border-red-500";
-      glowStyle = "shadow-md shadow-red-100/50";
+      borderStyle = "border-2 border-danger";
+      glowStyle = "shadow-md shadow-danger-light/50";
     } else if (isInstant) {
-      borderStyle = "border border-orange-400";
-      glowStyle = "shadow-md shadow-orange-50/50";
-    } else if (isCompleted) {
-      borderStyle = "border border-green-500 bg-green-50/5";
+      borderStyle = "border border-accent";
+      glowStyle = "shadow-md shadow-accent/10";
     } else if (isCancelled) {
-      borderStyle = "border border-gray-300 opacity-80";
+      borderStyle = "border border-neutral-300 opacity-75";
     }
 
-    // Status Badge helper
     const renderStatusBadge = () => {
-      let colorClass = "bg-gray-150 text-gray-700 border-gray-200";
-      if (isEmergency) colorClass = "bg-red-500 text-white border-red-600";
-      else if (isInstant) colorClass = "bg-orange-500 text-white border-orange-600";
-      else if (isCompleted) colorClass = "bg-green-600 text-white border-green-700";
-      else if (isCancelled) colorClass = "bg-gray-400 text-white border-gray-500";
-      else if (isAccepted) colorClass = "bg-blue-600 text-white border-blue-700";
-      else if (isInProgress) colorClass = "bg-yellow-600 text-white border-yellow-700";
+      let colorClass = "bg-neutral-100 text-neutral-600 border-neutral-200";
+      if (isEmergency) colorClass = "bg-danger text-white border-danger";
+      else if (isInstant) colorClass = "bg-accent text-white border-accent";
+      else if (isCompleted) colorClass = "bg-success text-white border-success";
+      else if (isCancelled) colorClass = "bg-neutral-300 text-neutral-600 border-neutral-400";
+      else if (isAccepted) colorClass = "bg-primary text-white border-primary";
+      else if (isInProgress) colorClass = "bg-warning text-neutral-900 border-warning";
 
       return (
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${colorClass}`}>
-          {isEmergency && <AlertCircle className="w-3 h-3 animate-bounce" />}
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${colorClass}`}>
+          {isEmergency && <AlertCircle className="w-3 h-3 animate-pulse" />}
           {booking.status}
         </span>
       );
     };
 
     return (
-      <div key={booking._id} className={`bg-white rounded-2xl border ${borderStyle} ${glowStyle} hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col p-3 sm:p-4 gap-2.5`}>
-
-        {/* Banner/Header Info */}
-        <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+      <div key={booking._id} className={`bg-white rounded-xl border ${borderStyle} ${glowStyle} hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col p-4 gap-3`}>
+        {/* Top: Status Badge, Priority Badge, Booking ID, Created Date */}
+        <div className="flex items-center justify-between text-[11px] text-neutral-500 border-b border-neutral-100 pb-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {renderStatusBadge()}
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${isEmergency ? 'bg-danger-light text-danger border-danger/20' : (isInstant ? 'bg-accent/10 text-accent border-accent/20' : 'bg-info-light text-info border-info/20')}`}>
+              {isEmergency ? '⚠️ Critical' : (isInstant ? '⚡ Instant' : '📅 Scheduled')}
+            </span>
             {booking.providerResponseDeadline && isPending && (
-              <span className="text-[10px] bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded-lg font-black flex items-center gap-1">
+              <span className="text-[9px] bg-danger-light text-danger border border-danger/15 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                 <Clock className="w-3 h-3 animate-spin" />
                 <CountdownTimer deadline={booking.providerResponseDeadline} />
               </span>
             )}
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg uppercase border ${isEmergency ? 'bg-red-50 text-red-700 border-red-200' : (isInstant ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200')
-              }`}>
-              {isEmergency ? '⚠️ Highest Priority' : (isInstant ? '⚡ Instant' : '📅 Scheduled')}
-            </span>
-            <span className="text-[10px] text-gray-400 font-mono">
-              #{booking.bookingId || booking._id.slice(-8)}
-            </span>
           </div>
-
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400">Created {formatDate(booking.createdAt)}</span>
+          <div className="text-right flex flex-col items-end">
+            <span className="font-mono font-bold text-secondary">#{booking.bookingId || booking._id.slice(-8)}</span>
+            <span className="text-[9px] text-neutral-400">Created {formatDate(booking.createdAt)}</span>
           </div>
         </div>
 
-        {/* Core Layout Grid */}
-        <div className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:gap-3 items-stretch">
-
-          {/* Earning Display - Compact on Mobile, prominent on Desktop */}
-          <div className="sm:col-span-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/25 p-2 sm:p-3 rounded-xl flex flex-row sm:flex-col justify-between sm:justify-center items-center text-center gap-1.5">
-            <div className="flex items-center gap-2 sm:flex-col sm:gap-0">
-              <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">You'll Receive</span>
-              <span className="text-xl sm:text-3xl font-black text-emerald-700 leading-tight">₹{calculatedEarnings}</span>
+        {/* Middle: Service Name, Customer, Amount, Bonus */}
+        <div className="flex items-start justify-between gap-4 py-1">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-bold text-secondary truncate">
+              {booking.services?.map(s => s.service?.title).join(', ') || 'Electrical Service'}
+            </h4>
+            <div className="flex items-center gap-1.5 mt-1 text-xs text-neutral-600">
+              <User className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="font-medium truncate">{booking.customer?.name || 'Guest Customer'}</span>
             </div>
+          </div>
+          
+          <div className="text-right shrink-0 flex flex-col items-end">
+            <span className="text-sm font-bold text-secondary">₹{calculatedEarnings}</span>
             {booking.providerEmergencyShare > 0 && (
-              <span className="text-[8px] bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded font-bold">
-                ⚡ +₹{booking.providerEmergencyShare} Bonus
+              <span className="text-[9px] text-accent font-bold mt-0.5">
+                +₹{booking.providerEmergencyShare} Bonus
               </span>
             )}
           </div>
+        </div>
 
-          {/* Service Details & Meta */}
-          <div className="sm:col-span-8 flex flex-col gap-1.5">
-            <div className="flex items-start gap-3">
-              {/* Service Info */}
-              <div className="min-w-0 flex-1">
-                <h4 className="text-sm sm:text-base font-black text-secondary leading-tight truncate">
-                  {booking.services?.map(s => s.service?.title).join(', ') || 'Service'}
-                </h4>
-
-                {/* Distance & Approx Area / Address Info */}
-                <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="font-bold text-gray-700">{distanceText}</span>
-                  <span className="text-gray-300">|</span>
-                  <span className="truncate flex items-center gap-0.5">
-                    <MapPin className="w-3.5 h-3.5 text-accent inline shrink-0" />
-                    {isPending ? approxArea : formatAddress(booking.address)}
-                  </span>
-                </p>
-              </div>
+        {/* Bottom: Address, Time, Payment, Rating */}
+        <div className="grid grid-cols-2 gap-3 text-xs bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+          <div className="col-span-2 flex items-start gap-1.5 text-neutral-600">
+            <MapPin className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+            <span className="line-clamp-2 leading-tight">
+              {isPending ? approxArea : formatAddress(booking.address)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-neutral-600">
+            <Clock className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="truncate">{formatDate(booking.date)} · {formatTime(booking.time)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 text-neutral-600 truncate">
+              <CreditCard className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="truncate">{(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? 'COD' : 'Online'}</span>
             </div>
-
-            {/* Quick Details Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3 text-[11px] text-gray-550 border-t border-gray-50 pt-1.5">
-              <div>
-                <span className="block text-[9px] text-gray-400 uppercase font-medium">Duration</span>
-                <span className="font-bold text-secondary">{durationText}</span>
-              </div>
-              <div>
-                <span className="block text-[9px] text-gray-400 uppercase font-medium">Date & Time</span>
-                <span className="font-bold text-secondary block">{formatDate(booking.date)} · {formatTime(booking.time)}</span>
-              </div>
-              <div>
-                <span className="block text-[9px] text-gray-400 uppercase font-medium">Payment Type</span>
-                {(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? (
-                  <span className="font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded border border-amber-100">Pay After Service</span>
-                ) : (
-                  <span className="font-bold text-primary bg-primary/5 px-1 py-0.5 rounded border border-primary/10">Online</span>
-                )}
-              </div>
-              <div>
-                <span className="block text-[9px] text-gray-400 uppercase font-medium">User Rating</span>
-                <span className="font-bold text-amber-500 flex items-center gap-0.5">
-                  ⭐ {Number(customerRating).toFixed(1)}
-                </span>
-              </div>
-            </div>
-
-            {/* If accepted, show customer quick contacts - auto hide on completion for privacy-first */}
-            {!isPending && booking.customer && !isCompleted && (
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 mt-1 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-bold text-secondary text-xs">{booking.customer.name}</p>
-                </div>
-                {booking.customer.phone && (
-                  <a
-                    href={`tel:${booking.customer.phone}`}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary text-white text-[10px] font-bold rounded-lg hover:bg-primary/95 transition-colors"
-                  >
-                    <Phone className="w-3 h-3" /> Call
-                  </a>
-                )}
-                {booking.payoutHoldUntil && new Date(booking.payoutHoldUntil) > new Date() && booking.paymentMethod !== 'cash' && (
-                  <span className="text-[9px] bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded-md font-bold">Hold</span>
-                )}
-              </div>
-            )}
+            <span className="text-amber-500 font-bold flex items-center shrink-0">
+              ⭐ {Number(customerRating).toFixed(1)}
+            </span>
           </div>
         </div>
 
-        {/* Action Buttons Row */}
-        <div className="flex gap-2 border-t border-gray-100 pt-3 flex-wrap">
-          {isPending ? (
-            <>
-              {/* View Details */}
-              <button
-                onClick={() => getBookingDetails(booking._id)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-secondary bg-white hover:bg-gray-50 transition-colors"
-                title="View Details"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Details</span>
-              </button>
+        {/* Footer: Call, Navigate, View Details, Primary Action */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-neutral-100">
+          
+          {/* Secondary Actions Group */}
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            {/* Details (always there) */}
+            <button
+              onClick={() => getBookingDetails(booking._id)}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-neutral-100 hover:bg-neutral-200 text-secondary text-xs font-bold rounded-lg transition-colors"
+            >
+              <Eye className="w-3.5 h-3.5 text-primary" />
+              <span className="hidden xs:inline sm:inline">Details</span>
+              <span className="xs:hidden sm:hidden">Info</span>
+            </button>
 
-              {/* Accept Request */}
-              {(!booking.provider || booking.provider === user?._id || booking.provider?._id === user?._id || (booking.provider?.toString && booking.provider.toString() === user?._id?.toString())) && (
-                <>
+            {/* Call customer if accepted & not completed */}
+            {!isPending && booking.customer && !isCompleted && booking.customer.phone && (
+              <a
+                href={`tel:${booking.customer.phone}`}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-neutral-100 hover:bg-neutral-200 text-secondary text-xs font-bold rounded-lg transition-colors"
+              >
+                <Phone className="w-3.5 h-3.5 text-success" />
+                <span>Call</span>
+              </a>
+            )}
+
+            {/* Navigate option */}
+            {!isPending && !isCompleted && (
+              <button
+                onClick={() => navigate(`/provider/track/${booking._id}`)}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-neutral-100 hover:bg-neutral-200 text-secondary text-xs font-bold rounded-lg transition-colors"
+              >
+                <Navigation className="w-3.5 h-3.5 text-success" />
+                <span>Map</span>
+              </button>
+            )}
+
+            {/* Chat option */}
+            {!isPending && !isCompleted && isChatVisible(booking) && (
+              <button
+                onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_customer'); }}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-neutral-100 hover:bg-neutral-200 text-secondary text-xs font-bold rounded-lg transition-colors"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-info" />
+                <span>Chat</span>
+              </button>
+            )}
+          </div>
+
+          {/* Primary Action Group */}
+          <div className="w-full sm:w-auto">
+            {isPending ? (
+              (!booking.provider || booking.provider === user?._id || booking.provider?._id === user?._id || (booking.provider?.toString && booking.provider.toString() === user?._id?.toString())) && (
+                <div className="flex gap-1.5 w-full">
                   <button
                     disabled={actionLoading.id !== null}
                     onClick={() => handleBookingAction(booking._id, 'accept')}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all"
                   >
                     {actionLoading.id === booking._id && actionLoading.type === 'accept' ? (
                       <Loader className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Check className="w-3.5 h-3.5" />
                     )}
-                    <span>{actionLoading.id === booking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept'}</span>
+                    <span>Accept</span>
                   </button>
-
                   <button
                     disabled={actionLoading.id !== null}
                     onClick={() => handleBookingAction(booking._id, 'reject')}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-red-100"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-danger hover:bg-danger/95 text-white text-xs font-bold rounded-lg transition-all"
                   >
                     {actionLoading.id === booking._id && actionLoading.type === 'reject' ? (
                       <Loader className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <X className="w-3.5 h-3.5" />
                     )}
-                    <span>{actionLoading.id === booking._id && actionLoading.type === 'reject' ? 'Rejecting...' : 'Reject'}</span>
+                    <span>Reject</span>
                   </button>
-                </>
-              )}
-            </>
-          ) : (
-            <div className={isCompleted ? "w-full" : "grid grid-cols-4 gap-1.5 w-full items-center"}>
-              {/* View Details button is always shown */}
-              <button
-                onClick={() => getBookingDetails(booking._id)}
-                className={`inline-flex items-center justify-center gap-1 py-2 border border-gray-200 rounded-xl text-[10px] font-semibold text-secondary bg-white hover:bg-gray-50 transition-colors ${isCompleted ? 'w-full text-xs font-bold py-2.5 shadow-sm' : 'w-full'}`}
-                title="View Details"
-              >
-                <Eye className="w-3.5 h-3.5 text-primary" />
-                <span>Details</span>
-              </button>
-
-              {!isCompleted && (
-                <>
-
-                  {/* Chat */}
-                  {isChatVisible(booking) ? (
+                </div>
+              )
+            ) : !isCompleted ? (
+              <div className="w-full">
+                {isAccepted ? (
+                  <button
+                    disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
+                    onClick={() => handleBookingAction(booking._id, 'start')}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300 disabled:cursor-not-allowed"
+                  >
+                    {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
+                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5" />
+                    )}
+                    <span>Start</span>
+                  </button>
+                ) : isInProgress ? (
+                  <div className="flex gap-1.5 w-full">
                     <button
-                      onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_customer'); }}
-                      className="inline-flex items-center justify-center gap-1 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white rounded-xl text-[10px] font-bold transition-all shadow-sm active:scale-95 w-full"
+                      onClick={() => setProofModal({ isOpen: true, action: 'start', bookingId: booking._id })}
+                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-warning hover:bg-warning/95 text-neutral-900 text-xs font-bold rounded-lg transition-all"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Chat</span>
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Photo</span>
                     </button>
-                  ) : (
                     <button
-                      disabled
-                      className="inline-flex items-center justify-center gap-1 py-2 bg-gray-100 border border-gray-250 text-gray-400 rounded-xl text-[10px] font-semibold cursor-not-allowed w-full"
+                      disabled={actionLoading.id !== null}
+                      onClick={() => handleBookingAction(booking._id, 'complete')}
+                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-success hover:bg-success/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Chat</span>
+                      {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
+                        <Loader className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Complete</span>
                     </button>
-                  )}
-
-                  {/* Navigate */}
-                  {((isAccepted || isInProgress || currentStatus === 'assigned') && !isCompleted) ? (
-                    <button
-                      onClick={() => navigate(`/provider/track/${booking._id}`)}
-                      className="inline-flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95"
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                      <span>Navigate</span>
-                    </button>
-                  ) : (
-                    <button
-                      disabled
-                      className="inline-flex items-center justify-center gap-1 py-2 bg-gray-100 border border-gray-250 text-gray-400 rounded-xl text-[10px] font-semibold cursor-not-allowed w-full"
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                      <span>Navigate</span>
-                    </button>
-                  )}
-
-                  {/* Action Button: Start / Upload Before / Complete */}
-                  <div className="w-full">
-                    {isAccepted ? (
-                      <button
-                        disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
-                        onClick={() => handleBookingAction(booking._id, 'start')}
-                        className="w-full inline-flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                      >
-                        {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
-                          <Loader className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Play className="w-3 h-3" />
-                        )}
-                        <span className="truncate">Start</span>
-                      </button>
-                    ) : isInProgress ? (
-                      <div className="flex flex-col gap-1 w-full">
-                        <button
-                          onClick={() => setProofModal({ isOpen: true, action: 'start', bookingId: booking._id })}
-                          className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[9px] font-bold text-white bg-amber-500 hover:bg-amber-600 transition-colors"
-                        >
-                          <Camera className="w-2.5 h-2.5" />
-                          <span>Before Photo</span>
-                        </button>
-                        <button
-                          disabled={actionLoading.id !== null}
-                          onClick={() => handleBookingAction(booking._id, 'complete')}
-                          className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[9px] font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300"
-                        >
-                          {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
-                            <Loader className="w-2.5 h-2.5 animate-spin" />
-                          ) : (
-                            <Check className="w-2.5 h-2.5" />
-                          )}
-                          <span>Complete</span>
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-gray-50 px-5 py-2.5 flex items-center justify-between">
-          <span className="text-xs text-gray-400">Created {formatDate(booking.createdAt)}</span>
-          <span className="text-xs text-gray-400">{formatDate(booking.date)} · {formatTime(booking.time)}</span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     );
@@ -1205,177 +1121,200 @@ const ProviderBooking = () => {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 font-inter">
+    <div className="min-h-screen bg-neutral-50 font-inter">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         {isLimitReached && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 shadow-sm animate-fade-in">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5 animate-bounce" />
+          <div className="mb-6 p-4 bg-danger/10 border border-danger/20 rounded-xl flex items-start gap-3 shadow-sm animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5 animate-bounce" />
             <div>
-              <h4 className="text-sm font-bold text-red-800">Booking Limit Reached</h4>
-              <p className="text-xs text-red-600 mt-0.5 font-medium">
+              <h4 className="text-sm font-bold text-secondary">Booking Limit Reached</h4>
+              <p className="text-xs text-neutral-550 mt-0.5 font-medium">
                 You have reached the maximum limit of parallel bookings (10). Complete your current jobs first.
               </p>
             </div>
           </div>
         )}
 
-        {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        {/* ── Page Title ── */}
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-secondary">My Bookings</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Manage and track all your service bookings</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowReports(!showReports)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-secondary hover:bg-gray-50 transition-colors"
-            >
-              <DownloadCloud className="w-4 h-4" />
-              {showReports ? 'Hide Reports' : 'Reports'}
-            </button>
+            <h1 className="text-2xl font-black text-secondary tracking-tight">My Bookings</h1>
+            <p className="text-xs text-neutral-500 font-medium mt-0.5">Manage and track your service jobs</p>
           </div>
         </div>
 
-        {/* ── Download Reports ── */}
-        {showReports && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <DownloadCloud className="w-5 h-5 text-primary" />
-              <h3 className="text-base font-semibold text-secondary">Download Reports</h3>
+        {/* ── Download Reports Accordion (Secondary Section now at the top) ── */}
+        <div className="bg-white border border-neutral-100 rounded-xl shadow-sm transition-all duration-200 mb-6">
+          <button
+            onClick={() => setShowReports(!showReports)}
+            className="w-full px-4 py-3.5 flex items-center justify-between text-secondary hover:bg-neutral-50 transition-colors rounded-xl"
+          >
+            <div className="flex items-center gap-2">
+              <DownloadCloud className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold">Download Reports</span>
             </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-500">Date Range:</span>
+            <ChevronDown className={`w-4 h-4 text-neutral-450 transition-transform duration-200 ${showReports ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {showReports && (
+            <div className="px-4 pb-4 pt-2 border-t border-neutral-100 bg-neutral-50 rounded-b-xl animate-slide-up">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
+                <div className="flex-1 grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-neutral-500 uppercase">Start Date</label>
+                    <DatePicker
+                      selected={dateFilter.startDate ? new Date(dateFilter.startDate) : null}
+                      onChange={(date) => setDateFilter({ ...dateFilter, startDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '' })}
+                      dateFormat="yyyy-MM-dd"
+                      placeholderText="YYYY-MM-DD"
+                      className="border border-neutral-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-white w-full"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-neutral-500 uppercase">End Date</label>
+                    <DatePicker
+                      selected={dateFilter.endDate ? new Date(dateFilter.endDate) : null}
+                      onChange={(date) => setDateFilter({ ...dateFilter, endDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '' })}
+                      dateFormat="yyyy-MM-dd"
+                      placeholderText="YYYY-MM-DD"
+                      className="border border-neutral-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-white w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => downloadReport('booking')}
+                    disabled={!dateFilter.startDate || !dateFilter.endDate || downloading}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/95 disabled:bg-neutral-200 disabled:text-neutral-400 text-white px-4 py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+                  >
+                    {downloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    <span>{downloading ? 'Downloading...' : 'Excel'}</span>
+                  </button>
+                  <button
+                    onClick={() => setDateFilter({ startDate: '', endDate: '' })}
+                    className="px-3 py-2.5 text-xs font-bold text-neutral-500 hover:text-danger hover:bg-danger-light rounded-lg transition-colors border border-transparent"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 items-center">
-                <DatePicker
-                  selected={dateFilter.startDate ? new Date(dateFilter.startDate) : null}
-                  onChange={(date) => setDateFilter({ ...dateFilter, startDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '' })}
-                  dateFormat="yyyy-MM-dd" placeholderText="Start Date"
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                />
-                <span className="text-xs text-gray-400">to</span>
-                <DatePicker
-                  selected={dateFilter.endDate ? new Date(dateFilter.endDate) : null}
-                  onChange={(date) => setDateFilter({ ...dateFilter, endDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '' })}
-                  dateFormat="yyyy-MM-dd" placeholderText="End Date"
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                />
-                <button onClick={() => setDateFilter({ startDate: '', endDate: '' })} className="text-sm text-primary hover:text-primary/80 transition-colors">Clear</button>
-              </div>
+              <p className="text-[10px] text-neutral-400 mt-2 font-medium">Note: Date range must be between 7 days and 2 months.</p>
             </div>
-            <p className="text-xs text-gray-400 mb-4">Date range must be between 7 days and 2 months</p>
-            <button
-              onClick={() => downloadReport('booking')}
-              disabled={!dateFilter.startDate || !dateFilter.endDate || downloading}
-              className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          )}
+        </div>
+
+        {/* ── Search (Full Width) ── */}
+        <div className="mb-4 relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <input
+            type="text"
+            placeholder="Search bookings by ID, service name, or customer..."
+            className="w-full pl-11 pr-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* ── Filters (All on a single line on both mobile and desktop) ── */}
+        <div className="grid grid-cols-3 md:flex md:flex-row gap-1.5 mb-6">
+          {/* Status Filter */}
+          <div className="relative md:flex-1">
+            <select
+              value={activeTab}
+              onChange={(e) => { setActiveTab(e.target.value); setCurrentPage(1); }}
+              className="w-full appearance-none pl-2 pr-6 py-2.5 bg-white border border-neutral-200 rounded-xl text-[10px] font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm truncate"
             >
-              {downloading ? <Loader className="w-4 h-4 " /> : <Download className="w-4 h-4" />}
-              {downloading ? 'Downloading...' : 'Download Excel'}
-            </button>
-          </div>
-        )}
-
-        {/* ── Filters ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-6">
-          {/* Row 1: Search — full width */}
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, service or ID..."
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+              <option value="all">All ({Object.values(bookings).flat().length})</option>
+              <option value="pending">Pending ({bookings.pending.length})</option>
+              <option value="accepted">Accepted ({bookings.accepted.length})</option>
+              <option value="in-progress">In Progress ({bookings['in-progress'].length})</option>
+              <option value="completed">Completed ({bookings.completed.length})</option>
+              <option value="cancelled">Cancelled ({bookings.cancelled.length})</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
           </div>
 
-          {/* Row 2: All 3 filters — always one line */}
-          <div className="flex flex-row gap-2">
-            {/* Status */}
-            <div className="relative flex-1 min-w-0">
-              <select
-                value={activeTab}
-                onChange={(e) => { setActiveTab(e.target.value); setCurrentPage(1); }}
-                className="appearance-none pl-2 pr-5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white font-medium w-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary truncate"
-              >
-                <option value="all">All ({Object.values(bookings).flat().length})</option>
-                <option value="pending">Pending ({bookings.pending.length})</option>
-                <option value="accepted">Accepted ({bookings.accepted.length})</option>
-                <option value="in-progress">In Progress ({bookings['in-progress'].length})</option>
-                <option value="completed">Completed ({bookings.completed.length})</option>
-                <option value="cancelled">Cancelled ({bookings.cancelled.length})</option>
-              </select>
-              <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-            </div>
+          {/* Time Filter */}
+          <div className="relative flex-1">
+            <select
+              value={filter}
+              onChange={(e) => { setFilter(e.target.value); setCurrentPage(1); }}
+              className="w-full appearance-none pl-2 pr-6 py-2.5 bg-white border border-neutral-200 rounded-xl text-[10px] font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+            >
+              <option value="all">All Jobs</option>
+              <option value="today">Today</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="emergency">Emergency</option>
+              <option value="instant">Instant</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="past">Past</option>
+            </select>
+            <Filter className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
+          </div>
 
-            {/* Time filter */}
-            <div className="relative flex-1 min-w-0">
-              <select
-                value={filter}
-                onChange={(e) => { setFilter(e.target.value); setCurrentPage(1); }}
-                className="appearance-none pl-2 pr-5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white font-medium w-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="all">All Jobs</option>
-                <option value="today">Today's Jobs</option>
-                <option value="upcoming">Upcoming Jobs</option>
-                <option value="emergency">Emergency Jobs</option>
-                <option value="instant">Instant Jobs</option>
-                <option value="scheduled">Scheduled Jobs</option>
-                <option value="past">Past Jobs</option>
-              </select>
-              <Filter className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-            </div>
-
-            {/* Per page */}
-            <div className="relative flex-1 min-w-0">
-              <select
-                value={bookingsPerPage}
-                onChange={(e) => { setBookingsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="appearance-none pl-2 pr-5 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm bg-white font-medium w-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={25}>25 / page</option>
-              </select>
-              <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-            </div>
+          {/* Per Page Filter */}
+          <div className="relative flex-1">
+            <select
+              value={bookingsPerPage}
+              onChange={(e) => { setBookingsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="w-full appearance-none pl-2 pr-6 py-2.5 bg-white border border-neutral-200 rounded-xl text-[10px] font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={25}>25</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
           </div>
         </div>
 
         {/* ── Booking List ── */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 mb-4">
+          <div className="grid grid-cols-1 gap-4 mb-6">
             {Array.from({ length: 3 }).map((_, i) => (
               <BookingCardSkeleton key={i} />
             ))}
           </div>
         ) : currentBookings.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-gray-100 rounded-2xl mb-4">
-              <ClipboardList className="w-7 h-7 text-gray-400" />
+          <div className="bg-white rounded-xl border border-neutral-150 p-12 text-center flex flex-col items-center justify-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-50 rounded-2xl mb-4 border border-neutral-100">
+              <ClipboardList className="w-8 h-8 text-neutral-400" />
             </div>
-            <h3 className="text-lg font-semibold text-secondary mb-2">No bookings found</h3>
-            <p className="text-sm text-gray-500 max-w-sm mx-auto">
-              {searchQuery ? `No results for "${searchQuery}".` : filter !== 'all' ? `No bookings for "${filter}".` : "You don't have any bookings yet."}
+            <h3 className="text-lg font-bold text-secondary mb-2">No Bookings Found</h3>
+            <p className="text-xs text-neutral-500 max-w-sm mx-auto mb-6">
+              {searchQuery ? `We couldn't find any results matching "${searchQuery}".` : "There are no bookings matching the selected filters."}
             </p>
+            {(searchQuery || activeTab !== 'all' || filter !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setActiveTab('all');
+                  setFilter('all');
+                  setCurrentPage(1);
+                }}
+                className="px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
+              >
+                Clear All Filters
+              </button>
+            )}
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 mb-4">
+            <div className="grid grid-cols-1 gap-4 mb-6">
               {paginatedBookings.map(renderBookingCard)}
             </div>
 
             {/* Pagination */}
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={currentBookings.length}
-              limit={bookingsPerPage}
-              onPageChange={paginate}
-            />
+            <div className="mb-6">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={currentBookings.length}
+                limit={bookingsPerPage}
+                onPageChange={paginate}
+              />
+            </div>
           </>
         )}
       </div>

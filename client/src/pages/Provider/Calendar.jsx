@@ -3,6 +3,7 @@ import { FiCalendar, FiChevronLeft, FiChevronRight, FiClock, FiUser, FiActivity,
 import axiosInstance from '../../api/axiosInstance';
 import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import ErrorState from '../../components/Error';
+import StatsCard from '../../components/ui/StatsCard';
 
 const Calendar = () => {
   const [view, setView] = useState('month'); // 'month' | 'week' | 'day'
@@ -335,53 +336,44 @@ const Calendar = () => {
       {/* Compact Operational Provider Summary Section */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Today's Jobs */}
-        <div className="bg-white border border-neutral-100 p-3 rounded-xl shadow-sm flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <FiActivity className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider leading-none">Day's Jobs</span>
-            <span className="text-sm sm:text-base font-black text-neutral-800 mt-1 block leading-none">{todayJobsCount}</span>
-            <span className="text-[8px] text-neutral-400 font-medium block leading-none mt-0.5">for selected day</span>
-          </div>
-        </div>
+        <StatsCard
+          title="Day's Jobs"
+          value={todayJobsCount}
+          icon={FiActivity}
+          iconBg="bg-primary/10"
+          iconColor="text-primary"
+          subtext="for selected day"
+        />
 
         {/* Today's Earnings */}
-        <div className="bg-white border border-neutral-100 p-3 rounded-xl shadow-sm flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-success/10 text-success flex items-center justify-center shrink-0">
-            <FiDollarSign className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider leading-none">Day's Earnings</span>
-            <span className="text-sm sm:text-base font-black text-success mt-1 block leading-none">₹{todayEarnings}</span>
-            <span className="text-[8px] text-neutral-400 font-medium block leading-none mt-0.5">estimated</span>
-          </div>
-        </div>
+        <StatsCard
+          title="Day's Earnings"
+          value={`₹${todayEarnings}`}
+          icon={FiDollarSign}
+          iconBg="bg-success/10"
+          iconColor="text-success"
+          subtext="estimated"
+        />
 
         {/* Emergency Jobs */}
-        <div className="bg-white border border-neutral-100 p-3 rounded-xl shadow-sm flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0">
-            <FiAlertTriangle className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider leading-none">Emergency Jobs</span>
-            <span className="text-sm sm:text-base font-black text-danger mt-1 block leading-none">{emergencyJobsCount}</span>
-            <span className="text-[8px] text-neutral-400 font-medium block leading-none mt-0.5">urgent</span>
-          </div>
-        </div>
+        <StatsCard
+          title="Emergency Jobs"
+          value={emergencyJobsCount}
+          icon={FiAlertTriangle}
+          iconBg="bg-accent/10"
+          iconColor="text-accent"
+          subtext="urgent"
+        />
 
         {/* Upcoming Jobs */}
-        <div className="bg-white border border-neutral-100 p-3 rounded-xl shadow-sm flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center shrink-0">
-            <FiCheckCircle className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider leading-none">Upcoming Jobs</span>
-            <span className="text-sm sm:text-base font-black text-primary mt-1 block leading-none">{upcomingJobsCount}</span>
-            <span className="text-[8px] text-neutral-400 font-medium block leading-none mt-0.5">scheduled ahead</span>
-        </div>
-      </div>
-
+        <StatsCard
+          title="Upcoming Jobs"
+          value={upcomingJobsCount}
+          icon={FiCheckCircle}
+          iconBg="bg-info/10"
+          iconColor="text-info"
+          subtext="scheduled ahead"
+        />
       </div>
 
       {/* Header Controller */}
