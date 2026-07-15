@@ -83,7 +83,7 @@ const ServicesPage = () => {
         }
     ];
 
-    const handleBookNow = (service) => {
+    const handleBookNow = () => {
         navigate(`/customer/services`);
     };
 

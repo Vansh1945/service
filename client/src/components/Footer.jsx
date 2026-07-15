@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Facebook,
@@ -9,12 +9,10 @@ import {
   Phone,
   Mail,
   ChevronRight,
-  Smartphone,
   ShieldCheck,
   Zap,
   Heart,
   Send,
-  Apple,
   Youtube
 } from 'lucide-react';
 import { useAuth } from '../context/auth';
@@ -53,7 +51,7 @@ const Footer = () => {
   };
 
   const socialLinks = systemData?.socialLinks ? Object.entries(systemData.socialLinks)
-    .filter(([_, href]) => href && href !== '#' && href !== '')
+    .filter(([, href]) => href && href !== '#' && href !== '')
     .map(([platform, href]) => ({
       Icon: getSocialIcon(platform),
       href,

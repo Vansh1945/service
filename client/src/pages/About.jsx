@@ -1,5 +1,6 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import {
   Zap, Award, Shield, MapPin, Phone, Users, CheckCircle,
@@ -13,36 +14,6 @@ const AboutPage = () => {
     { icon: Users, value: "10k+", label: "Happy Customers" },
     { icon: Briefcase, value: "500+", label: "Providers" },
     { icon: MapPin, value: "50+", label: "Cities Covered" },
-  ];
-
-  const whyWeStarted = [
-    {
-      icon: Shield,
-      title: "Building Trust",
-      description: "Started to bring transparency and reliability to the unorganized service sector."
-    },
-    {
-      icon: Clock,
-      title: "Valuing Time",
-      description: "Created to eliminate unpredictable wait times with systematic scheduling."
-    },
-    {
-      icon: ThumbsUp,
-      title: "Ensuring Quality",
-      description: "Driven to standardize service quality and ensure professional execution."
-    },
-    {
-      icon: Heart,
-      title: "Customer First",
-      description: "Built to create an experience where your peace of mind is the ultimate priority."
-    },
-  ];
-
-  const teamMembers = [
-    { name: "Rahul Sharma", role: "Founder & CEO" },
-    { name: "Priya Singh", role: "Head of Operations" },
-    { name: "Amit Kumar", role: "Technical Lead" },
-    { name: "Neha Gupta", role: "Customer Success" },
   ];
 
   return (
@@ -238,59 +209,6 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* Team Section */}
-      {/* <section className="py-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <img
-                src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-                alt="Our dedicated team"
-                className="rounded-2xl shadow-lg w-full h-[350px] object-cover hover:scale-105 transition-transform duration-700"
-              />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Meet Our Team
-              </h2>
-              <p className="text-gray-600 mb-6">
-                A passionate group of professionals driving our vision forward and ensuring excellence in every project.
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                {teamMembers.map((member, index) => (
-                  <div key={index} className="flex items-center justify-between border-b border-gray-100 py-3">
-                    <span className="text-gray-700">{member.name}</span>
-                    <span className="font-semibold text-primary">{member.role}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8 flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-gray-600">Expert Leadership</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  <span className="text-sm text-gray-600">Dedicated Support</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section> */}
-
-      {/* ── Supplementary SEO Sections ── */}
 
       {/* Professional Electrical Solutions Section */}
       <section className="py-16 bg-white border-t border-gray-100">

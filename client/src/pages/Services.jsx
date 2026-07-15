@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { useAuth } from '../context/auth';
+import { Link } from 'react-router-dom';
 import ServiceCardSkeleton from '../components/ui-skeletons/ServiceCardSkeleton';
 import { getActiveServices } from '../services/ServiceService';
 import ServiceCard from './Customer/components/ServiceCard';
@@ -13,9 +10,7 @@ import useSurchargeBooking from '../hooks/useSurchargeBooking';
 const Services = ({ limit }) => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const [, setError] = useState(null);
   const sliderRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -78,7 +73,6 @@ const Services = ({ limit }) => {
 
   const scrollSlider = (direction) => {
     if (sliderRef.current) {
-      const { scrollLeft, clientWidth } = sliderRef.current;
       // Scroll by roughly 1 card width + gap (approx 300px)
       const scrollAmount = direction === 'left' ? -300 : 300;
       sliderRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });

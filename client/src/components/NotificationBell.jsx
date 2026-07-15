@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/auth';
 import { getSocket } from '../socket/socket';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle, ShieldCheck, Wallet, MessageSquare } from 'lucide-react';
+import { Bell, X, CheckCheck, BookOpen, CreditCard, AlertCircle, ShieldCheck, Wallet, MessageSquare } from 'lucide-react';
 
 import * as NotificationService from '../services/NotificationService';
 
 const NotificationBell = () => {
-    const { token, API, user } = useAuth();
+    const { token } = useAuth();
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -176,7 +176,7 @@ const NotificationBell = () => {
                                         if (!n.isRead) markRead(n._id);
                                         try {
                                             await NotificationService.markClicked(n._id);
-                                        } catch (err) { /* silent fail for analytics */ }
+                                        } catch { /* silent fail for analytics */ }
                                         
                                         if (n.url && n.url !== '/' && !n.url.startsWith('/messages')) {
                                             navigate(n.url);
