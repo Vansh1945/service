@@ -10,12 +10,11 @@ import StatsCard from '../../components/ui/StatsCard';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import * as ProviderService from '../../services/ProviderService';
-import * as ComplaintService from '../../services/ComplaintService';
 import { formatCurrency, formatDate, formatTime } from '../../utils/format';
 import { formatAddress } from '../../utils/providerHelpers';
 import PwaInstallBanner from '../../components/PwaInstallBanner';
 const Dashboard = () => {
-  const { token, showToast, user, refreshUser, logoutUser } = useAuth();
+  const { showToast, user, refreshUser, logoutUser } = useAuth();
   const { socket } = useSocket();
 
   const [loading, setLoading] = useState(true);
@@ -55,8 +54,6 @@ const Dashboard = () => {
     pendingReviews: 0
   });
   const [isReady, setIsReady] = useState(false);
-  const [actionLoading, setActionLoading] = useState({});
-  const [complaintsCount, setComplaintsCount] = useState(0);
 
 
   const fetchDashboardData = useCallback(async (silent = false) => {
@@ -94,7 +91,7 @@ const Dashboard = () => {
         disputesCount,
         pendingReviews
       });
-    } catch (error) {
+    } catch {
       showToast('Failed to load dashboard data', 'error');
     } finally {
       if (!silent) setLoading(false);
@@ -156,19 +153,7 @@ const Dashboard = () => {
       socket.off('connect', handleReconnect);
       socket.off('reconnect', handleReconnect);
     };
-  }, [socket, fetchDashboardData, user, refreshUser]);
-
-  // Fetch provider's complaint count
-  useEffect(() => {
-    const fetchComplaintsCount = async () => {
-      try {
-        const response = await ComplaintService.getMyComplaints();
-        const data = response.data;
-        if (data?.success) setComplaintsCount(data.data?.length || 0);
-      } catch (e) { /* silent */ }
-    };
-    if (token) fetchComplaintsCount();
-  }, [token]);
+  }, [socket, fetchDashboardData, user, refreshUser, showToast]);
 
 
   useEffect(() => {
@@ -189,12 +174,6 @@ const Dashboard = () => {
 
   const totalPieValue = (bookings?.pieChartData || []).reduce((sum, item) => sum + item.value, 0) || 1;
   const performanceBadge = ratings?.performanceBadge || 'Bronze';
-  const badgeColors = {
-    'Platinum': 'bg-slate-800 text-white',
-    'Gold': 'bg-amber-500 text-white',
-    'Silver': 'bg-slate-300 text-slate-800',
-    'Bronze': 'bg-amber-800 text-white'
-  };
 
   const getRecentBookingServiceTitle = (booking) => {
     if (booking.services && booking.services.length > 0) {
@@ -227,31 +206,36 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 font-inter animate-slide-up">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-neutral-50/50 p-3 sm:p-5 font-inter animate-slide-up">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         <PwaInstallBanner role="provider" />
 
         {/* Header */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2 font-poppins">
-              Welcome back, {profile?.name || 'Provider'}! <span className="animate-bounce">👋</span>
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">Here's what's happening today.</p>
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-xl md:text-2xl font-bold text-neutral-800 flex items-center flex-wrap gap-2 font-poppins leading-tight">
+                Welcome back, {profile?.name || 'Provider'}! <span className="animate-bounce">👋</span>
+              </h1>
+              <p className="text-neutral-500 text-xs sm:text-sm mt-1">Here's what's happening today.</p>
+            </div>
           </div>
-          <div className="flex items-center gap-3 self-start md:self-center">
+          <div className="flex flex-row flex-nowrap items-center gap-1.5 sm:gap-3 self-start sm:self-center w-full sm:w-auto overflow-x-auto scrollbar-none whitespace-nowrap">
+            {/* Provider ID */}
             {profile?.providerId && (
-              <span className="text-xs font-semibold px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100/50">
+              <span className="text-xs font-bold px-2.5 py-1 bg-neutral-50 text-neutral-600 rounded-full border border-neutral-200/60 shrink-0">
                 ID: {profile.providerId}
               </span>
             )}
+
+            {/* Date Filter */}
             <select
               value={`${dateRange.startDate}_${dateRange.endDate}`}
               onChange={(e) => {
                 const [start, end] = e.target.value.split('_');
                 setDateRange({ startDate: start, endDate: end });
               }}
-              className="text-xs font-semibold border border-slate-100 rounded-lg px-2.5 py-1.5 bg-slate-50/50 text-slate-500 focus:outline-none shadow-sm cursor-pointer"
+              className="text-xs font-bold border border-neutral-200 rounded-xl px-2.5 py-1 bg-neutral-50 hover:bg-neutral-100/50 text-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm cursor-pointer transition-all duration-200 shrink-0"
             >
               <option value={`${new Date().toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>Today</option>
               <option value={`${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>7 days</option>
@@ -263,12 +247,12 @@ const Dashboard = () => {
 
         {/* Account Warning/Restriction/Suspended/Blocked Alert Banner */}
         {user?.blockedTill && new Date(user.blockedTill) > new Date() && (
-          <div className="bg-red-900 border border-red-850 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md text-white animate-pulse">
+          <div className="bg-danger border border-danger/25 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md text-white animate-pulse">
             <div className="flex items-start gap-3">
-              <FiAlertTriangle className="w-8 h-8 text-red-200 shrink-0 mt-0.5" />
+              <FiAlertTriangle className="w-8 h-8 text-white shrink-0 mt-0.5" />
               <div>
                 <p className="font-extrabold text-lg text-white">Account Blocked</p>
-                <p className="text-red-100 text-xs mt-1 leading-relaxed">
+                <p className="text-white/90 text-xs mt-1 leading-relaxed">
                   Your account has been blocked by the administrator. All actions have been restricted.
                   {user.rejectionReason && ` Reason: ${user.rejectionReason}`}
                 </p>
@@ -276,7 +260,7 @@ const Dashboard = () => {
             </div>
             <button
               onClick={() => logoutUser()}
-              className="px-4 py-2 bg-white text-red-950 font-bold text-xs rounded-xl hover:bg-slate-100 transition-all self-start sm:self-center"
+              className="px-4 py-2 bg-white text-danger font-bold text-xs rounded-xl hover:bg-slate-100 transition-all self-start sm:self-center"
             >
               Logout
             </button>
@@ -284,12 +268,12 @@ const Dashboard = () => {
         )}
 
         {user?.isSuspended && (
-          <div className="bg-rose-600 border border-rose-700 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md text-white">
+          <div className="bg-danger border border-danger/25 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md text-white">
             <div className="flex items-start gap-3">
-              <FiAlertTriangle className="w-8 h-8 text-rose-100 shrink-0 mt-0.5" />
+              <FiAlertTriangle className="w-8 h-8 text-white shrink-0 mt-0.5" />
               <div>
                 <p className="font-extrabold text-lg text-white">Account Suspended</p>
-                <p className="text-rose-100 text-xs mt-1 leading-relaxed">
+                <p className="text-white/90 text-xs mt-1 leading-relaxed">
                   Your account is suspended. All login-protected provider operations are restricted.
                   {user.suspensionReason && ` Reason: ${user.suspensionReason}`}
                 </p>
@@ -297,7 +281,7 @@ const Dashboard = () => {
             </div>
             <button
               onClick={() => logoutUser()}
-              className="px-4 py-2 bg-white text-rose-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-all self-start sm:self-center"
+              className="px-4 py-2 bg-white text-danger font-bold text-xs rounded-xl hover:bg-slate-100 transition-all self-start sm:self-center"
             >
               Logout
             </button>
@@ -305,11 +289,11 @@ const Dashboard = () => {
         )}
 
         {ratings?.restrictionsActive && !user?.isSuspended && !(user?.blockedTill && new Date(user.blockedTill) > new Date()) && (
-          <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex items-start gap-3 shadow-sm border-l-4 border-l-amber-500">
-            <FiAlertTriangle className="w-7 h-7 text-amber-600 shrink-0 mt-0.5" />
+          <div className="bg-warning/5 border border-warning/20 p-4 rounded-2xl flex items-start gap-3 shadow-sm border-l-4 border-l-warning">
+            <FiAlertTriangle className="w-7 h-7 text-warning shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-amber-800 text-sm">Account Restricted</p>
-              <div className="text-amber-700 text-xs mt-1 space-y-1 leading-relaxed">
+              <p className="font-bold text-warning text-sm">Account Restricted</p>
+              <div className="text-warning text-xs mt-1 space-y-1 leading-relaxed">
                 <p>Your account is currently restricted. Restricted features have been disabled.</p>
                 <p><strong>Current Status:</strong> Restricted</p>
                 <p><strong>Reason:</strong> {ratings.restrictionReason || 'Manual restriction'}</p>
@@ -320,14 +304,15 @@ const Dashboard = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 xl:grid-cols-6 gap-2 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           <StatsCard
             to="/provider/earnings"
             title="Total Earnings"
             value={formatCurrency(totalEarnings)}
             icon={FiDollarSign}
-            iconBg="bg-emerald-50"
-            iconColor="text-emerald-600"
+            iconBg="bg-success/5"
+            iconColor="text-success"
+            className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
           <StatsCard
@@ -335,8 +320,9 @@ const Dashboard = () => {
             title="Today's Earnings"
             value={formatCurrency(todaysEarnings)}
             icon={FiDollarSign}
-            iconBg="bg-emerald-50"
-            iconColor="text-emerald-600"
+            iconBg="bg-success/5"
+            iconColor="text-success"
+            className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
           <StatsCard
@@ -344,86 +330,110 @@ const Dashboard = () => {
             title="Available Balance"
             value={formatCurrency(wallet?.currentBalance || 0)}
             icon={FiCreditCard}
-            iconBg="bg-orange-50"
-            iconColor="text-orange-500"
+            iconBg="bg-primary/5"
+            iconColor="text-primary"
+            className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
           <StatsCard
             title="Released Payouts"
             value={formatCurrency(wallet?.releasedPayouts || 0)}
             icon={FiCheckCircle}
-            iconBg="bg-blue-50"
-            iconColor="text-blue-500"
+            iconBg="bg-info/5"
+            iconColor="text-info"
+            className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
           <StatsCard
             title="Refund Deductions"
             value={formatCurrency(wallet?.refundedDeductions || 0)}
             icon={FiTrendingUp}
-            iconBg="bg-rose-50"
-            iconColor="text-rose-500"
+            iconBg="bg-danger/5"
+            iconColor="text-danger"
+            className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
           <StatsCard
             title="Completed"
             value={summary?.completedJobs || 0}
             icon={FiCheckCircle}
-            iconBg="bg-teal-50"
-            iconColor="text-teal-600"
+            iconBg="bg-success/5"
+            iconColor="text-success"
+            className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
         </div>
 
         {/* Provider Performance Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between gap-2 mb-6">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <FiStar className="text-amber-500 w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-              <span className="font-bold text-slate-800 text-sm sm:text-base truncate">Provider Performance</span>
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-warning/5 flex items-center justify-center text-warning">
+                <FiStar className="w-4.5 h-4.5 fill-warning" />
+              </div>
+              <div>
+                <span className="font-bold text-neutral-800 text-sm sm:text-base">Provider Performance</span>
+                <p className="text-[10px] text-neutral-400">Based on your recent completed services</p>
+              </div>
             </div>
-            <span className={`text-2xs sm:text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${badgeColors[performanceBadge] || 'bg-amber-800 text-white'}`}>
-              {performanceBadge}
+            <span className={`text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full tracking-wider border shadow-sm ${
+              performanceBadge === 'Platinum' ? 'bg-neutral-900 border-neutral-800 text-white' :
+              performanceBadge === 'Gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
+              performanceBadge === 'Silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
+              'bg-amber-900 border-amber-955 text-white'
+            }`}>
+              {performanceBadge} Partner
             </span>
           </div>
-          <div className="grid grid-cols-3 divide-x divide-slate-100 text-center">
-            <div>
-              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.averageRating ?? 0).toFixed(1)}</p>
-              <p className="text-xs font-medium text-slate-400 mt-1.5">Rating</p>
+          <div className="grid grid-cols-3 divide-x divide-neutral-100 text-center">
+            <div className="py-1">
+              <div className="flex items-center justify-center gap-1">
+                <FiStar className="text-warning w-4 h-4 fill-warning shrink-0" />
+                <p className="text-lg md:text-xl font-extrabold text-neutral-800">{Number(ratings?.averageRating ?? 0).toFixed(1)}</p>
+              </div>
+              <p className="text-[10px] sm:text-xs font-semibold text-neutral-400 mt-1 uppercase tracking-wider">Rating</p>
             </div>
-            <div>
-              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.onTimeRate ?? 0).toFixed(1)}%</p>
-              <p className="text-xs font-medium text-slate-400 mt-1.5">On-Time</p>
+            <div className="py-1">
+              <div className="flex items-center justify-center gap-1">
+                <FiClock className="text-primary w-4 h-4 shrink-0" />
+                <p className="text-lg md:text-xl font-extrabold text-neutral-800">{Number(ratings?.onTimeRate ?? 0).toFixed(1)}%</p>
+              </div>
+              <p className="text-[10px] sm:text-xs font-semibold text-neutral-400 mt-1 uppercase tracking-wider">On-Time</p>
             </div>
-            <div>
-              <p className="text-lg md:text-xl font-bold text-slate-800">{Number(ratings?.completionRate ?? 0).toFixed(1)}%</p>
-              <p className="text-xs font-medium text-slate-400 mt-1.5">Completion</p>
+            <div className="py-1">
+              <div className="flex items-center justify-center gap-1">
+                <FiCheckCircle className="text-success w-4 h-4 shrink-0" />
+                <p className="text-lg md:text-xl font-extrabold text-neutral-800">{Number(ratings?.completionRate ?? 0).toFixed(1)}%</p>
+              </div>
+              <p className="text-[10px] sm:text-xs font-semibold text-neutral-400 mt-1 uppercase tracking-wider">Completion</p>
             </div>
           </div>
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Earnings Area Chart */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                <FiTrendingUp className="text-emerald-500 w-5 h-5" />
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 min-h-[320px] flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-neutral-800 text-sm sm:text-base flex items-center gap-2">
+                <FiTrendingUp className="text-success w-5 h-5" />
                 Earnings Trend
               </h3>
             </div>
-            {isReady && Recharts && (
-              <div className="h-[200px] w-full mt-4 flex items-center justify-center">
-                {!earnings?.chartData || earnings.chartData.length < 2 ? (
-                  <div className="text-center py-4">
-                    <FiTrendingUp className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                    <p className="text-xs text-slate-400 font-medium">No trend data for this period</p>
-                    <p className="text-[10px] text-slate-400/70 mt-0.5">Select a longer range (e.g. 7 days) to view trend chart</p>
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={200}>
+            
+            <div className="h-[180px] w-full flex items-center justify-center my-3">
+              {(!earnings?.chartData || earnings.chartData.length < 2) ? (
+                <div className="text-center py-4">
+                  <FiTrendingUp className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
+                  <p className="text-xs text-neutral-500 font-bold">No trend data for this period</p>
+                  <p className="text-[10px] text-neutral-400 mt-1">Select a longer range (e.g., 7 days) to view trend chart</p>
+                </div>
+              ) : (
+                isReady && Recharts && (
+                  <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={earnings.chartData}>
                       <defs>
                         <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0D9488" stopOpacity={0.25} />
+                          <stop offset="5%" stopColor="#0D9488" stopOpacity={0.2} />
                           <stop offset="95%" stopColor="#0D9488" stopOpacity={0.01} />
                         </linearGradient>
                       </defs>
@@ -434,134 +444,168 @@ const Dashboard = () => {
                       <Area type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} fillOpacity={1} fill="url(#colorEarnings)" />
                     </AreaChart>
                   </ResponsiveContainer>
-                )}
-              </div>
-            )}
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                )
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Earnings</p>
-                <p className="text-xl font-bold text-slate-800 mt-0.5">{formatCurrency(totalEarnings)}</p>
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Total Earnings</p>
+                <p className="text-lg sm:text-xl font-extrabold text-neutral-800 mt-0.5">{formatCurrency(totalEarnings)}</p>
               </div>
-              <span className="text-xs font-semibold px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100/30 flex items-center gap-1">
-                ↑ 18.6%
-              </span>
+              {earnings?.chartData && earnings.chartData.length >= 2 && (
+                <span className="text-xs font-bold px-2 py-1 bg-success/5 text-success rounded-full border border-success/10 flex items-center gap-1">
+                  ↑ Stable
+                </span>
+              )}
             </div>
           </div>
 
           {/* Bookings Breakdown Donut Chart */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-4">
-              <FiPieChart className="text-emerald-500 w-5 h-5" />
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 min-h-[320px] flex flex-col justify-between">
+            <h3 className="font-bold text-neutral-800 text-sm sm:text-base flex items-center gap-2">
+              <FiPieChart className="text-primary w-5 h-5" />
               Bookings Breakdown
             </h3>
-            <div className="flex flex-row items-center justify-between gap-4 flex-1">
-              <div className="w-1/2 flex justify-center h-[160px] min-w-0">
-                {isReady && Recharts && (
-                  <ResponsiveContainer width="100%" height={160}>
-                    <PieChart>
-                      <Pie
-                        data={bookings?.pieChartData || []}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={45}
-                        outerRadius={65}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {(bookings?.pieChartData || []).map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '11px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-              <div className="w-1/2 flex flex-col gap-2">
-                {(bookings?.pieChartData || []).map((entry, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="text-xs font-semibold text-slate-600">{entry.name}</span>
-                    </div>
-                    <span className="text-xs font-medium text-slate-400">
-                      {entry.value} ({((entry.value / totalPieValue) * 100).toFixed(1)}%)
-                    </span>
+            
+            <div className="flex flex-row items-center justify-between gap-4 my-3 flex-grow">
+              {!bookings?.pieChartData || bookings.pieChartData.length === 0 || totalPieValue === 0 ? (
+                <div className="w-full text-center py-6">
+                  <FiPieChart className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
+                  <p className="text-xs text-neutral-500 font-bold">No bookings breakdown available</p>
+                  <p className="text-[10px] text-neutral-400 mt-1">Complete bookings to populate metrics</p>
+                </div>
+              ) : (
+                <>
+                  <div className="w-1/2 flex justify-center h-[140px] min-w-0">
+                    {isReady && Recharts && (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={bookings?.pieChartData || []}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={45}
+                            outerRadius={60}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {(bookings?.pieChartData || []).map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '11px' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <div className="w-1/2 flex flex-col gap-1.5 max-h-[140px] overflow-y-auto">
+                    {(bookings?.pieChartData || []).map((entry, index) => (
+                      <div key={index} className="flex items-center justify-between min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                          <span className="text-xs font-bold text-neutral-600 truncate">{entry.name}</span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-neutral-450 shrink-0 ml-1">
+                          {entry.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-100">
-              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Bookings</p>
-              <p className="text-xl font-bold text-slate-800 mt-0.5">{summary?.totalBookings ?? 0}</p>
+
+            <div className="pt-3 border-t border-neutral-100">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Total Bookings</p>
+              <p className="text-lg sm:text-xl font-extrabold text-neutral-800 mt-0.5">{summary?.totalBookings ?? 0}</p>
             </div>
           </div>
         </div>
 
         {/* Bottom Section: Links & Recent Bookings */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Quick Action Navigation Links */}
-          <div className="grid grid-cols-3 lg:flex lg:flex-col gap-2 sm:gap-4">
-            <Link to="/provider/booking-requests" className="bg-white rounded-xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all block min-w-0">
-              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Pending</p>
-              <p className="text-lg sm:text-2xl font-extrabold text-orange-500 mt-0.5 sm:mt-1">{pendingRequests?.length || 0}</p>
-              <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden sm:block">Awaiting response</p>
+          <div className="grid grid-cols-3 lg:grid-cols-1 gap-3 sm:gap-4">
+            <Link to="/provider/booking-requests" className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block min-w-0">
+              <div className="flex lg:flex-row flex-col justify-between lg:items-center gap-1.5">
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider truncate">Pending Requests</p>
+                  <p className="text-lg sm:text-2xl font-extrabold text-accent mt-0.5">{pendingRequests?.length || 0}</p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-accent/5 flex items-center justify-center text-accent shrink-0 self-start lg:self-center">
+                  <FiClock className="w-4 h-4" />
+                </div>
+              </div>
             </Link>
 
-            <Link to="/provider/active-jobs" className="bg-white rounded-xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all block min-w-0">
-              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Active Jobs</p>
-              <p className="text-lg sm:text-2xl font-extrabold text-emerald-600 mt-0.5 sm:mt-1">{dashboardData.activeJobs?.length || 0}</p>
-              <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden sm:block">In progress</p>
+            <Link to="/provider/active-jobs" className="bg-white rounded-2xl p-4 border border-neutral-150 shadow-[0_2px_8px_rgba(0,0,0,0.01)] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block min-w-0">
+              <div className="flex lg:flex-row flex-col justify-between lg:items-center gap-1.5">
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider truncate">Active Jobs</p>
+                  <p className="text-lg sm:text-2xl font-extrabold text-success mt-0.5">{dashboardData.activeJobs?.length || 0}</p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-success/5 flex items-center justify-center text-success shrink-0 self-start lg:self-center">
+                  <FiBriefcase className="w-4 h-4" />
+                </div>
+              </div>
             </Link>
 
-            <Link to="/provider/earnings" className="bg-white rounded-xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md transition-all block min-w-0">
-              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Available</p>
-              <p className="text-lg sm:text-2xl font-extrabold text-emerald-600 mt-0.5 sm:mt-1">{formatCurrency(wallet?.currentBalance || 0)}</p>
-              <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden sm:block">Ready to withdraw</p>
+            <Link to="/provider/earnings" className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block min-w-0">
+              <div className="flex lg:flex-row flex-col justify-between lg:items-center gap-1.5">
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider truncate">Available</p>
+                  <p className="text-lg sm:text-2xl font-extrabold text-primary mt-0.5">{formatCurrency(wallet?.currentBalance || 0)}</p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary shrink-0 self-start lg:self-center">
+                  <FiCreditCard className="w-4 h-4" />
+                </div>
+              </div>
             </Link>
           </div>
 
           {/* Recent Bookings List Card */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between p-5 border-b border-slate-100">
-                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <FiCalendar className="text-emerald-600 w-5 h-5" />
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-neutral-100">
+                <h2 className="font-bold text-neutral-800 text-sm sm:text-base flex items-center gap-2">
+                  <FiCalendar className="text-primary w-5 h-5" />
                   Recent Bookings
                 </h2>
-                <Link to="/provider/booking-requests" className="text-emerald-600 hover:text-emerald-700 text-xs font-bold flex items-center gap-1 transition-all">
+                <Link to="/provider/booking-requests" className="text-primary hover:text-primary/80 text-xs font-bold flex items-center gap-0.5 transition-colors">
                   View All <FiChevronRight className="w-4 h-4" />
                 </Link>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-4 sm:p-5 space-y-3.5">
                 {!recentBookings?.length ? (
-                  <div className="text-center py-12">
-                    <FiCalendar className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-400 text-sm font-medium">No recent bookings</p>
+                  <div className="text-center py-10">
+                    <FiCalendar className="w-10 h-10 text-neutral-250 mx-auto mb-2" />
+                    <p className="text-neutral-400 text-xs font-bold">No recent bookings</p>
                   </div>
                 ) : (
                   recentBookings.map((booking) => {
                     const title = getRecentBookingServiceTitle(booking);
                     return (
-                      <div key={booking._id} className="flex items-center gap-4 p-3 bg-slate-50/50 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                      <div key={booking._id} className="flex items-center gap-3 p-3 bg-neutral-50/50 rounded-2xl border border-neutral-100 hover:bg-neutral-50 transition-colors">
                         {getRecentBookingServiceIcon(title)}
                         <div className="flex-grow min-w-0">
-                          <h4 className="text-sm font-bold text-slate-800 truncate">{title}</h4>
-                          <p className="text-xs text-slate-400 truncate mt-0.5">{formatAddress(booking.location)}</p>
+                          <h4 className="text-xs sm:text-sm font-bold text-neutral-800 truncate">{title}</h4>
+                          <p className="text-[10px] sm:text-xs text-neutral-450 truncate mt-0.5">{formatAddress(booking.location)}</p>
                         </div>
-                        <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                          <span className="text-[11px] font-semibold text-slate-400">
-                            {formatDate(booking.date)} at {formatTime(booking.time)}
+                        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                          <span className="text-[9px] sm:text-2xs font-semibold text-neutral-400">
+                            {formatDate(booking.date)} • {formatTime(booking.time)}
                           </span>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider border
-                              ${booking.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-150' :
-                                booking.status === 'accepted' ? 'bg-blue-50 text-blue-600 border-blue-150' :
-                                  booking.status === 'pending' ? 'bg-orange-50 text-orange-600 border-orange-150' :
-                                    'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider border ${
+                              booking.status === 'completed' ? 'bg-success/5 text-success border-success/15' :
+                              booking.status === 'accepted' ? 'bg-info/5 text-info border-info/15' :
+                              booking.status === 'pending' ? 'bg-warning/5 text-warning border-warning/15' :
+                              'bg-neutral-100 text-neutral-500 border-neutral-200'
+                            }`}>
                               {booking.status === 'in-progress' ? 'In Progress' : booking.status}
                             </span>
-                            <span className="text-sm font-bold text-slate-800">{formatCurrency(booking.totalAmount)}</span>
+                            <span className="text-xs sm:text-sm font-extrabold text-neutral-800">{formatCurrency(booking.totalAmount)}</span>
                           </div>
                         </div>
                       </div>
@@ -570,8 +614,8 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
-            <div className="p-4 bg-slate-50/30 border-t border-slate-100 rounded-b-2xl text-center">
-              <Link to="/provider/booking-requests" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+            <div className="p-3.5 bg-neutral-50/20 border-t border-neutral-100 rounded-b-2xl text-center">
+              <Link to="/provider/booking-requests" className="text-xs font-bold text-primary hover:text-primary/80 transition-colors">
                 View All Bookings
               </Link>
             </div>
@@ -580,16 +624,16 @@ const Dashboard = () => {
 
         {/* Setup Required Alert Banner */}
         {profile && (!profile.approved || !profile.testPassed) && (
-          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex items-start gap-3">
-            <FiAlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="bg-warning/5 rounded-2xl p-4 border border-warning/15 flex items-start gap-3">
+            <FiAlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
             <div className="flex-grow">
-              <h4 className="text-sm font-bold text-amber-800">Account Setup Required</h4>
-              <ul className="mt-1.5 text-xs text-amber-700 space-y-1">
+              <h4 className="text-sm font-bold text-warning">Account Setup Required</h4>
+              <ul className="mt-1.5 text-xs text-warning space-y-1">
                 {!profile.approved && <li>• Your account is pending approval by the administrator</li>}
                 {!profile.testPassed && (
                   <li className="flex items-center gap-2 justify-between">
                     <span>• Complete your skill test to start accepting bookings</span>
-                    <Link to="/provider/test" className="text-emerald-600 font-bold hover:underline">Take Test →</Link>
+                    <Link to="/provider/test" className="text-primary font-bold hover:underline">Take Test →</Link>
                   </li>
                 )}
               </ul>
