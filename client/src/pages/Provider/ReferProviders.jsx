@@ -114,7 +114,7 @@ const ReferProviders = () => {
                   ` Plus, your referred partner gets a ${details.programRules.commissionPercentage}% commission discount for their first ${details.programRules.expiryDays || 30} days!`}
               </p>
             </div>
-            <div className="flex flex-row items-center gap-3 w-full sm:max-w-md mt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:max-w-md mt-2">
               <button 
                 onClick={handleShare} 
                 className="flex-1 h-10 inline-flex items-center justify-center font-bold rounded-xl text-xs px-4 bg-primary hover:bg-primary/90 text-white gap-1.5 shadow-sm hover:scale-[0.98] transition-transform duration-200 whitespace-nowrap"

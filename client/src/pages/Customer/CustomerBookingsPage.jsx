@@ -322,7 +322,7 @@ const AddressBlock = ({ address, phone }) => {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
+const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [activeTab, setActiveTab] = useState('booking');
   const provider = booking.provider || booking.providerDetails;
@@ -373,8 +373,8 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-3 py-1.5 font-bold text-[11px] border-b-2 transition-all whitespace-nowrap uppercase tracking-wider ${activeTab === tab.id
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-400 hover:text-gray-650'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-400 hover:text-gray-650'
                   }`}
               >
                 {tab.label}
@@ -497,31 +497,31 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
 
               {((booking.disputeRaised === true || booking.hasComplaint === true) &&
                 ((booking.disputeStatus && !['none', 'None'].includes(booking.disputeStatus)) ||
-                 (booking.adminRefundDecision && !['none', 'None'].includes(booking.adminRefundDecision)))) && (
-                <div className="bg-red-50 rounded-xl p-4 border border-red-100">
-                  <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <ShieldAlert className="w-3.5 h-3.5" /> Dispute & Refund Details
-                  </p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-red-700">Dispute Status</span>
-                      <span className="font-medium text-red-800 capitalize">{booking.disputeStatus?.replace('_', ' ') || 'Under Review'}</span>
+                  (booking.adminRefundDecision && !['none', 'None'].includes(booking.adminRefundDecision)))) && (
+                  <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5" /> Dispute & Refund Details
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-red-700">Dispute Status</span>
+                        <span className="font-medium text-red-800 capitalize">{booking.disputeStatus?.replace('_', ' ') || 'Under Review'}</span>
+                      </div>
+                      {booking.adminRefundDecision && !['none', 'None'].includes(booking.adminRefundDecision) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-red-700">Admin Decision</span>
+                          <span className="font-medium text-red-800 capitalize">{booking.adminRefundDecision}</span>
+                        </div>
+                      )}
+                      {booking.paymentStatus === 'refunded' && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-red-700">Refund Status</span>
+                          <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4" /> Refunded to Wallet</span>
+                        </div>
+                      )}
                     </div>
-                    {booking.adminRefundDecision && !['none', 'None'].includes(booking.adminRefundDecision) && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-red-700">Admin Decision</span>
-                        <span className="font-medium text-red-800 capitalize">{booking.adminRefundDecision}</span>
-                      </div>
-                    )}
-                    {booking.paymentStatus === 'refunded' && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-red-700">Refund Status</span>
-                        <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4" /> Refunded to Wallet</span>
-                      </div>
-                    )}
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
@@ -530,7 +530,11 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
                 <div className="relative pl-1">
                   <div className="space-y-0">
                     {(() => {
-                      const stepsList = [
+                      const isCancelled = (booking.status || '').toLowerCase() === 'cancelled';
+                      const stepsList = isCancelled ? [
+                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed', 'cancelled'] },
+                        { label: 'Booking Cancelled', statuses: ['cancelled'], isRed: true }
+                      ] : [
                         { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
                         { label: 'Provider Assigned', statuses: ['assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
                         { label: 'Accepted', statuses: ['accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
@@ -549,20 +553,21 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
                         const isCompleted = !!match || step.statuses.includes((booking.status || '').toLowerCase().replace(/[^a-z]/g, ''));
                         const timestamp = match ? match.timestamp : null;
 
+                        const lineClass = isCompleted ? (step.isRed ? 'bg-danger' : 'bg-emerald-500') : 'bg-gray-250';
+                        const iconClass = isCompleted
+                          ? (step.isRed ? 'bg-danger text-white shadow-sm ring-4 ring-danger/10' : 'bg-emerald-500 text-white shadow-sm ring-4 ring-emerald-50')
+                          : 'bg-white border-2 border-gray-300 text-gray-400';
+
                         return (
                           <div key={idx} className="relative pl-8 pb-5 last:pb-0">
                             {idx !== stepsList.length - 1 && (
-                              <div className={`absolute left-[9px] top-5 bottom-0 w-0.5 ${isCompleted ? 'bg-emerald-500' : 'bg-gray-250'}`} />
+                              <div className={`absolute left-[9px] top-5 bottom-0 w-0.5 ${lineClass}`} />
                             )}
-                            <div className={`absolute left-0 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold z-10 transition-all ${
-                              isCompleted 
-                                ? 'bg-emerald-500 text-white shadow-sm ring-4 ring-emerald-50' 
-                                : 'bg-white border-2 border-gray-300 text-gray-400'
-                            }`}>
+                            <div className={`absolute left-0 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold z-10 transition-all ${iconClass}`}>
                               {isCompleted ? '✓' : idx + 1}
                             </div>
                             <div className="min-w-0">
-                              <h4 className={`text-xs font-bold leading-none ${isCompleted ? 'text-secondary font-black' : 'text-gray-400 font-semibold'}`}>
+                              <h4 className={`text-xs font-bold leading-none ${isCompleted ? (step.isRed ? 'text-danger font-black' : 'text-secondary font-black') : 'text-gray-400 font-semibold'}`}>
                                 {step.label}
                               </h4>
                               {timestamp && (
@@ -741,7 +746,7 @@ const ActionBtn = ({ label, icon: Icon, onClick, variant = 'blue', disabled = fa
   );
 };
 
-const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall, onChat, onToggleFavorite, user, actionLoading = {} }) => {
+const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, actionLoading = {} }) => {
   const navigate = useNavigate();
   const cfg = getStatusCfg(booking.status);
   const provider = booking.provider || booking.providerDetails;
@@ -881,14 +886,14 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
 
 
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ───────────────
 
 const CustomerBookingsPage = () => {
   const { token, API, showToast, user, refreshUser } = useAuth();
   const { socket } = useSocket();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
   const [actionLoading, setActionLoading] = useState({});
 

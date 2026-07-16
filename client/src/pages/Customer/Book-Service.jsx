@@ -1262,7 +1262,7 @@ const BookService = () => {
                       <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
                         Platform Fee
                         <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-center font-normal leading-tight">
+                        <span className="absolute bottom-full left-0 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-left font-normal leading-tight">
                           Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
                         </span>
                       </span>

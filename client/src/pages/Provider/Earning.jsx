@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import * as PaymentService from '../../services/PaymentService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatDate, formatCurrency } from '../../utils/format';
+import { formatDate, formatCurrency, formatTime } from '../../utils/format';
 import { getStatusConfig } from '../../utils/providerHelpers';
 import DashboardSkeleton from '../../components/ui-skeletons/DashboardSkeleton';
 import StatsCard from '../../components/ui/StatsCard';
@@ -156,7 +156,9 @@ const ProviderEarningsDashboard = () => {
         setEarningsReport(data.earnings || []);
         setTotalItems(data.total || 0);
       }
-    } catch (err) { showToast('Failed to fetch earnings', 'error'); }
+    } catch {
+      showToast('Failed to fetch earnings', 'error');
+    }
   }, [currentPage, limit, dateFilter, showToast, setTotalItems]);
 
   const fetchHeldEarnings = useCallback(async () => {
@@ -164,7 +166,9 @@ const ProviderEarningsDashboard = () => {
       const response = await PaymentService.getHeldEarnings();
       const data = response.data;
       if (data.success) setHeldEarnings(data.earnings || []);
-    } catch (err) { console.error('Failed to fetch held earnings:', err); }
+    } catch {
+      // Failed silently
+    }
   }, []);
 
   const fetchWithdrawalReport = useCallback(async () => {
@@ -176,7 +180,9 @@ const ProviderEarningsDashboard = () => {
       const response = await PaymentService.getWithdrawalReport(params);
       const data = response.data;
       if (data.success) setWithdrawalReport(data.records || []);
-    } catch (err) { showToast('Failed to fetch withdrawals', 'error'); }
+    } catch {
+      showToast('Failed to fetch withdrawals', 'error');
+    }
   }, [dateFilter, showToast]);
 
   const fetchProviderProfile = useCallback(async () => {
@@ -243,10 +249,12 @@ const ProviderEarningsDashboard = () => {
       let errMsg = 'Download failed';
       if (err.response?.data instanceof Blob) {
         try {
-          const text = await err.response.data.text();
-          const errorJson = JSON.parse(text);
-          errMsg = errorJson.message || errorJson.error || errMsg;
-        } catch (_) { }
+           const text = await err.response.data.text();
+           const errorJson = JSON.parse(text);
+           errMsg = errorJson.message || errorJson.error || errMsg;
+         } catch {
+           return;
+         }
       } else if (err.response?.data?.error) {
         errMsg = err.response.data.error;
       } else if (err.response?.data?.message) {
@@ -634,7 +642,7 @@ const ProviderEarningsDashboard = () => {
                       earningsReport.filter(e => e.isWithdrawable).map((e, idx) => {
                         let parsedSplits = e.surgeSplitSettings;
                         if (typeof parsedSplits === 'string') {
-                          try { parsedSplits = JSON.parse(parsedSplits); } catch (_) { parsedSplits = null; }
+                          try { parsedSplits = JSON.parse(parsedSplits); } catch { parsedSplits = null; }
                         }
                         const splits = {
                           visiting: parsedSplits?.visiting ?? fallbackSplits.visiting,
@@ -701,7 +709,7 @@ const ProviderEarningsDashboard = () => {
                     {earningsReport.filter(e => e.isWithdrawable).map((e, idx) => {
                       let parsedSplits = e.surgeSplitSettings;
                       if (typeof parsedSplits === 'string') {
-                        try { parsedSplits = JSON.parse(parsedSplits); } catch (_) { parsedSplits = null; }
+                        try { parsedSplits = JSON.parse(parsedSplits); } catch { parsedSplits = null; }
                       }
                       const splits = {
                         visiting: parsedSplits?.visiting ?? fallbackSplits.visiting,
@@ -903,67 +911,68 @@ const ProviderEarningsDashboard = () => {
           {activeTab === 'reports' && (
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-1 flex flex-col gap-3 bg-neutral-100/50 p-4 rounded-xl border border-neutral-200/30">
-                  <span className="text-xs font-bold text-neutral-600 uppercase tracking-wider flex items-center gap-1">
-                    <Calendar className="w-4 h-4 text-primary" /> Date Period Select
-                  </span>
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="date"
-                      value={dateFilter.startDate}
-                      onChange={e => setDateFilter(p => ({ ...p, startDate: e.target.value }))}
-                      className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 text-neutral-755 shadow-sm"
-                    />
-                    <span className="text-neutral-350 text-center font-bold">↓</span>
-                    <input
-                      type="date"
-                      value={dateFilter.endDate}
-                      onChange={e => setDateFilter(p => ({ ...p, endDate: e.target.value }))}
-                      className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 text-neutral-755 shadow-sm"
-                    />
+                {/* Date Period Select Card */}
+                <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm flex flex-col justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-neutral-850 uppercase tracking-wider flex items-center gap-1">
+                      <Calendar className="w-4 h-4 text-primary" /> Date Period Select
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <input
+                        type="date"
+                        value={dateFilter.startDate}
+                        onChange={e => setDateFilter(p => ({ ...p, startDate: e.target.value }))}
+                        className="w-full px-2 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 text-neutral-700 shadow-sm cursor-pointer"
+                      />
+                      <span className="text-neutral-400 text-xs font-bold font-mono">to</span>
+                      <input
+                        type="date"
+                        value={dateFilter.endDate}
+                        onChange={e => setDateFilter(p => ({ ...p, endDate: e.target.value }))}
+                        className="w-full px-2 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 text-neutral-700 shadow-sm cursor-pointer"
+                      />
+                    </div>
                   </div>
                   <button
                     onClick={() => setDateFilter({ startDate: '', endDate: '' })}
-                    className="text-xs font-bold text-primary hover:bg-primary/5 transition-colors border border-primary/10 px-3 py-2 rounded-lg bg-white shadow-sm"
+                    className="w-full py-2 bg-neutral-100 hover:bg-neutral-200/60 text-neutral-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-sm border border-neutral-200/50"
                   >
                     Clear Fields
                   </button>
                 </div>
 
-                <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm flex flex-col justify-between gap-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-neutral-800">Earnings Sheet</h4>
-                      <p className="text-[10px] text-neutral-400 mt-1">Excel file of booking revenues.</p>
-                    </div>
-                    <button
-                      onClick={() => downloadReport('earnings')}
-                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
-                      className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/95 transition-all disabled:opacity-50 flex items-center justify-center gap-1 shadow-sm"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{downloading.earnings ? 'Generating...' : 'Excel'}</span>
-                    </button>
+                {/* Earnings Sheet Card */}
+                <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm flex flex-col justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-neutral-800">Earnings Sheet</h4>
+                    <p className="text-[10px] text-neutral-400 mt-1">Excel file of booking revenues.</p>
                   </div>
+                  <button
+                    onClick={() => downloadReport('earnings')}
+                    disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
+                    className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/95 transition-all disabled:opacity-50 flex items-center justify-center gap-1 shadow-sm"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{downloading.earnings ? 'Generating...' : 'Excel'}</span>
+                  </button>
+                </div>
 
-                  <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm flex flex-col justify-between gap-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-neutral-800">Withdrawals logs</h4>
-                      <p className="text-[10px] text-neutral-400 mt-1">Spreadsheet of payouts list.</p>
-                    </div>
-                    <button
-                      onClick={() => downloadReport('withdrawals')}
-                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
-                      className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/95 transition-all disabled:opacity-50 flex items-center justify-center gap-1 shadow-sm"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{downloading.withdrawals ? 'Generating...' : 'Excel'}</span>
-                    </button>
+                {/* Withdrawals logs Card */}
+                <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm flex flex-col justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-neutral-800">Withdrawals logs</h4>
+                    <p className="text-[10px] text-neutral-400 mt-1">Spreadsheet of payouts list.</p>
                   </div>
+                  <button
+                    onClick={() => downloadReport('withdrawals')}
+                    disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
+                    className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/95 transition-all disabled:opacity-50 flex items-center justify-center gap-1 shadow-sm"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{downloading.withdrawals ? 'Generating...' : 'Excel'}</span>
+                  </button>
                 </div>
               </div>
-
-
             </div>
           )}
 
@@ -1099,6 +1108,41 @@ const ProviderEarningsDashboard = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Transaction Info Block */}
+              {(selectedWithdrawal.utrNo || selectedWithdrawal.adminRemark || selectedWithdrawal.transferDate) && (
+                <div className="p-3 bg-neutral-50 border border-neutral-100 rounded-xl space-y-2">
+                  <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <FileText className="w-3 h-3 text-primary" />
+                    <span>Transaction Info</span>
+                  </p>
+                  <div className="space-y-1.5 text-[11px]">
+                    {selectedWithdrawal.utrNo && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-450 font-medium">UTR Number</span>
+                        <span className="font-mono font-bold text-neutral-800">{selectedWithdrawal.utrNo}</span>
+                      </div>
+                    )}
+                    {selectedWithdrawal.transferDate && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-450 font-medium">Transfer Date & Time</span>
+                        <span className="font-semibold text-neutral-800">
+                          {formatDate(selectedWithdrawal.transferDate)}
+                          {selectedWithdrawal.transferTime ? ` at ${formatTime(selectedWithdrawal.transferTime)}` : ''}
+                        </span>
+                      </div>
+                    )}
+                    {selectedWithdrawal.adminRemark && (
+                      <div className="mt-2 pt-2 border-t border-neutral-100">
+                        <span className="text-neutral-400 block font-medium mb-1">Admin Remark</span>
+                        <div className="bg-white p-2 rounded border border-neutral-100 text-neutral-700 font-semibold leading-relaxed">
+                          {selectedWithdrawal.adminRemark}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="px-4 py-3 border-t border-neutral-100 bg-neutral-50/50 flex justify-end">

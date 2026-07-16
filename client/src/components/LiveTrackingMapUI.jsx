@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Loader } from 'lucide-react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MdHome } from 'react-icons/md';
+import { BsLightningChargeFill } from 'react-icons/bs';
 import 'leaflet/dist/leaflet.css';
 import { calculateBearing } from '../utils/format';
 
@@ -15,22 +18,40 @@ let DefaultIcon = L.divIcon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Custom stylized pins
-const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+// Custom stylized customer icon
+const customerIconHtml = renderToStaticMarkup(
+  <div className="w-[42px] h-[42px] flex items-center justify-center bg-transparent">
+    <div className="bg-danger text-white border-[3px] border-white rounded-full w-[36px] h-[36px] md:w-[42px] md:h-[42px] flex items-center justify-center shadow-lg transition-all duration-300">
+      <MdHome className="w-5 h-5 md:w-6 md:h-6 text-white" />
+    </div>
+  </div>
+);
+
+const customerIcon = L.divIcon({
+  html: customerIconHtml,
+  className: 'bg-transparent border-0',
+  iconSize: [42, 42],
+  iconAnchor: [21, 21],
+  popupAnchor: [0, -21]
+});
 
 // Bike/car style moving provider marker with direction rotation
 const createProviderIcon = (bearing) => {
-  return L.divIcon({
-    html: `
-      <div style="transform: rotate(${bearing}deg); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: transform 0.35s ease-out; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25));">
-        <div style="background:#10B981;border:3px solid #fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M5 20a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm14 0a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM6.5 17h11M5 12l2-5h7l2 3h3l-2 4H8l-1-2z"/></svg>
-        </div>
+  const providerIconHtml = renderToStaticMarkup(
+    <div className="w-[42px] h-[42px] flex items-center justify-center bg-transparent">
+      <div 
+        className="bg-primary text-white border-[3px] border-white rounded-full w-[36px] h-[36px] md:w-[42px] md:h-[42px] flex items-center justify-center shadow-lg transition-transform duration-300 animate-pulse"
+        style={{ transform: `rotate(${bearing}deg)` }}
+      >
+        <BsLightningChargeFill className="w-4.5 h-4.5 md:w-5.5 md:h-5.5 text-white" />
       </div>
-    `,
-    className: '',
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
+    </div>
+  );
+  return L.divIcon({
+    html: providerIconHtml,
+    className: 'bg-transparent border-0',
+    iconSize: [42, 42],
+    iconAnchor: [21, 21]
   });
 };
 
@@ -96,6 +117,9 @@ const SmoothMarker = ({ position, children }) => {
 
   return (
     <Marker position={currentPos} icon={rotatedIcon}>
+      <Tooltip direction="top" offset={[0, -20]} opacity={0.9}>
+        ⚡ Service Provider
+      </Tooltip>
       {children}
     </Marker>
   );
@@ -136,43 +160,10 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
     }
   };
 
-  // Custom styling block for the premium live map animations
-  const customStyles = `
-    @keyframes pulseRing {
-      0% {
-        stroke-width: 1px;
-        stroke-opacity: 0.95;
-        fill-opacity: 0.35;
-        transform: scale(0.65);
-      }
-      100% {
-        stroke-width: 8px;
-        stroke-opacity: 0;
-        fill-opacity: 0;
-        transform: scale(1.65);
-      }
-    }
-    .live-pulse-ring {
-      transform-origin: center;
-      animation: pulseRing 2.5s infinite cubic-bezier(0.215, 0.610, 0.355, 1);
-    }
-    .custom-route-polyline {
-      stroke-dasharray: 8 12;
-      animation: dashmove 45s linear infinite;
-    }
-    @keyframes dashmove {
-      to {
-        stroke-dashoffset: -1000;
-      }
-    }
-  `;
-
   const providerPos = providerLoc && providerLoc.lat && providerLoc.lng ? [providerLoc.lat, providerLoc.lng] : null;
 
   return (
     <div className="w-full h-[60vh] md:h-full flex-grow relative z-10">
-      <style>{customStyles}</style>
-
       {/* Route GPS detection spinner overlay */}
       {loadingRoute && routeCoords.length < 2 && (
         <div className="absolute inset-0 z-[1001] bg-white/75 flex flex-col items-center justify-center backdrop-blur-sm">
@@ -213,13 +204,14 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
           url={mapLayers[mapStyle].url}
         />
 
-
-
         {/* Customer Marker */}
         {targetLat && targetLng && (
-          <Marker position={[targetLat, targetLng]} icon={customerIcon} />
+          <Marker position={[targetLat, targetLng]} icon={customerIcon}>
+            <Tooltip direction="top" offset={[0, -20]} opacity={0.9}>
+              🏠 Customer Location
+            </Tooltip>
+          </Marker>
         )}
-
 
         {/* Smooth Moving Provider Marker */}
         {providerPos && (
@@ -235,7 +227,6 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
             opacity={0.9}
             lineCap="round"
             lineJoin="round"
-            className="custom-route-polyline"
           />
         )}
 

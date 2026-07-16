@@ -504,10 +504,10 @@ const BookingConfirmation = () => {
             <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
               <ArrowLeft className="w-5 h-5 text-secondary" />
             </button>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <span className="text-gray-400">Booking Confirmation</span>
-              <ChevronRight className="w-4 h-4" />
-              <span className="text-primary font-medium truncate max-w-[200px]">{serviceInfo.title}</span>
+            <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
+              <span className="text-gray-400 hidden sm:inline">Booking Confirmation</span>
+              <ChevronRight className="w-4 h-4 hidden sm:inline" />
+              <span className="text-primary font-bold sm:font-medium truncate max-w-[140px] sm:max-w-[250px]">{serviceInfo.title}</span>
             </div>
           </div>
         </div>
