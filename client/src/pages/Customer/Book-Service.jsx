@@ -12,7 +12,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking, getBookingEstimate } from '../../services/BookingService';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
-import { calculateSurchargeAmount, getMergedPrice } from '../../utils/surge';
+import { getMergedPrice } from '../../utils/surge';
 import * as CustomerService from '../../services/CustomerService';
 import { formatCurrency, formatTime } from '../../utils/format';
 
@@ -95,6 +95,7 @@ const BookService = () => {
             });
           }
         } catch (err) {
+      console.error(err);
           setFavoriteProviderAvailability({
             checked: true,
             available: false,
@@ -511,6 +512,7 @@ const BookService = () => {
           }
         }
       } catch (err) {
+      console.error(err);
         navigate('/services');
       } finally {
         setIsLoading(false);

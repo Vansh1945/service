@@ -377,7 +377,9 @@ export const NotificationProvider = ({ children }) => {
             if (activeAudioRef.current) {
                 try {
                     activeAudioRef.current.pause();
-                } catch (e) {}
+                } catch (e) {
+                    console.error(e);
+                }
             }
         };
     }, [isAuthenticated, token, userRole, isAdmin]);

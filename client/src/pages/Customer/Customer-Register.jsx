@@ -369,6 +369,7 @@ const CustomerRegistration = () => {
           setIsReferralValid(false);
         }
       } catch (err) {
+        console.error(err);
         setReferralFeedback('Error validating code');
         setIsReferralValid(false);
       } finally {

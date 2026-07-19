@@ -6,7 +6,7 @@ import {
     FiBell, FiTarget, FiLoader, FiMessageSquare, FiSmile,
     FiEdit2, FiTrash2, FiXCircle, FiPlay, FiSettings
 } from 'react-icons/fi';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Modal from '../../components/ui/Modal';
 

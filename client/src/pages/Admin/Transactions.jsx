@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useSearchParams } from 'react-router-dom';
+
 import { useAuth } from '../../context/auth';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import * as TransactionService from '../../services/TransactionService';
 import Pagination from '../../components/Pagination';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
-import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
+import { formatDateTime } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
 import {
     Filter,
@@ -187,6 +187,7 @@ const AdminTransactions = () => {
                 setShowModal(true);
             }
         } catch (error) {
+      console.error(error);
             showToast('Failed to fetch transaction details', 'error');
         }
     };

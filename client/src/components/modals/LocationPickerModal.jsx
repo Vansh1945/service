@@ -15,7 +15,7 @@ import {
   detectCurrentLocation,
   cleanAddressFields
 } from '../../utils/format';
-import { latLngToS2CellId, s2CellIdToCorners } from '../../utils/s2Helper';
+import { latLngToS2CellId } from '../../utils/s2Helper';
 
 
 delete L.Icon.Default.prototype._getIconUrl;

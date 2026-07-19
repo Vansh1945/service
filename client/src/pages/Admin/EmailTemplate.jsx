@@ -83,7 +83,7 @@ const EmailTemplate = () => {
   // Live preview rendered states
   const [previewSubject, setPreviewSubject] = useState('');
   const [previewHtml, setPreviewHtml] = useState('');
-  const [previewTab, setPreviewTab] = useState('preview'); // 'preview' | 'code'
+  const [previewTab] = useState('preview'); // 'preview' | 'code'
   const [previewDevice, setPreviewDevice] = useState('desktop'); // 'desktop' | 'mobile'
 
   // Test modal states

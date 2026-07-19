@@ -3,7 +3,7 @@ define(['exports'], (function (exports) { 'use strict';
     // @ts-ignore
     try {
       self['workbox:core:7.2.0'] && _();
-    } catch (e) {}
+    } catch (_e) {}
 
     /*
       Copyright 2019 Google LLC
@@ -456,7 +456,7 @@ define(['exports'], (function (exports) { 'use strict';
     // @ts-ignore
     try {
       self['workbox:routing:7.2.0'] && _();
-    } catch (e) {}
+    } catch (_e) {}
 
     /*
       Copyright 2018 Google LLC
@@ -1543,7 +1543,7 @@ define(['exports'], (function (exports) { 'use strict';
     // @ts-ignore
     try {
       self['workbox:expiration:7.2.0'] && _();
-    } catch (e) {}
+    } catch (_e) {}
 
     /*
       Copyright 2018 Google LLC
@@ -1964,7 +1964,7 @@ define(['exports'], (function (exports) { 'use strict';
           if (event) {
             try {
               event.waitUntil(updateTimestampDone);
-            } catch (error) {
+            } catch (_error) {
               {
                 // The event may not be a fetch event; only log the URL if it is.
                 if ('request' in event) {
@@ -2137,7 +2137,7 @@ define(['exports'], (function (exports) { 'use strict';
     // @ts-ignore
     try {
       self['workbox:strategies:7.2.0'] && _();
-    } catch (e) {}
+    } catch (_e) {}
 
     /*
       Copyright 2018 Google LLC
@@ -2966,7 +2966,7 @@ define(['exports'], (function (exports) { 'use strict';
         let error;
         try {
           response = await responseDone;
-        } catch (error) {
+        } catch (_error) {
           // Ignore errors, as response errors should be caught via the `response`
           // promise above. The `done` promise will only throw for errors in
           // promises passed to `handler.waitUntil()`.
@@ -3275,7 +3275,7 @@ define(['exports'], (function (exports) { 'use strict';
     // @ts-ignore
     try {
       self['workbox:precaching:7.2.0'] && _();
-    } catch (e) {}
+    } catch (_e) {}
 
     /*
       Copyright 2018 Google LLC
@@ -3523,7 +3523,7 @@ define(['exports'], (function (exports) { 'use strict';
           try {
             new Response(testResponse.body);
             supportStatus = true;
-          } catch (error) {
+          } catch (_error) {
             supportStatus = false;
           }
         }

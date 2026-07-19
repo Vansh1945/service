@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User, Mail, Lock,
   ArrowLeft, CheckCircle, Shield, Zap,
@@ -41,6 +41,7 @@ const getCookie = (name) => {
       try {
         return decodeURIComponent(c.substring(nameEQ.length, c.length));
       } catch (e) {
+      console.error(e);
         return c.substring(nameEQ.length, c.length);
       }
     }
@@ -209,6 +210,7 @@ const SelfieCaptureField = ({ value, onChange, onRemove, progress }) => {
         }
       }, 100);
     } catch (err) {
+      console.error(err);
       toast.error('Could not access camera. Please upload file instead.');
       setActive(false);
     }
@@ -644,6 +646,7 @@ const ProviderRegistration = () => {
           setIsReferralValid(false);
         }
       } catch (err) {
+      console.error(err);
         setReferralFeedback('Error validating code');
         setIsReferralValid(false);
       } finally {

@@ -60,6 +60,7 @@ const getCookie = (name) => {
             try {
                 return decodeURIComponent(c.substring(nameEQ.length, c.length));
             } catch (e) {
+      console.error(e);
                 return c.substring(nameEQ.length, c.length);
             }
         }

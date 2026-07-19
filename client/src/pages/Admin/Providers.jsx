@@ -104,8 +104,8 @@ const AdminProvidersPage = () => {
     hasPassbook: ''
   });
 
-  const [sortBy, setSortBy] = useState('registrationDate');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [sortBy] = useState('registrationDate');
+  const [sortOrder] = useState('desc');
 
   // Stats
   const [stats, setStats] = useState({
@@ -728,7 +728,7 @@ const AdminProvidersPage = () => {
 };
 
 // Hoisted Provider Table Row Component
-const ProviderTableRow = React.memo(({ provider, onViewDetails, onApprove, onReject, daysPending, status }) => {
+const ProviderTableRow = React.memo(({ provider, onViewDetails, onApprove, onReject, daysPending, _status }) => {
   return (
     <tr className="border-b border-gray-200 hover:bg-gradient-to-r hover:from-teal-50/50 hover:to-white transition-all duration-200 group">
       <td className="p-4">

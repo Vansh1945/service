@@ -49,6 +49,7 @@ const useTestData = (token, API, showToast) => {
         setTestHistory(res.data.data);
       }
     } catch (error) {
+      console.error(error);
       showToast('Error fetching test history', 'error');
     }
   }, [showToast]);
@@ -277,9 +278,9 @@ const ProviderTestPage = () => {
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   const [categories, setCategories] = useState([]);
-  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
-  const [testQuestions, setTestQuestions] = useState([]);
-  const [allTestData, setAllTestData] = useState({});
+  const [currentCategoryIndex] = useState(0);
+  const [testQuestions] = useState([]);
+  const [allTestData] = useState({});
   const [cooldown, setCooldown] = useState(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -431,6 +432,7 @@ const ProviderTestPage = () => {
         showToast(data.message || 'Failed to submit test', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Error submitting test', 'error');
     } finally {
       setSubmitting(false);

@@ -300,7 +300,7 @@ const ZoneManagement = () => {
 
   // Sidebar, Tree and Analytics States
   const [sidebarTab, setSidebarTab] = useState('list'); // 'list' or 'tree'
-  const [expandedNodes, setExpandedNodes] = useState({});
+  const [expandedNodes] = useState({});
   const [filterLevel, setFilterLevel] = useState('');
   const [analyticsModal, setAnalyticsModal] = useState({ open: false, zone: null, loading: false });
   const [actionHubModal, setActionHubModal] = useState({ open: false, zone: null });
@@ -782,6 +782,7 @@ const ZoneManagement = () => {
         if (showToast) showToast(`Generated approximated polygon using ${radius} km radius around ${result.display_name.split(',')[0]}`, 'success');
       }
     } catch (err) {
+      console.error(err);
       if (showToast) showToast('Failed to auto-generate boundary.', 'error');
     } finally {
       setAutoGenerating(false);

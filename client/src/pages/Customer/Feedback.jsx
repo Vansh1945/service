@@ -124,6 +124,7 @@ const Feedback = () => {
         }
       }
     } catch (error) {
+      console.error(error);
       if (!localFb) {
         toast.error('Failed to load feedback details');
       }

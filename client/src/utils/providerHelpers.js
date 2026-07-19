@@ -54,7 +54,8 @@ export const calculateNetAmount = (booking) => {
   const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
     let bSplits = bookingSplits;
     if (typeof bSplits === 'string') {
-      try { bSplits = JSON.parse(bSplits); } catch (_) { bSplits = null; }
+      try { bSplits = JSON.parse(bSplits); } catch (err) {
+      console.error(err); bSplits = null; }
     }
     if (bSplits && typeof bSplits === 'object' && bSplits[key] !== undefined && bSplits[key] !== null) {
       const val = parseFloat(bSplits[key]);
@@ -63,7 +64,8 @@ export const calculateNetAmount = (booking) => {
     
     let sSplits = systemSplits;
     if (typeof sSplits === 'string') {
-      try { sSplits = JSON.parse(sSplits); } catch (_) { sSplits = null; }
+      try { sSplits = JSON.parse(sSplits); } catch (err) {
+      console.error(err); sSplits = null; }
     }
     if (sSplits && typeof sSplits === 'object' && sSplits[key] !== undefined && sSplits[key] !== null) {
       const val = parseFloat(sSplits[key]);

@@ -94,7 +94,7 @@ import RescheduleModal from '../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import StatsCard from '../../components/ui/StatsCard';
-import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
+import { formatDate, formatTime, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
 import {
     Calendar,

@@ -15,7 +15,7 @@ import * as CustomerService from '../../services/CustomerService';
 import Loader from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
 import ErrorState from '../../components/Error';
-import { formatDate, formatTime, formatCurrency } from '../../utils/format';
+import { formatDate, formatTime } from '../../utils/format';
 import PriceDisplay from '../../components/PriceDisplay';
 import PwaInstallBanner from '../../components/PwaInstallBanner';
 
@@ -161,6 +161,7 @@ const BookingConfirmation = () => {
           await fetchBookingDetails();
         }
       } catch (error) {
+      console.error(error);
         setError('Failed to initialize booking confirmation');
       } finally {
         setIsLoading(false);
@@ -402,6 +403,7 @@ const BookingConfirmation = () => {
             axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
             setTimeout(() => navigate('/customer/bookings'), 2000);
           } catch (verificationError) {
+      console.error(verificationError);
             setIsProcessingPayment(false);
             setPaymentProgressMessage('');
             showToast('Payment verification failed. Please contact support.', 'error');
@@ -430,7 +432,7 @@ const BookingConfirmation = () => {
       const rzp = new window.Razorpay(options);
       window.currentRazorpay = rzp;
 
-      rzp.on('payment.failed', function (response) {
+      rzp.on('payment.failed', function (_response) {
         setIsProcessingPayment(false);
         setPaymentProgressMessage('');
       });

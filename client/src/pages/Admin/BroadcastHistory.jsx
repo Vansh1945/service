@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fi';
 import { formatDate } from '../../utils/format';
 import { toast } from 'react-toastify';
-import { motion } from 'framer-motion';
+
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import StatsCard from '../../components/ui/StatsCard';
@@ -101,6 +101,7 @@ const BroadcastHistory = () => {
                 fetchHistory();
             }
         } catch (error) {
+      console.error(error);
             toast.error('Action execution failed');
         } finally {
             setConfirmModal({ open: false, type: '', id: null, title: '' });

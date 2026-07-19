@@ -7,11 +7,11 @@ import { useAuth } from '../../context/auth';
 import { useConfirm } from '../../context/ConfirmContext';
 import * as QuestionService from '../../services/QuestionService';
 import * as SystemService from '../../services/SystemService';
-import { toast } from 'react-toastify';
+
 import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+
 import {
   FileText, PlusCircle, Trash2, Edit2, Download, Upload, X, Check,
   Filter, BarChart3, Eye, CheckSquare, Square,
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 const AdminQuestions = () => {
-  const { token, isAdmin, API, showToast, logoutUser } = useAuth();
+  const { token, isAdmin, API, showToast, _logoutUser } = useAuth();
   const navigate = useNavigate();
   const confirm = useConfirm();
 
@@ -57,11 +57,11 @@ const AdminQuestions = () => {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   // New enhanced states
-  const [selectedQuestions, setSelectedQuestions] = useState(new Set());
+  const [selectedQuestions] = useState(new Set());
   const [showStats, setShowStats] = useState(true);
-  const [sortBy, setSortBy] = useState('newest');
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewQuestion, setPreviewQuestion] = useState(null);
+  const [sortBy] = useState('newest');
+  const [showPreview] = useState(false);
+  const [previewQuestion] = useState(null);
   const { categories, loading: categoriesLoading } = useCategory();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);

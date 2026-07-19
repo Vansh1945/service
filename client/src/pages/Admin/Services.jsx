@@ -58,6 +58,7 @@ const parseArrayField = (field) => {
       const parsed = JSON.parse(field);
       return parseArrayField(parsed);
     } catch (e) {
+      console.error(e);
       return field
         .replace(/[[\]"\\]/g, ' ')
         .trim()
@@ -692,6 +693,7 @@ const AdminServices = () => {
         const parsed = JSON.parse(field);
         return parseArrayField(parsed);
       } catch (e) {
+      console.error(e);
         return field
           .replace(/[[\]"\\]/g, ' ')
           .trim()

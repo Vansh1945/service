@@ -221,6 +221,7 @@ const SystemLogs = () => {
         setTotalItems(res.data.total);
       }
     } catch (err) {
+      console.error(err);
       if (!isAuto) showToast('Failed to fetch system logs', 'error');
     } finally {
       if (!isAuto) setLoading(false);

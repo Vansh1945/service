@@ -32,7 +32,7 @@ import AdminFilterBar from '../../components/AdminFilterBar';
 import StatsCard from '../../components/ui/StatsCard';
 
 const AdminCoupons = () => {
-  const { API, token } = useAuth();
+  const { API, _token } = useAuth();
 
   const {
     filterType,
@@ -102,19 +102,19 @@ const AdminCoupons = () => {
     applicableZones: []
   });
 
-  const [createStateSearch, setCreateStateSearch] = useState('');
-  const [createStateOpen, setCreateStateOpen] = useState(false);
-  const [createCitySearch, setCreateCitySearch] = useState('');
-  const [createCityOpen, setCreateCityOpen] = useState(false);
-  const [createMicroSearch, setCreateMicroSearch] = useState('');
-  const [createMicroOpen, setCreateMicroOpen] = useState(false);
+  const [createStateSearch] = useState('');
+  const [createStateOpen] = useState(false);
+  const [createCitySearch] = useState('');
+  const [createCityOpen] = useState(false);
+  const [createMicroSearch] = useState('');
+  const [createMicroOpen] = useState(false);
 
-  const [editStateSearch, setEditStateSearch] = useState('');
-  const [editStateOpen, setEditStateOpen] = useState(false);
-  const [editCitySearch, setEditCitySearch] = useState('');
-  const [editCityOpen, setEditCityOpen] = useState(false);
-  const [editMicroSearch, setEditMicroSearch] = useState('');
-  const [editMicroOpen, setEditMicroOpen] = useState(false);
+  const [editStateSearch] = useState('');
+  const [editStateOpen] = useState(false);
+  const [editCitySearch] = useState('');
+  const [editCityOpen] = useState(false);
+  const [editMicroSearch] = useState('');
+  const [editMicroOpen] = useState(false);
 
   const handleZoneToggleCascade = (zone, isCreate) => {
     const form = isCreate ? createForm : editForm;

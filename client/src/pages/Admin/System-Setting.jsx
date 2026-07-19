@@ -181,6 +181,7 @@ const SystemSetting = () => {
         if (settingsData.data.companySeal) setPreviewSeal(settingsData.data.companySeal);
       }
     } catch (error) {
+      console.error(error);
       showToast('Error fetching system settings', 'error');
     } finally {
       setLoading(false);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+
 import { useAuth } from '../context/auth';
 import {
     Zap,

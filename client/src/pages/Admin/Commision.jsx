@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+
 import { useAuth } from '../../context/auth';
 import useDebounce from '../../hooks/useDebounce';
 import { useConfirm } from '../../context/ConfirmContext';
@@ -28,7 +28,7 @@ import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector'
 import StatsCard from '../../components/ui/StatsCard';
 
 const AdminCommissionPage = () => {
-  const { API, token, showToast } = useAuth();
+  const { API, _token, showToast } = useAuth();
   const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
 
@@ -84,12 +84,12 @@ const AdminCommissionPage = () => {
     effectiveUntil: ''
   });
 
-  const [stateSearch, setStateSearch] = useState('');
-  const [stateOpen, setStateOpen] = useState(false);
-  const [citySearch, setCitySearch] = useState('');
-  const [cityOpen, setCityOpen] = useState(false);
-  const [microSearch, setMicroSearch] = useState('');
-  const [microOpen, setMicroOpen] = useState(false);
+  const [stateSearch] = useState('');
+  const [stateOpen] = useState(false);
+  const [citySearch] = useState('');
+  const [cityOpen] = useState(false);
+  const [microSearch] = useState('');
+  const [microOpen] = useState(false);
 
   const handleZoneToggleCascade = (zone) => {
     const currentSelected = ruleForm.zoneIds || [];
@@ -237,6 +237,7 @@ const AdminCommissionPage = () => {
         }
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to fetch commission rules', 'error');
     } finally {
       setLoading(false);
@@ -256,6 +257,7 @@ const AdminCommissionPage = () => {
         showToast(data.message || 'Failed to fetch rule details', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to fetch rule details', 'error');
     } finally {
       setLoading(false);
@@ -277,6 +279,7 @@ const AdminCommissionPage = () => {
         showToast(data.message || 'Failed to fetch providers', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to fetch providers', 'error');
       setProviders([]);
     }
@@ -293,6 +296,7 @@ const AdminCommissionPage = () => {
         showToast(data.message || 'Failed to fetch zones', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to fetch zones', 'error');
     }
   };
@@ -350,6 +354,7 @@ const AdminCommissionPage = () => {
         showToast(data.message || 'Failed to create rule', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to create rule', 'error');
     } finally {
       setLoading(false);
@@ -410,6 +415,7 @@ const AdminCommissionPage = () => {
         showToast(data.message || 'Failed to update rule', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to update rule', 'error');
     } finally {
       setLoading(false);
@@ -430,6 +436,7 @@ const AdminCommissionPage = () => {
         setCommissionRules(prevRules);
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to toggle rule status', 'error');
       setCommissionRules(prevRules);
     }
@@ -457,6 +464,7 @@ const AdminCommissionPage = () => {
         setCommissionRules(prevRules);
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to delete commission rule', 'error');
       setCommissionRules(prevRules);
     }

@@ -64,6 +64,7 @@ const AdminFeedback = () => {
       setPagination(p => ({ ...p, total: data.total || 0, pages: data.pages || 1 }));
       calculateStats(list);
     } catch (err) {
+      console.error(err);
       showToast('Failed to fetch feedbacks', 'error');
     } finally {
       setLoading(false);
@@ -109,6 +110,7 @@ const AdminFeedback = () => {
         }
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to update approval status', 'error');
     }
   };

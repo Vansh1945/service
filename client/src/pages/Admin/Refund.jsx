@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 import StatsCard from '../../components/ui/StatsCard';
-import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
+import { formatDate, formatDateTime } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
 import PriceDisplay from '../../components/PriceDisplay';
 import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
@@ -957,6 +957,7 @@ const RefundPage = () => {
         }
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to fetch refund cases', 'error');
     } finally {
       setLoading(false);
@@ -983,6 +984,7 @@ const RefundPage = () => {
         });
       }
     } catch (err) {
+      console.error(err);
       showToast('Error loading details', 'error');
     }
   };

@@ -172,6 +172,7 @@ const ProviderSupportPage = () => {
       setSelectedComplaint(c);
       setOpenComplaintDetail(true);
     } catch (err) {
+      console.error(err);
       toast.error('Failed to fetch ticket details');
     }
   };

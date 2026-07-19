@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from '../context/auth';
-import { connectSocket, disconnectSocket, getSocket } from './socket';
+import { connectSocket, disconnectSocket } from './socket';
 
 const SocketContext = createContext(null);
 
@@ -8,7 +8,7 @@ export const SocketProvider = ({ children }) => {
     const { token, user } = useAuth();
     const [socket, setSocket] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
-    const [onlineUsers, setOnlineUsers] = useState([]);
+    const [onlineUsers] = useState([]);
 
     // Connect when user logs in
     useEffect(() => {

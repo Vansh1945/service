@@ -44,6 +44,7 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
       showToast('Reply sent successfully', 'success');
       onClose();
     } catch (error) {
+      console.error(error);
       showToast('Failed to send reply', 'error');
     } finally {
       setIsReplying(false);
@@ -259,6 +260,7 @@ const UserContacts = () => {
         showToast(data.message || 'Failed to fetch contacts', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Error fetching contacts', 'error');
     } finally {
       setLoading(false);
@@ -279,6 +281,7 @@ const UserContacts = () => {
         showToast(data.message || 'Failed to fetch contact details', 'error');
       }
     } catch (error) {
+      console.error(error);
       showToast('Failed to fetch contact details', 'error');
     }
   };

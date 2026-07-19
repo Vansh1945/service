@@ -400,7 +400,7 @@ const ProviderBooking = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalActiveTab, setModalActiveTab] = useState('booking');
   const [paymentBreakdownExpanded, setPaymentBreakdownExpanded] = useState(false);
-  const [expandedSections, setExpandedSections] = useState({ booking: true, customer: true, service: true, payment: true, address: true });
+  const [expandedSections] = useState({ booking: true, customer: true, service: true, payment: true, address: true });
   const [activeTab, setActiveTab] = useState('all');
   const [filter, setFilter] = useState('today');
   const [searchQuery, setSearchQuery] = useState('');
@@ -410,7 +410,7 @@ const ProviderBooking = () => {
   const [stats, setStats] = useState({ totalBookings: 0, completedBookings: 0, pendingBookings: 0, totalCashCollected: 0, commissionPayable: 0, netEarnings: 0 });
   const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
   const [downloading, setDownloading] = useState(false);
-  const [showSummary, setShowSummary] = useState(true);
+  const [showSummary] = useState(true);
   const [showReports, setShowReports] = useState(false);
   const [chatBookingId, setChatBookingId] = useState(null);
   const [chatRoomType, setChatRoomType] = useState('provider_customer');
@@ -420,7 +420,7 @@ const ProviderBooking = () => {
   const [actionLoading, setActionLoading] = useState({ id: null, type: null });
   const [selectedImages, setSelectedImages] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [navModal, setNavModal] = useState({ isOpen: false, booking: null });
+  const [navModal] = useState({ isOpen: false, booking: null });
 
   const [disputeResponseText, setDisputeResponseText] = useState('');
   const [disputeImages, setDisputeImages] = useState([]);
@@ -460,6 +460,7 @@ const ProviderBooking = () => {
         return ["paid", "escrow_hold"].includes(b.paymentStatus);
       });
     } catch (err) {
+      console.error(err);
       showToast(`Failed to load ${status} bookings`, 'error');
       return [];
     }

@@ -29,6 +29,7 @@ const parseArrayField = (field) => {
     try {
       return parseArrayField(JSON.parse(field));
     } catch (e) {
+      console.error(e);
       return field
         .replace(/[[\]"\\]/g, ' ')
         .trim()

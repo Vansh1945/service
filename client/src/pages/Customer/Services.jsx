@@ -220,7 +220,7 @@ const ServiceListingPage = () => {
   const categoryScrollRef = useRef(null);
   const scrollCategories = (direction) => {
     if (categoryScrollRef.current) {
-      const { scrollLeft, clientWidth } = categoryScrollRef.current;
+      const { scrollLeft, _clientWidth } = categoryScrollRef.current;
       const scrollTo = direction === 'left' ? scrollLeft - 200 : scrollLeft + 200;
       categoryScrollRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
     }

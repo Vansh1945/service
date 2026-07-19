@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import axiosInstance from '../../api/axiosInstance';
@@ -17,7 +17,7 @@ import { getQuickReplies } from '../../components/chat/quickReplies';
 
 const AdminChatMonitor = () => {
   const { user, showToast } = useAuth();
-  const { socket, isConnected } = useSocket();
+  const { socket } = useSocket();
 
   // State Management
   const [rooms, setRooms] = useState([]);

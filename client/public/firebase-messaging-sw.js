@@ -142,7 +142,7 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 // ✅ Activate SW immediately (don't wait for old SW to die)
-self.addEventListener('install', (event) => {
+self.addEventListener('install', (_event) => {
     self.skipWaiting();
 });
 

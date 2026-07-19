@@ -19,7 +19,7 @@ import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar, { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 const AdminEarningReports = () => {
-  const { API, token, showToast } = useAuth();
+  const { API, _token, showToast } = useAuth();
   const { getComputedDateRange, getMergedQuery, resetGlobalFilters } = useAdminFilter();
   const [loading, setLoading] = useState(false);
   const [activeReport, setActiveReport] = useState(null);

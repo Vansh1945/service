@@ -32,7 +32,7 @@ const CategoryBanner = () => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  const { API, token } = useAuth();
+  const { API, _token } = useAuth();
 
   useEffect(() => {
     fetchData();

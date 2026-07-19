@@ -130,6 +130,7 @@ const AdminFraud = () => {
           break;
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to fetch fraud data', 'error');
     } finally {
       setLoading(false);
@@ -194,6 +195,7 @@ const AdminFraud = () => {
         }
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to apply override', 'error');
     }
   };
@@ -212,6 +214,7 @@ const AdminFraud = () => {
         fetchFraudData(activeTab);
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to save note', 'error');
     } finally {
       setSubmittingNote(false);
@@ -242,6 +245,7 @@ const AdminFraud = () => {
         fetchFraudData(activeTab);
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to toggle account suspension', 'error');
     }
   };
@@ -254,6 +258,7 @@ const AdminFraud = () => {
         fetchFraudData(activeTab);
       }
     } catch (err) {
+      console.error(err);
       showToast('Failed to force logout user', 'error');
     }
   };

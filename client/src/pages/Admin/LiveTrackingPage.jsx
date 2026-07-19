@@ -272,8 +272,8 @@ const LiveTrackingPage = () => {
   const [liveLogs, setLiveLogs] = useState([]);
   const [mapCenter, setMapCenter] = useState([31.3260, 75.5762]); // Default center around Jalandhar
   const [mapZoom, setMapZoom] = useState(12);
-  const [mapStyle, setMapStyle] = useState('hybrid'); // 'satellite' (Esri World Imagery) or 'hybrid' (Google Satellite with Labels & 3D Terrain)
-  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [mapStyle] = useState('hybrid'); // 'satellite' (Esri World Imagery) or 'hybrid' (Google Satellite with Labels & 3D Terrain)
+  const [showHeatmap] = useState(true);
   const [, setTick] = useState(0);
   const [actionHubModal, setActionHubModal] = useState({ open: false, zone: null });
   const [zones, setZones] = useState([]);

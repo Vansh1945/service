@@ -167,6 +167,7 @@ const ProviderFeedback = () => {
             }
             return { averageRating: 0, ratingCount: 0 };
         } catch (error) {
+            console.error(error);
             return { averageRating: 0, ratingCount: 0 };
         }
     };

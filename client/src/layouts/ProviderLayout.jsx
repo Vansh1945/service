@@ -7,7 +7,7 @@ import {
 } from 'react-icons/fi';
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
-import { DEFAULT_COMPANY_NAME, DEFAULT_PROVIDER_APP_NAME, getUserInitials, useClickOutside, UserAvatar } from './CustomerLayout';
+import { DEFAULT_COMPANY_NAME, DEFAULT_PROVIDER_APP_NAME, useClickOutside, UserAvatar } from './CustomerLayout';
 import NotificationBell from '../components/NotificationBell';
 import { useSocket } from '../socket/SocketContext';
 import { useNotification } from '../context/NotificationContext';

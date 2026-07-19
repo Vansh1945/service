@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import * as NotificationService from '../../services/NotificationService';
@@ -7,7 +7,7 @@ import {
     FiLoader, FiMessageSquare, FiTarget, FiClock, FiSmile, FiLayers, FiImage
 } from 'react-icons/fi';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
-import { motion } from 'framer-motion';
+
 import { toast } from 'react-toastify';
 import * as ZoneService from '../../services/ZoneService';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';

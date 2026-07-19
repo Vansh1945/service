@@ -37,6 +37,7 @@ const getCookie = (name) => {
             try {
                 return decodeURIComponent(c.substring(nameEQ.length, c.length));
             } catch (e) {
+      console.error(e);
                 return c.substring(nameEQ.length, c.length);
             }
         }
@@ -72,6 +73,7 @@ export const AuthProvider = ({ children }) => {
             const userData = getCookie("user");
             return userData ? JSON.parse(userData) : null;
         } catch (error) {
+      console.error(error);
             return null;
         }
     });
@@ -87,6 +89,7 @@ export const AuthProvider = ({ children }) => {
             }
             return null;
         } catch (error) {
+      console.error(error);
             return null;
         }
     });
@@ -140,7 +143,8 @@ export const AuthProvider = ({ children }) => {
             try {
                 const parsed = JSON.parse(cached);
                 setActiveBranding(parsed.role ? parsed : { ...parsed, role: currentBrandingRole });
-            } catch (e) { }
+            } catch (e) {
+      console.error(e); }
         }
 
         // Background update fetch
@@ -179,6 +183,7 @@ export const AuthProvider = ({ children }) => {
             const decoded = jwtDecode(token);
             return decoded.exp * 1000 < Date.now();
         } catch (error) {
+      console.error(error);
             return true;
         }
     };
@@ -190,6 +195,7 @@ export const AuthProvider = ({ children }) => {
             const decoded = jwtDecode(token);
             return decoded.role === 'admin' || decoded.isAdmin === true;
         } catch (error) {
+      console.error(error);
             return false;
         }
     }, [token]);

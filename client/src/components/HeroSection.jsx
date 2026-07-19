@@ -59,6 +59,7 @@ const HeroSection = ({ noMargin = false }) => {
 
         setBanners(finalBanners);
       } catch (error) {
+      console.error(error);
         setBanners([defaultBanner]);
       } finally {
         setLoading(false);

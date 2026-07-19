@@ -17,7 +17,7 @@ import {
   Eye, Check, X, RefreshCw, ChevronLeft, ChevronRight,
   User, CreditCard, FileText, Calendar, Filter, Send
 } from 'lucide-react';
-import { formatDate, formatDateTime, formatTime, formatCurrency, formatNumber } from '../../utils/format';
+import { formatDate, formatDateTime, formatTime, formatCurrency } from '../../utils/format';
 import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import * as AdminService from '../../services/AdminService';
 

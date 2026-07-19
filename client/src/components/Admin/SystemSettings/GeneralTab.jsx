@@ -4,8 +4,8 @@ import { SettingInput } from './SharedComponents';
 
 const GeneralTab = ({
   systemSettings, handleSystemSettingsChange, setSystemSettings,
-  logoFile, setLogoFile, faviconFile, setFaviconFile,
-  signatureFile, setSignatureFile, sealFile, setSealFile,
+  logoFile, setLogoFile, setFaviconFile,
+  signatureFile, setSignatureFile, setSealFile,
   previewLogo, previewFavicon, previewSignature, previewSeal
 }) => (
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
@@ -18,7 +18,7 @@ const AdminLayout = () => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logoutUser, API, token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
+  const { user, logoutUser, API, _token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
 
   const logo = activeBranding?.logo || authSystemSettings?.logo || null;
   const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
