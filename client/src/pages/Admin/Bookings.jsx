@@ -1427,6 +1427,17 @@ const AdminBookingsView = () => {
                                                 <span className="text-gray-400">Global/None</span>
                                             )}
                                         </InfoRow>
+                                        <InfoRow label="SLA Status">
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                                                bk.slaStatus === 'CRITICAL' ? 'bg-red-100 text-red-700 border-red-500 animate-pulse' :
+                                                bk.slaStatus === 'DELAYED' ? 'bg-orange-100 text-orange-700 border-orange-400' :
+                                                bk.slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-750 border-yellow-400' :
+                                                bk.slaStatus === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-400' :
+                                                'bg-blue-105 text-blue-800 border-blue-200'
+                                            }`}>
+                                                {bk.slaStatus || 'ON_TIME'}
+                                            </span>
+                                        </InfoRow>
                                     </Card>
 
                                     {/* ── Col 2: Customer Info ── */}

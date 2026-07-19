@@ -1454,6 +1454,18 @@ const ProviderBooking = () => {
                           {selectedBooking.estimatedDuration ? `${selectedBooking.estimatedDuration} hrs` : (selectedBooking.services?.[0]?.service?.duration ? `${selectedBooking.services[0].service.duration} hrs` : 'N/A')}
                         </span>
                       </div>
+                      <div className="flex justify-between items-center">
+                        <span>SLA Status</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                          selectedBooking.slaStatus === 'CRITICAL' ? 'bg-red-105 text-red-700 border-red-500 animate-pulse' :
+                          selectedBooking.slaStatus === 'DELAYED' ? 'bg-orange-100 text-orange-700 border-orange-400' :
+                          selectedBooking.slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-750 border-yellow-400' :
+                          selectedBooking.slaStatus === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-400' :
+                          'bg-blue-105 text-blue-800 border-blue-200'
+                        }`}>
+                          {selectedBooking.slaStatus || 'ON_TIME'}
+                        </span>
+                      </div>
                       {selectedBooking.metadata?.assignedAt && (
                         <div className="flex justify-between items-center">
                           <span>Assigned At</span>

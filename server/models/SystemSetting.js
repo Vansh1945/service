@@ -253,6 +253,23 @@ const systemConfigSchema = new mongoose.Schema(
           type: Number,
           default: 5
         }
+      },
+      slaThresholds: {
+        scheduled: {
+          atRiskMinutes: { type: Number, default: 10 },
+          delayedMinutes: { type: Number, default: 15 },
+          criticalMinutes: { type: Number, default: 30 }
+        },
+        instant: {
+          atRiskMinutes: { type: Number, default: 15 },
+          delayedMinutes: { type: Number, default: 45 },
+          criticalMinutes: { type: Number, default: 60 }
+        },
+        emergency: {
+          atRiskMinutes: { type: Number, default: 5 },
+          delayedMinutes: { type: Number, default: 15 },
+          criticalMinutes: { type: Number, default: 20 }
+        }
       }
     },
     walletSettings: {

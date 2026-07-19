@@ -556,6 +556,16 @@ cron.schedule('* * * * *', async () => {
             await settings.save();
         }
 
+        // Invoke dynamic SLA checks periodically
+        try {
+            const BookingService = require('../services/BookingService');
+            if (BookingService && typeof BookingService.monitorActiveBookingsSLA === 'function') {
+                await BookingService.monitorActiveBookingsSLA();
+            }
+        } catch (slaErr) {
+            console.error('[SLA Engine] Error during SLA checks:', slaErr);
+        }
+
         const enableTimeout = settings?.bookingSettings?.enableProviderAcceptTimeout !== false;
         if (enableTimeout) {
             const timeoutMinutes = settings?.bookingSettings?.providerAcceptTimeoutMinutes || 5;

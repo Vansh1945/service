@@ -477,6 +477,9 @@ const initSocket = (httpServer) => {
                 booking.liveDuration = durationText;
                 booking.routeCoordinates = routeCoords;
                 booking.trackingEnabled = true;
+                if (!booking.journeyStartedAt) {
+                    booking.journeyStartedAt = new Date();
+                }
 
                 // Arrival detection (100m threshold)
                 const arrivalDist = targetLat != null && targetLng != null
@@ -484,6 +487,7 @@ const initSocket = (httpServer) => {
                     : Infinity;
                 if (arrivalDist <= 100 && !booking.providerReached) {
                     booking.providerReached = true;
+                    booking.arrivedAt = new Date();
                     booking.statusHistory.push({
                         status: booking.status,
                         timestamp: new Date(),

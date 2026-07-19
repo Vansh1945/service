@@ -353,7 +353,13 @@ const providerSchema = new mongoose.Schema({
         emergencySuccessRate: { type: Number, default: 100 },
         cancellationRate: { type: Number, default: 0 },
         averageRating: { type: Number, default: 5 },
-        lateArrival: { type: Number, default: 0 }
+        lateArrival: { type: Number, default: 0 },
+        responseTime: { type: Number, default: 0 }, // in seconds
+        arrivalTime: { type: Number, default: 0 }, // in minutes
+        lateCount: { type: Number, default: 0 },
+        onTimePercentageNew: { type: Number, default: 100 },
+        reassignmentCount: { type: Number, default: 0 },
+        penaltyScore: { type: Number, default: 0 }
     },
 
     completedBookings: {

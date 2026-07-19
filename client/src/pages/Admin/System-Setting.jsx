@@ -593,6 +593,137 @@ const BookingTab = ({ systemSettings, handleNestedChange }) => (
           />
         </div>
       </div>
+
+      <div className="md:col-span-2 border border-gray-100 rounded-2xl p-6 bg-gray-50/50 space-y-4">
+        <h4 className="text-sm font-bold text-secondary font-poppins flex items-center gap-2">
+          <ShieldAlert className="w-4.5 h-4.5 text-primary" /> SLA Threshold Configurations
+        </h4>
+        <p className="text-xs text-gray-500 font-inter">
+          Configure response and delay status threshold values (in minutes) for each booking priority queue.
+        </p>
+        
+        <div className="space-y-4">
+          {/* Scheduled SLA */}
+          <div className="border-b border-gray-200/60 pb-4">
+            <h5 className="text-xs font-black text-secondary uppercase tracking-wider mb-3">Scheduled Bookings SLA</h5>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <SettingInput
+                label="At Risk (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.scheduled?.atRiskMinutes || 10}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const sched = thresholds.scheduled || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, scheduled: { ...sched, atRiskMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+              <SettingInput
+                label="Delayed (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.scheduled?.delayedMinutes || 15}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const sched = thresholds.scheduled || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, scheduled: { ...sched, delayedMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+              <SettingInput
+                label="Critical (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.scheduled?.criticalMinutes || 30}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const sched = thresholds.scheduled || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, scheduled: { ...sched, criticalMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+            </div>
+          </div>
+
+          {/* Instant SLA */}
+          <div className="border-b border-gray-200/60 pb-4">
+            <h5 className="text-xs font-black text-secondary uppercase tracking-wider mb-3">Instant Bookings SLA</h5>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <SettingInput
+                label="At Risk (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.instant?.atRiskMinutes || 15}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const inst = thresholds.instant || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, instant: { ...inst, atRiskMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+              <SettingInput
+                label="Delayed (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.instant?.delayedMinutes || 45}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const inst = thresholds.instant || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, instant: { ...inst, delayedMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+              <SettingInput
+                label="Critical (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.instant?.criticalMinutes || 60}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const inst = thresholds.instant || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, instant: { ...inst, criticalMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+            </div>
+          </div>
+
+          {/* Emergency SLA */}
+          <div>
+            <h5 className="text-xs font-black text-secondary uppercase tracking-wider mb-3">Emergency Bookings SLA</h5>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <SettingInput
+                label="At Risk (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.emergency?.atRiskMinutes || 5}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const emerg = thresholds.emergency || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, emergency: { ...emerg, atRiskMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+              <SettingInput
+                label="Delayed (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.emergency?.delayedMinutes || 15}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const emerg = thresholds.emergency || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, emergency: { ...emerg, delayedMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+              <SettingInput
+                label="Critical (Minutes)"
+                value={systemSettings.bookingSettings.slaThresholds?.emergency?.criticalMinutes || 20}
+                onChange={(e) => {
+                  const thresholds = systemSettings.bookingSettings.slaThresholds || {};
+                  const emerg = thresholds.emergency || {};
+                  handleNestedChange('bookingSettings', 'slaThresholds', { ...thresholds, emergency: { ...emerg, criticalMinutes: Number(e.target.value) } });
+                }}
+                type="number"
+                min="1"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 );

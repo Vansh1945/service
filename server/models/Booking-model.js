@@ -169,6 +169,18 @@ const bookingSchema = new Schema({
   deadline: {
     type: Date
   },
+  acceptedAt: {
+    type: Date
+  },
+  journeyStartedAt: {
+    type: Date
+  },
+  arrivedAt: {
+    type: Date
+  },
+  workStartedAt: {
+    type: Date
+  },
   completedAt: {
     type: Date
   },
@@ -930,6 +942,100 @@ bookingSchema.pre('save', async function (next) {
 bookingSchema.virtual('progressStatus').get(function () {
   const { getBookingProgress } = require('../utils/bookingHelper');
   return getBookingProgress(this);
+});
+
+// Dynamic SLA status virtual calculator
+bookingSchema.virtual('slaStatus').get(function () {
+  if (this.status === 'Completed' || this.status === 'completed') return 'COMPLETED';
+  if (['Cancelled', 'cancelled', 'Rejected', 'rejected', 'Expired', 'expired'].includes(this.status)) return 'COMPLETED';
+
+  const now = new Date();
+  const type = (this.bookingType || '').toLowerCase();
+
+  // Fetch dynamic system settings if available
+  let settings = null;
+  try {
+    const SystemSetting = mongoose.model('SystemSetting');
+    // Using a synchronous check or mock since virtual getters must be synchronous.
+    // We can rely on global cache or fetch dynamically if pre-loaded, otherwise fall back to database defaults.
+    if (global.systemSettingsCache) {
+      settings = global.systemSettingsCache;
+    }
+  } catch (e) {
+    // Ignore model or cache fetch errors
+  }
+
+  const thresholds = settings?.bookingSettings?.slaThresholds || {
+    scheduled: { atRiskMinutes: 10, delayedMinutes: 15, criticalMinutes: 30 },
+    instant: { atRiskMinutes: 15, delayedMinutes: 45, criticalMinutes: 60 },
+    emergency: { atRiskMinutes: 5, delayedMinutes: 15, criticalMinutes: 20 }
+  };
+
+  if (type === 'scheduled') {
+    if (!this.date) return 'ON_TIME';
+    const scheduledTime = new Date(this.date);
+    if (this.time) {
+      const [hours, minutes] = this.time.split(':').map(Number);
+      scheduledTime.setHours(hours, minutes, 0, 0);
+    }
+    const diffMs = scheduledTime.getTime() - now.getTime();
+    const diffMins = diffMs / (60 * 1000);
+
+    const atRisk = thresholds.scheduled.atRiskMinutes;
+    const delayed = thresholds.scheduled.delayedMinutes;
+    const critical = thresholds.scheduled.criticalMinutes;
+
+    // If journey has not started before scheduled time
+    if (!this.journeyStartedAt && diffMins <= atRisk && diffMins > -delayed) {
+      return 'AT_RISK';
+    }
+    // If not arrived and booking time is past
+    if (!this.arrivedAt && diffMins <= 0) {
+      if (diffMins > -delayed) {
+        return 'AT_RISK';
+      } else if (diffMins <= -delayed && diffMins > -critical) {
+        return 'DELAYED';
+      } else if (diffMins <= -critical) {
+        return 'CRITICAL';
+      }
+    }
+  } else if (type === 'instant') {
+    if (this.acceptedAt) {
+      const diffMins = (now.getTime() - new Date(this.acceptedAt).getTime()) / (60 * 1000);
+      const atRisk = thresholds.instant.atRiskMinutes;
+      const delayed = thresholds.instant.delayedMinutes;
+      const critical = thresholds.instant.criticalMinutes;
+
+      if (!this.journeyStartedAt && diffMins >= atRisk && diffMins < delayed) {
+        return 'AT_RISK';
+      }
+      if (diffMins >= delayed && diffMins < critical) {
+        return 'DELAYED';
+      }
+      if (diffMins >= critical) {
+        return 'CRITICAL';
+      }
+    }
+  } else if (type === 'emergency') {
+    if (this.acceptedAt) {
+      const diffMins = (now.getTime() - new Date(this.acceptedAt).getTime()) / (60 * 1000);
+      const atRisk = thresholds.emergency.atRiskMinutes;
+      const delayed = thresholds.emergency.delayedMinutes;
+      const critical = thresholds.emergency.criticalMinutes;
+
+      if (!this.journeyStartedAt && diffMins >= atRisk && diffMins < delayed) {
+        return 'AT_RISK';
+      }
+      if (diffMins >= delayed && diffMins < critical) {
+        return 'DELAYED';
+      }
+      if (diffMins >= critical) {
+        return 'CRITICAL';
+      }
+    }
+  }
+
+  return 'ON_TIME';
 });
 
 // Virtual for admin earning
