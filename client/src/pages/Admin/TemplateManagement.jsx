@@ -350,7 +350,7 @@ const TemplateManagement = () => {
             />
 
             {/* Layout Toggles */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs font-semibold">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs font-semibold">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -377,15 +377,6 @@ const TemplateManagement = () => {
                   className="rounded text-primary focus:ring-0"
                 />
                 Seal & Stamp
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hasQrSection}
-                  onChange={(e) => setHasQrSection(e.target.checked)}
-                  className="rounded text-primary focus:ring-0"
-                />
-                QR Section
               </label>
             </div>
 

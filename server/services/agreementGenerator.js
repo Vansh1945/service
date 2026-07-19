@@ -64,26 +64,27 @@ const drawCornerAccent = (doc) => {
 
 const drawPhoneIcon = (doc, cx, cy) => {
   doc.save();
-  doc.translate(cx - 4, cy - 4);
-  doc.lineWidth(1.2).strokeColor(WHITE);
-  doc.moveTo(2, 1)
-    .bezierCurveTo(4, 1, 7, 4, 7, 6)
-    .lineTo(6, 7)
-    .bezierCurveTo(5.5, 7.5, 4.5, 7.5, 4, 7)
-    .lineTo(3, 6)
-    .bezierCurveTo(2.5, 5.5, 2.5, 4.5, 3, 4)
+  doc.translate(cx + 0.8, cy + 0.6);
+  doc.lineWidth(1.1).strokeColor(WHITE);
+  doc.moveTo(-2.5, -1.5)
+    .lineTo(-1.5, -2.5)
+    .lineTo(-0.5, -1.5)
+    .lineTo(-1, -1)
+    .bezierCurveTo(-0.2, -0.2, 0.8, 0.8, 1.5, 1.5)
+    .lineTo(2, 1)
+    .lineTo(3, 2)
     .lineTo(2, 3)
-    .bezierCurveTo(1.5, 2.5, 1.5, 1.5, 2, 1)
+    .bezierCurveTo(0.5, 3, -2.5, 0, -2.5, -1.5)
     .stroke();
   doc.restore();
 };
 
 const drawMailIcon = (doc, cx, cy) => {
   doc.save();
-  doc.translate(cx - 5, cy - 3.5);
+  doc.translate(cx + 0.8, cy + 0.6);
   doc.lineWidth(1).strokeColor(WHITE);
-  doc.rect(0, 0, 10, 7).stroke();
-  doc.moveTo(0, 0).lineTo(5, 4.5).lineTo(10, 0).stroke();
+  doc.rect(-4.5, -3, 9, 6).stroke();
+  doc.moveTo(-4.5, -3).lineTo(0, 0.5).lineTo(4.5, -3).stroke();
   doc.restore();
 };
 
@@ -99,15 +100,15 @@ const drawGlobeIcon = (doc, cx, cy) => {
 
 const drawPinIcon = (doc, cx, cy) => {
   doc.save();
-  doc.translate(cx, cy - 2);
-  doc.fillColor(WHITE).strokeColor(WHITE).lineWidth(1);
-  doc.circle(0, 0, 2.5).fill();
-  doc.moveTo(-2.5, 0)
-    .bezierCurveTo(-2.5, 2.5, 0, 5.5, 0, 5.5)
-    .bezierCurveTo(0, 5.5, 2.5, 2.5, 2.5, 0)
+  doc.translate(cx + 0.8, cy + 0.3);
+  doc.fillColor(WHITE).strokeColor(WHITE).lineWidth(0.8);
+  doc.circle(0, -1, 2).fill();
+  doc.moveTo(-2, -1)
+    .bezierCurveTo(-2, 1, 0, 3.5, 0, 3.5)
+    .bezierCurveTo(0, 3.5, 2, 1, 2, -1)
     .closePath()
     .fill();
-  doc.fillColor(TEAL).circle(0, 0, 1).fill();
+  doc.fillColor(TEAL).circle(0, -1, 0.8).fill();
   doc.restore();
 };
 
