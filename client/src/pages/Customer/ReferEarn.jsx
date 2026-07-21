@@ -131,11 +131,11 @@ const ReferEarn = () => {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { title: 'Wallet Balance', value: `₹${profile?.wallet?.availableBalance ?? 0}`, sub: 'Available to spend', icon: <FiCreditCard className="w-4.5 h-4.5" />, colorBg: 'bg-primary/10', colorText: 'text-primary' },
-            { title: 'Released Rewards', value: `₹${details.releasedRewards ?? 0}`, sub: 'Credited successfully', icon: <FiGift className="w-4.5 h-4.5" />, colorBg: 'bg-success/10', colorText: 'text-success' },
-            { title: 'Pending Rewards', value: `₹${displayPending}`, sub: 'Awaiting first booking', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' },
+            systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Wallet Balance', value: `₹${profile?.wallet?.availableBalance ?? 0}`, sub: 'Available to spend', icon: <FiCreditCard className="w-4.5 h-4.5" />, colorBg: 'bg-primary/10', colorText: 'text-primary' },
+            systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Released Rewards', value: `₹${details.releasedRewards ?? 0}`, sub: 'Credited successfully', icon: <FiGift className="w-4.5 h-4.5" />, colorBg: 'bg-success/10', colorText: 'text-success' },
+            systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Pending Rewards', value: `₹${displayPending}`, sub: 'Awaiting first booking', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' },
             { title: 'Friends Invited', value: `${details.referralsCount ?? 0}`, sub: 'Signed up users', icon: <FiUsers className="w-4.5 h-4.5" />, colorBg: 'bg-info/10', colorText: 'text-info' }
-          ].map((stat, i) => (
+          ].filter(Boolean).map((stat, i) => (
             <div key={i} className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-poppins">{stat.title}</span>

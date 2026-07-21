@@ -814,6 +814,15 @@ const getCustomerDashboardStats = async (req, res, next) => {
  */
 const getWalletHistory = async (req, res, next) => {
   try {
+    const { SystemConfig } = require('../models/SystemSetting-model');
+    const settings = await SystemConfig.findOne();
+    if (settings?.featureFlags?.walletEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Wallet feature is currently disabled.'
+      });
+    }
+
     const user = await User.findById(req.user._id)
       .select('wallet')
       .populate({

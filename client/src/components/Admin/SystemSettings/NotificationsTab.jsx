@@ -8,7 +8,7 @@ const NotificationsTab = ({ systemSettings, handleNestedChange }) => (
       <h3 className="text-base font-semibold text-secondary pb-1 border-b border-gray-100 font-poppins flex items-center gap-2">
         <Bell className="w-5 h-5 text-primary" /> Global Alert Switches
       </h3>
-      <p className="text-xs text-gray-500 mt-1 font-inter">Enable or disable push notifications, emails, SMS alerts, and role-based notifications.</p>
+      <p className="text-xs text-gray-500 mt-1 font-inter">Enable or disable push notifications, emails, and role-based notifications.</p>
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -23,12 +23,6 @@ const NotificationsTab = ({ systemSettings, handleNestedChange }) => (
         description="Enable system emails, receipts, verification codes, and statements."
         checked={systemSettings.notificationSettings.emailEnabled}
         onChange={(val) => handleNestedChange('notificationSettings', 'emailEnabled', val)}
-      />
-      <ToggleSwitch
-        label="SMS Gateway"
-        description="Allow text messages for mission-critical notifications."
-        checked={systemSettings.notificationSettings.smsEnabled}
-        onChange={(val) => handleNestedChange('notificationSettings', 'smsEnabled', val)}
       />
       <ToggleSwitch
         label="Provider Dashboard Alerts"

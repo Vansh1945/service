@@ -66,7 +66,7 @@ const SystemSetting = () => {
     walletSettings: { minWithdrawal: 500, refundToWalletOnly: true },
     commissionSettings: { defaultCommission: 10, payoutHoldHours: 48 },
     surgeSplitSettings: { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50, emergency: 85 },
-    notificationSettings: { pushEnabled: true, emailEnabled: true, smsEnabled: false, providerAlerts: true, customerAlerts: true },
+    notificationSettings: { pushEnabled: true, emailEnabled: true, providerAlerts: true, customerAlerts: true },
     maintenanceMode: {
       customer: { enabled: false, message: 'Customer services are under maintenance.' },
       provider: { enabled: false, message: 'Provider services are under maintenance.' },
@@ -292,7 +292,7 @@ const SystemSetting = () => {
     { id: 'booking', name: 'Booking', icon: Calendar, desc: 'Auto-allocation, cancel windows, buffer and provider limitations' },
     { id: 'wallet', name: 'Wallet', icon: Wallet, desc: 'Withdrawal thresholds and balance refunds' },
     { id: 'commission', name: 'Commission', icon: Percent, desc: 'Default commission rules, taxes, and payout hold policies' },
-    { id: 'notifications', name: 'Notifications', icon: Bell, desc: 'Toggle alerts for push notifications, emails, and SMS integrations' },
+    { id: 'notifications', name: 'Notifications', icon: Bell, desc: 'Toggle alerts for push notifications and emails' },
     { id: 'security', name: 'Security', icon: Shield, desc: 'Lockouts, authentication expirations, and OTP active times' },
     { id: 'features', name: 'Features', icon: Flag, desc: 'Unlock or restrict core platform features and capabilities' },
     { id: 'referral', name: 'Referral & Rewards', icon: Gift, desc: 'Configure customer & provider referral programs, budgets, caps, and safety limits' },

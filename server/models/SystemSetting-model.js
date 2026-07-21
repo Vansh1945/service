@@ -327,10 +327,6 @@ const systemConfigSchema = new mongoose.Schema(
         type: Boolean,
         default: true
       },
-      smsEnabled: {
-        type: Boolean,
-        default: false
-      },
       providerAlerts: {
         type: Boolean,
         default: true

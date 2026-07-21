@@ -754,16 +754,18 @@ const BookingConfirmation = () => {
                   </h3>
 
                   {/* Wallet Balance Indicator */}
-                  <div className="mb-4 p-3 bg-teal-50/50 border border-teal-100 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Wallet className="w-4 h-4 text-teal-600" />
-                      <div>
-                        <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">Available Wallet Balance</p>
-                        <PriceDisplay amount={walletBalance} type="text-only" className="text-sm font-black text-teal-900" />
+                  {systemSettings?.featureFlags?.walletEnabled !== false && (
+                    <div className="mb-4 p-3 bg-teal-50/50 border border-teal-100 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-teal-600" />
+                        <div>
+                          <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">Available Wallet Balance</p>
+                          <PriceDisplay amount={walletBalance} type="text-only" className="text-sm font-black text-teal-900" />
+                        </div>
                       </div>
+                      <span className="text-[10px] font-medium bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">Secure</span>
                     </div>
-                    <span className="text-[10px] font-medium bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">Secure</span>
-                  </div>
+                  )}
 
                   {/* Payment Selector */}
                   <div className="grid grid-cols-1 gap-2 mb-4">
@@ -781,60 +783,63 @@ const BookingConfirmation = () => {
                       </div>
                       <CreditCard className="w-3.5 h-3.5 text-gray-300" />
                     </div>
-
-                    {/* Wallet Payment */}
-                    <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'wallet'
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-gray-100 hover:border-gray-200'
-                        }`}
-                      onClick={() => setPaymentMethod('wallet')}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
-                        {paymentMethod === 'wallet' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-bold text-secondary">Wallet Payment</p>
-                          {walletBalance < totalAmount && (
-                            <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Insufficient</span>
-                          )}
+                    {systemSettings?.featureFlags?.walletEnabled !== false && (
+                      <>
+                        {/* Wallet Payment */}
+                        <div
+                          className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'wallet'
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-gray-100 hover:border-gray-200'
+                            }`}
+                          onClick={() => setPaymentMethod('wallet')}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
+                            {paymentMethod === 'wallet' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-secondary">Wallet Payment</p>
+                              {walletBalance < totalAmount && (
+                                <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Insufficient</span>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-gray-400">Pay 100% from your Wallet</p>
+                          </div>
+                          <Wallet className="w-3.5 h-3.5 text-gray-300" />
                         </div>
-                        <p className="text-[9px] text-gray-400">Pay 100% from your Wallet</p>
-                      </div>
-                      <Wallet className="w-3.5 h-3.5 text-gray-300" />
-                    </div>
 
-                    {/* Wallet + Online Mixed */}
-                    <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'mixed'
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-gray-100 hover:border-gray-200'
-                        }`}
-                      onClick={() => setPaymentMethod('mixed')}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
-                        {paymentMethod === 'mixed' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-bold text-secondary">Wallet + Online Mixed</p>
-                          {walletBalance <= 0 && (
-                            <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">₹0 Balance</span>
-                          )}
+                        {/* Wallet + Online Mixed */}
+                        <div
+                          className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'mixed'
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-gray-100 hover:border-gray-200'
+                            }`}
+                          onClick={() => setPaymentMethod('mixed')}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
+                            {paymentMethod === 'mixed' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-secondary">Wallet + Online Mixed</p>
+                              {walletBalance <= 0 && (
+                                <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">₹0 Balance</span>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-gray-400">
+                              {walletBalance > 0 && walletBalance < totalAmount
+                                ? `Use ₹${walletBalance} from wallet + pay remaining online`
+                                : 'Combine wallet balance with online payment'}
+                            </p>
+                          </div>
+                          <div className="flex gap-0.5 text-gray-300">
+                            <Wallet className="w-3 h-3" />
+                            <span className="text-[8px] mt-0.5">+</span>
+                            <CreditCard className="w-3 h-3" />
+                          </div>
                         </div>
-                        <p className="text-[9px] text-gray-400">
-                          {walletBalance > 0 && walletBalance < totalAmount
-                            ? `Use ₹${walletBalance} from wallet + pay remaining online`
-                            : 'Combine wallet balance with online payment'}
-                        </p>
-                      </div>
-                      <div className="flex gap-0.5 text-gray-300">
-                        <Wallet className="w-3 h-3" />
-                        <span className="text-[8px] mt-0.5">+</span>
-                        <CreditCard className="w-3 h-3" />
-                      </div>
-                    </div>
+                      </>
+                    )}
 
                     {/* Pay After Service (COD) */}
                     {allowCOD && (

@@ -30,6 +30,14 @@ const getWeeklyMonthlyStats = async (req, res, next) => {
 
 const requestBulkWithdrawal = async (req, res, next) => {
   try {
+    const { SystemConfig } = require('../models/SystemSetting-model');
+    const settings = await SystemConfig.findOne();
+    if (settings?.featureFlags?.walletEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Wallet withdrawals are currently disabled.'
+      });
+    }
     await PaymentService.requestBulkWithdrawal(req, res, next);
   } catch (error) {
     global.logger.error(`[paymentController.requestBulkWithdrawal] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);

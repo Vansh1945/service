@@ -1265,6 +1265,11 @@ class BookingService {
             throw new Error('Direct online processing is deprecated. Please use the secure Razorpay payment flow via /api/transaction/create-order');
 
           case 'wallet': {
+            const { SystemConfig } = require('../models/SystemSetting-model');
+            const settings = await SystemConfig.findOne();
+            if (settings?.featureFlags?.walletEnabled === false) {
+              throw new Error('Wallet payment is currently disabled.');
+            }
             const updatedUser = await User.findOneAndUpdate(
               { _id: userId, "wallet.availableBalance": { $gte: booking.totalAmount } },
               {

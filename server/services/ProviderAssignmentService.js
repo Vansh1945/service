@@ -326,6 +326,31 @@ class ProviderAssignmentService {
               return null;
             }
 
+            // 4.5. Trusted Provider Rules Validation
+            const rules = settings?.bookingSettings?.trustedProviderRules;
+            if (rules) {
+              const pRating = p.performanceScore?.averageRating || p.performanceScore?.rating || 5;
+              if (rules.minRating && pRating < rules.minRating) {
+                return null;
+              }
+              const pCompleted = p.completedBookings || 0;
+              if (rules.minCompletedJobs && pCompleted < rules.minCompletedJobs) {
+                return null;
+              }
+              const pCancelRate = p.performanceScore?.cancellationRate || p.performanceScore?.cancellationRatio || 0;
+              if (rules.maxCancellationRate && pCancelRate > rules.maxCancellationRate) {
+                return null;
+              }
+              const pCompletionRate = p.performanceScore?.completionRate || p.performanceScore?.completionPercentage || 100;
+              if (rules.minCompletionRate && pCompletionRate < rules.minCompletionRate) {
+                return null;
+              }
+              const pComplaintRate = p.performanceScore?.complaintRatio || 0;
+              if (rules.maxComplaintRate && pComplaintRate > rules.maxComplaintRate) {
+                return null;
+              }
+            }
+
             // 5. Calendar conflict check (using custom duration & buffers)
             const providerBookings = providerBookingsMap[pIdStr] || [];
             if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {

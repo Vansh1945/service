@@ -115,6 +115,9 @@ exports.Login = async (req, res, next) => {
       });
     }
 
+    const { SystemConfig } = require('../models/SystemSetting-model');
+    const settings = await SystemConfig.findOne();
+
     // Verify password
     let isMatch;
     try {
@@ -128,7 +131,8 @@ exports.Login = async (req, res, next) => {
     if (!isMatch) {
       user.loginAttempts = (user.loginAttempts || 0) + 1;
       let locked = false;
-      if (user.loginAttempts >= 5) {
+      const maxAttempts = settings?.securitySettings?.maxLoginAttempts || 5;
+      if (user.loginAttempts >= maxAttempts) {
         user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
         locked = true;
       }

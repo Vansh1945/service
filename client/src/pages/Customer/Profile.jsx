@@ -17,7 +17,8 @@ import { getAvailableCoupons } from '../../services/CouponService';
 import { formatCurrency, formatDate, formatDateTime, compressImage } from '../../utils/format';
 
 const UserProfile = () => {
-    const { user, logoutUser } = useAuth();
+    const { user, logoutUser, systemSettings } = useAuth();
+    const isWalletEnabled = systemSettings?.featureFlags?.walletEnabled !== false;
     const navigate = useNavigate();
 
     const [profile, setProfile] = useState({
@@ -230,17 +231,17 @@ const UserProfile = () => {
 
     const navigationItems = [
         { id: 'profile', label: 'Personal Details', icon: <User className="w-4 h-4" /> },
-        { id: 'payments', label: 'Wallet & Activity', icon: <Wallet className="w-4 h-4" /> },
+        isWalletEnabled && { id: 'payments', label: 'Wallet & Activity', icon: <Wallet className="w-4 h-4" /> },
         { id: 'favorites', label: 'Favorite Providers', icon: <Heart className="w-4 h-4" /> },
         { id: 'offers', label: 'Coupons & Offers', icon: <Gift className="w-4 h-4" /> }
-    ];
+    ].filter(Boolean);
 
     const quickActions = [
-        { id: 'payments', label: 'Wallet', icon: <Wallet className="w-5 h-5" />, color: 'bg-primary/10 text-primary' },
+        isWalletEnabled && { id: 'payments', label: 'Wallet', icon: <Wallet className="w-5 h-5" />, color: 'bg-primary/10 text-primary' },
         { id: 'favorites', label: 'Favorites', icon: <Heart className="w-5 h-5" />, color: 'bg-rose-50 text-rose-500' },
         { id: 'offers', label: 'Offers', icon: <Gift className="w-5 h-5" />, color: 'bg-amber-50 text-amber-500' },
         { id: 'support', label: 'Support', icon: <Shield className="w-5 h-5" />, color: 'bg-blue-50 text-blue-500', action: () => navigate('/customer/complaints') }
-    ];
+    ].filter(Boolean);
 
     const renderBackHeader = (title) => (
         <div className="flex items-center gap-3 pb-3 mb-4 border-b border-neutral-100 xl:hidden">
@@ -298,10 +299,12 @@ const UserProfile = () => {
                                     <span className="text-neutral-400">Bookings</span>
                                     <span>{profile.totalBookings}</span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-neutral-400">Wallet</span>
-                                    <span className="text-success">{formatCurrency(profile.wallet?.availableBalance || 0)}</span>
-                                </div>
+                                {isWalletEnabled && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-neutral-400">Wallet</span>
+                                        <span className="text-success">{formatCurrency(profile.wallet?.availableBalance || 0)}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center">
                                     <span className="text-neutral-400">Saved Providers</span>
                                     <span>{profile.favoriteProviders?.length || 0}</span>
@@ -339,7 +342,7 @@ const UserProfile = () => {
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <h2 className="text-sm font-black text-secondary truncate">{profile.name}</h2>
-                                                    {profile.wallet && (
+                                                    {isWalletEnabled && profile.wallet && (
                                                         <span className="inline-flex items-center text-[9px] font-black bg-success/15 text-emerald-700 px-1.5 py-0.5 rounded select-none">
                                                             ₹{profile.wallet.availableBalance || 0}
                                                         </span>

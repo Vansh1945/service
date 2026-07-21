@@ -108,6 +108,18 @@ const createOrder = async (req, res, next) => {
       });
     }
 
+    if (paymentMethod === 'mixed') {
+      const { SystemConfig } = require('../models/SystemSetting-model');
+      const settings = await SystemConfig.findOne();
+      if (settings?.featureFlags?.walletEnabled === false) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: 'Wallet payment is currently disabled.'
+        });
+      }
+    }
+
     // Rollback any existing pending transaction for this booking
     const existingPending = await Transaction.findOne({
       booking: bookingId,
