@@ -27,6 +27,31 @@ const ROUTE_CACHE = new Map();
 const ROUTE_CACHE_TTL_MS = 45000;
 const LAST_PROVIDER_POS = new Map();
 
+// Periodically clean up stale route cache and provider positions to prevent memory leaks (Phase A)
+setInterval(() => {
+    try {
+        const now = Date.now();
+        // Evict route cache entries older than TTL
+        for (const [key, val] of ROUTE_CACHE.entries()) {
+            if (now - val.ts > ROUTE_CACHE_TTL_MS) {
+                ROUTE_CACHE.delete(key);
+            }
+        }
+        // Evict provider positions older than 1 hour (inactive providers)
+        for (const [key, val] of LAST_PROVIDER_POS.entries()) {
+            if (now - val.ts > 3600000) {
+                LAST_PROVIDER_POS.delete(key);
+            }
+        }
+    } catch (err) {
+        if (global.logger) {
+            global.logger.error('[Socket Cache Eviction Error]', err);
+        } else {
+            console.error('[Socket Cache Eviction Error]', err);
+        }
+    }
+}, 60000); // Check every 60 seconds
+
 const { calculateDistance } = require('../utils/geoUtils');
 
 // Polyline decoder helper for overview route coordinates

@@ -7,12 +7,12 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { validateBody } = require('../validation/common.validation');
 const { requestBulkWithdrawalSchema } = require('../validation/payment.validation');
 
+// Provider routes
+const { paymentLimiter, webhookLimiter } = require('../middlewares/rate-limit');
+
 // Webhook route - must use express.raw() for signature verification
 // This route is PUBLIC - no authentication required
-router.post('/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
-
-// Provider routes
-const { paymentLimiter } = require('../middlewares/rate-limit');
+router.post('/webhook', webhookLimiter, express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 const { preventDuplicateSubmissions } = require('../middlewares/fraud-middleware');
 
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);

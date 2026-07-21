@@ -92,7 +92,6 @@ const SystemSetting = () => {
       expiryDays: 30,
       referralExpiryDays: 90,
       fraudScoreThreshold: 50,
-      walletUsagePercentage: 20,
       rewardCalculationMode: 'commission',
       rewardThresholdAmount: 1000,
       fixedRewardAmount: 50,

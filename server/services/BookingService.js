@@ -1908,20 +1908,6 @@ class BookingService {
 
       let paymentResult;
       if (paymentDetails?.paymentMethod === 'wallet') {
-        const { SystemConfig } = require('../models/SystemSetting');
-        const settings = session
-          ? await SystemConfig.findOne().session(session)
-          : await SystemConfig.findOne();
-        const usagePercentage = settings?.referralSettings?.walletUsagePercentage ?? 20;
-
-        if (usagePercentage < 100) {
-          await safeAbort(session);
-          if (session) safeEnd(session);
-          return res.status(400).json({
-            success: false,
-            message: `Wallet usage is limited to ${usagePercentage}% of booking value. Please use mixed payment instead.`
-          });
-        }
 
         const userWallet = await User.findById(userId).session(session);
         if (!userWallet.wallet) {
@@ -1973,14 +1959,7 @@ class BookingService {
         const userMixed = await User.findById(userId).session(session);
         const walletBal = userMixed.wallet?.availableBalance || 0;
 
-        const { SystemConfig } = require('../models/SystemSetting');
-        const settings = session
-          ? await SystemConfig.findOne().session(session)
-          : await SystemConfig.findOne();
-        const usagePercentage = settings?.referralSettings?.walletUsagePercentage ?? 20;
-        const maxAllowedDeduction = (booking.totalAmount * usagePercentage) / 100;
-
-        const walletDeduction = Math.min(walletBal, booking.totalAmount, maxAllowedDeduction);
+        const walletDeduction = Math.min(walletBal, booking.totalAmount);
 
         if (walletDeduction > 0) {
           userMixed.wallet.availableBalance -= walletDeduction;

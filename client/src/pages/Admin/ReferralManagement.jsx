@@ -52,7 +52,6 @@ const ReferralManagement = () => {
     expiryDays: 30,
     fraudScoreThreshold: 50,
     programVersion: 1,
-    walletUsagePercentage: 20,
     rewardCalculationMode: 'commission',
     rewardThresholdAmount: 1000,
     fixedRewardAmount: 50

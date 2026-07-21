@@ -470,7 +470,6 @@ const systemConfigSchema = new mongoose.Schema(
       expiryDays: { type: Number, default: 30 },
       fraudScoreThreshold: { type: Number, default: 50 },
       programVersion: { type: Number, default: 1 },
-      walletUsagePercentage: { type: Number, default: 20 },
       rewardCalculationMode: { type: String, enum: ['commission', 'conditional', 'fixed'], default: 'commission' },
       rewardThresholdAmount: { type: Number, default: 1000 },
       fixedRewardAmount: { type: Number, default: 50 },

@@ -128,9 +128,7 @@ const createOrder = async (req, res, next) => {
     if (paymentMethod === 'mixed') {
       const user = await User.findById(userId).session(session);
       const walletBalance = user.wallet?.availableBalance || 0;
-      const usagePercentage = settings?.referralSettings?.walletUsagePercentage ?? 20;
-      const maxAllowedDeduction = (booking.totalAmount * usagePercentage) / 100;
-      walletDeduction = Math.min(walletBalance, booking.totalAmount, maxAllowedDeduction);
+      walletDeduction = Math.min(walletBalance, booking.totalAmount);
       expectedAmountPaise = Math.round((booking.totalAmount - walletDeduction) * 100);
 
       if (expectedAmountPaise <= 0) {

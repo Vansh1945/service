@@ -42,7 +42,6 @@ const bootstrapReferralSettings = async () => {
       referralExpiryDays: 90,
       fraudScoreThreshold: 50,
       programVersion: 1,
-      walletUsagePercentage: 20,
       rewardCalculationMode: 'commission',
       rewardThresholdAmount: 1000,
       fixedRewardAmount: 50,
@@ -516,7 +515,7 @@ const getCustomerReferralDetails = async (req, res, next) => {
       .populate('referredUser', 'name email createdAt')
       .lean();
 
-    const rewardLogs = await Transaction.find({ user: customerId, type: 'referral_reward' }).select('amount').lean();
+    const rewardLogs = await ReferralRewardLog.find({ recipient: customerId, status: 'released' }).select('amount').lean();
     const releasedRewards = rewardLogs.reduce((sum, log) => sum + log.amount, 0);
 
     res.status(200).json({
@@ -580,7 +579,7 @@ const getProviderReferralDetails = async (req, res, next) => {
       .populate('referredUser', 'name email createdAt')
       .lean();
 
-    const rewardLogs = await Transaction.find({ provider: providerId, type: 'referral_reward' }).select('amount').lean();
+    const rewardLogs = await ReferralRewardLog.find({ recipient: providerId, status: 'released' }).select('amount').lean();
     const totalEarnings = rewardLogs.reduce((sum, log) => sum + log.amount, 0);
 
     const milestones = refConfig.providerMilestones || [];

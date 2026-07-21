@@ -89,6 +89,15 @@ const chatLimiter = rateLimit({
   message: { success: false, message: 'Too many messages sent. Please slow down.' }
 });
 
+// Rate limiter for Webhook endpoints (high window limit to allow bursts)
+const webhookLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 100, // Limit each IP to 100 requests per 5 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many webhook events.' }
+});
+
 module.exports = {
   authLimiter,
   signupLimiter,
@@ -99,6 +108,7 @@ module.exports = {
   adminActionLimiter,
   contactLimiter,
   feedbackLimiter,
-  chatLimiter
+  chatLimiter,
+  webhookLimiter
 };
 

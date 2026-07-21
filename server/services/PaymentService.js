@@ -258,6 +258,22 @@ class PaymentService {
         return res.status(400).json({ error: 'Invalid payload structure' });
       }
 
+      // Enforce Webhook Idempotency (Phase A)
+      const eventId = payload.id || `${event}:${payment.id}`;
+      try {
+        const WebhookIdempotency = mongoose.models.WebhookIdempotency || mongoose.model('WebhookIdempotency', new mongoose.Schema({
+          eventId: { type: String, required: true, unique: true },
+          processedAt: { type: Date, default: Date.now, expires: 604800 } // TTL: 7 days
+        }));
+        await WebhookIdempotency.create({ eventId });
+      } catch (idempErr) {
+        if (idempErr.code === 11000) {
+          console.warn(`[Webhook Duplicate] Webhook event ${eventId} already processed. Skipping to prevent duplicates.`);
+          return res.status(200).json({ status: 'success', duplicate: true });
+        }
+        throw idempErr;
+      }
+
       console.log(`Webhook received: ${event}, Payment ID: ${payment.id}`);
 
       switch (event) {
