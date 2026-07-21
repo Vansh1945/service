@@ -59,6 +59,7 @@ const ServiceDetailPage = () => {
   const [allImages, setAllImages] = useState([]);
   const { categories } = useCategory();
   const [activeSurcharges, setActiveSurcharges] = useState([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   // Fetch active surcharges
   useEffect(() => {
@@ -692,48 +693,67 @@ const ServiceDetailPage = () => {
 
                   {/* Comments Grid */}
                   <div className="flex-1">
-                    <div className="grid grid-cols-1 gap-4">
-                      {(() => {
-                        const reviewsWithComments = service.feedback?.flatMap(review =>
-                          (review.comment && review.comment.trim() !== "") ? [review] : []
-                        ) || [];
-                        return reviewsWithComments.length > 0 ? (
-                          reviewsWithComments.map((review, index) => (
-                            <div key={index} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group text-xs md:text-sm">
-                              <div className="flex items-center gap-3 mb-3">
-                                <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-xs">
-                                  {review.customer?.name?.[0]?.toUpperCase() || 'U'}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
-                                  <div className="text-[9px] uppercase font-black text-gray-400 tracking-wider">
-                                    {formatDate(review.createdAt)}
+                    {(() => {
+                      const reviewsWithComments = service.feedback?.flatMap(review =>
+                        (review.comment && review.comment.trim() !== "") ? [review] : []
+                      ) || [];
+                      
+                      const visibleReviews = showAllReviews 
+                        ? reviewsWithComments 
+                        : reviewsWithComments.slice(0, 3);
+
+                      return reviewsWithComments.length > 0 ? (
+                        <div className="space-y-4">
+                          <div 
+                            className={`grid grid-cols-1 gap-4 ${showAllReviews ? 'max-h-[350px] overflow-y-auto pr-2 scrollbar-thin' : ''}`}
+                            style={showAllReviews ? { scrollbarWidth: 'thin', scrollbarColor: 'rgba(13, 148, 136, 0.2) transparent' } : {}}
+                          >
+                            {visibleReviews.map((review, index) => (
+                              <div key={index} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group text-xs md:text-sm">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-xs">
+                                    {review.customer?.name?.[0]?.toUpperCase() || 'U'}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
+                                    <div className="text-[9px] uppercase font-black text-gray-400 tracking-wider">
+                                      {formatDate(review.createdAt)}
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(s => (
+                                      <MdStar key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
+                                    ))}
                                   </div>
                                 </div>
-                                <div className="flex gap-0.5">
-                                  {[1, 2, 3, 4, 5].map(s => (
-                                    <MdStar key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
-                                  ))}
-                                </div>
+                                <p className="text-gray-600 leading-relaxed italic border-l-2 border-gray-100 pl-3">
+                                  {review.comment}
+                                </p>
                               </div>
-                              <p className="text-gray-600 leading-relaxed italic border-l-2 border-gray-100 pl-3">
-                                {review.comment}
-                              </p>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="py-12 px-6 text-center bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-dashed border-gray-200 shadow-inner flex flex-col items-center justify-center w-full">
-                            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary animate-pulse">
-                              <ChatBubbleLeftEllipsisIcon className="w-8 h-8" />
-                            </div>
-                            <h4 className="text-secondary font-bold text-sm mb-1">No Reviews Yet</h4>
-                            <p className="text-gray-400 text-xs max-w-[250px] leading-relaxed">
-                              There are currently no review comments for this service. Book now and be the first to share your experience!
-                            </p>
+                            ))}
                           </div>
-                        );
-                      })()}
-                    </div>
+                          
+                          {!showAllReviews && reviewsWithComments.length > 3 && (
+                            <button
+                              onClick={() => setShowAllReviews(true)}
+                              className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-primary font-bold text-xs rounded-xl border border-gray-200 hover:border-primary/20 transition-all flex items-center justify-center gap-1 focus:outline-none"
+                            >
+                              See More Reviews ({reviewsWithComments.length - 3} more)
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="py-12 px-6 text-center bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-dashed border-gray-200 shadow-inner flex flex-col items-center justify-center w-full">
+                          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary animate-pulse">
+                            <ChatBubbleLeftEllipsisIcon className="w-8 h-8" />
+                          </div>
+                          <h4 className="text-secondary font-bold text-sm mb-1">No Reviews Yet</h4>
+                          <p className="text-gray-400 text-xs max-w-[250px] leading-relaxed">
+                            There are currently no review comments for this service. Book now and be the first to share your experience!
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

@@ -53,7 +53,7 @@ const userAuthMiddleware = async (req, res, next) => {
         }
 
         if (user.isSuspended) {
-            return res.status(403).json({ success: false, message: `Account suspended: ${user.suspensionReason || 'Suspicious activity'}` });
+            return res.status(403).json({ success: false, message: 'Your account has been blocked. Please contact support.' });
         }
 
         req.user   = user;

@@ -160,9 +160,12 @@ exports.Login = async (req, res, next) => {
 
     // Check if user is suspended
     if (user.isSuspended) {
+      const displayMsg = user.role === 'customer'
+        ? 'Your account has been blocked. Please contact support.'
+        : `Your account has been suspended. Reason: ${user.suspensionReason || 'Suspicious/fraudulent activity detected.'}`;
       return res.status(403).json({
         success: false,
-        message: `Your account has been suspended. Reason: ${user.suspensionReason || 'Suspicious/fraudulent activity detected.'}`
+        message: displayMsg
       });
     }
 

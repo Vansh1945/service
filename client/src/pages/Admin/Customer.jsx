@@ -5,6 +5,7 @@ import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import { formatDate } from '../../utils/format';
+import Modal from '../../components/ui/Modal';
 import {
     Users,
     UserCheck,
@@ -45,6 +46,13 @@ const AdminCustomersDashboard = () => {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: '',
+        customer: null,
+        message: '',
+        title: ''
+    });
     const [activeDropdownId, setActiveDropdownId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchParams] = useSearchParams();
@@ -229,53 +237,70 @@ const AdminCustomersDashboard = () => {
     };
 
     // Handle Toggle Block Status
-    const handleToggleBlock = async (customer) => {
-        const confirmMsg = customer.isSuspended
+    const handleToggleBlock = (customer) => {
+        const title = customer.isSuspended ? 'Unblock Customer Account' : 'Block Customer Account';
+        const message = customer.isSuspended
             ? `Are you sure you want to unblock ${customer.name || 'this customer'}?`
             : `Are you sure you want to block ${customer.name || 'this customer'}?`;
-        
-        if (!window.confirm(confirmMsg)) return;
 
-        try {
-            const response = await AdminService.toggleBlockCustomer(customer._id, {
-                isSuspended: !customer.isSuspended,
-                suspensionReason: customer.isSuspended ? undefined : 'Violating system guidelines'
-            });
-            if (response.data.success) {
-                showToast(`Customer account successfully ${customer.isSuspended ? 'unblocked' : 'blocked'}`, 'success');
-                fetchCustomers();
-                if (selectedCustomer && selectedCustomer._id === customer._id) {
-                    setSelectedCustomer(prev => ({
-                        ...prev,
-                        isSuspended: !customer.isSuspended,
-                        suspensionReason: customer.isSuspended ? undefined : 'Violating system guidelines'
-                    }));
-                }
-            } else {
-                showToast(response.data.message || 'Failed to update status', 'error');
-            }
-        } catch (error) {
-            console.error('Error toggling block status:', error);
-            showToast('Error updating account block status', 'error');
-        }
+        setConfirmModal({
+            isOpen: true,
+            type: 'block',
+            customer,
+            message,
+            title
+        });
     };
 
     // Handle Delete (Deactivate)
-    const handleDeleteClick = async (customer) => {
-        if (!window.confirm(`Are you sure you want to deactivate (soft delete) ${customer.name || 'this customer'}'s account? The customer will no longer be able to log in.`)) return;
+    const handleDeleteClick = (customer) => {
+        setConfirmModal({
+            isOpen: true,
+            type: 'delete',
+            customer,
+            message: `Are you sure you want to deactivate (soft delete) ${customer.name || 'this customer'}'s account? The customer will no longer be able to log in.`,
+            title: 'Deactivate Customer Account'
+        });
+    };
+
+    const handleConfirmAction = async () => {
+        const { type, customer } = confirmModal;
+        if (!customer) return;
 
         try {
-            const response = await AdminService.deleteCustomer(customer._id);
-            if (response.data.success) {
-                showToast('Customer account deactivated successfully', 'success');
-                fetchCustomers();
-                setShowViewModal(false);
-            } else {
-                showToast(response.data.message || 'Failed to deactivate account', 'error');
+            if (type === 'block') {
+                const response = await AdminService.toggleBlockCustomer(customer._id, {
+                    isSuspended: !customer.isSuspended,
+                    suspensionReason: customer.isSuspended ? undefined : 'Violating system guidelines'
+                });
+                if (response.data.success) {
+                    showToast(`Customer account successfully ${customer.isSuspended ? 'unblocked' : 'blocked'}`, 'success');
+                    fetchCustomers();
+                    if (selectedCustomer && selectedCustomer._id === customer._id) {
+                        setSelectedCustomer(prev => ({
+                            ...prev,
+                            isSuspended: !customer.isSuspended,
+                            suspensionReason: customer.isSuspended ? undefined : 'Violating system guidelines'
+                        }));
+                    }
+                } else {
+                    showToast(response.data.message || 'Failed to update status', 'error');
+                }
+            } else if (type === 'delete') {
+                const response = await AdminService.deleteCustomer(customer._id);
+                if (response.data.success) {
+                    showToast('Customer account deactivated successfully', 'success');
+                    fetchCustomers();
+                    setShowViewModal(false);
+                } else {
+                    showToast(response.data.message || 'Failed to deactivate account', 'error');
+                }
             }
         } catch (error) {
-            console.error('Error deactivating account:', error);
-            showToast('Error deactivating account', 'error');
+            console.error(`Error performing ${type} action:`, error);
+            showToast(`Error performing ${type} action`, 'error');
+        } finally {
+            setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' });
         }
     };
 
@@ -977,50 +1002,36 @@ const AdminCustomersDashboard = () => {
                     </Modal>
                 )}
 
-            </div>
-        </div>
-    );
-};
-
-// Reusable Modal Component (same as in AdminProviders)
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
-    if (!isOpen) return null;
-
-    const sizeClasses = {
-        medium: 'sm:max-w-lg',
-        large: 'sm:max-w-2xl',
-        xlarge: 'sm:max-w-4xl'
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-                    <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
-                </div>
-
-                <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                <div className={`inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}>
-                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <div className="sm:flex sm:items-start">
-                            <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg leading-6 font-medium text-secondary">{title}</h3>
-                                    <button
-                                        onClick={onClose}
-                                        className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                {children}
-                            </div>
+            {/* Confirmation Modal */}
+            {confirmModal.isOpen && (
+                <Modal
+                    isOpen={confirmModal.isOpen}
+                    onClose={() => setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' })}
+                    title={confirmModal.title}
+                    size="small"
+                >
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 font-medium leading-relaxed">
+                            {confirmModal.message}
+                        </p>
+                        <div className="flex justify-end gap-3 pt-3 border-t border-gray-150">
+                            <button
+                                onClick={() => setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' })}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-semibold transition-colors focus:outline-none"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmAction}
+                                className={`px-4 py-2 text-white rounded-lg text-xs font-bold transition-colors focus:outline-none ${confirmModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary/95'}`}
+                            >
+                                Confirm
+                            </button>
                         </div>
                     </div>
-                </div>
+                </Modal>
+            )}
+
             </div>
         </div>
     );

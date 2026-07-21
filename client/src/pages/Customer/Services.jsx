@@ -266,7 +266,7 @@ const ServiceListingPage = () => {
         {/* Horizontal Categories Ribbon */}
         <div className="relative bg-white rounded-2xl border border-gray-100 p-2 md:p-3.5 shadow-sm">
           <div
-            className="flex items-center gap-4 md:gap-6 overflow-x-auto py-1.5 px-1 scrollbar-hide scroll-smooth"
+            className="flex items-start gap-4 md:gap-6 overflow-x-auto py-1.5 px-1 scrollbar-hide scroll-smooth"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
@@ -282,7 +282,7 @@ const ServiceListingPage = () => {
                 <button
                   key={cat.value}
                   onClick={() => handleCategoryChange(cat.value)}
-                  className="flex flex-col items-center min-w-[64px] md:min-w-[80px] focus:outline-none group flex-shrink-0"
+                  className="flex flex-col items-center w-[72px] md:w-[88px] focus:outline-none group flex-shrink-0"
                 >
                   <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm border ${isActive
                     ? 'bg-primary/10 border-primary text-primary scale-105 ring-2 ring-primary/20'
@@ -301,7 +301,7 @@ const ServiceListingPage = () => {
                       IconComp && <IconComp className="w-4 h-4 md:w-5 md:h-5" />
                     )}
                   </div>
-                  <span className={`text-[10px] md:text-[11px] font-semibold tracking-wide text-center mt-2 md:mt-2.5 line-clamp-1 transition-colors ${isActive ? 'text-primary font-bold' : 'text-gray-600 group-hover:text-primary'
+                  <span className={`max-w-[70px] md:max-w-[85px] text-[10px] md:text-[11px] font-semibold tracking-tight text-center mt-2 leading-tight line-clamp-2 transition-colors ${isActive ? 'text-primary font-bold' : 'text-gray-600 group-hover:text-primary'
                     }`}>
                     {cat.label}
                   </span>

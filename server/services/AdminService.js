@@ -639,6 +639,102 @@ class AdminService {
         }
     }
 
+    static async updateCustomer(req, res) {
+        try {
+            const customerId = req.params.id;
+            const updateFields = req.body;
+
+            const customer = await User.findOneAndUpdate(
+                { _id: customerId, role: 'customer' },
+                { $set: updateFields },
+                { new: true, runValidators: true }
+            ).select('-password');
+
+            if (!customer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Customer not found'
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                message: 'Customer details updated successfully',
+                user: customer
+            });
+
+        } catch (error) {
+            console.error('Update customer error:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Server error while updating customer details'
+            });
+        }
+    }
+
+    static async toggleBlockCustomer(req, res) {
+        try {
+            const customerId = req.params.id;
+            const { reason } = req.body;
+
+            const customer = await User.findOne({ _id: customerId, role: 'customer' });
+            if (!customer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Customer not found'
+                });
+            }
+
+            customer.isSuspended = !customer.isSuspended;
+            if (customer.isSuspended) {
+                customer.suspensionReason = reason || 'Suspended by admin';
+            } else {
+                customer.suspensionReason = undefined;
+            }
+
+            await customer.save();
+
+            res.status(200).json({
+                success: true,
+                message: `Customer account ${customer.isSuspended ? 'blocked' : 'unblocked'} successfully`,
+                user: customer
+            });
+
+        } catch (error) {
+            console.error('Toggle block customer error:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Server error while toggling customer block status'
+            });
+        }
+    }
+
+    static async deleteCustomer(req, res) {
+        try {
+            const customerId = req.params.id;
+
+            const customer = await User.findOneAndDelete({ _id: customerId, role: 'customer' });
+            if (!customer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Customer not found'
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                message: 'Customer deleted successfully'
+            });
+
+        } catch (error) {
+            console.error('Delete customer error:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Server error while deleting customer'
+            });
+        }
+    }
+
     static async approveProvider(req, res) {
         try {
             const queryId = req.params.id;
