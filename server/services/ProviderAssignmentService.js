@@ -349,6 +349,11 @@ class ProviderAssignmentService {
               if (rules.maxComplaintRate && pComplaintRate > rules.maxComplaintRate) {
                 return null;
               }
+              const pResponseTimeSec = p.performanceScore?.responseTime || 0;
+              const pResponseTimeMin = pResponseTimeSec / 60;
+              if (rules.providerResponseTimeMinutes && pResponseTimeMin > rules.providerResponseTimeMinutes) {
+                return null;
+              }
             }
 
             // 5. Calendar conflict check (using custom duration & buffers)

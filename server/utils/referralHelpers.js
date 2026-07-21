@@ -89,6 +89,28 @@ const validateReferralCode = async (code, expectedRole, settings) => {
     };
   }
 
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+  const dailyReferralsCount = await Referral.countDocuments({
+    referrer: referrer._id,
+    createdAt: { $gte: startOfDay }
+  });
+  const dailyLimit = settings.dailyReferralLimitPerUser || 5;
+  if (dailyReferralsCount >= dailyLimit) {
+    return { valid: false, message: `Referral code usage limit exceeded for today (limit: ${dailyLimit})` };
+  }
+
+  const monthlyReferralsCount = await Referral.countDocuments({
+    referrer: referrer._id,
+    createdAt: { $gte: startOfMonth }
+  });
+  const monthlyLimit = settings.monthlyReferralLimitPerUser || 20;
+  if (monthlyReferralsCount >= monthlyLimit) {
+    return { valid: false, message: `Referral code usage limit exceeded for this month (limit: ${monthlyLimit})` };
+  }
+
   return {
     valid: true,
     eligible: true,

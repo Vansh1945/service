@@ -349,6 +349,8 @@ const initSocket = (httpServer) => {
                     .lean();
 
                 if (booking) {
+                    const { SystemConfig } = require('../models/SystemSetting-model');
+                    const settings = await SystemConfig.findOne();
                     let trackingEnabled = booking.trackingEnabled;
                     let providerLiveLocation = booking.providerLiveLocation;
                     let liveDistance = booking.liveDistance;
@@ -356,7 +358,16 @@ const initSocket = (httpServer) => {
                     let routeCoordinates = booking.routeCoordinates;
                     let provider = booking.provider;
 
-                    if (provider && socket.userRole === 'customer') {
+                    if (settings && settings.bookingSettings?.trackingEnabled === false && socket.userRole === 'customer') {
+                        trackingEnabled = false;
+                        providerLiveLocation = null;
+                        liveDistance = null;
+                        liveDuration = null;
+                        routeCoordinates = null;
+                        if (provider && provider.currentLocation) {
+                            provider = { ...provider, currentLocation: null };
+                        }
+                    } else if (provider && socket.userRole === 'customer') {
                         const isThisBookingActive = provider.activeBooking && 
                                                     provider.activeBooking.toString() === bookingId.toString();
                         const isTrackable = (isThisBookingActive && ['accepted', 'assigned'].includes(booking.status)) ||
@@ -407,10 +418,14 @@ const initSocket = (httpServer) => {
                     return;
                 }
 
-                // Rate limiting check
+                // Rate limiting check using dynamic system config tracking interval
+                const { SystemConfig } = require('../models/SystemSetting-model');
+                const settings = await SystemConfig.findOne();
+                const intervalSec = settings?.bookingSettings?.trackingInterval || 5;
+                const intervalMs = (intervalSec - 0.5) * 1000;
                 const now = Date.now();
-                if (socket[LAST_UPDATE_KEY] && (now - socket[LAST_UPDATE_KEY] < 4500)) {
-                    return; // Skip update if sent within 5 seconds
+                if (socket[LAST_UPDATE_KEY] && (now - socket[LAST_UPDATE_KEY] < intervalMs)) {
+                    return; // Skip update if sent within the interval
                 }
                 socket[LAST_UPDATE_KEY] = now;
 
@@ -550,19 +565,22 @@ const initSocket = (httpServer) => {
 
                 await booking.save();
 
-                // Broadcast live location to Customer tracking room
-                io.to(`booking_${bookingId}`).emit('provider-live-location', {
-                    bookingId,
-                    providerId: userId,
-                    latitude: emitLat,
-                    longitude: emitLng,
-                    s2CellId: providerS2CellId,
-                    s2CellIdPrecise: providerS2CellIdPrecise,
-                    liveDistance: booking.liveDistance,
-                    liveDuration: booking.liveDuration,
-                    routeCoordinates: booking.routeCoordinates,
-                    providerReached: booking.providerReached
-                });
+                // Broadcast live location to Customer tracking room (only if globally enabled)
+                const settingsLoc = await SystemConfig.findOne();
+                if (!settingsLoc || settingsLoc.bookingSettings?.trackingEnabled !== false) {
+                    io.to(`booking_${bookingId}`).emit('provider-live-location', {
+                        bookingId,
+                        providerId: userId,
+                        latitude: emitLat,
+                        longitude: emitLng,
+                        s2CellId: providerS2CellId,
+                        s2CellIdPrecise: providerS2CellIdPrecise,
+                        liveDistance: booking.liveDistance,
+                        liveDuration: booking.liveDuration,
+                        routeCoordinates: booking.routeCoordinates,
+                        providerReached: booking.providerReached
+                    });
+                }
 
                 // Broadcast live location to Admin live room
                 io.to('admin_live_room').emit('provider-moving', {

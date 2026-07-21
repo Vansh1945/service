@@ -324,6 +324,66 @@ const triggerCustomerReferralReward = async (booking) => {
     const rewardAmount = calculateCustomerReward(booking, rules);
     if (rewardAmount <= 0) return;
 
+    // Platform Monthly Budget Check
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const monthlySpendRes = await ReferralRewardLog.aggregate([
+      { $match: { status: 'released', createdAt: { $gte: startOfMonth } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const monthlySpend = monthlySpendRes[0]?.total || 0;
+    if (rules.monthlyBudget && (monthlySpend + rewardAmount) > rules.monthlyBudget) {
+      referral.status = 'fraud_flagged';
+      referral.abuseFlags.push('platform_monthly_budget_exceeded');
+      await referral.save();
+      await notifyAdmins(
+        'Platform Referral Monthly Budget Exceeded',
+        `Referral reward for booking ${booking.bookingId || booking._id} rejected: Monthly budget of ₹${rules.monthlyBudget} reached. Current spend: ₹${monthlySpend}.`,
+        'critical',
+        booking._id
+      );
+      return;
+    }
+
+    // Referrer Daily Cap Check
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const dailyEarningsRes = await ReferralRewardLog.aggregate([
+      { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfDay } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const dailyEarnings = dailyEarningsRes[0]?.total || 0;
+    if (rules.dailyCapPerUser && (dailyEarnings + rewardAmount) > rules.dailyCapPerUser) {
+      referral.status = 'fraud_flagged';
+      referral.abuseFlags.push('user_daily_cap_exceeded');
+      await referral.save();
+      await notifyAdmins(
+        'User Referral Daily Cap Exceeded',
+        `Referrer ${referrer.name} hit daily cap of ₹${rules.dailyCapPerUser}. Held for review.`,
+        'warning',
+        booking._id
+      );
+      return;
+    }
+
+    // Referrer Monthly Cap Check
+    const monthlyEarningsRes = await ReferralRewardLog.aggregate([
+      { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfMonth } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const monthlyEarnings = monthlyEarningsRes[0]?.total || 0;
+    if (rules.monthlyCapPerUser && (monthlyEarnings + rewardAmount) > rules.monthlyCapPerUser) {
+      referral.status = 'fraud_flagged';
+      referral.abuseFlags.push('user_monthly_cap_exceeded');
+      await referral.save();
+      await notifyAdmins(
+        'User Referral Monthly Cap Exceeded',
+        `Referrer ${referrer.name} hit monthly cap of ₹${rules.monthlyCapPerUser}. Held for review.`,
+        'warning',
+        booking._id
+      );
+      return;
+    }
+
     referral.customerRewardReleased = true;
     referral.status = 'released';
     referral.completedAt = new Date();
@@ -463,6 +523,66 @@ const triggerProviderReferralReward = async (referredProviderId) => {
 
       const rewardAmount = calculateProviderReward(commissionGenerated, sysSettings);
       if (rewardAmount <= 0) continue;
+
+      // Platform Monthly Budget Check
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const monthlySpendRes = await ReferralRewardLog.aggregate([
+        { $match: { status: 'released', createdAt: { $gte: startOfMonth } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      const monthlySpend = monthlySpendRes[0]?.total || 0;
+      if (sysSettings.monthlyBudget && (monthlySpend + rewardAmount) > sysSettings.monthlyBudget) {
+        referral.status = 'fraud_flagged';
+        referral.abuseFlags.push('platform_monthly_budget_exceeded');
+        await referral.save();
+        await notifyAdmins(
+          'Platform Referral Monthly Budget Exceeded',
+          `Provider referral milestone reward for provider ${referrer.name} rejected: Monthly budget of ₹${sysSettings.monthlyBudget} reached.`,
+          'critical',
+          null
+        );
+        continue;
+      }
+
+      // Referrer Daily Cap Check
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const dailyEarningsRes = await ReferralRewardLog.aggregate([
+        { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfDay } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      const dailyEarnings = dailyEarningsRes[0]?.total || 0;
+      if (sysSettings.dailyCapPerUser && (dailyEarnings + rewardAmount) > sysSettings.dailyCapPerUser) {
+        referral.status = 'fraud_flagged';
+        referral.abuseFlags.push('user_daily_cap_exceeded');
+        await referral.save();
+        await notifyAdmins(
+          'User Referral Daily Cap Exceeded',
+          `Referrer ${referrer.name} hit daily cap of ₹${sysSettings.dailyCapPerUser} during milestone reward. Held for review.`,
+          'warning',
+          null
+        );
+        continue;
+      }
+
+      // Referrer Monthly Cap Check
+      const monthlyEarningsRes = await ReferralRewardLog.aggregate([
+        { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfMonth } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      const monthlyEarnings = monthlyEarningsRes[0]?.total || 0;
+      if (sysSettings.monthlyCapPerUser && (monthlyEarnings + rewardAmount) > sysSettings.monthlyCapPerUser) {
+        referral.status = 'fraud_flagged';
+        referral.abuseFlags.push('user_monthly_cap_exceeded');
+        await referral.save();
+        await notifyAdmins(
+          'User Referral Monthly Cap Exceeded',
+          `Referrer ${referrer.name} hit monthly cap of ₹${sysSettings.monthlyCapPerUser} during milestone reward. Held for review.`,
+          'warning',
+          null
+        );
+        continue;
+      }
 
       referral.providerRewardMilestonesReleased.push(milestone.bookingsCount);
       referral.status = 'released';

@@ -849,6 +849,42 @@ class BookingService {
       const resolvedIsEmergency = !!(isEmergency || resolvedBookingType === 'emergency');
       const resolvedIsInstant = !!(isInstant || resolvedBookingType === 'instant');
 
+      const { SystemConfig } = require('../models/SystemSetting-model');
+      const settings = await SystemConfig.findOne();
+      if (settings) {
+        if (resolvedBookingType === 'emergency' && settings.bookingSettings?.emergencyAssignment === false) {
+          return res.status(400).json({
+            success: false,
+            message: 'Emergency booking requests are temporarily disabled by the platform.'
+          });
+        }
+        if (resolvedBookingType === 'instant' && settings.bookingSettings?.instantBooking === false) {
+          return res.status(400).json({
+            success: false,
+            message: 'Instant booking requests are temporarily disabled by the platform.'
+          });
+        }
+        if (settings.bookingSettings?.bookingMode === 'slot-based' && resolvedBookingType === 'scheduled' && !time) {
+          return res.status(400).json({
+            success: false,
+            message: 'Time slot selection is required for slot-based booking mode.'
+          });
+        }
+        if (resolvedBookingType === 'scheduled' && date) {
+          const maxDays = settings.bookingSettings?.maxBookingDays || 3;
+          const bookingDate = new Date(date);
+          const maxDate = new Date();
+          maxDate.setDate(maxDate.getDate() + maxDays);
+          maxDate.setHours(23, 59, 59, 999);
+          if (bookingDate > maxDate) {
+            return res.status(400).json({
+              success: false,
+              message: `Booking date cannot exceed ${maxDays} days in advance.`
+            });
+          }
+        }
+      }
+
       // Validate required fields
       if (!serviceId || !date || !address || !paymentMethod) {
         return res.status(400).json({
@@ -5045,6 +5081,15 @@ class BookingService {
         return res.status(400).json({
           success: false,
           message: 'Invalid booking ID or provider ID format'
+        });
+      }
+
+      const { SystemConfig } = require('../models/SystemSetting-model');
+      const settings = await SystemConfig.findOne();
+      if (settings && settings.bookingSettings?.manualAssignment === false) {
+        return res.status(400).json({
+          success: false,
+          message: 'Manual provider assignment is disabled by the platform.'
         });
       }
 

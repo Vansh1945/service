@@ -50,6 +50,44 @@ const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
     try {
       if (!req.file && !req.files) return next();
 
+      const { SystemConfig } = require('../models/SystemSetting-model');
+      const settings = await SystemConfig.findOne();
+      if (settings && settings.uploadSettings) {
+        const { maxImageSizeMB, allowedImageFormats } = settings.uploadSettings;
+        if (maxImageSizeMB) {
+          const maxBytes = maxImageSizeMB * 1024 * 1024;
+          const checkSize = (file) => {
+            if (file.size > maxBytes) {
+              throw new Error(`Security Alert: File size exceeds the limit of ${maxImageSizeMB}MB`);
+            }
+          };
+          if (req.file) checkSize(req.file);
+          if (req.files) {
+            if (Array.isArray(req.files)) {
+              req.files.forEach(checkSize);
+            } else if (typeof req.files === 'object') {
+              Object.values(req.files).flat().forEach(checkSize);
+            }
+          }
+        }
+        if (allowedImageFormats && allowedImageFormats.length > 0) {
+          const checkFormat = (file) => {
+            const ext = file.originalname.split('.').pop().toLowerCase();
+            if (!allowedImageFormats.map(f => f.toLowerCase()).includes(ext)) {
+              throw new Error(`Security Alert: File extension .${ext} is not allowed. Allowed formats: ${allowedImageFormats.join(', ')}`);
+            }
+          };
+          if (req.file) checkFormat(req.file);
+          if (req.files) {
+            if (Array.isArray(req.files)) {
+              req.files.forEach(checkFormat);
+            } else if (typeof req.files === 'object') {
+              Object.values(req.files).flat().forEach(checkFormat);
+            }
+          }
+        }
+      }
+
       const processFile = async (file) => {
         let activeType = defaultType;
         let activeFolder = defaultFolder;
