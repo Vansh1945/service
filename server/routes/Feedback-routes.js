@@ -12,7 +12,7 @@ const {
   deleteFeedbackAdmin,
   getServiceFeedbacks,
   toggleFeedbackApproval
-} = require('../controllers/feedback-controller');
+} = require('../controllers/Feedback-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
