@@ -1,5 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../../context/auth';
+import { motion } from 'framer-motion';
 import { useSocket } from '../../socket/SocketContext';
 import * as NotificationService from '../../services/NotificationService';
 import {

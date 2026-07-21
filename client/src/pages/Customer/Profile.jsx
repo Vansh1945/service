@@ -253,7 +253,7 @@ const UserProfile = () => {
 
     return (
         <div className="min-h-screen bg-neutral-50/50 pb-12 font-sans">
-            <div className="max-w-6xl mx-auto px-4 py-4 md:py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
                 <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
                     
                     {/* Desktop Sidebar Layout */}
@@ -509,9 +509,19 @@ const UserProfile = () => {
                                                                     <IconComponent className="w-4 h-4" />
                                                                 </div>
                                                                 <div className="text-left">
-                                                                    <p className="text-xs font-bold text-secondary leading-tight">{entry.reason}</p>
-                                                                    <p className="text-[9px] text-neutral-400 mt-0.5">{formatDateTime(entry.createdAt)}</p>
-                                                                </div>
+                                                                     <p className="text-xs font-bold text-secondary leading-tight">{entry.reason}</p>
+                                                                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                         <p className="text-[9px] text-neutral-400">{formatDateTime(entry.createdAt)}</p>
+                                                                         {entry.booking?.bookingId && (
+                                                                             <>
+                                                                                 <span className="w-1 h-1 rounded-full bg-neutral-300" />
+                                                                                 <span className="text-[9px] font-bold text-neutral-500 bg-neutral-100 px-1 py-0.5 rounded">
+                                                                                     ID: {entry.booking.bookingId}
+                                                                                 </span>
+                                                                             </>
+                                                                         )}
+                                                                     </div>
+                                                                 </div>
                                                             </div>
                                                             <div className="text-right shrink-0 ml-3">
                                                                 <p className={`text-xs font-black ${amountColor}`}>

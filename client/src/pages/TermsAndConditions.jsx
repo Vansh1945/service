@@ -120,7 +120,7 @@ const TermsAndConditions = () => {
     }
   ];
 
-  const currentDate = formatDate(new Date());
+  const currentDate = new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 
   return (
     <div className="min-h-screen bg-white font-inter">
@@ -137,7 +137,7 @@ const TermsAndConditions = () => {
 
       {/* Header Section */}
       <section className="bg-gray-50 border-b border-gray-100 pt-24 pb-16 md:pt-32 md:pb-20">
-        <div className="max-w-4xl mx-auto px-4 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -166,7 +166,7 @@ const TermsAndConditions = () => {
       </section>
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 py-12 md:py-16">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-4 md:pt-16 md:pb-6">
         <div className="grid gap-6 md:gap-8">
           {sections.map((section, index) => (
             <motion.section
@@ -186,14 +186,16 @@ const TermsAndConditions = () => {
                   <h2 className="text-base md:text-lg font-bold text-secondary mb-3">
                     {index + 1}. {section.title}
                   </h2>
-                  <ul className="space-y-2.5">
-                    {section.content.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2.5 group">
-                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-300 group-hover:bg-primary transition-colors shrink-0" />
-                        <span className="text-gray-600 text-xs md:text-sm leading-relaxed">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-4">
+                    <ul className="space-y-2.5">
+                      {section.content.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2.5 group">
+                          <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-300 group-hover:bg-primary transition-colors shrink-0" />
+                          <span className="text-gray-600 text-xs md:text-sm leading-relaxed">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
             </motion.section>
@@ -201,7 +203,7 @@ const TermsAndConditions = () => {
         </div>
 
         {/* Contact CTA */}
-        <section className="mt-14 md:mt-20">
+        <section className="mt-8 md:mt-10">
           <div className="max-w-3xl mx-auto bg-primary/5 rounded-2xl p-6 md:p-10 text-center border border-primary/10 relative overflow-hidden">
             <div className="absolute -top-16 -left-16 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-16 -right-16 w-32 h-32 bg-accent/10 rounded-full blur-3xl" />
@@ -227,7 +229,7 @@ const TermsAndConditions = () => {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="mt-12 pt-6 border-t border-gray-100 text-center"
+          className="mt-6 pt-4 border-t border-gray-100 text-center"
         >
           <div className="inline-flex items-center gap-2 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
             <Info className="w-3.5 h-3.5 text-gray-400" />
@@ -239,7 +241,7 @@ const TermsAndConditions = () => {
       </main>
 
       {/* Bottom Brand Tag */}
-      <div className="pb-10 text-center text-gray-400 text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold">
+      <div className="pb-4 text-center text-gray-400 text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold">
         {companyName} • Fairness • Transparency • Trust
       </div>
     </div>
