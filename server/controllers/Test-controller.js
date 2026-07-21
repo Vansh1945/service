@@ -1,6 +1,6 @@
 const TestAttempt = require('../models/TestAttempt-model');
 const Question = require('../models/AddQuestion-model');
-const { Category } = require('../models/SystemSetting');
+const { Category } = require('../models/SystemSetting-model');
 const Provider = require('../models/Provider-model');
 
 // @desc    Get active categories and provider exam attempt cooldown status
@@ -359,3 +359,4 @@ exports.getTestResults = async (req, res, next) => {
     next(error);
   }
 };
+

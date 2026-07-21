@@ -1,6 +1,6 @@
 const axios = require('axios');
 const Handlebars = require('handlebars');
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 
 /**
  * Default templates defined internally in the server
@@ -201,7 +201,7 @@ const sendMail = async ({ to, subject, html, templateType, variables, attachment
   if (templateType) {
     try {
       const config = await SystemConfig.findOne();
-      const Template = require('../models/Template');
+      const Template = require('../models/Template-model');
       let templateDoc = await Template.findOne({ key: templateType });
       if (!templateDoc) {
         templateDoc = await Template.findOne({ key: `email_${templateType}` });

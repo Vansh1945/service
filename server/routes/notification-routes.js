@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const notificationController = require('../controllers/notificationController');
+const notificationController = require('../controllers/Notification-controller');
 const jwt = require('jsonwebtoken');
 
 // Flexible auth that works for customer, provider, and admin

@@ -1,4 +1,4 @@
-const { Category } = require('../models/SystemSetting');
+const { Category } = require('../models/SystemSetting-model');
 const cache = require('../utils/cache');
 
 // Create Category (Admin)
@@ -156,3 +156,4 @@ module.exports = {
   deleteCategory,
   toggleCategoryStatus
 };
+

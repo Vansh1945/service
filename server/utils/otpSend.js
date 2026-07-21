@@ -5,7 +5,7 @@ const admin = require('../config/firebaseAdmin');
 const OTP = require('../models/OTP-model');
 const { sendMail } = require('./sendmail');
 
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 
 exports.generateOTP = async (email) => {
   const otp = crypto.randomInt(100000, 999999).toString();
@@ -175,3 +175,4 @@ exports.hasActiveOTP = async (email) => {
 exports.clearOTP = async (email) => {
   await OTP.deleteOne({ email });
 };
+

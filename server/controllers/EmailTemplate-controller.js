@@ -1,4 +1,4 @@
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 const Handlebars = require('handlebars');
 const { sendMail, DEFAULT_EMAIL_TEMPLATES } = require('../utils/sendmail');
 
@@ -261,3 +261,4 @@ module.exports = {
   testSendEmailTemplate,
   restoreDefaultTemplate
 };
+

@@ -1,4 +1,4 @@
-const { Banner } = require('../models/SystemSetting');
+const { Banner } = require('../models/SystemSetting-model');
 const cache = require('../utils/cache');
 
 // Get Banners (Public)
@@ -132,3 +132,4 @@ module.exports = {
   updateBanner,
   deleteBanner
 };
+

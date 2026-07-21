@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Notification = require('../models/Notification');
+const Notification = require('../models/Notification-model');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Admin = require('../models/Admin-model');
@@ -851,7 +851,7 @@ const getAdminDashboardStats = async (req, res, next) => {
         const User = require('../models/User-model');
         const Provider = require('../models/Provider-model');
         const Admin = require('../models/Admin-model');
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
 
         // Query active devices count in fcmDevices (where isActive is true)
         const customerDevices = await User.aggregate([
@@ -1188,3 +1188,4 @@ module.exports = {
     getActiveEvents,
     seedDefaultTemplates
 };
+

@@ -1,4 +1,4 @@
-const Notification = require('../models/Notification');
+const Notification = require('../models/Notification-model');
 const notificationService = require('./notificationService');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
@@ -290,7 +290,7 @@ const triggerEventNotification = async (eventId, context = {}, overrideTargetUse
 
                     const lat = parseFloat(booking.address?.lat);
                     const lng = parseFloat(booking.address?.lng);
-                    const { SystemConfig } = require('../models/SystemSetting');
+                    const { SystemConfig } = require('../models/SystemSetting-model');
                     const settings = await SystemConfig.findOne();
                     const maxDistanceKm = settings?.bookingSettings?.autoAssignRadius || 15;
                     const maxDistanceMeters = maxDistanceKm * 1000;
@@ -377,7 +377,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             }
         }
 
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
         const config = await SystemConfig.findOne();
         if (config && config.notificationSettings) {
             if (role === 'provider' && config.notificationSettings.providerAlerts === false) {
@@ -599,5 +599,6 @@ module.exports = {
     renderTemplateString,
     triggerEventNotification
 };
+
 
 

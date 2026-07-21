@@ -48,7 +48,7 @@ const createOrder = async (req, res, next) => {
     const { bookingId, amount, paymentMethod } = req.body;
     const userId = req.user._id;
 
-    const { SystemConfig } = require('../models/SystemSetting');
+    const { SystemConfig } = require('../models/SystemSetting-model');
     let settings = await SystemConfig.findOne().session(session);
     if (!settings) {
       settings = await SystemConfig.findOne();
@@ -214,7 +214,7 @@ const createOrder = async (req, res, next) => {
           providerEarning = netAmount || booking.totalAmount;
           commissionRuleId = rule._id;
         } else {
-          const { SystemConfig } = require('../models/SystemSetting');
+          const { SystemConfig } = require('../models/SystemSetting-model');
           let settings = await SystemConfig.findOne();
           if (!settings) {
             settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
@@ -1125,3 +1125,4 @@ module.exports = {
   adminMarkPaid,
   rollbackWalletDeduction
 };
+

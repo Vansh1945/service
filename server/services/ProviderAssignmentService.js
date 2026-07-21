@@ -110,7 +110,7 @@ class ProviderAssignmentService {
 
   static async autoAssignProviderIfEnabled(bookingId) {
     try {
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let settings = await SystemConfig.findOne();
       if (!settings) {
         settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
@@ -620,7 +620,7 @@ class ProviderAssignmentService {
 
       await booking.save();
 
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let settings = await SystemConfig.findOne();
       const adminTimeoutMin = settings?.bookingSettings?.adminResponseTime || 30;
 
@@ -787,3 +787,4 @@ class ProviderAssignmentService {
 }
 
 module.exports = ProviderAssignmentService;
+

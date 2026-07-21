@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Service = require('../models/Service-model');
 const Coupon = require('../models/Coupon-model');
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 
 class PricingService {
   /**
@@ -247,3 +247,4 @@ class PricingService {
 }
 
 module.exports = PricingService;
+

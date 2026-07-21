@@ -296,7 +296,7 @@ class ComplaintService {
       const formattedDescription = complaintType ? `[${complaintType}]\n${description}` : description;
 
       // Retrieve provider response SLA from SystemConfig dynamically
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       const systemConfigDoc = await SystemConfig.findOne().session(session).lean();
       const providerSla = systemConfigDoc?.bookingSettings?.providerResponseSlaHours || 24;
 
@@ -2088,7 +2088,7 @@ class ComplaintService {
     const hoursElapsed = Math.abs(now - createdAtTime) / 36e5;
 
     // Retrieve configuration dynamically where possible (SLA timing overrides) (Fix 1)
-    const { SystemConfig } = require('../models/SystemSetting');
+    const { SystemConfig } = require('../models/SystemSetting-model');
     const systemConfigDoc = await SystemConfig.findOne().lean();
     const configHours = systemConfigDoc?.bookingSettings?.refundReviewHours || 48;
     const providerSlaHours = systemConfigDoc?.bookingSettings?.providerResponseSlaHours || 24;
@@ -2234,3 +2234,4 @@ class ComplaintService {
 }
 
 module.exports = ComplaintService;
+

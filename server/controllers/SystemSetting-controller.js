@@ -1,4 +1,4 @@
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 const ifsc = require('ifsc');
 const cache = require('../utils/cache');
 
@@ -209,3 +209,4 @@ module.exports = {
   updateSystemSetting,
   validateIfsc
 };
+

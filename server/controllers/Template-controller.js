@@ -1,5 +1,5 @@
-const Template = require('../models/Template');
-const { SystemConfig } = require('../models/SystemSetting');
+const Template = require('../models/Template-model');
+const { SystemConfig } = require('../models/SystemSetting-model');
 const Provider = require('../models/Provider-model');
 const Handlebars = require('handlebars');
 const { fetchImageBuffer, generateLetterheadDocument } = require('../services/agreementGenerator');

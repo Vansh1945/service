@@ -438,7 +438,7 @@ class PaymentService {
       ]);
       const todayEarnings = todayEarningsResult.length > 0 ? todayEarningsResult[0].totalEarnings : 0;
 
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let settings = await SystemConfig.findOne();
       const minWithdrawalLimit = settings?.walletSettings?.minWithdrawal ?? 500;
 
@@ -561,7 +561,7 @@ class PaymentService {
       const { amount } = req.body;
 
       // Fetch minimum withdrawal from system settings
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let settings = await SystemConfig.findOne();
       if (!settings) {
         settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
@@ -3235,3 +3235,4 @@ class PaymentService {
 }
 
 module.exports = PaymentService;
+

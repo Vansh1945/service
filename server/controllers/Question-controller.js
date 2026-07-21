@@ -11,7 +11,7 @@ const createQuestion = async (req, res) => {
     // Handle category conversion from string to ObjectId
     let categoryId = category;
     if (category && typeof category === 'string') {
-      const { Category } = require('../models/SystemSetting');
+      const { Category } = require('../models/SystemSetting-model');
       let categoryDoc = null;
 
       // Check if the string is a valid ObjectId
@@ -84,7 +84,7 @@ const updateQuestion = async (req, res) => {
     let categoryId = category;
     if (category) {
       if (typeof category === 'string') {
-        const { Category } = require('../models/SystemSetting');
+        const { Category } = require('../models/SystemSetting-model');
         let categoryDoc = null;
 
         // Check if the string is a valid ObjectId
@@ -111,7 +111,7 @@ const updateQuestion = async (req, res) => {
         categoryId = category._id;
       } else if (typeof category === 'object' && category.name) {
         // Category is an object with name
-        const { Category } = require('../models/SystemSetting');
+        const { Category } = require('../models/SystemSetting-model');
         let categoryDoc = await Category.findOne({ name: new RegExp('^' + category.name + '$', 'i') });
         if (!categoryDoc) {
           await session.abortTransaction();
@@ -349,7 +349,7 @@ const createBulkQuestions = async (req, res) => {
       });
     }
 
-    const { Category } = require('../models/SystemSetting');
+    const { Category } = require('../models/SystemSetting-model');
     const allCategories = await Category.find({ isActive: true });
     const categoryMap = new Map();
     allCategories.forEach(c => {
@@ -496,3 +496,4 @@ module.exports = {
   createBulkQuestions,
   downloadQuestionsPDF,
 };
+

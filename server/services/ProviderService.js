@@ -287,7 +287,7 @@ class ProviderService {
             });
 
             // Generate JWT token
-            const { SystemConfig } = require('../models/SystemSetting');
+            const { SystemConfig } = require('../models/SystemSetting-model');
             const settings = await SystemConfig.findOne();
             const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
             const token = provider.generateJWT(sessionTimeoutHours);
@@ -366,7 +366,7 @@ class ProviderService {
             }
 
             // Generate JWT token
-            const { SystemConfig } = require('../models/SystemSetting');
+            const { SystemConfig } = require('../models/SystemSetting-model');
             const settings = await SystemConfig.findOne();
             const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
             const token = provider.generateJWT(sessionTimeoutHours);
@@ -532,7 +532,7 @@ class ProviderService {
                     servicesArray = Array.isArray(services) ? services : [services];
                 }
 
-                const { Category } = require('../models/SystemSetting');
+                const { Category } = require('../models/SystemSetting-model');
                 const allCategories = await Category.find({ isActive: true }).lean();
                 const categoryMap = new Map();
                 allCategories.forEach(c => {
@@ -1032,7 +1032,7 @@ class ProviderService {
                             servicesArray = Array.isArray(services) ? services : [services];
                         }
 
-                        const { Category } = require('../models/SystemSetting');
+                        const { Category } = require('../models/SystemSetting-model');
                         const allCategories = await Category.find({ isActive: true }).lean();
                         const categoryMap = new Map();
                         allCategories.forEach(c => {
@@ -2118,3 +2118,4 @@ class ProviderService {
 }
 
 module.exports = ProviderService;
+

@@ -30,13 +30,13 @@ const categoryRoutes = require("./routes/Category-routes");
 const couponRoutes = require("./routes/Coupon-route");
 const bookingRoutes = require("./routes/Booking-route");
 const transactionRoutes = require("./routes/Transaction-route");
-const complaintRoutes = require("./routes/complaintRoutes");
-const feedbackRoutes = require("./routes/feedback-routes");
-const commissionRoutes = require('./routes/commissionRoutes');
-const paymentRoutes = require('./routes/payment-routes');
+const complaintRoutes = require("./routes/Complaint-routes");
+const feedbackRoutes = require("./routes/Feedback-routes");
+const commissionRoutes = require('./routes/Commission-routes');
+const paymentRoutes = require('./routes/Payment-routes');
 const systemSettingRoutes = require('./routes/SystemSetting-routes');
 const contactRoutes = require('./routes/Contact-routes');
-const notificationRoutes = require('./routes/notification-routes');
+const notificationRoutes = require('./routes/Notification-routes');
 const chatRoutes = require('./routes/Chat-route');
 const zoneRoutes = require('./routes/Zone-routes');
 const surgeRoutes = require('./routes/Surge-routes');
@@ -209,7 +209,7 @@ app.use(async (req, res, next) => {
   }
 
   try {
-    const { SystemConfig } = require('./models/SystemSetting');
+    const { SystemConfig } = require('./models/SystemSetting-model');
     const jwt = require('jsonwebtoken');
 
     let settings = cache.get('system_config');
@@ -355,7 +355,7 @@ const startServer = async () => {
 
     // Auto-migrate branding defaults
     try {
-      const { SystemConfig } = require('./models/SystemSetting');
+      const { SystemConfig } = require('./models/SystemSetting-model');
       const existingConfig = await SystemConfig.findOne();
       if (existingConfig) {
         let modified = false;
@@ -399,7 +399,11 @@ const startServer = async () => {
     }
 
     // Initialize background tasks
-    const { releaseHeldEarnings } = require('./controllers/paymentController');
+    const { releaseHeldEarnings } = require('./controllers/Payment-controller');
+    const { startCronJobs } = require('./cron/cronScheduler');
+
+    // Start background cron scheduler
+    startCronJobs();
 
     // Run releaseHeldEarnings every hour
     setInterval(async () => {

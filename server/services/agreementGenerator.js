@@ -1,6 +1,6 @@
 const PDFDocument = require('pdfkit');
-const { SystemConfig } = require('../models/SystemSetting');
-const Template = require('../models/Template');
+const { SystemConfig } = require('../models/SystemSetting-model');
+const Template = require('../models/Template-model');
 const Handlebars = require('handlebars');
 const cloudinary = require('./cloudinary');
 

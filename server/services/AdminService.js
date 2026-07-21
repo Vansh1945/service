@@ -360,7 +360,7 @@ class AdminService {
             });
 
             // Generate JWT token
-            const { SystemConfig } = require('../models/SystemSetting');
+            const { SystemConfig } = require('../models/SystemSetting-model');
             const settings = await SystemConfig.findOne();
             const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
             const token = admin.generateJWT(sessionTimeoutHours);
@@ -3794,3 +3794,4 @@ class AdminService {
 }
 
 module.exports = AdminService;
+

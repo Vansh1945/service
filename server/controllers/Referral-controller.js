@@ -7,7 +7,7 @@ const Booking = require('../models/Booking-model');
 const Coupon = require('../models/Coupon-model');
 const Transaction = require('../models/Transaction-model');
 const FraudLog = require('../models/FraudLog-model');
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 
 /**
@@ -994,3 +994,4 @@ module.exports = {
   getCustomerEligibility,
   getProviderEligibility
 };
+

@@ -2,7 +2,7 @@ const admin = require('../config/firebaseAdmin');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Admin = require('../models/Admin-model');
-const Notification = require('../models/Notification'); // Ensure Notification model is imported
+const Notification = require('../models/Notification-model'); // Ensure Notification model is imported
 const cron = require('node-cron');
 
 /**
@@ -19,7 +19,7 @@ const sendPushNotification = async (tokens, payload) => {
     }
 
     try {
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
         const config = await SystemConfig.findOne();
         if (config && config.notificationSettings && config.notificationSettings.pushEnabled === false) {
             console.log('[NotificationService] Push notifications are globally disabled in settings. Skipping FCM dispatch.');
@@ -61,7 +61,7 @@ const sendPushNotification = async (tokens, payload) => {
 
         // Resolve logo/branding dynamically from SystemConfig
         try {
-            const { SystemConfig } = require('../models/SystemSetting');
+            const { SystemConfig } = require('../models/SystemSetting-model');
             const config = await SystemConfig.findOne();
             if (config) {
                 let logoUrl = config.logo || '';
@@ -152,7 +152,7 @@ const sendPushNotification = async (tokens, payload) => {
             // Cleanup invalid tokens async from all collections
             if (failedTokens.length > 0) {
                 console.log(`[NotificationService] Cleaning up ${failedTokens.length} invalid tokens...`);
-                const { SystemConfig } = require('../models/SystemSetting');
+                const { SystemConfig } = require('../models/SystemSetting-model');
                 Promise.all([
                     User.updateMany({}, { $pull: { fcmDevices: { token: { $in: failedTokens } } } }),
                     Provider.updateMany({}, { $pull: { fcmDevices: { token: { $in: failedTokens } } } }),
@@ -286,7 +286,7 @@ const getZoneAndDescendants = async (targetZoneIds) => {
 
 const sendBroadcastNotification = async (audience, payload, filters = {}, broadcastId = null) => {
     try {
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
         const config = await SystemConfig.findOne();
 
         let allTokens = [];
@@ -537,157 +537,6 @@ const scheduleNotification = async (payload) => {
     }
 };
 
-/**
- * CRON JOB: Runs every minute to check and send pending scheduled notifications
- */
-cron.schedule('* * * * *', async () => {
-    try {
-        const mongoose = require('mongoose');
-        if (mongoose.connection.readyState !== 1) {
-            console.log('[NotificationService] Database not connected. Skipping cron job execution.');
-            return;
-        }
-        const Booking = mongoose.model('Booking');
-        const { SystemConfig } = require('../models/SystemSetting');
-
-        let settings = await SystemConfig.findOne();
-        if (!settings) {
-            settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
-            await settings.save();
-        }
-
-        // Invoke dynamic SLA checks periodically
-        try {
-            const BookingService = require('../services/BookingService');
-            if (BookingService && typeof BookingService.monitorActiveBookingsSLA === 'function') {
-                await BookingService.monitorActiveBookingsSLA();
-            }
-        } catch (slaErr) {
-            console.error('[SLA Engine] Error during SLA checks:', slaErr);
-        }
-
-        const enableTimeout = settings?.bookingSettings?.enableProviderAcceptTimeout !== false;
-        if (enableTimeout) {
-            const timeoutMinutes = settings?.bookingSettings?.providerAcceptTimeoutMinutes || 5;
-            const timeoutThreshold = new Date(Date.now() - timeoutMinutes * 60 * 1000);
-            const expiredBookings = await Booking.find({
-                status: 'assigned',
-                provider: { $ne: null },
-                'metadata.assignedAt': { $lte: timeoutThreshold }
-            });
-
-            for (const booking of expiredBookings) {
-                console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Re-assigning...`);
-                
-                if (!booking.metadata) booking.metadata = {};
-                if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
-                booking.metadata.ignoredProviders.push(booking.provider);
-                
-                booking.provider = null;
-                booking.status = 'pending';
-                await booking.save();
-
-                const ProviderAssignmentService = require('../services/ProviderAssignmentService');
-                ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
-            }
-        }
-
-        const now = new Date();
-        // Find pending notifications where scheduledFor has passed, up to 3 retries max
-        const pendingNotifications = await Notification.find({
-            status: 'pending',
-            scheduledFor: { $lte: now },
-            retries: { $lt: 3 }
-        });
-
-        if (pendingNotifications.length > 0) {
-            console.log(`[NotificationService] Found ${pendingNotifications.length} scheduled notification(s) to process.`);
-        }
-
-        for (const notif of pendingNotifications) {
-            try {
-                let result;
-                // Dispatch logic based on whether it is a broadcast or user-specific notification
-                if (notif.audience && ['all', 'customer', 'provider'].includes(notif.audience)) {
-                    result = await sendBroadcastNotification(notif.audience, {
-                        title: notif.title,
-                        body: notif.message,
-                        url: notif.url,
-                        isScheduled: true,
-                        data: { type: notif.type, url: notif.url, route: notif.url, role: notif.audience === 'all' ? null : notif.audience, notificationId: notif._id }
-                    }, {
-                        city: notif.targetCity,
-                        targetZones: notif.targetZones || [],
-                        category: notif.targetProviderCategory,
-                        minBookings: notif.minBookings
-                    }, notif._id);
-                } else if (notif.userId && notif.role) {
-                    // Collect tokens for a single user to trigger sendPushNotification manually,
-                    // but we can simply rely on the existing notifyUser if we don't need accurate result counting.
-                    // For accuracy, we manually execute finding tokens to log failures identically.
-                    let userModel;
-                    if (notif.role === 'provider') userModel = Provider;
-                    else if (notif.role === 'admin') userModel = Admin;
-                    else userModel = User;
-
-                    const user = await userModel.findById(notif.userId);
-                    if (user && user.fcmDevices && user.fcmDevices.length > 0) {
-                        const tokens = [...new Set(user.fcmDevices.filter(t => t.isActive !== false && t.token).map(t => t.token))];
-                        result = await sendPushNotification(tokens, {
-                            title: notif.title,
-                            body: notif.message,
-                            url: notif.url,
-                            data: { type: notif.type, url: notif.url, route: notif.url, role: notif.role, notificationId: notif._id }
-                        });
-                        if (result) {
-                            result = { success: true, sent: result.successCount, failed: result.failureCount, total: tokens.length };
-                        } else {
-                            result = { success: false, sent: 0, failed: 0, total: tokens.length };
-                        }
-                    } else {
-                        // User exists but has no Firebase tokens
-                        result = { success: false, sent: 0, failed: 0, total: 0, message: 'No registered devices' };
-                    }
-                }
-
-                // Update DB status to 'sent'
-                notif.status = 'sent';
-                notif.sentAt = new Date();
-                notif.totalSent = result?.total || 0;
-                notif.successCount = result?.sent || 0;
-                notif.deliveredCount = result?.sent || 0;
-                notif.failureCount = result?.failed || 0;
-                await notif.save();
-                console.log(`[NotificationService] Scheduled notification (ID: ${notif._id}) SENT successfully.`);
-
-                // Emit stats update if it was a broadcast
-                if (notif.audience && ['all', 'customer', 'provider'].includes(notif.audience)) {
-                    try {
-                        const { emitStatsUpdate } = require('../controllers/notificationController');
-                        if (emitStatsUpdate) {
-                            emitStatsUpdate(notif._id);
-                        }
-                    } catch (e) {
-                        console.error('Failed to emit stats update from cron:', e);
-                    }
-                }
-
-            } catch (err) {
-                console.error(`[NotificationService] Failed matching scheduled notification (ID: ${notif._id}):`, err);
-
-                // Retry Logic
-                notif.retries += 1;
-                if (notif.retries >= 3) {
-                    notif.status = 'failed';
-                }
-                await notif.save();
-            }
-        }
-    } catch (error) {
-        console.error('[NotificationService] Cron job error:', error);
-    }
-});
-
 module.exports = {
     sendPushNotification,
     notifyUser,
@@ -695,3 +544,4 @@ module.exports = {
     sendBroadcastNotification,
     scheduleNotification
 };
+

@@ -595,7 +595,7 @@ exports.firebaseLogin = async (req, res) => {
       return res.status(403).json({ success: false, message: `Your provider account has been blocked by the administrator until ${new Date(user.blockedTill).toLocaleDateString()}.` });
     }
     try {
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       const s = await SystemConfig.findOne();
       if (userType === 'customer' && s?.maintenanceMode?.customer?.enabled)
         return res.status(503).json({ success: false, maintenance: true, message: s.maintenanceMode.customer.message });
@@ -615,7 +615,7 @@ exports.firebaseLogin = async (req, res) => {
     if (picture && !user.profilePicUrl) user.profilePicUrl = picture;
 
     // 5. Generate tokens
-    const { SystemConfig } = require('../models/SystemSetting');
+    const { SystemConfig } = require('../models/SystemSetting-model');
     const settings = await SystemConfig.findOne();
     const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
 
@@ -695,7 +695,7 @@ exports.refreshAccessToken = async (req, res) => {
     if (oldToken) oldToken.isValid = false;
 
     // Issue new tokens
-    const { SystemConfig } = require('../models/SystemSetting');
+    const { SystemConfig } = require('../models/SystemSetting-model');
     const settings = await SystemConfig.findOne();
     const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
 

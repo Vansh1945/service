@@ -877,7 +877,7 @@ class BookingService {
         // Parallelize lookups
         const ZoneModel = mongoose.model('Zone');
         const SurgeModel = mongoose.model('Surge');
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
 
         const promises = [
           session ? Service.findById(serviceId).session(session) : Service.findById(serviceId),
@@ -1697,7 +1697,7 @@ class BookingService {
 
       // Validate if Pay after Service (COD) is allowed
       if (paymentMethod === 'cash') {
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
         let settings = await SystemConfig.findOne();
         if (!settings) {
           settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
@@ -2232,7 +2232,7 @@ class BookingService {
       const isStarted = !!booking.serviceStartedAt;
 
       // Check cancellation window dynamically from System Settings
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let settings = await SystemConfig.findOne();
       if (!settings) {
         settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
@@ -2853,7 +2853,7 @@ class BookingService {
       }
 
       // Check parallel bookings limit for pending bookings list
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let settings = await SystemConfig.findOne();
       const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
 
@@ -3140,7 +3140,7 @@ class BookingService {
           }
 
           // Check parallel bookings limit & scheduling conflict based on system configuration
-          const { SystemConfig } = require('../models/SystemSetting');
+          const { SystemConfig } = require('../models/SystemSetting-model');
           let settings = session
             ? await SystemConfig.findOne().session(session)
             : await SystemConfig.findOne();
@@ -3829,7 +3829,7 @@ class BookingService {
         });
       }
 
-      const { SystemConfig } = require('../models/SystemSetting');
+      const { SystemConfig } = require('../models/SystemSetting-model');
       let systemConfigDoc = await SystemConfig.findOne().session(session).lean();
       if (!systemConfigDoc) {
         systemConfigDoc = { bookingSettings: { minCompletedImages: 1 } };
@@ -5065,7 +5065,7 @@ class BookingService {
         }
 
         // Check parallel bookings limit & scheduling conflict based on system configuration
-        const { SystemConfig } = require('../models/SystemSetting');
+        const { SystemConfig } = require('../models/SystemSetting-model');
         let settings = session ? await SystemConfig.findOne().session(session) : await SystemConfig.findOne();
         const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
         const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
@@ -5626,3 +5626,4 @@ class BookingService {
 }
 
 module.exports = BookingService;
+

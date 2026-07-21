@@ -6,7 +6,7 @@ const excelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
-const { Category } = require('../models/SystemSetting');
+const { Category } = require('../models/SystemSetting-model');
 const cache = require('../utils/cache');
 
 const parseArrayInput = (value, fallback = []) => {
@@ -994,3 +994,4 @@ module.exports = {
     getPublicServiceById,
     getServicesByCategory
 };
+

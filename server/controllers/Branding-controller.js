@@ -1,4 +1,4 @@
-const { SystemConfig } = require('../models/SystemSetting');
+const { SystemConfig } = require('../models/SystemSetting-model');
 const cache = require('../utils/cache');
 
 const getCachedConfig = async () => {
@@ -460,3 +460,4 @@ module.exports = {
   getBrandingLogoRedirect,
   getBrandingFaviconRedirect
 };
+
