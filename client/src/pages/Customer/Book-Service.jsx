@@ -433,11 +433,12 @@ const BookService = () => {
           return;
         }
 
-        const [serviceData, addressesData, profileData] = await Promise.all([
+        const [serviceData, profileData] = await Promise.all([
           fetchService(),
-          fetchUserAddresses(),
           CustomerService.getProfile().then(res => res.data?.user).catch(() => null)
         ]);
+
+        const addressesData = profileData?.address ? [profileData.address] : [];
 
         setService(serviceData);
         setAddresses(addressesData);

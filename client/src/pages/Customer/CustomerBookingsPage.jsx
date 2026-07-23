@@ -199,7 +199,7 @@ const PaymentDetails = ({ booking }) => {
     discount > 0 && { label: 'Coupon Discount', val: discount, type: 'discount', prefix: '-' },
     visitingCharge > 0 && { label: 'Visiting Charges', val: visitingCharge, type: 'default', prefix: '+' },
     emergencyCharge > 0 && { label: 'Emergency Charge', val: emergencyCharge, type: 'charge', prefix: '+' },
-    surgeCharge > 0 && { label: 'Surge Charges', val: surgeCharge, type: 'charge', prefix: '+' },
+    surgeCharge > 0 && { label: 'Platform Charges', val: surgeCharge, type: 'charge', prefix: '+' },
     walletUsed > 0 && { label: 'Wallet Used', val: walletUsed, type: 'purple-bold', prefix: '-' },
     onlinePaid > 0 && { label: 'Online Paid', val: onlinePaid, type: 'default' },
     cashRemaining > 0 && { label: 'Cash To Pay', val: cashRemaining, type: 'default' },

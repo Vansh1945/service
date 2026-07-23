@@ -1831,7 +1831,7 @@ class BookingService {
       // Enforce valid payment status transitions
       const validPaymentTransitions = {
         'pending': ['processing', 'paid', 'failed'],
-        'processing': ['paid', 'failed'],
+        'processing': ['paid', 'failed', 'pending'],
         'paid': [],
         'failed': ['pending', 'processing', 'paid']
       };

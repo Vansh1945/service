@@ -380,50 +380,45 @@ const getProfile = async (req, res, next) => {
     // Enhance favoriteProviders with ratings and other provider details
     let enrichedFavorites = [];
     if (user.favoriteProviders && user.favoriteProviders.length > 0) {
-      enrichedFavorites = await Promise.all(
-        user.favoriteProviders.map(async (fav) => {
-          try {
-            const prov = await Provider.findById(fav.providerId)
-              .select('performanceScore.rating profilePicUrl isOnline isActive approved services completedBookings')
-              .populate('services', 'name')
-              .lean();
-            if (prov) {
-              const categoryNames = prov.services && prov.services.length > 0
-                ? prov.services.map(s => s.name).join(', ')
-                : 'N/A';
+      const providerIds = user.favoriteProviders.map(fav => fav.providerId).filter(Boolean);
+      const providers = await Provider.find({ _id: { $in: providerIds } })
+        .select('performanceScore.rating profilePicUrl isOnline isActive approved services completedBookings')
+        .populate('services', 'name')
+        .lean();
 
-              return {
-                ...fav,
-                rating: prov.performanceScore?.rating || 0,
-                profilePicUrl: prov.profilePicUrl,
-                isOnline: prov.isOnline,
-                isActive: prov.isActive,
-                approved: prov.approved,
-                category: categoryNames,
-                completedBookings: prov.completedBookings || 0
-              };
-            } else {
-              return {
-                ...fav,
-                rating: 0,
-                category: fav.category || 'N/A',
-                completedBookings: 0
-              };
-            }
-          } catch (err) {
-            global.logger.error('Error fetching favorite provider details in getProfile: ' + err.message, err);
-            return {
-              ...fav,
-              rating: 0,
-              category: fav.category || 'N/A',
-              completedBookings: 0
-            };
-          }
-        })
-      );
+      const providerMap = {};
+      providers.forEach(p => {
+        providerMap[p._id.toString()] = p;
+      });
+
+      enrichedFavorites = user.favoriteProviders.map(fav => {
+        const prov = providerMap[fav.providerId?.toString()];
+        if (prov) {
+          const categoryNames = prov.services && prov.services.length > 0
+            ? prov.services.map(s => s.name).join(', ')
+            : 'N/A';
+
+          return {
+            ...fav,
+            rating: prov.performanceScore?.rating || 0,
+            profilePicUrl: prov.profilePicUrl,
+            isOnline: prov.isOnline,
+            isActive: prov.isActive,
+            approved: prov.approved,
+            category: categoryNames,
+            completedBookings: prov.completedBookings || 0
+          };
+        } else {
+          return {
+            ...fav,
+            rating: 0,
+            category: fav.category || 'N/A',
+            completedBookings: 0
+          };
+        }
+      });
     }
 
-    // Calculate total bookings dynamically
     const totalBookings = await Booking.countDocuments({ customer: req.user._id });
 
     // Update user with calculated values
@@ -433,10 +428,10 @@ const getProfile = async (req, res, next) => {
       totalBookings
     };
 
-    // Optionally update the stored values in DB for future use
-    await User.findByIdAndUpdate(req.user._id, {
-      totalBookings
-    });
+    // Optionally update the stored values in DB for future use only if changed
+    if (user.totalBookings !== totalBookings) {
+      await User.updateOne({ _id: req.user._id }, { totalBookings });
+    }
 
     res.status(200).json({
       success: true,

@@ -164,9 +164,11 @@ const ComplaintsPage = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchSystemSettings();
-      fetchBookings();
-      fetchComplaints();
+      Promise.all([
+        fetchSystemSettings(),
+        fetchBookings(),
+        fetchComplaints()
+      ]).catch(err => console.error('Error fetching complaints page data:', err));
     }
   }, [isAuthenticated]);
 

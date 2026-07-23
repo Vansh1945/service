@@ -631,11 +631,13 @@ const getCustomerReferralDetails = async (req, res, next) => {
       await customer.save();
     }
 
-    const referrals = await Referral.find({ referrer: customerId, referrerType: 'customer' })
-      .populate('referredUser', 'name email createdAt')
-      .lean();
+    const [referrals, rewardLogs] = await Promise.all([
+      Referral.find({ referrer: customerId, referrerType: 'customer' })
+        .populate('referredUser', 'name email createdAt')
+        .lean(),
+      ReferralRewardLog.find({ recipient: customerId, status: 'released' }).select('amount').lean()
+    ]);
 
-    const rewardLogs = await ReferralRewardLog.find({ recipient: customerId, status: 'released' }).select('amount').lean();
     const releasedRewards = rewardLogs.reduce((sum, log) => sum + log.amount, 0);
 
     res.status(200).json({
@@ -695,23 +697,47 @@ const getProviderReferralDetails = async (req, res, next) => {
       await provider.save();
     }
 
-    const referrals = await Referral.find({ referrer: providerId, referrerType: 'provider' })
-      .populate('referredUser', 'name email createdAt')
-      .lean();
+    const [referrals, rewardLogs] = await Promise.all([
+      Referral.find({ referrer: providerId, referrerType: 'provider' })
+        .populate('referredUser', 'name email createdAt')
+        .lean(),
+      ReferralRewardLog.find({ recipient: providerId, status: 'released' }).select('amount').lean()
+    ]);
 
-    const rewardLogs = await ReferralRewardLog.find({ recipient: providerId, status: 'released' }).select('amount').lean();
     const totalEarnings = rewardLogs.reduce((sum, log) => sum + log.amount, 0);
 
     const milestones = refConfig.providerMilestones || [];
     const referralsWithProgress = [];
 
+    // Batch count booking completions to avoid N+1 queries
+    const referredUserIds = referrals
+      .map(ref => ref.referredUser?._id)
+      .filter(Boolean);
+
+    const bookingCounts = referredUserIds.length > 0 ? await Booking.aggregate([
+      {
+        $match: {
+          provider: { $in: referredUserIds },
+          status: 'Completed'
+        }
+      },
+      {
+        $group: {
+          _id: '$provider',
+          count: { $sum: 1 }
+        }
+      }
+    ]) : [];
+
+    const countMap = {};
+    bookingCounts.forEach(c => {
+      countMap[c._id.toString()] = c.count;
+    });
+
     for (const ref of referrals) {
       if (!ref.referredUser) continue;
 
-      const compCount = await Booking.countDocuments({
-        provider: ref.referredUser._id,
-        status: 'completed'
-      });
+      const compCount = countMap[ref.referredUser._id.toString()] || 0;
 
       const milestonesProgress = milestones.map(m => ({
         bookingsCount: m.bookingsCount,

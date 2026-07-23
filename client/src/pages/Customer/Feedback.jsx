@@ -55,13 +55,12 @@ const Feedback = () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ status: 'completed' });
-      const bookingsResponse = await getCustomerBookings(params);
-      const bookingsData = bookingsResponse.data;
-      setCompletedBookings(bookingsData.data || []);
-
-      const feedbacksResponse = await getCustomerFeedbacksService();
-      const feedbacksData = feedbacksResponse.data;
-      setFeedbacks(feedbacksData.data || []);
+      const [bookingsResponse, feedbacksResponse] = await Promise.all([
+        getCustomerBookings(params),
+        getCustomerFeedbacksService()
+      ]);
+      setCompletedBookings(bookingsResponse.data?.data || []);
+      setFeedbacks(feedbacksResponse.data?.data || []);
     } catch (error) {
       console.error('Fetch data error:', error);
       toast.error('Failed to load data');
@@ -655,4 +654,4 @@ const Feedback = () => {
   );
 };
 
-export default Feedback;
+export default Feedback;
