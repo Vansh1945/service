@@ -469,7 +469,7 @@ const bookingSchema = new Schema({
   },
   disputeStatus: {
     type: String,
-    enum: ['none', 'under_review', 'provider_responded', 'customer_responded', 'resolved', 'refund_approved', 'refund_rejected'],
+    enum: ['none', 'pending', 'under_review', 'provider_responded', 'customer_responded', 'resolved', 'refund_approved', 'refund_rejected'],
     default: 'none'
   },
   adminRefundDecision: {
