@@ -18,8 +18,8 @@ export const editFeedback = (feedbackId, data) => {
 };
 
 // Provider routes
-export const getProviderFeedbacks = () => {
-    return axiosInstance.get("/feedback/provider/my-feedbacks");
+export const getProviderFeedbacks = (params) => {
+    return axiosInstance.get("/feedback/provider/my-feedbacks", { params });
 };
 
 export const getProviderAverageRating = () => {

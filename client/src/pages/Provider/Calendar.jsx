@@ -14,14 +14,39 @@ const Calendar = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
+  const getVisibleRange = (date, currentView) => {
+    let start, end;
+    if (currentView === 'month') {
+      start = new Date(date.getFullYear(), date.getMonth(), 1);
+      end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    } else if (currentView === 'week') {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day;
+      start = new Date(d.setDate(diff));
+      end = new Date(start);
+      end.setDate(end.getDate() + 6);
+    } else {
+      start = new Date(date);
+      end = new Date(date);
+    }
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  };
 
-  const fetchBookings = async () => {
+  useEffect(() => {
+    const { start, end } = getVisibleRange(currentDate, view);
+    fetchBookings(start, end);
+  }, [currentDate, view]);
+
+  const fetchBookings = async (start, end) => {
     try {
       setLoading(true);
-      const res = await axiosInstance.get('/booking/provider/status/all?limit=1000');
+      const startStr = start ? start.toISOString() : '';
+      const endStr = end ? end.toISOString() : '';
+      const url = `/booking/provider/status/all?limit=1000${startStr ? `&startDate=${startStr}` : ''}${endStr ? `&endDate=${endStr}` : ''}`;
+      const res = await axiosInstance.get(url);
       if (res.data.success) {
         setBookings(res.data.data || []);
       } else {

@@ -1954,10 +1954,24 @@ class ProviderService {
             const earnings = combinedEarnings[0] || { totalEarnings: 0, todaysEarnings: 0 };
             const averageRating = ratingStats.length > 0 ? parseFloat(ratingStats[0].averageRating.toFixed(1)) : 0;
 
-            // Process jobs with payout status helper
-            const jobsWithPayoutStatus = async (jobs) => {
-                return Promise.all(jobs.map(async job => {
-                    const earning = await ProviderEarning.findOne({ booking: job._id }).lean();
+            // Batch fetch earnings for all retrieved bookings to avoid N+1 queries
+            const allJobIds = [
+                ...todayJobs.map(j => j._id),
+                ...upcomingJobs.map(j => j._id),
+                ...recentBookings.map(j => j._id)
+            ];
+            const earningsList = await ProviderEarning.find({ booking: { $in: allJobIds } }).lean();
+            const earningsMap = {};
+            earningsList.forEach(e => {
+                if (e.booking) {
+                    earningsMap[e.booking.toString()] = e;
+                }
+            });
+
+            // Process jobs with payout status helper (in-memory mapping)
+            const jobsWithPayoutStatus = (jobs) => {
+                return jobs.map(job => {
+                    const earning = earningsMap[job._id.toString()];
                     return {
                         _id: job._id,
                         customer: job.customer,
@@ -1972,12 +1986,12 @@ class ProviderService {
                         disputeStatus: job.disputeStatus,
                         payoutHoldUntil: job.payoutHoldUntil
                     };
-                }));
+                });
             };
 
-            const todayJobsList = await jobsWithPayoutStatus(todayJobs);
-            const upcomingJobsList = await jobsWithPayoutStatus(upcomingJobs);
-            const recentJobsList = await jobsWithPayoutStatus(recentBookings);
+            const todayJobsList = jobsWithPayoutStatus(todayJobs);
+            const upcomingJobsList = jobsWithPayoutStatus(upcomingJobs);
+            const recentJobsList = jobsWithPayoutStatus(recentBookings);
 
             // Process wallet info
             const availableBalance = provider?.wallet?.availableBalance || 0;
@@ -1992,20 +2006,7 @@ class ProviderService {
             const releasedPayouts = provider?.wallet?.releasedPayouts || 0;
             const refundedDeductions = provider?.wallet?.refundedDeductions || 0;
 
-            // Calculate performance rating values
-            const completedJobs = await Booking.find({ provider: providerId, status: 'Completed' }).select('completedAt date time').lean();
-            let onTimeCompleted = 0;
-            completedJobs.forEach(job => {
-                if (job.completedAt && job.date && job.time) {
-                    const scheduledDate = new Date(job.date);
-                    const [hours, minutes] = job.time.split(':').map(Number);
-                    scheduledDate.setHours(hours, minutes, 0, 0);
-                    const maxCompletionTime = new Date(scheduledDate.getTime() + 6 * 60 * 60 * 1000);
-                    if (job.completedAt <= maxCompletionTime) {
-                        onTimeCompleted++;
-                    }
-                }
-            });
+            const performance = provider?.performanceScore || {};
 
             let totalRelevant = 0;
             bookingStats.forEach(stat => {
@@ -2015,10 +2016,31 @@ class ProviderService {
                 }
             });
 
-            const completionRate = totalRelevant > 0 ? parseFloat(((completedJobs.length / totalRelevant) * 100).toFixed(1)) : 0;
-            const onTimeRate = completedJobs.length > 0 ? parseFloat(((onTimeCompleted / completedJobs.length) * 100).toFixed(1)) : 0;
+            // Calculate performance rating values (Lazy loaded only if not present in performance Score)
+            let completionRate = 0;
+            let onTimeRate = 0;
 
-            const performance = provider?.performanceScore || {};
+            if (performance.completionPercentage === undefined || performance.onTimePercentage === undefined) {
+                const completedJobsCount = bookingStats.find(stat => stat._id?.toLowerCase() === 'completed')?.count || 0;
+                completionRate = totalRelevant > 0 ? parseFloat(((completedJobsCount / totalRelevant) * 100).toFixed(1)) : 0;
+
+                if (performance.onTimePercentage === undefined && completedJobsCount > 0) {
+                    const completedJobs = await Booking.find({ provider: providerId, status: 'Completed' }).select('completedAt date time').lean();
+                    let onTimeCompleted = 0;
+                    completedJobs.forEach(job => {
+                        if (job.completedAt && job.date && job.time) {
+                            const scheduledDate = new Date(job.date);
+                            const [hours, minutes] = job.time.split(':').map(Number);
+                            scheduledDate.setHours(hours, minutes, 0, 0);
+                            const maxCompletionTime = new Date(scheduledDate.getTime() + 6 * 60 * 60 * 1000);
+                            if (job.completedAt <= maxCompletionTime) {
+                                onTimeCompleted++;
+                            }
+                        }
+                    });
+                    onTimeRate = completedJobs.length > 0 ? parseFloat(((onTimeCompleted / completedJobs.length) * 100).toFixed(1)) : 0;
+                }
+            }
 
             res.status(200).json({
                 success: true,

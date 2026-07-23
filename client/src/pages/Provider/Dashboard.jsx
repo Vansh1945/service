@@ -121,12 +121,68 @@ const Dashboard = () => {
 
     const handleBookingUpdated = (data) => {
       if (!data || !data.booking) return;
-      fetchDashboardData(true);
+      const updated = data.booking;
+      
+      setDashboardData(prev => {
+        if (!prev.summary) return prev;
+        
+        const updateJobInList = (list) => {
+          let updatedExist = false;
+          let updatedList = list.map(item => {
+            if (item && (item._id === updated._id || item.bookingId === updated.bookingId)) {
+              updatedExist = true;
+              return { ...item, ...updated };
+            }
+            return item;
+          });
+          
+          if (!updatedExist && ['pending', 'accepted', 'in-progress', 'scheduled'].includes(updated.status?.toLowerCase())) {
+            updatedList = [updated, ...updatedList];
+          }
+          return updatedList;
+        };
+
+        const activeJobs = updateJobInList(prev.activeJobs || []);
+        const recentBookings = updateJobInList(prev.recentBookings || []);
+        
+        const summary = prev.summary ? { ...prev.summary } : null;
+        if (summary) {
+          const oldJob = prev.activeJobs?.find(item => item._id === updated._id || item.bookingId === updated.bookingId);
+          const oldStatus = oldJob?.status?.toLowerCase();
+          const newStatus = updated.status?.toLowerCase();
+          
+          if (oldStatus !== newStatus) {
+            if (oldStatus === 'completed') summary.completedJobs = Math.max(0, summary.completedJobs - 1);
+            if (oldStatus === 'cancelled') summary.cancelledJobs = Math.max(0, summary.cancelledJobs - 1);
+            if (oldStatus === 'pending') summary.pendingBookings = Math.max(0, summary.pendingBookings - 1);
+            
+            if (newStatus === 'completed') summary.completedJobs = (summary.completedJobs || 0) + 1;
+            if (newStatus === 'cancelled') summary.cancelledJobs = (summary.cancelledJobs || 0) + 1;
+            if (newStatus === 'pending') summary.pendingBookings = (summary.pendingBookings || 0) + 1;
+          }
+        }
+
+        return {
+          ...prev,
+          activeJobs,
+          recentBookings,
+          summary
+        };
+      });
     };
 
     const handleBookingDeleted = (data) => {
       if (!data || !data.bookingId) return;
-      fetchDashboardData(true);
+      const targetId = data.bookingId;
+      setDashboardData(prev => {
+        const activeJobs = (prev.activeJobs || []).filter(item => item._id !== targetId && item.bookingId !== targetId);
+        const recentBookings = (prev.recentBookings || []).filter(item => item._id !== targetId && item.bookingId !== targetId);
+        return {
+          ...prev,
+          activeJobs,
+          recentBookings
+        };
+      });
     };
 
     const handleProviderStatusChanged = (data) => {

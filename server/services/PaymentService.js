@@ -47,35 +47,53 @@ const safeCommit = async (session) => {
 
 const syncEarningsStatus = async (providerId) => {
   try {
-    const earnings = await ProviderEarning.find({ provider: providerId });
+    const [earningsStats, withdrawalsStats] = await Promise.all([
+      ProviderEarning.aggregate([
+        { $match: { provider: providerId } },
+        {
+          $group: {
+            _id: '$status',
+            totalNet: { $sum: { $ifNull: ['$netAmount', { $ifNull: ['$amount', 0] }] } }
+          }
+        }
+      ]),
+      PaymentRecord.aggregate([
+        { $match: { provider: providerId } },
+        {
+          $group: {
+            _id: '$status',
+            totalAmount: { $sum: { $ifNull: ['$amount', 0] } }
+          }
+        }
+      ])
+    ]);
+
     let totalEarning = 0;
     let pendingWithdrawal = 0;
     let totalWithdrawn = 0;
     let heldBalance = 0;
 
-    earnings.forEach((earning) => {
-      const amount = parseFloat(earning.netAmount) || parseFloat(earning.amount) || 0;
-      if (earning.status === 'paid' || earning.status === 'withdrawn') {
+    earningsStats.forEach((stat) => {
+      const amount = stat.totalNet || 0;
+      if (stat._id === 'paid' || stat._id === 'withdrawn') {
         totalWithdrawn += amount;
-      } else if (earning.status === 'held') {
+      } else if (stat._id === 'held') {
         heldBalance += amount;
-      } else if (earning.status === 'pending_withdrawal') {
+      } else if (stat._id === 'pending_withdrawal') {
         pendingWithdrawal += amount;
-      } else if (earning.status === 'available') {
+      } else if (stat._id === 'available') {
         totalEarning += amount;
       }
     });
 
-    // Fetch all withdrawal records for the provider to deduct from available balance
-    const withdrawals = await PaymentRecord.find({ provider: providerId });
     let totalCompletedWithdrawals = 0;
     let totalPendingWithdrawals = 0;
 
-    withdrawals.forEach((wd) => {
-      const amount = parseFloat(wd.amount) || 0;
-      if (wd.status === 'completed' || wd.status === 'transferred') {
+    withdrawalsStats.forEach((stat) => {
+      const amount = stat.totalAmount || 0;
+      if (stat._id === 'completed' || stat._id === 'transferred') {
         totalCompletedWithdrawals += amount;
-      } else if (['requested', 'processing', 'under_review', 'approved'].includes(wd.status)) {
+      } else if (['requested', 'processing', 'under_review', 'approved'].includes(stat._id)) {
         totalPendingWithdrawals += amount;
       }
     });
@@ -83,12 +101,25 @@ const syncEarningsStatus = async (providerId) => {
     const provider = await Provider.findById(providerId);
     if (provider) {
       provider.wallet = provider.wallet || {};
-      provider.wallet.availableBalance = parseFloat((totalEarning - totalCompletedWithdrawals - totalPendingWithdrawals).toFixed(2));
-      provider.wallet.pendingWithdrawal = parseFloat(totalPendingWithdrawals.toFixed(2));
-      provider.wallet.totalWithdrawn = parseFloat(totalCompletedWithdrawals.toFixed(2));
-      provider.wallet.heldBalance = parseFloat(heldBalance.toFixed(2));
-      provider.wallet.lastUpdated = new Date();
-      await provider.save();
+      const newAvailable = parseFloat((totalEarning - totalCompletedWithdrawals - totalPendingWithdrawals).toFixed(2));
+      const newPending = parseFloat(totalPendingWithdrawals.toFixed(2));
+      const newWithdrawn = parseFloat(totalCompletedWithdrawals.toFixed(2));
+      const newHeld = parseFloat(heldBalance.toFixed(2));
+
+      const wallet = provider.wallet;
+      if (
+        wallet.availableBalance !== newAvailable ||
+        wallet.pendingWithdrawal !== newPending ||
+        wallet.totalWithdrawn !== newWithdrawn ||
+        wallet.heldBalance !== newHeld
+      ) {
+        provider.wallet.availableBalance = newAvailable;
+        provider.wallet.pendingWithdrawal = newPending;
+        provider.wallet.totalWithdrawn = newWithdrawn;
+        provider.wallet.heldBalance = newHeld;
+        provider.wallet.lastUpdated = new Date();
+        await provider.save();
+      }
     }
   } catch (error) {
     console.error(`syncEarningsStatus error for provider ${providerId}:`, error.message);

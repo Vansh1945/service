@@ -481,29 +481,69 @@ const deleteFeedbackAdmin = async (req, res, next) => {
 // @access  Private (Provider)
 const getProviderFeedbacks = async (req, res, next) => {
   try {
-    const feedbacks = await Feedback.find({
+    const { page = 1, limit = 10, rating, timeRange, search } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const query = {
       'providerFeedback.provider': req.provider._id
-    })
-      .populate('customer', 'name profilePicUrl')
-      .populate({
-        path: 'serviceFeedback.service',
-        select: 'title image'
-      })
-      .populate({
-        path: 'booking',
-        select: '_id bookingId date time status totalAmount address services',
-        populate: {
-          path: 'services.service',
-          select: 'title'
-        }
-      })
-      .sort({ createdAt: -1 })
-      .lean();
+    };
+
+    if (rating && rating !== 'all') {
+      query['providerFeedback.rating'] = parseInt(rating);
+    }
+
+    if (timeRange && timeRange !== 'all') {
+      const now = new Date();
+      let startDate = new Date(now);
+      if (timeRange === 'week') startDate.setDate(now.getDate() - 7);
+      else if (timeRange === 'month') startDate.setMonth(now.getMonth() - 1);
+      query.createdAt = { $gte: startDate };
+    }
+
+    // Since we populate, if search term is provided, we query by bookingId if matches or service title
+    // However, to keep it fast, we do matching if search exists
+    let matchStage = { ...query };
+
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find(matchStage)
+        .populate('customer', 'name profilePicUrl')
+        .populate({
+          path: 'serviceFeedback.service',
+          select: 'title image'
+        })
+        .populate({
+          path: 'booking',
+          select: '_id bookingId date time status totalAmount address services',
+          populate: {
+            path: 'services.service',
+            select: 'title'
+          }
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Feedback.countDocuments(matchStage)
+    ]);
+
+    // Apply search filter in memory if present to avoid complicated populate joins
+    let filteredFeedbacks = feedbacks;
+    if (search && search.trim() !== '') {
+      const searchLower = search.toLowerCase();
+      filteredFeedbacks = feedbacks.filter(f => 
+        (f.booking?.bookingId && f.booking.bookingId.toLowerCase().includes(searchLower)) ||
+        (f.booking?.services?.[0]?.service?.title && f.booking.services[0].service.title.toLowerCase().includes(searchLower))
+      );
+    }
 
     return res.status(200).json({
       success: true,
-      count: feedbacks.length,
-      data: feedbacks
+      count: filteredFeedbacks.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limitNum),
+      data: filteredFeedbacks
     });
   } catch (error) {
     global.logger.error(`[FeedbackController.getProviderFeedbacks] Route: ${req.originalUrl || req.url} - Error getting provider feedbacks: ${error.message}`, error);
@@ -516,19 +556,120 @@ const getProviderFeedbacks = async (req, res, next) => {
 // @access  Private (Provider)
 const getProviderAverageRating = async (req, res, next) => {
   try {
-    const result = await Feedback.aggregate([
-      { $match: { 'providerFeedback.provider': req.provider._id } },
+    const providerId = req.provider._id;
+
+    // 1. Overall Rating & Total Reviews
+    const overallStats = await Feedback.aggregate([
+      { $match: { 'providerFeedback.provider': providerId } },
       { $group: { _id: null, avgRating: { $avg: '$providerFeedback.rating' }, count: { $sum: 1 } } }
     ]);
+    const averageRating = overallStats.length > 0 ? parseFloat(overallStats[0].avgRating.toFixed(1)) : 0;
+    const ratingCount = overallStats.length > 0 ? overallStats[0].count : 0;
 
-    const averageRating = result.length > 0 ? parseFloat(result[0].avgRating.toFixed(1)) : 0;
-    const ratingCount = result.length > 0 ? result[0].count : 0;
+    // 2. Rating Breakdown
+    const breakdownStats = await Feedback.aggregate([
+      { $match: { 'providerFeedback.provider': providerId } },
+      { $group: { _id: '$providerFeedback.rating', count: { $sum: 1 } } }
+    ]);
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    breakdownStats.forEach(stat => {
+      if (stat._id >= 1 && stat._id <= 5) {
+        breakdown[stat._id] = stat.count;
+      }
+    });
+
+    // 3. This Month Reviews
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonthReviews = await Feedback.countDocuments({
+      'providerFeedback.provider': providerId,
+      createdAt: { $gte: startOfMonth }
+    });
+
+    // 4. Weekly Performance (current week vs last week)
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+    currentWeekStart.setHours(0, 0, 0, 0);
+    const lastWeekStart = new Date(currentWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const weeklyStats = await Feedback.aggregate([
+      {
+        $match: {
+          'providerFeedback.provider': providerId,
+          createdAt: { $gte: lastWeekStart }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $gte: ['$createdAt', currentWeekStart] },
+              'current',
+              'last'
+            ]
+          },
+          avgRating: { $avg: '$providerFeedback.rating' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    let currentWeekAvg = 0;
+    let lastWeekAvg = 0;
+    weeklyStats.forEach(stat => {
+      if (stat._id === 'current') currentWeekAvg = stat.avgRating;
+      if (stat._id === 'last') lastWeekAvg = stat.avgRating;
+    });
+    const weeklyTrend = currentWeekAvg > lastWeekAvg ? 'up' : (currentWeekAvg < lastWeekAvg ? 'down' : 'same');
+
+    // 5. Monthly Trend (last 6 months)
+    const monthlyTrendData = [];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (let i = 5; i >= 0; i--) {
+      const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const targetMonth = targetDate.getMonth();
+      const targetYear = targetDate.getFullYear();
+      const startOfTargetMonth = new Date(targetYear, targetMonth, 1);
+      const endOfTargetMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+
+      const monthStats = await Feedback.aggregate([
+        {
+          $match: {
+            'providerFeedback.provider': providerId,
+            createdAt: { $gte: startOfTargetMonth, $lte: endOfTargetMonth }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            avgRating: { $avg: '$providerFeedback.rating' },
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const avgRating = monthStats.length > 0 ? monthStats[0].avgRating : 0;
+      monthlyTrendData.push({
+        month: months[targetMonth],
+        rating: parseFloat(avgRating.toFixed(1)),
+        count: monthStats.length > 0 ? monthStats[0].count : 0
+      });
+    }
 
     return res.status(200).json({
       success: true,
       data: {
         averageRating,
-        ratingCount
+        ratingCount,
+        ratingBreakdown: breakdown,
+        thisMonthReviews,
+        weeklyPerformance: {
+          currentWeek: parseFloat(currentWeekAvg.toFixed(1)),
+          lastWeek: parseFloat(lastWeekAvg.toFixed(1)),
+          trend: weeklyTrend
+        },
+        monthlyTrend: monthlyTrendData
       }
     });
   } catch (error) {

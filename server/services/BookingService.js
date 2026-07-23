@@ -282,17 +282,28 @@ const logCancellationFraud = async (req, booking, userId, role) => {
   }
 };
 
+const zoneRelationCache = new Map();
 const getZoneRelation = async (bookingZoneId, providerZoneId) => {
   try {
-    if (bookingZoneId.toString() === providerZoneId.toString()) return 'same';
+    if (!bookingZoneId || !providerZoneId) return 'none';
+    const key = `${bookingZoneId.toString()}_${providerZoneId.toString()}`;
+    if (zoneRelationCache.has(key)) {
+      return zoneRelationCache.get(key);
+    }
+    if (bookingZoneId.toString() === providerZoneId.toString()) {
+      zoneRelationCache.set(key, 'same');
+      return 'same';
+    }
     const Zone = mongoose.model('Zone');
     let curr = await Zone.findById(bookingZoneId).select('parentZone').lean();
     while (curr && curr.parentZone) {
       if (curr.parentZone.toString() === providerZoneId.toString()) {
+        zoneRelationCache.set(key, 'ancestor');
         return 'ancestor';
       }
       curr = await Zone.findById(curr.parentZone).select('parentZone').lean();
     }
+    zoneRelationCache.set(key, 'none');
     return 'none';
   } catch (err) {
     console.error('Error in getZoneRelation:', err);
@@ -2888,7 +2899,7 @@ class BookingService {
     try {
       const providerId = req.provider._id;
       let { status } = req.params;
-      const { page = 1, limit = 10 } = req.query;
+      const { page = 1, limit = 10, startDate, endDate } = req.query;
 
       // BOOKING STATUS STATE MACHINE UPGRADE
       const normalizeParam = (s) => {
@@ -3040,6 +3051,12 @@ class BookingService {
         };
       }
       // END BOOKING STATUS STATE MACHINE UPGRADE
+
+      if (startDate || endDate) {
+        query.date = {};
+        if (startDate) query.date.$gte = new Date(startDate);
+        if (endDate) query.date.$lte = new Date(endDate);
+      }
 
       const bookings = await Booking.find(query)
         .populate('customer', 'name email phone profilePicUrl')

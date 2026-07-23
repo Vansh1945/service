@@ -131,7 +131,13 @@ const ProviderFeedback = () => {
         try {
             setIsLoading(true);
             setError(null);
-            const response = await FeedbackService.getProviderFeedbacks();
+            const response = await FeedbackService.getProviderFeedbacks({
+                page: currentPage,
+                limit: itemsPerPage,
+                rating: filterRating,
+                timeRange,
+                search: searchTerm
+            });
             const data = response.data;
 
             if (data.success) {
@@ -148,7 +154,7 @@ const ProviderFeedback = () => {
                     bookingDate: feedback.booking?.date || 'N/A'
                 }));
                 setFeedbackData(formattedFeedbacks);
-                calculateStats(formattedFeedbacks);
+                setTotalItems(data.total || formattedFeedbacks.length);
             }
         } catch (error) {
             setError(error.message);
@@ -158,100 +164,39 @@ const ProviderFeedback = () => {
         }
     };
 
-    const fetchProviderRating = async () => {
+    const loadStats = async () => {
         try {
             const response = await FeedbackService.getProviderAverageRating();
             const data = response.data;
-            if (data.success) {
-                return { averageRating: data.data.averageRating || 0, ratingCount: data.data.ratingCount || 0 };
+            if (data.success && data.data) {
+                const stats = data.data;
+                setRatingsStats({
+                    overallRating: stats.averageRating || 0,
+                    totalReviews: stats.ratingCount || 0,
+                    ratingBreakdown: stats.ratingBreakdown || { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+                    monthlyTrend: stats.monthlyTrend || [],
+                    weeklyPerformance: stats.weeklyPerformance || { currentWeek: 0, lastWeek: 0, trend: 'same' },
+                    thisMonthReviews: stats.thisMonthReviews || 0
+                });
             }
-            return { averageRating: 0, ratingCount: 0 };
         } catch (error) {
-            console.error(error);
-            return { averageRating: 0, ratingCount: 0 };
+            console.error('Failed to load rating stats:', error);
         }
-    };
-
-    const calculateStats = async (feedbacks) => {
-        const ratingData = await fetchProviderRating();
-        const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth();
-        const currentYear = currentDate.getFullYear();
-        const startOfWeek = new Date(currentDate);
-        startOfWeek.setDate(currentDate.getDate() - currentDate.getDay() + (currentDate.getDay() === 0 ? -6 : 1));
-        startOfWeek.setHours(0, 0, 0, 0);
-        const startOfLastWeek = new Date(startOfWeek);
-        startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
-
-        let thisMonthReviews = 0, currentWeekRatingSum = 0, currentWeekRatingCount = 0, lastWeekRatingSum = 0, lastWeekRatingCount = 0;
-
-        feedbacks.forEach(feedback => {
-            const feedbackDate = new Date(feedback.date);
-            const feedbackRating = feedback.rating;
-            if (feedbackRating >= 1 && feedbackRating <= 5) breakdown[feedbackRating]++;
-            if (feedbackDate.getMonth() === currentMonth && feedbackDate.getFullYear() === currentYear) thisMonthReviews++;
-            if (feedbackDate >= startOfWeek) {
-                currentWeekRatingSum += feedbackRating;
-                currentWeekRatingCount++;
-            } else if (feedbackDate >= startOfLastWeek && feedbackDate < startOfWeek) {
-                lastWeekRatingSum += feedbackRating;
-                lastWeekRatingCount++;
-            }
-        });
-
-        const currentWeekAvg = currentWeekRatingCount > 0 ? currentWeekRatingSum / currentWeekRatingCount : 0;
-        const lastWeekAvg = lastWeekRatingCount > 0 ? lastWeekRatingSum / lastWeekRatingCount : 0;
-        let weeklyTrend = currentWeekAvg > lastWeekAvg ? 'up' : (currentWeekAvg < lastWeekAvg ? 'down' : 'same');
-
-        const monthlyTrendData = [];
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        for (let i = 5; i >= 0; i--) {
-            const date = new Date(currentYear, currentMonth - i, 1);
-            const monthName = months[date.getMonth()];
-            const year = date.getFullYear();
-            const monthFeedbacks = feedbacks.filter(f => {
-                const fd = new Date(f.date);
-                return fd.getMonth() === date.getMonth() && fd.getFullYear() === year;
-            });
-            const avgRating = monthFeedbacks.length > 0 ? monthFeedbacks.reduce((sum, f) => sum + f.rating, 0) / monthFeedbacks.length : 0;
-            monthlyTrendData.push({ month: monthName, rating: parseFloat(avgRating.toFixed(1)), count: monthFeedbacks.length });
-        }
-
-        setRatingsStats({
-            overallRating: ratingData.averageRating,
-            totalReviews: ratingData.ratingCount,
-            ratingBreakdown: breakdown,
-            monthlyTrend: monthlyTrendData,
-            weeklyPerformance: { currentWeek: parseFloat(currentWeekAvg.toFixed(1)), lastWeek: parseFloat(lastWeekAvg.toFixed(1)), trend: weeklyTrend },
-            thisMonthReviews
-        });
     };
 
     useEffect(() => {
-        if (token) fetchProviderFeedbacks();
+        if (token) {
+            fetchProviderFeedbacks();
+        }
+    }, [token, currentPage, filterRating, timeRange, searchTerm]);
+
+    useEffect(() => {
+        if (token) {
+            loadStats();
+        }
     }, [token]);
 
-    const filterFeedbackByTimeRange = (feedbacks) => {
-        const now = new Date();
-        if (timeRange === 'all') return feedbacks;
-        let startDate = new Date(now);
-        if (timeRange === 'week') startDate.setDate(now.getDate() - 7);
-        else if (timeRange === 'month') startDate.setMonth(now.getMonth() - 1);
-        return feedbacks.filter(f => new Date(f.date) >= startDate);
-    };
-
-    const filteredFeedback = feedbackData
-        .filter(item => item.comment && item.comment.trim() !== '')
-        .filter(item => filterRating === 'all' || item.rating === parseInt(filterRating))
-        .filter(item => item.service.toLowerCase().includes(searchTerm.toLowerCase()) || item.bookingId.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const finalFilteredFeedback = filterFeedbackByTimeRange(filteredFeedback);
-    const paginatedFeedback = finalFilteredFeedback.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-    useEffect(() => {
-        setTotalItems(finalFilteredFeedback.length);
-    }, [finalFilteredFeedback.length, setTotalItems]);
+    const paginatedFeedback = feedbackData;
 
 
 
@@ -476,7 +421,7 @@ const ProviderFeedback = () => {
                             <Pagination
                                 currentPage={currentPage}
                                 totalPages={totalPages}
-                                totalItems={finalFilteredFeedback.length}
+                                totalItems={totalItems}
                                 limit={itemsPerPage}
                                 onPageChange={onPageChange}
                             />
