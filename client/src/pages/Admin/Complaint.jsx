@@ -193,12 +193,23 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
     if (submitting) return;
     setSubmitting(true);
     try {
-      await onUpdateStatus(complaint._id, statusUpdate, resolutionNotes);
-      showToast('Status updated', 'success');
-      setResolutionNotes('');
+      const success = await onUpdateStatus(complaint._id, statusUpdate, resolutionNotes);
+      if (success) {
+        showToast('Status updated', 'success');
+        setResolutionNotes('');
+      }
     }
     catch { showToast('Failed to update status', 'error'); }
     finally { setSubmitting(false); }
+  };
+
+  const handleDecisionClick = (action, setupFn) => {
+    if (!resolutionNotes.trim()) {
+      showToast('Please enter Admin Remarks (Required) first', 'warning');
+      return;
+    }
+    if (setupFn) setupFn();
+    setConfirmAction(action);
   };
 
   const handleResolve = async () => {
@@ -214,10 +225,12 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
       if (confirmAction === 'provider_penalty') {
         extra.penaltyAmount = Number(penaltyAmount);
       }
-      await onResolve(complaint._id, resolutionNotes, confirmAction, extra);
-      setResolutionNotes('');
-      setConfirmAction(null);
-      showToast('Complaint resolved!', 'success');
+      const success = await onResolve(complaint._id, resolutionNotes, confirmAction, extra);
+      if (success) {
+        setResolutionNotes('');
+        setConfirmAction(null);
+        showToast('Complaint resolved!', 'success');
+      }
     }
     catch (err) { showToast(err.response?.data?.message || 'Failed to resolve', 'error'); }
     finally { setSubmitting(false); }
@@ -594,7 +607,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
             const isServiceQuality = ['poor_quality', 'bad_work', 'incomplete_work'].includes(cType);
             const isGeneral = !isCancelRequest && !isLateOrNoShow && !isServiceQuality;
 
-            const providerReplies = booking?.complaintProofs?.filter(p => p.uploadedBy !== 'customer') || [];
+            const providerReplies = booking?.complaintProofs?.filter(p => p.uploadedBy !== 'customer' && !(p.message && p.message.startsWith('[Audit Trail]'))) || [];
             const showBeforeWork = isServiceQuality || (isLateOrNoShow && booking?.workProof?.beforeImages?.length > 0);
             const showAfterWork = isServiceQuality || (isLateOrNoShow && booking?.workProof?.afterImages?.length > 0);
             const showCustomerEvidence = !isGeneral;
@@ -893,22 +906,20 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     {complaint.complaintType === 'cancel_booking' ? (
                       <>
                         <button
-                          onClick={() => { setRefundAmount(booking?.totalAmount || 0); setConfirmAction('full_refund'); }}
-                          disabled={!resolutionNotes.trim() || isFullyRefunded || isWorkStartedOrCompleted}
+                          onClick={() => handleDecisionClick('full_refund', () => setRefundAmount(booking?.totalAmount || 0))}
+                          disabled={isFullyRefunded || isWorkStartedOrCompleted}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'full_refund' ? 'bg-green-600 text-white' : 'bg-white hover:bg-gray-50 text-green-600 border-green-200'} ${isWorkStartedOrCompleted ? 'opacity-40 cursor-not-allowed' : ''}`}
                         >
                           Approve Cancellation
                         </button>
                         <button
-                          onClick={() => setConfirmAction('reject')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('reject')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Reject Cancellation
                         </button>
                         <button
-                          onClick={() => setConfirmAction('request_more_evidence')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('request_more_evidence')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'request_more_evidence' ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-gray-50 text-indigo-600 border-indigo-200'}`}
                         >
                           Request Evidence
@@ -917,50 +928,45 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     ) : complaint.isRefundEligible !== false ? (
                       <>
                         <button
-                          onClick={() => { setRefundAmount(booking?.totalAmount || 0); setConfirmAction('full_refund'); }}
-                          disabled={!resolutionNotes.trim() || isFullyRefunded}
+                          onClick={() => handleDecisionClick('full_refund', () => setRefundAmount(booking?.totalAmount || 0))}
+                          disabled={isFullyRefunded}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'full_refund' ? 'bg-green-600 text-white' : 'bg-white hover:bg-gray-50 text-green-600 border-green-200'}`}
                         >
                           Approve Refund
                         </button>
                         <button
-                          onClick={() => setConfirmAction('reject')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('reject')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Reject Refund
                         </button>
                         <button
-                          onClick={() => setConfirmAction('partial_refund')}
-                          disabled={!resolutionNotes.trim() || isFullyRefunded}
+                          onClick={() => handleDecisionClick('partial_refund', () => setRefundAmount(booking?.totalAmount || 0))}
+                          disabled={isFullyRefunded}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'partial_refund' ? 'bg-teal-600 text-white' : 'bg-white hover:bg-gray-50 text-teal-600 border-teal-200'}`}
                         >
                           Partial Refund
                         </button>
                         <button
-                          onClick={() => setConfirmAction('platform_credit')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('platform_credit')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'platform_credit' ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-50 text-blue-600 border-blue-200'}`}
                         >
                           Platform Credit
                         </button>
                         <button
-                          onClick={() => setConfirmAction('re_service')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('re_service')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 're_service' ? 'bg-purple-650 text-white' : 'bg-white hover:bg-gray-50 text-purple-650 border-purple-200'}`}
                         >
                           Re-Service
                         </button>
                         <button
-                          onClick={() => setConfirmAction('provider_warning')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('provider_warning')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'provider_warning' ? 'bg-orange-500 text-white' : 'bg-white hover:bg-gray-50 text-orange-500 border-orange-200'}`}
                         >
                           Provider Warning
                         </button>
                         <button
-                          onClick={() => setConfirmAction('provider_penalty')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('provider_penalty')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'provider_penalty' ? 'bg-red-500 text-white' : 'bg-white hover:bg-gray-50 text-red-500 border-red-200'}`}
                         >
                           Provider Penalty
@@ -969,36 +975,31 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     ) : (
                       <>
                         <button
-                          onClick={() => setConfirmAction('resolve')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('resolve')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'resolve' ? 'bg-green-600 text-white' : 'bg-white hover:bg-gray-50 text-green-600 border-green-200'}`}
                         >
                           Resolve
                         </button>
                         <button
-                          onClick={() => setConfirmAction('reject')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('reject')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reject' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Reject
                         </button>
                         <button
-                          onClick={() => setConfirmAction('reply')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('reply')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'reply' ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-50 text-blue-600 border-blue-200'}`}
                         >
                           Reply
                         </button>
                         <button
-                          onClick={() => setConfirmAction('escalate')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('escalate')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'escalate' ? 'bg-amber-600 text-white' : 'bg-white hover:bg-gray-50 text-amber-600 border-amber-200'}`}
                         >
                           Escalate
                         </button>
                         <button
-                          onClick={() => setConfirmAction('close')}
-                          disabled={!resolutionNotes.trim()}
+                          onClick={() => handleDecisionClick('close')}
                           className={`px-3 py-2 text-xs font-bold rounded-lg transition-all border ${confirmAction === 'close' ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-50 text-red-600 border-red-200'}`}
                         >
                           Close
@@ -1288,11 +1289,11 @@ const ComplaintsPage = () => {
         }
         return true;
       }
-      showToast('Failed to update status', 'error');
+      showToast(res.data?.message || 'Failed to update status', 'error');
       setComplaints(prevComplaints);
       return false;
-    } catch {
-      showToast('Failed to update status', 'error');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to update status', 'error');
       setComplaints(prevComplaints);
       return false;
     }

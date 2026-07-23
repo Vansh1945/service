@@ -747,16 +747,16 @@ class ComplaintService {
 
       // --- STATE MACHINE VALIDATION ---
       const VALID_TRANSITIONS = {
-        'submitted': ['under_review', 'Closed', 'request_more_evidence', 'admin_review', 'resolved', 'rejected', 'refunded'],
-        'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded'],
-        'provider_responded': ['admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded'],
-        'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence'],
+        'submitted': ['under_review', 'Closed', 'request_more_evidence', 'admin_review', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
+        'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
+        'provider_responded': ['admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
+        'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence', 'In-Progress', 'Open'],
         'resolved': ['Reopened', 'Closed'],
         'rejected': ['Reopened', 'Closed'],
         'refunded': [],
         'Closed': ['Reopened'],
-        'Reopened': ['under_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded'],
-        'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded'],
+        'Reopened': ['under_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
+        'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
 
         'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
         'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
@@ -1381,16 +1381,16 @@ class ComplaintService {
 
       // --- STATE MACHINE VALIDATION ---
       const VALID_TRANSITIONS = {
-        'submitted': ['under_review', 'Closed', 'request_more_evidence'],
-        'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence'],
-        'provider_responded': ['admin_review', 'Closed', 'request_more_evidence'],
-        'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence'],
-        'resolved': ['Reopened'],
-        'rejected': ['Reopened'],
+        'submitted': ['under_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open', 'resolved', 'rejected', 'refunded'],
+        'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open', 'resolved', 'rejected', 'refunded'],
+        'provider_responded': ['admin_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open', 'resolved', 'rejected', 'refunded'],
+        'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence', 'In-Progress', 'Open'],
+        'resolved': ['Reopened', 'Closed'],
+        'rejected': ['Reopened', 'Closed'],
         'refunded': [],
         'Closed': ['Reopened'],
-        'Reopened': ['under_review', 'Closed', 'request_more_evidence'],
-        'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded'],
+        'Reopened': ['under_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open'],
+        'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
 
         'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
         'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
@@ -1414,6 +1414,21 @@ class ComplaintService {
       }
 
       await complaint.save();
+
+      if (complaint.booking) {
+        const adminName = req.user?.name || req.admin?.name || req.user?.email || 'Support Admin';
+        const auditMessage = `[Audit Trail] Status changed to ${status.replace(/_/g, ' ').toUpperCase()} | Remarks: ${resolutionNotes} (By: ${adminName})`;
+        await Booking.findByIdAndUpdate(complaint.booking, {
+          $push: {
+            complaintProofs: {
+              uploadedBy: 'admin',
+              images: [],
+              message: auditMessage,
+              createdAt: new Date()
+            }
+          }
+        });
+      }
 
       // Invalidate dashboard caches
       try {
@@ -1825,6 +1840,9 @@ class ComplaintService {
     }
     if (complaint.booking?.complaintProofs) {
       complaint.booking.complaintProofs.forEach(proof => {
+        if (proof.message && proof.message.startsWith('[Audit Trail] Status changed to')) {
+          return;
+        }
         const proofTime = new Date(proof.createdAt).getTime();
         const complaintTime = new Date(complaint.createdAt).getTime();
         const timeDiffSeconds = Math.abs(proofTime - complaintTime) / 1000;
