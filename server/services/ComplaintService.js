@@ -1059,7 +1059,9 @@ class ComplaintService {
               if (!providerDoc.wallet) {
                 providerDoc.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
               }
+              const balanceBefore = providerDoc.wallet.availableBalance || 0;
               providerDoc.wallet.availableBalance -= penaltyAmount;
+              const balanceAfter = providerDoc.wallet.availableBalance;
               providerDoc.wallet.lastUpdated = new Date();
               await providerDoc.save({ session });
 
@@ -1072,7 +1074,12 @@ class ComplaintService {
                 amount: penaltyAmount,
                 paymentStatus: 'completed',
                 paymentMethod: 'wallet',
-                type: 'refund',
+                type: 'penalty',
+                balanceBefore: balanceBefore,
+                balanceAfter: balanceAfter,
+                complaint: complaint._id,
+                approvedBy: req.admin ? req.admin._id : null,
+                deductionType: 'provider_penalty',
                 description: `Penalty deduction of ₹${penaltyAmount} issued. Reason: ${resolutionNotes}`,
                 refundReason: `Penalty: ${resolutionNotes}`
               });
@@ -1212,9 +1219,32 @@ class ComplaintService {
                         if (providerDoc.wallet.availableBalance === undefined) {
                           providerDoc.wallet.availableBalance = 0;
                         }
+                        const balanceBefore = providerDoc.wallet.availableBalance;
                         providerDoc.wallet.availableBalance -= recoveredAmount;
+                        const balanceAfter = providerDoc.wallet.availableBalance;
                         providerDoc.wallet.lastUpdated = new Date();
                         await providerDoc.save({ session });
+
+                        // Log explicit recovery transaction for audit visibility
+                        const recoveryTx = new Transaction({
+                          booking: booking._id,
+                          bookingId: booking.bookingId || booking._id,
+                          user: booking.customer,
+                          provider: booking.provider,
+                          amount: recoveredAmount,
+                          paymentStatus: 'completed',
+                          paymentMethod: 'wallet',
+                          type: 'refund_recovery',
+                          balanceBefore: balanceBefore,
+                          balanceAfter: balanceAfter,
+                          complaint: complaint._id,
+                          approvedBy: req.admin ? req.admin._id : null,
+                          recoveryType: 'wallet',
+                          deductionType: 'refund_clawback',
+                          description: `Refund clawback of ₹${recoveredAmount} from provider wallet for complaint #${complaint._id.toString().slice(-6)}. Reason: ${resolutionNotes}`,
+                          refundReason: resolutionNotes
+                        });
+                        await recoveryTx.save({ session });
                       }
                     } else {
                       recoveryStatus = 'platform_absorbed';

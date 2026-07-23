@@ -4323,6 +4323,27 @@ class BookingService {
             message: "Insufficient wallet balance to cover commission for this cash booking. Please recharge your wallet."
           });
         }
+
+        // Log dedicated commission deduction transaction for provider wallet audit
+        if (commission > 0) {
+          const balanceAfter = updatedProvider.wallet?.availableBalance || 0;
+          const balanceBefore = balanceAfter + commission;
+          const commissionTx = new Transaction({
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id,
+            user: booking.customer,
+            provider: providerId,
+            amount: commission,
+            paymentStatus: 'completed',
+            paymentMethod: 'wallet',
+            type: 'commission_deduction',
+            balanceBefore: balanceBefore,
+            balanceAfter: balanceAfter,
+            deductionType: 'cash_booking_commission',
+            description: `Commission fee of ₹${commission} deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
+          });
+          await commissionTx.save({ session });
+        }
       } else {
         await Provider.findByIdAndUpdate(
           providerId,

@@ -68,8 +68,35 @@ const transactionSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['payment', 'refund', 'referral_reward'],
+    enum: ['payment', 'refund', 'referral_reward', 'penalty', 'commission_deduction', 'withdrawal', 'withdrawal_rejection', 'refund_recovery'],
     default: 'payment'
+  },
+  balanceBefore: {
+    type: Number,
+    default: null
+  },
+  balanceAfter: {
+    type: Number,
+    default: null
+  },
+  complaint: {
+    type: Schema.Types.ObjectId,
+    ref: 'Complaint',
+    default: null
+  },
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
+  recoveryType: {
+    type: String,
+    enum: ['wallet', 'held_earnings', 'pending_release', 'available', 'platform_credit_reserve', 'platform_absorbed'],
+    default: null
+  },
+  deductionType: {
+    type: String,
+    default: null
   },
   razorpayOrderId: String,
   razorpayPaymentId: String,

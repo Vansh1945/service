@@ -47,7 +47,7 @@ const safeCommit = async (session) => {
 
 const syncEarningsStatus = async (providerId) => {
   try {
-    const [earningsStats, withdrawalsStats] = await Promise.all([
+    const [earningsStats, withdrawalsStats, deductionsStats] = await Promise.all([
       ProviderEarning.aggregate([
         { $match: { provider: providerId } },
         {
@@ -65,6 +65,21 @@ const syncEarningsStatus = async (providerId) => {
             totalAmount: { $sum: { $ifNull: ['$amount', 0] } }
           }
         }
+      ]),
+      Transaction.aggregate([
+        {
+          $match: {
+            provider: providerId,
+            type: { $in: ['penalty', 'refund_recovery', 'commission_deduction'] },
+            paymentStatus: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalDeducted: { $sum: { $ifNull: ['$amount', 0] } }
+          }
+        }
       ])
     ]);
 
@@ -72,6 +87,7 @@ const syncEarningsStatus = async (providerId) => {
     let pendingWithdrawal = 0;
     let totalWithdrawn = 0;
     let heldBalance = 0;
+    const totalDeductions = deductionsStats.length > 0 ? deductionsStats[0].totalDeducted : 0;
 
     earningsStats.forEach((stat) => {
       const amount = stat.totalNet || 0;
@@ -101,7 +117,7 @@ const syncEarningsStatus = async (providerId) => {
     const provider = await Provider.findById(providerId);
     if (provider) {
       provider.wallet = provider.wallet || {};
-      const newAvailable = parseFloat((totalEarning - totalCompletedWithdrawals - totalPendingWithdrawals).toFixed(2));
+      const newAvailable = parseFloat((totalEarning - totalCompletedWithdrawals - totalPendingWithdrawals - totalDeductions).toFixed(2));
       const newPending = parseFloat(totalPendingWithdrawals.toFixed(2));
       const newWithdrawn = parseFloat(totalCompletedWithdrawals.toFixed(2));
       const newHeld = parseFloat(heldBalance.toFixed(2));
@@ -702,7 +718,9 @@ class PaymentService {
           }
 
           // Lock the pending amount immediately to prevent double-spending/withdrawals
+          const balanceBefore = provider.wallet.availableBalance;
           provider.wallet.availableBalance -= amount;
+          const balanceAfter = provider.wallet.availableBalance;
           provider.wallet.lastUpdated = new Date();
 
           const paymentRecord = new PaymentRecord({
@@ -726,6 +744,27 @@ class PaymentService {
             await paymentRecord.save({ session: currSession });
           } else {
             await paymentRecord.save();
+          }
+
+          // Log withdrawal transaction for provider ledger history
+          const withdrawalTx = new Transaction({
+            booking: paymentRecord._id, // fallback reference to paymentRecord ID
+            bookingId: paymentRecord.transactionReference || `WDL-${Date.now()}`,
+            user: provider._id,
+            provider: providerId,
+            amount: amount,
+            paymentStatus: 'completed',
+            paymentMethod: 'wallet',
+            type: 'withdrawal',
+            balanceBefore: balanceBefore,
+            balanceAfter: balanceAfter,
+            deductionType: 'payout_withdrawal',
+            description: `Payout withdrawal request of ₹${amount} initiated (${paymentRecord.transactionReference})`
+          });
+          if (currSession) {
+            await withdrawalTx.save({ session: currSession });
+          } else {
+            await withdrawalTx.save();
           }
 
           // Update provider security settings (cooldown info)
@@ -835,7 +874,9 @@ class PaymentService {
         }
 
         // Lock the pending amount immediately upon OTP verification to prevent double-spending/withdrawals
+        const balanceBefore = provider.wallet.availableBalance;
         provider.wallet.availableBalance -= amount;
+        const balanceAfter = provider.wallet.availableBalance;
         provider.wallet.lastUpdated = new Date();
 
         const paymentRecord = new PaymentRecord({
@@ -859,6 +900,27 @@ class PaymentService {
           await paymentRecord.save({ session: currSession });
         } else {
           await paymentRecord.save();
+        }
+
+        // Log withdrawal transaction for provider ledger history
+        const withdrawalTx = new Transaction({
+          booking: paymentRecord._id,
+          bookingId: paymentRecord.transactionReference || `WDL-${Date.now()}`,
+          user: provider._id,
+          provider: providerId,
+          amount: amount,
+          paymentStatus: 'completed',
+          paymentMethod: 'wallet',
+          type: 'withdrawal',
+          balanceBefore: balanceBefore,
+          balanceAfter: balanceAfter,
+          deductionType: 'payout_withdrawal',
+          description: `Payout withdrawal request of ₹${amount} initiated (${paymentRecord.transactionReference})`
+        });
+        if (currSession) {
+          await withdrawalTx.save({ session: currSession });
+        } else {
+          await withdrawalTx.save();
         }
 
         // Clear OTP and update cooldown
@@ -1720,7 +1782,9 @@ class PaymentService {
       if (!provider.wallet) {
         provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
       }
+      const balanceBefore = provider.wallet.availableBalance;
       provider.wallet.availableBalance += paymentRecord.amount;
+      const balanceAfter = provider.wallet.availableBalance;
       provider.wallet.lastUpdated = new Date();
       if (session) {
         await provider.save({ session });
@@ -1738,6 +1802,27 @@ class PaymentService {
         await paymentRecord.save({ session });
       } else {
         await paymentRecord.save();
+      }
+
+      // Log withdrawal rejection transaction for provider audit visibility
+      const rejectionTx = new Transaction({
+        booking: paymentRecord._id,
+        bookingId: paymentRecord.transactionReference || `WDL-REJ-${Date.now()}`,
+        user: provider._id,
+        provider: provider._id,
+        amount: paymentRecord.amount,
+        paymentStatus: 'completed',
+        paymentMethod: 'wallet',
+        type: 'withdrawal_rejection',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceAfter,
+        approvedBy: req.admin ? req.admin._id : null,
+        description: `Withdrawal request (${paymentRecord.transactionReference || paymentRecord._id}) rejected. ₹${paymentRecord.amount} refunded to wallet. Reason: ${rejectionReason || 'No reason provided'}`
+      });
+      if (session) {
+        await rejectionTx.save({ session });
+      } else {
+        await rejectionTx.save();
       }
 
       await safeCommit(session);
