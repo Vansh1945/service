@@ -363,7 +363,7 @@ const ProviderEarningsDashboard = () => {
               </div>
               {lastWithdrawal && (
                 <p className="text-[10px] text-neutral-400 mt-0.5">
-                  Last Settlement: <span className="text-white font-semibold">{formatCurrency(lastWithdrawal.amount)}</span> ({lastWithdrawal.status}) on {formatDate(lastWithdrawal.createdAt)}
+                  Last Settlement: <span className="text-white font-semibold">{formatCurrency(lastWithdrawal.amount)}</span> ({lastWithdrawal.status ? lastWithdrawal.status.charAt(0).toUpperCase() + lastWithdrawal.status.slice(1).toLowerCase() : ''}) on {formatDate(lastWithdrawal.createdAt)}
                 </p>
               )}
             </div>

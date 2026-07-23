@@ -2362,7 +2362,9 @@ class AdminService {
                     matchStage.createdAt.$gte = new Date(req.query.startDate);
                 }
                 if (req.query.endDate) {
-                    matchStage.createdAt.$lte = new Date(req.query.endDate);
+                    const endDateObj = new Date(req.query.endDate);
+                    endDateObj.setHours(23, 59, 59, 999);
+                    matchStage.createdAt.$lte = endDateObj;
                 }
             } else {
                 matchStage.createdAt = { $gte: startDate };
@@ -2389,7 +2391,7 @@ class AdminService {
                         $facet: {
                             statusDistribution: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
                             revenueOverview: [
-                                { $match: { status: 'completed' } },
+                                { $match: { status: { $in: ['completed', 'Completed'] } } },
                                 {
                                     $group: {
                                         _id: null,
@@ -2412,7 +2414,7 @@ class AdminService {
                                 }
                             ],
                             chartData: [
-                                { $match: { status: 'completed' } },
+                                { $match: { status: { $in: ['completed', 'Completed'] } } },
                                 {
                                     $group: {
                                         _id: {
@@ -2428,7 +2430,7 @@ class AdminService {
                                 { $sort: { _id: 1 } }
                             ],
                             cancellationReasons: [
-                                { $match: { status: 'cancelled' } },
+                                { $match: { status: { $in: ['cancelled', 'Cancelled'] } } },
                                 {
                                     $group: {
                                         _id: { $ifNull: ["$cancellationProgress.reason", "Unknown"] },
@@ -2443,7 +2445,7 @@ class AdminService {
 
                 // 2. Top Performing Providers
                 Booking.aggregate([
-                    { $match: { ...matchStage, status: 'completed' } },
+                    { $match: { ...matchStage, status: { $in: ['completed', 'Completed'] } } },
                     {
                         $group: {
                             _id: "$provider",
@@ -2478,7 +2480,7 @@ class AdminService {
                     {
                         $facet: {
                             new: [
-                                { $match: { role: 'customer', createdAt: { $gte: startDate } } },
+                                { $match: { role: 'customer', createdAt: matchStage.createdAt || { $gte: startDate } } },
                                 { $count: "count" }
                             ],
                             total: [
@@ -2543,8 +2545,11 @@ class AdminService {
                 }))
             ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 15);
 
-            const totalBookings = stats.statusDistribution.reduce((acc, curr) => acc + curr.count, 0);
-            const cancelledCount = stats.statusDistribution.find(s => s._id === 'cancelled')?.count || 0;
+            const totalBookings = stats?.statusDistribution ? stats.statusDistribution.reduce((acc, curr) => acc + curr.count, 0) : 0;
+            const completedCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['completed'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : (stats?.revenueOverview?.[0]?.completedCount || 0);
+            const cancelledCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['cancelled'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
+            const inProgressCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['inprogress', 'in-progress', 'in_progress', 'ontheway', 'arrived', 'started', 'accepted'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
+            const pendingCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['pending', 'searchingprovider', 'offered', 'assigned'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
 
             // Rebook and Favorite Provider Analytics
             const [totalRebooks, topRepeatedServices, mostFavoritedProviders, repeatCustomerCount, totalFavBookings, unassignedBookingsByZone] = await Promise.all([
@@ -2579,7 +2584,7 @@ class AdminService {
                 ]),
                 Booking.countDocuments({ isFavoriteProviderBooking: true }),
                 Booking.aggregate([
-                    { $match: { provider: null, status: 'pending' } },
+                    { $match: { provider: null, status: { $in: ['Pending', 'pending', 'SearchingProvider', 'Offered', 'Assigned'] } } },
                     {
                         $group: {
                             _id: "$zoneId",
@@ -2611,10 +2616,10 @@ class AdminService {
             const result = {
                 bookingStats: {
                     total: totalBookings,
-                    completed: stats.revenueOverview[0]?.completedCount || 0,
+                    completed: completedCount,
                     cancelled: cancelledCount,
-                    inProgress: stats.statusDistribution.find(s => s._id === 'in-progress')?.count || 0,
-                    pending: stats.statusDistribution.find(s => s._id === 'pending')?.count || 0,
+                    inProgress: inProgressCount,
+                    pending: pendingCount,
                 },
                 providerStats: {
                     active: activeProvidersCount || 0
