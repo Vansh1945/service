@@ -56,6 +56,7 @@ const SystemSetting = () => {
       instantBooking: true,
       emergencySurgeCharge: 0,
       minCompletedImages: 1,
+      complaintWindowDays: 7,
       trustedProviderRules: {
         minRating: 4.0,
         minCompletedJobs: 5,

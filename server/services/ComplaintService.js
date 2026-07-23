@@ -125,7 +125,8 @@ class ComplaintService {
 
       // Validate Complaint Type if provided
       const validTypes = [
-        'poor_quality', 'incomplete_work', 'provider_late', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'other'
+        'poor_quality', 'incomplete_work', 'provider_late', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'cancel_booking', 'other',
+        'provider_no_show', 'provider_not_responding', 'wrong_service', 'provider_left_job', 'safety_issue'
       ];
       if (complaintType && !validTypes.includes(complaintType)) {
         await session.abortTransaction();
@@ -133,7 +134,6 @@ class ComplaintService {
         return res.status(400).json({ message: 'Invalid complaint type.' });
       }
 
-      // --- RATE LIMITING / COMPLAINT SPAM PROTECTION ---
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const recentCount = await Complaint.countDocuments({
         userType: userRole,
@@ -212,17 +212,72 @@ class ComplaintService {
           return res.status(400).json({ message: 'Cannot submit a complaint for a cancelled booking.' });
         }
 
-        // Check valid time window: within 7 days of completion/creation
-        const bookingDate = booking.createdAt || booking.date || new Date();
-        const bookingAgeMs = Date.now() - new Date(bookingDate).getTime();
-        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-        if (bookingAgeMs > sevenDaysMs) {
+        const bookingStatusNorm = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
+
+        // If cancel booking is requested, automatically route to BookingService.cancelBooking
+        if (category === 'Service issue' && userRole === 'customer' && complaintType === 'cancel_booking') {
+          const BookingService = require('./BookingService');
+          req.params.id = bookingId;
           await session.abortTransaction();
           session.endSession();
-          return res.status(400).json({
-            success: false,
-            message: 'Dispute window closed: Complaints must be submitted within 7 days of booking creation or completion.'
-          });
+          return await BookingService.cancelBooking(req, res);
+        }
+
+        // BEFORE WORK STARTS
+        const beforeWorkStatuses = ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived'];
+        if (beforeWorkStatuses.includes(bookingStatusNorm)) {
+          const allowedBeforeStart = ['cancel_booking', 'provider_late', 'provider_no_show', 'provider_not_responding'];
+          if (!complaintType || !allowedBeforeStart.includes(complaintType)) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+              success: false,
+              message: 'Only pre-service complaints (Cancel Booking, Provider Late, Provider No Show, Provider Not Responding) are allowed before work starts.'
+            });
+          }
+        }
+
+        // AFTER WORK STARTS
+        const activeStatuses = ['started', 'inprogress'];
+        if (activeStatuses.includes(bookingStatusNorm)) {
+          const allowedAfterStart = ['poor_quality', 'incomplete_work', 'wrong_service', 'provider_left_job', 'behaviour_issue', 'overcharged_service', 'safety_issue'];
+          if (!complaintType || !allowedAfterStart.includes(complaintType)) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+              success: false,
+              message: 'Invalid complaint reason for active service. Allowed reasons: Poor Service, Work Not Completed, Wrong Service, Provider Left Job, Behaviour Issue, Extra Charge, Safety Issue.'
+            });
+          }
+        }
+
+        // Completed: check complaint window from completedAt
+        if (bookingStatusNorm === 'completed') {
+          const { SystemConfig } = require('../models/SystemSetting-model');
+          const sysConfig = await SystemConfig.findOne().session(session).lean();
+          const windowDays = sysConfig?.bookingSettings?.complaintWindowDays ?? 7;
+          const windowMs = windowDays * 24 * 60 * 60 * 1000;
+
+          const completionDate = booking.completedAt || booking.serviceCompletedAt || booking.updatedAt || booking.createdAt;
+          const ageMs = Date.now() - new Date(completionDate).getTime();
+          if (ageMs > windowMs) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+              success: false,
+              message: `Dispute window closed: Complaints must be submitted within ${windowDays} days of service completion.`
+            });
+          }
+
+          const allowedCompleted = ['poor_quality', 'incomplete_work', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'other'];
+          if (complaintType && !allowedCompleted.includes(complaintType)) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+              success: false,
+              message: 'Invalid complaint reason for completed service.'
+            });
+          }
         }
 
         // Instant fake refund requests check: block service issues on unstarted bookings
@@ -312,7 +367,13 @@ class ComplaintService {
         'incomplete_work',
         'provider_late',
         'payment_issue',
-        'overcharged_service'
+        'overcharged_service',
+        'provider_no_show',
+        'provider_not_responding',
+        'cancel_booking',
+        'wrong_service',
+        'provider_left_job',
+        'safety_issue'
       ];
 
       const matchedCategory = refundEligibleCategories.some(c =>
@@ -711,6 +772,23 @@ class ComplaintService {
           success: false,
           message: `Invalid status transition: cannot change status from '${currentStatus}' to '${resolvedStatus}' by resolving.`
         });
+      }
+
+      if ((decision === 'full_refund' || decision === 'approve_refund' || resolvedStatus === 'refunded') &&
+        (complaint.complaintType === 'cancel_booking')) {
+        const booking = complaint.booking;
+        if (booking) {
+          const isWorkStartedOrCompleted = booking.timeline?.some(t => t.label === 'Work Started') ||
+            ['started', 'inprogress', 'completed'].includes((booking.status || '').toLowerCase());
+          if (isWorkStartedOrCompleted) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+              success: false,
+              message: 'Cannot cancel this booking: work has already started or the booking is completed.'
+            });
+          }
+        }
       }
 
       // --- SAFETY GUARDS (FIX 9) ---
@@ -1203,6 +1281,9 @@ class ComplaintService {
                 }
 
                 // Update booking fields
+                if (complaintType === 'cancel_booking' || complaint.complaintType === 'cancel_booking') {
+                  booking.status = 'cancelled';
+                }
                 booking.paymentStatus = 'refunded';
                 booking.disputeStatus = 'resolved';
                 booking.adminRefundDecision = (refundAmount >= booking.totalAmount) ? 'approved' : 'partial';
@@ -1280,7 +1361,7 @@ class ComplaintService {
 
   static async updateComplaintStatus(req, res) {
     try {
-      const { status } = req.body;
+      const { status, resolutionNotes } = req.body;
       const validStatuses = ["Open", "In-Progress", "Solved", "Reopened", "Closed", "submitted", "under_review", "provider_responded", "admin_review", "resolved", "rejected", "refunded", "request_more_evidence"];
 
       if (!status || !validStatuses.includes(status)) {
@@ -1326,6 +1407,11 @@ class ComplaintService {
       }
 
       complaint.status = status;
+      complaint.resolutionNotes = resolutionNotes;
+      complaint.resolvedBy = req.admin?._id || req.user?._id;
+      if (['resolved', 'Solved'].includes(status)) {
+        complaint.resolvedAt = new Date();
+      }
 
       await complaint.save();
 
@@ -1514,6 +1600,10 @@ class ComplaintService {
           },
           complaintProofs: b.complaintProofs || [],
           timeline: timeline,
+          totalAmount: b.totalAmount,
+          commissionAmount: b.commissionAmount,
+          providerEarnings: b.providerEarnings,
+          cancellationProgress: b.cancellationProgress || { refundAmount: b.refundAmount || 0 },
           cancelledBy: b.cancelledBy,
           refundAmount: b.refundAmount,
           platformFeeRetained: b.platformFeeRetained
@@ -1608,7 +1698,7 @@ class ComplaintService {
 
     if (!isDetail) {
       let complaintType = 'N/A';
-      const descriptionMatch = complaint.description?.match(/^\[(bad_work|late_arrival|rude_behavior|incomplete_work|overcharge)\]/);
+      const descriptionMatch = complaint.description?.match(/^\[(poor_quality|incomplete_work|provider_late|payment_issue|overcharged_service|behaviour_issue|cancel_booking|other|bad_work|late_arrival|rude_behavior|overcharge)\]/);
       if (descriptionMatch) complaintType = descriptionMatch[1];
       return {
         ...complaint,
@@ -1637,7 +1727,7 @@ class ComplaintService {
 
     // ─── Extract Complaint Type ─────────────────────────────────
     let complaintType = 'N/A';
-    const descriptionMatch = complaint.description?.match(/^\[(bad_work|late_arrival|rude_behavior|incomplete_work|overcharge)\]/);
+    const descriptionMatch = complaint.description?.match(/^\[(poor_quality|incomplete_work|provider_late|payment_issue|overcharged_service|behaviour_issue|cancel_booking|other|bad_work|late_arrival|rude_behavior|overcharge)\]/);
     if (descriptionMatch) complaintType = descriptionMatch[1];
 
     // ─── Provider Complaint History ─────────────────────────────
@@ -1717,7 +1807,7 @@ class ComplaintService {
         let note = undefined;
         let by = 'Support Team';
 
-        if (isFinalStatus && (isLatest || h.status === complaint.status)) {
+        if ((isFinalStatus || isLatest) && (isLatest || h.status === complaint.status)) {
           note = complaint.resolutionNotes;
           by = complaint.resolvedBy?.name || 'Support Admin';
         } else if (h.status === 'Reopened' && complaint.reopenHistory?.length > 0) {
@@ -2038,7 +2128,13 @@ class ComplaintService {
       'incomplete_work',
       'provider_late',
       'payment_issue',
-      'overcharged_service'
+      'overcharged_service',
+      'provider_no_show',
+      'provider_not_responding',
+      'cancel_booking',
+      'wrong_service',
+      'provider_left_job',
+      'safety_issue'
     ];
 
     const category = complaint.category || '';

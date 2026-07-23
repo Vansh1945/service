@@ -124,7 +124,6 @@ import {
     Filter
 } from 'lucide-react';
 
-// Static option arrays outside component — never change between renders
 const statusOptions = [
     { value: '', label: 'All Status' },
     { value: 'pending', label: 'Pending' },
@@ -146,7 +145,6 @@ const paymentStatusOptions = [
 
 
 const getBookingTypeBadge = (bookingType) => {
-    // EMERGENCY BOOKING ENGINE UPGRADE
     const type = bookingType || 'scheduled';
     let colorClass = '';
     let label = '';
@@ -172,13 +170,10 @@ const getBookingTypeBadge = (bookingType) => {
             {label}
         </span>
     );
-    // END EMERGENCY BOOKING ENGINE UPGRADE
 };
 
-// Memoized Booking Row to prevent unnecessary re-renders
 const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel, rowActionStates = {} }) => {
     const isRowLoading = !!rowActionStates[booking._id];
-    // EMERGENCY BOOKING ENGINE UPGRADE
     const isEmergency = booking.bookingType?.toLowerCase() === 'emergency' || booking.isEmergency;
     const isInstant = booking.bookingType?.toLowerCase() === 'instant' || booking.isInstant;
 
@@ -188,7 +183,6 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
     } else if (isInstant) {
         rowBorderColor = 'border-l-4 border-orange-500';
     }
-    // END EMERGENCY BOOKING ENGINE UPGRADE
     return (
         <tr className={`hover:bg-gray-50 ${rowBorderColor} ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
             <td className="px-4 py-4 whitespace-nowrap">
@@ -298,7 +292,7 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                         </button>
                     )}
 
-                    {['pending', 'accepted', 'assigned', 'confirmed', 'Waiting Admin Assignment'].includes(booking.status) && (
+                    {!['started', 'in-progress', 'inprogress', 'completed', 'cancelled'].includes(booking.status?.toLowerCase()) && (
                         <button
                             onClick={() => onCancel(booking)}
                             className="p-1 text-red-500 hover:text-red-700"
@@ -307,7 +301,6 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                             <X className="w-4 h-4" />
                         </button>
                     )}
-                    {/* END EMERGENCY BOOKING ENGINE UPGRADE */}
 
                     <button
                         onClick={() => onDelete(booking)}
@@ -1295,8 +1288,8 @@ const AdminBookingsView = () => {
                             key={tab.id}
                             onClick={() => setSelectedQueue(tab.id)}
                             className={`px-4 py-3 text-xs font-bold uppercase tracking-wider border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${selectedQueue === tab.id
-                                    ? 'border-primary text-primary bg-white'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'
+                                ? 'border-primary text-primary bg-white'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'
                                 }`}
                         >
                             {tab.label}
@@ -1428,13 +1421,12 @@ const AdminBookingsView = () => {
                                             )}
                                         </InfoRow>
                                         <InfoRow label="SLA Status">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
-                                                bk.slaStatus === 'CRITICAL' ? 'bg-red-100 text-red-700 border-red-500 animate-pulse' :
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${bk.slaStatus === 'CRITICAL' ? 'bg-red-100 text-red-700 border-red-500 animate-pulse' :
                                                 bk.slaStatus === 'DELAYED' ? 'bg-orange-100 text-orange-700 border-orange-400' :
-                                                bk.slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-750 border-yellow-400' :
-                                                bk.slaStatus === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-400' :
-                                                'bg-blue-105 text-blue-800 border-blue-200'
-                                            }`}>
+                                                    bk.slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-750 border-yellow-400' :
+                                                        bk.slaStatus === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-400' :
+                                                            'bg-blue-105 text-blue-800 border-blue-200'
+                                                }`}>
                                                 {bk.slaStatus || 'ON_TIME'}
                                             </span>
                                         </InfoRow>
@@ -1861,7 +1853,7 @@ const AdminBookingsView = () => {
                                 >
                                     Close
                                 </button>
-                                {['pending', 'accepted', 'assigned', 'confirmed'].includes(bk.status) && (
+                                {!['started', 'in-progress', 'inprogress', 'completed', 'cancelled'].includes(bk.status?.toLowerCase()) && (
                                     <button
                                         onClick={() => {
                                             fetchBookingComplaints(bk._id);

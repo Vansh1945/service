@@ -480,9 +480,10 @@ const ProviderBooking = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [allBookings, pendingBookings] = await Promise.all([
+      const [allBookings, pendingBookings, rejectedBookings] = await Promise.all([
         fetchBookings('all'),
-        fetchBookings('pending')
+        fetchBookings('pending'),
+        fetchBookings('rejected')
       ]);
 
       const combinedMap = new Map();
@@ -495,6 +496,7 @@ const ProviderBooking = () => {
       const inProgressList = [];
       const completedList = [];
       const cancelledList = [];
+      const rejectedList = rejectedBookings || [];
 
       combinedList.forEach(b => {
         const s = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -506,10 +508,8 @@ const ProviderBooking = () => {
           inProgressList.push(b);
         } else if (['completed'].includes(s)) {
           completedList.push(b);
-        } else if (['cancelled', 'rejected', 'expired', 'refunded'].includes(s)) {
+        } else if (['cancelled', 'expired', 'refunded'].includes(s)) {
           cancelledList.push(b);
-        } else {
-          pendingList.push(b);
         }
       });
 
@@ -518,7 +518,8 @@ const ProviderBooking = () => {
         accepted: acceptedList,
         'in-progress': inProgressList,
         completed: completedList,
-        cancelled: cancelledList
+        cancelled: cancelledList,
+        rejected: rejectedList
       });
       setStats(calculateStats(combinedList));
     } catch (error) {
@@ -865,7 +866,8 @@ const ProviderBooking = () => {
   // ── Booking card ─────────────────────────────────────────────────────────
   const renderBookingCard = (booking) => {
     const currentStatus = (booking.status || 'Pending').toLowerCase().replace(/[^a-z]/g, '');
-    const isPending = currentStatus === 'pending' || currentStatus === 'assigned' || currentStatus === 'searchingprovider' || currentStatus === 'offered' || currentStatus === 'reassigned';
+    const isRejected = (booking.rejectedBy?.toString() === user?._id?.toString()) || (booking.metadata?.ignoredProviders?.some(id => id?.toString() === user?._id?.toString()));
+    const isPending = !isRejected && (currentStatus === 'pending' || currentStatus === 'assigned' || currentStatus === 'searchingprovider' || currentStatus === 'offered' || currentStatus === 'reassigned');
     const isAccepted = currentStatus === 'accepted';
     const isInProgress = currentStatus === 'inprogress' || currentStatus === 'started' || currentStatus === 'ontheway' || currentStatus === 'arrived';
     const isCompleted = currentStatus === 'completed';
@@ -1232,6 +1234,7 @@ const ProviderBooking = () => {
               <option value="accepted">Accepted ({bookings.accepted.length})</option>
               <option value="in-progress">In Progress ({bookings['in-progress'].length})</option>
               <option value="completed">Completed ({bookings.completed.length})</option>
+              <option value="rejected">Rejected Bookings ({bookings.rejected?.length || 0})</option>
               <option value="cancelled">Cancelled ({bookings.cancelled.length})</option>
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />

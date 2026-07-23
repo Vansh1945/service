@@ -7,7 +7,7 @@ const submitComplaintSchema = z.object({
   category: z.string().min(1, "Category is required"),
   bookingId: objectIdSchema.optional().or(z.literal('')),
   complaintType: z.enum([
-    'poor_quality', 'incomplete_work', 'provider_late', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'other'
+    'poor_quality', 'incomplete_work', 'provider_late', 'payment_issue', 'overcharged_service', 'behaviour_issue', 'cancel_booking', 'other'
   ]).optional()
 });
 
@@ -22,7 +22,8 @@ const resolveComplaintSchema = z.object({
 const updateComplaintStatusSchema = z.object({
   status: z.enum(['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'], {
     errorMap: () => ({ message: "Invalid status" })
-  })
+  }),
+  resolutionNotes: z.string().min(1, "Admin Remarks (Required) is required")
 });
 
 const reopenComplaintSchema = z.object({

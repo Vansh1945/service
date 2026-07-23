@@ -270,6 +270,10 @@ const systemConfigSchema = new mongoose.Schema(
           delayedMinutes: { type: Number, default: 15 },
           criticalMinutes: { type: Number, default: 20 }
         }
+      },
+      complaintWindowDays: {
+        type: Number,
+        default: 7
       }
     },
     walletSettings: {

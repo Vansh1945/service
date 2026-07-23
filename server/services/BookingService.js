@@ -772,9 +772,9 @@ class BookingService {
       const lateArrival = Math.max(0, completedJobs.length - onTimeCompleted);
       const providerReliabilityScore = Math.round(
         (acceptanceRate * 0.2) +
-         (completionRate * 0.3) +
-         (emergencySuccessRate * 0.3) +
-         ((100 - cancellationRate) * 0.2)
+        (completionRate * 0.3) +
+        (emergencySuccessRate * 0.3) +
+        ((100 - cancellationRate) * 0.2)
       );
 
       // Save back to provider doc
@@ -852,35 +852,60 @@ class BookingService {
       const { SystemConfig } = require('../models/SystemSetting-model');
       const settings = await SystemConfig.findOne();
       if (settings) {
-        if (resolvedBookingType === 'emergency' && settings.bookingSettings?.emergencyAssignment === false) {
-          return res.status(400).json({
-            success: false,
-            message: 'Emergency booking requests are temporarily disabled by the platform.'
-          });
-        }
-        if (resolvedBookingType === 'instant' && settings.bookingSettings?.instantBooking === false) {
-          return res.status(400).json({
-            success: false,
-            message: 'Instant booking requests are temporarily disabled by the platform.'
-          });
-        }
-        if (settings.bookingSettings?.bookingMode === 'slot-based' && resolvedBookingType === 'scheduled' && !time) {
-          return res.status(400).json({
-            success: false,
-            message: 'Time slot selection is required for slot-based booking mode.'
-          });
-        }
-        if (resolvedBookingType === 'scheduled' && date) {
-          const maxDays = settings.bookingSettings?.maxBookingDays || 3;
-          const bookingDate = new Date(date);
-          const maxDate = new Date();
-          maxDate.setDate(maxDate.getDate() + maxDays);
-          maxDate.setHours(23, 59, 59, 999);
-          if (bookingDate > maxDate) {
+        if (resolvedBookingType === 'emergency') {
+          if (settings.bookingSettings?.emergencyAssignment === false) {
             return res.status(400).json({
               success: false,
-              message: `Booking date cannot exceed ${maxDays} days in advance.`
+              message: 'Emergency booking requests are temporarily disabled by the platform.'
             });
+          }
+        } else if (resolvedBookingType === 'instant') {
+          if (settings.bookingSettings?.instantBooking === false) {
+            return res.status(400).json({
+              success: false,
+              message: 'Instant booking requests are temporarily disabled by the platform.'
+            });
+          }
+        } else if (resolvedBookingType === 'scheduled') {
+          if (settings.bookingSettings?.bookingMode === 'slot-based' && !time) {
+            return res.status(400).json({
+              success: false,
+              message: 'Time slot selection is required for slot-based booking mode.'
+            });
+          }
+          if (date) {
+            const maxDays = settings.bookingSettings?.maxBookingDays || 3;
+            const bookingDate = new Date(date);
+            const maxDate = new Date();
+            maxDate.setDate(maxDate.getDate() + maxDays);
+            maxDate.setHours(23, 59, 59, 999);
+            if (bookingDate > maxDate) {
+              return res.status(400).json({
+                success: false,
+                message: `Booking date cannot exceed ${maxDays} days in advance.`
+              });
+            }
+          }
+          if (time && settings.bookingSettings?.startTime && settings.bookingSettings?.endTime) {
+            const parseMinutes = (tStr) => {
+              if (!tStr || typeof tStr !== 'string') return null;
+              const [h, m] = tStr.split(':').map(Number);
+              return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
+            };
+            const slotMinutes = parseMinutes(time);
+            const startMinutes = parseMinutes(settings.bookingSettings.startTime);
+            const endMinutes = parseMinutes(settings.bookingSettings.endTime);
+            if (slotMinutes !== null && startMinutes !== null && endMinutes !== null) {
+              const inRange = startMinutes <= endMinutes
+                ? (slotMinutes >= startMinutes && slotMinutes <= endMinutes)
+                : (slotMinutes >= startMinutes || slotMinutes <= endMinutes);
+              if (!inRange) {
+                return res.status(400).json({
+                  success: false,
+                  message: `Scheduled booking time must be within business working hours (${settings.bookingSettings.startTime} - ${settings.bookingSettings.endTime}).`
+                });
+              }
+            }
           }
         }
       }
@@ -997,6 +1022,27 @@ class BookingService {
           throw new Error('Selected address is outside our active service zones');
         }
         let detectedZoneId = detectedZone._id;
+
+        // Pre-booking Provider Availability Validation for Instant and Emergency bookings
+        if (resolvedBookingType === 'instant' || resolvedBookingType === 'emergency') {
+          const ProviderAssignmentService = require('./ProviderAssignmentService');
+          const eligibleProviders = await ProviderAssignmentService.findEligibleProviders({
+            bookingType: resolvedBookingType,
+            serviceCategory: service.category,
+            lat: address?.lat,
+            lng: address?.lng,
+            zoneId: detectedZoneId,
+            trustedProviderOnly: trustedProviderOnly || resolvedIsEmergency
+          });
+
+          if (!eligibleProviders || eligibleProviders.length === 0) {
+            if (resolvedBookingType === 'emergency') {
+              throw new Error('Emergency service is currently unavailable in your area because no trusted provider is available.');
+            } else {
+              throw new Error('No provider is currently available for an Instant Booking in your area. Please try again later or schedule your service.');
+            }
+          }
+        }
 
         const PricingService = require('./PricingService');
         const priceDetails = await PricingService.calculatePriceEstimate({
@@ -2258,7 +2304,17 @@ class BookingService {
         });
       }
 
-      // --- NEW STRICT EARNING STATUS CHECKS ---
+      const normalizedStatus = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
+      if (['started', 'inprogress'].includes(normalizedStatus)) {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({
+          success: false,
+          message: 'Work has already started. Please raise a complaint if you are facing any issue.',
+          code: 'WORK_STARTED'
+        });
+      }
+
       const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
       if (earning && (earning.status === 'available' || earning.status === 'withdrawn' || earning.status === 'paid')) {
         await safeAbort(session);
@@ -2924,6 +2980,7 @@ class BookingService {
       if (normalizedStatus === 'Pending') {
         query = {
           'services.service': { $in: serviceIds },
+          'metadata.ignoredProviders': { $ne: providerId },
           $or: [
             { status: { $in: ['Pending', 'SearchingProvider', 'pending', 'searchingprovider'] }, $or: [{ provider: { $exists: false } }, { provider: null }] },
             { status: { $in: ['Assigned', 'assigned'] }, provider: providerId },
@@ -2949,6 +3006,14 @@ class BookingService {
           status: 'Completed',
           provider: providerId,
           'services.service': { $in: serviceIds }
+        };
+      } else if (normalizedStatus === 'Rejected') {
+        query = {
+          $or: [
+            { rejectedBy: providerId },
+            { 'metadata.ignoredProviders': providerId },
+            { status: 'Rejected', provider: providerId }
+          ]
         };
       } else if (normalizedStatus === 'all') {
         query = {
@@ -3720,9 +3785,10 @@ class BookingService {
       // Disassociate provider activeBooking
       await Provider.findByIdAndUpdate(providerId, { $set: { activeBooking: null } }, { session });
 
-      // Update booking status to pending, clear current provider, and ignore this provider
+      // Update booking status to pending, clear current provider, and store rejection history
       booking.status = 'pending';
       booking.provider = null;
+      booking.providerAcceptanceStatus = 'rejected';
       if (!booking.metadata) booking.metadata = {};
       if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
       if (!booking.metadata.ignoredProviders.some(p => p.toString() === providerId.toString())) {
@@ -3734,7 +3800,7 @@ class BookingService {
         status: 'pending',
         timestamp: new Date(),
         note: `Booking rejected by provider (reason: ${reason || 'Provider declined'}). Seeking reassignment.`,
-        updatedBy: 'system'
+        updatedBy: 'provider'
       });
 
       await booking.save({ session });
@@ -5623,7 +5689,7 @@ class BookingService {
         await Provider.findByIdAndUpdate(oldProviderId, { $set: { activeBooking: null } });
         // Increment reassignment/late counts
         await Provider.findByIdAndUpdate(oldProviderId, {
-          $inc: { 
+          $inc: {
             'performanceScore.lateArrival': 1,
             'performanceScore.reassignmentCount': 1
           }

@@ -99,6 +99,15 @@ const BookingTab = ({ systemSettings, handleNestedChange }) => {
           description="Required timeframe for processing refund requests to customer wallets/gateways."
         />
         <SettingInput
+          label="Complaint Window (Days)"
+          value={systemSettings.bookingSettings.complaintWindowDays ?? 7}
+          onChange={(e) => handleNestedChange('bookingSettings', 'complaintWindowDays', Number(e.target.value))}
+          type="number"
+          min="1"
+          max="90"
+          description="Number of days after service completion within which customers can file a complaint or dispute."
+        />
+        <SettingInput
           label="Max Bookings per Provider"
           value={systemSettings.bookingSettings.maxBookingsPerProvider}
           onChange={(e) => handleNestedChange('bookingSettings', 'maxBookingsPerProvider', Number(e.target.value))}

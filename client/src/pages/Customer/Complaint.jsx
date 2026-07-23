@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
   MessageSquare, Phone, Plus,
   Clock, AlertCircle, CheckCircle, Check, X, Upload,
-  ChevronRight, FileText, Headphones, ArrowLeft,
+  ChevronRight, ChevronDown, FileText, Headphones, ArrowLeft,
   Wallet, RotateCcw
 } from 'lucide-react';
 import { getCustomerBookings } from '../../services/BookingService';
+import { getSystemSetting } from '../../services/SystemService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
-import { formatDate, formatDateTime, compressImage } from '../../utils/format';
+
+import { formatDate, formatTime, formatDateTime, compressImage } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
 import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
@@ -68,6 +70,7 @@ const formatCustomDateTime = (dateString) => {
 const ComplaintsPage = () => {
   const { token, user, logoutUser, isAuthenticated, API, API_URL_IMAGE } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('complaintId');
 
@@ -87,6 +90,8 @@ const ComplaintsPage = () => {
   const [submittingComplaint, setSubmittingComplaint] = useState(false);
   const [chatRoomInfo, setChatRoomInfo] = useState(null);
 
+  const [systemSettings, setSystemSettings] = useState(null);
+
   useEffect(() => {
     if (entityId) {
       viewComplaintDetails(entityId);
@@ -94,8 +99,31 @@ const ComplaintsPage = () => {
   }, [entityId]);
 
   useEffect(() => {
+    if (location.state?.prefilledBookingId) {
+      setFormData(prev => ({
+        ...prev,
+        bookingId: location.state.prefilledBookingId,
+        category: 'Service issue'
+      }));
+      setOpenNewComplaint(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  useEffect(() => {
     if (!isAuthenticated) navigate('/login');
   }, [isAuthenticated, navigate]);
+
+  const fetchSystemSettings = async () => {
+    try {
+      const response = await getSystemSetting();
+      if (response.data?.success && response.data?.data) {
+        setSystemSettings(response.data.data);
+      }
+    } catch (err) {
+      console.error('Fetch system settings error:', err);
+    }
+  };
 
   const fetchBookings = async () => {
     try {
@@ -136,6 +164,7 @@ const ComplaintsPage = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
+      fetchSystemSettings();
       fetchBookings();
       fetchComplaints();
     }
@@ -178,9 +207,14 @@ const ComplaintsPage = () => {
     }));
   };
 
+  const resetForm = () => {
+    setFormData({ bookingId: '', title: '', description: '', category: '', complaintType: '', images: [], previewImages: [] });
+    setFormErrors({ bookingId: '', title: '', description: '', category: '', complaintType: '' });
+  };
+
   const validateForm = () => {
     let valid = true;
-    const newErrors = { bookingId: '', title: '', description: '', category: '' };
+    const newErrors = { bookingId: '', title: '', description: '', category: '', complaintType: '' };
     if ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) {
       newErrors.bookingId = 'Booking ID is required for service or refund-related complaints';
       valid = false;
@@ -190,8 +224,58 @@ const ComplaintsPage = () => {
     if (!formData.description.trim()) { newErrors.description = 'Description is required'; valid = false; }
     else if (formData.description.trim().length < 20) { newErrors.description = 'Minimum 20 characters'; valid = false; }
     if (!formData.category) { newErrors.category = 'Category is required'; valid = false; }
+    if (formData.category === 'Service issue' && !formData.complaintType) {
+      newErrors.complaintType = 'Please select a reason for complaint';
+      valid = false;
+    }
     setFormErrors(newErrors);
     return valid;
+  };
+
+  const getComplaintReasonsForStatus = (status) => {
+    const norm = (status || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!norm) return [
+      { value: 'cancel_booking', label: 'Cancel Booking' },
+      { value: 'provider_late', label: 'Provider Late' },
+      { value: 'provider_no_show', label: 'Provider No Show' },
+      { value: 'provider_not_responding', label: 'Provider Not Responding' },
+      { value: 'poor_quality', label: 'Poor Quality' },
+      { value: 'incomplete_work', label: 'Incomplete Work' },
+      { value: 'payment_issue', label: 'Payment Issue' },
+      { value: 'overcharged_service', label: 'Overcharged Service' },
+      { value: 'behaviour_issue', label: 'Behaviour Issue' },
+      { value: 'other', label: 'Other' }
+    ];
+    if (['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived'].includes(norm)) {
+      return [
+        { value: 'cancel_booking', label: 'Cancel Booking' },
+        { value: 'provider_late', label: 'Provider Late' },
+        { value: 'provider_no_show', label: 'Provider No Show' },
+        { value: 'provider_not_responding', label: 'Provider Not Responding' }
+      ];
+    }
+    if (['started', 'inprogress'].includes(norm)) {
+      return [
+        { value: 'poor_quality', label: 'Poor Service' },
+        { value: 'incomplete_work', label: 'Work Not Completed' },
+        { value: 'wrong_service', label: 'Wrong Service' },
+        { value: 'provider_left_job', label: 'Provider Left Job' },
+        { value: 'behaviour_issue', label: 'Behaviour Issue' },
+        { value: 'overcharged_service', label: 'Extra Charge' },
+        { value: 'safety_issue', label: 'Safety Issue' }
+      ];
+    }
+    if (norm === 'completed') {
+      return [
+        { value: 'poor_quality', label: 'Poor Quality' },
+        { value: 'incomplete_work', label: 'Incomplete Work' },
+        { value: 'payment_issue', label: 'Payment Issue' },
+        { value: 'overcharged_service', label: 'Overcharged Service' },
+        { value: 'behaviour_issue', label: 'Behaviour Issue' },
+        { value: 'other', label: 'Other' }
+      ];
+    }
+    return [{ value: 'other', label: 'Other' }];
   };
 
   const handleSubmitComplaint = async () => {
@@ -250,19 +334,13 @@ const ComplaintsPage = () => {
       toast.error(err.response?.data?.message || 'Failed to reopen');
     }
   };
-
-  const resetForm = () => {
-    setFormData({ bookingId: '', title: '', description: '', category: '', images: [], previewImages: [] });
-    setFormErrors({ bookingId: '', title: '', description: '', category: '' });
-  };
-
-
-
-
   const getStatusStyle = getCustomStatusStyle;
+
+  const selectedBooking = bookings.find(b => b._id === formData.bookingId);
 
   const isFormDisabled =
     ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) ||
+    (formData.category === 'Service issue' && !formData.complaintType) ||
     !formData.title.trim() || !formData.description.trim() || !formData.category || submittingComplaint;
 
   return (
@@ -545,13 +623,9 @@ const ComplaintsPage = () => {
                     className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 bg-white"
                   >
                     <option value="">Select Reason</option>
-                    <option value="poor_quality">Poor Quality</option>
-                    <option value="incomplete_work">Incomplete Work</option>
-                    <option value="provider_late">Provider Late</option>
-                    <option value="payment_issue">Payment Issue</option>
-                    <option value="overcharged_service">Overcharged Service</option>
-                    <option value="behaviour_issue">Behaviour Issue</option>
-                    <option value="other">Other</option>
+                    {getComplaintReasonsForStatus(selectedBooking?.status).map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                   {formErrors.complaintType && <p className="text-xs text-red-500 mt-1">{formErrors.complaintType}</p>}
                 </div>
@@ -561,42 +635,122 @@ const ComplaintsPage = () => {
               {(formData.category === 'Service issue' || formData.category === 'Refund request') && (
                 <div>
                   <label className="block text-xs font-semibold text-secondary mb-1.5">Select Booking *</label>
-                  {formData.bookingId ? (
-                    (() => {
-                      const selectedBooking = bookings.find(b => b._id === formData.bookingId);
-                      return (
-                        <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-100 flex items-center justify-between">
-                          <div className="grid grid-cols-2 gap-4 flex-1">
-                            <div>
-                              <span className="block text-[9px] uppercase font-bold text-neutral-400">Booking ID</span>
-                              <span className="text-xs font-semibold text-neutral-700">#{selectedBooking?.bookingId || selectedBooking?._id?.slice(-8) || 'N/A'}</span>
+                  {(() => {
+                    const activeComplaintBookingIds = new Set(
+                      complaints
+                        .filter(c => ['Open', 'In-Progress', 'Reopened', 'submitted', 'under_review', 'provider_responded', 'admin_review'].includes(c.status))
+                        .map(c => typeof c.booking === 'object' ? c.booking?._id : c.booking)
+                        .filter(Boolean)
+                    );
+
+                    const configuredDays = systemSettings?.bookingSettings?.complaintWindowDays ?? 7;
+                    const complaintWindowMs = configuredDays * 24 * 60 * 60 * 1000;
+                    const eligibleBookings = bookings.filter(b => {
+                      const statusNorm = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
+
+                      // Only hide Completed bookings if they have passed the complaintWindowDays limit
+                      if (statusNorm === 'completed') {
+                        const completionDate = b.completedAt || b.serviceCompletedAt || b.updatedAt || b.createdAt || b.date;
+                        if (completionDate) {
+                          const ageMs = Date.now() - new Date(completionDate).getTime();
+                          return ageMs <= complaintWindowMs;
+                        }
+                      }
+
+                      return true;
+                    });
+
+                    const selectedBooking = eligibleBookings.find(b => b._id === formData.bookingId);
+                    const isDisabled = eligibleBookings.length === 0;
+
+                    return (
+                      <div className="relative w-full">
+                        <div
+                          onClick={() => {
+                            if (isDisabled) return;
+                            const el = document.getElementById('booking-dropdown-menu');
+                            if (el) el.classList.toggle('hidden');
+                          }}
+                          className={`w-full px-3 py-2.5 text-xs font-medium border border-neutral-200 rounded-xl bg-white text-neutral-800 shadow-2xs transition-all flex items-center justify-between gap-2 ${isDisabled ? 'bg-neutral-100/70 text-neutral-400 cursor-not-allowed border-neutral-200' : 'hover:border-neutral-300 cursor-pointer'}`}
+                        >
+                          {selectedBooking ? (
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span className="font-bold text-neutral-900 shrink-0">#{selectedBooking.bookingId || selectedBooking._id.slice(-8)}</span>
+                              <span className="text-neutral-400 font-normal shrink-0">•</span>
+                              <span className="truncate text-neutral-700">{selectedBooking.services?.[0]?.service?.title || 'Service'}</span>
                             </div>
-                            <div>
-                              <span className="block text-[9px] uppercase font-bold text-neutral-400">Service Name</span>
-                              <span className="text-xs font-semibold text-neutral-700 truncate block">{selectedBooking?.services?.[0]?.service?.title || 'Service'}</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({ ...prev, bookingId: '' }))}
-                            className="text-primary text-[10px] font-bold hover:underline ml-2"
-                          >
-                            Change
-                          </button>
+                          ) : (
+                            <span className="text-neutral-400">
+                              {isDisabled ? 'No bookings are currently eligible for raising a complaint.' : 'Select a booking'}
+                            </span>
+                          )}
+                          <ChevronDown className="w-4 h-4 text-neutral-400 shrink-0" />
                         </div>
-                      );
-                    })()
-                  ) : (
-                    <div>
-                      <select name="bookingId" value={formData.bookingId} onChange={handleInputChange} className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 bg-white">
-                        <option value="">Select a booking</option>
-                        {bookings.flatMap(b => (b.status === 'completed' || b.status === 'cancelled') ? [
-                          <option key={b._id} value={b._id}>{b.services?.[0]?.service?.title || 'Service'} - {formatDate(b.date)}</option>
-                        ] : [])}
-                      </select>
-                      {formErrors.bookingId && <p className="text-xs text-red-500 mt-1">{formErrors.bookingId}</p>}
-                    </div>
-                  )}
+
+                        {!isDisabled && (
+                          <div
+                            id="booking-dropdown-menu"
+                            className="hidden absolute top-full left-0 right-0 mt-1.5 bg-white border border-neutral-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-neutral-100 w-full"
+                          >
+                            <div
+                              onClick={() => {
+                                setFormData(prev => ({ ...prev, bookingId: '' }));
+                                document.getElementById('booking-dropdown-menu')?.classList.add('hidden');
+                              }}
+                              className="px-3 py-2 text-xs text-neutral-400 hover:bg-neutral-50 cursor-pointer"
+                            >
+                              Select a booking
+                            </div>
+                            {eligibleBookings.map(b => {
+                              const bId = b.bookingId || b._id.slice(-8);
+                              const bType = (b.bookingType || (b.isEmergency ? 'Emergency' : b.isInstant ? 'Instant' : 'Scheduled'));
+                              const serviceTitle = b.services?.[0]?.service?.title || 'Service';
+                              const status = b.status || 'Pending';
+                              const dateStr = formatDate(b.date);
+                              const timeStr = b.time ? ` • ${formatTime(b.time)}` : '';
+                              const isSelected = formData.bookingId === b._id;
+
+                              const typeColor = bType.toLowerCase() === 'emergency'
+                                ? 'bg-red-50 text-red-600 border-red-200'
+                                : bType.toLowerCase() === 'instant'
+                                  ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                  : 'bg-blue-50 text-blue-600 border-blue-200';
+
+                              return (
+                                <div
+                                  key={b._id}
+                                  onClick={() => {
+                                    setFormData(prev => ({ ...prev, bookingId: b._id }));
+                                    setFormErrors(prev => ({ ...prev, bookingId: '' }));
+                                    document.getElementById('booking-dropdown-menu')?.classList.add('hidden');
+                                  }}
+                                  className={`px-3 py-2.5 text-xs hover:bg-teal-50/50 cursor-pointer transition-colors flex items-center justify-between gap-2 ${isSelected ? 'bg-teal-50/70 font-semibold' : ''}`}
+                                >
+                                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-neutral-900">#{bId}</span>
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border uppercase ${typeColor}`}>
+                                        {bType}
+                                      </span>
+                                      <span className="text-[9px] text-neutral-500 bg-neutral-100 px-1.5 py-0.2 rounded capitalize">
+                                        {status}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-neutral-700 truncate">{serviceTitle}</span>
+                                      <span className="text-[10px] text-neutral-400 shrink-0 font-normal">{dateStr}{timeStr}</span>
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {formErrors.bookingId && <p className="text-xs text-red-500 mt-1">{formErrors.bookingId}</p>}
                 </div>
               )}
 

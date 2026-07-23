@@ -32,8 +32,8 @@ export const resolveComplaint = (id, data) => {
     return axiosInstance.put(`/complaint/${id}/resolve`, data);
 };
 
-export const updateComplaintStatus = (id, status) => {
-    return axiosInstance.put(`/complaint/${id}/status`, { status });
+export const updateComplaintStatus = (id, status, resolutionNotes) => {
+    return axiosInstance.put(`/complaint/${id}/status`, { status, resolutionNotes });
 };
 
 export const replyToComplaint = (id, data) => {

@@ -16,13 +16,45 @@ import PriceDisplay from '../../components/PriceDisplay';
 import { AdminLocalFilterBar } from '../../components/AdminFilterBar';
 
 const refundOptions = [
-  { value: 'all', label: 'All Cases' },
+  { value: 'all', label: 'All Financial Cases' },
   { value: 'pending', label: 'Pending Refund' },
-  { value: 'disputed', label: 'Disputes Only' },
-  { value: 'completed', label: 'Approved Claims' },
-  { value: 'rejected', label: 'Rejected Claims' },
-  { value: 'held', label: 'Escrow Frozen' }
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'approved', label: 'Approved Refund' },
+  { value: 'rejected', label: 'Rejected Refund' },
+  { value: 'escrow_hold', label: 'Escrow Hold' },
+  { value: 'payout_hold', label: 'Provider Payout Hold' },
+  { value: 'completed', label: 'Completed Refund' }
 ];
+
+const isBookingEligibleForRefundLedger = (b, filterStatus) => {
+  if (!b) return false;
+
+  const hasPendingRefund = b.paymentStatus === 'refund_pending' || b.refundStatus === 'pending' || b.cancellationProgress?.status === 'refund_pending';
+  const hasApprovedRefund = b.paymentStatus === 'refunded' || b.adminRefundDecision === 'approved' || b.refundStatus === 'completed';
+  const hasRejectedRefund = b.adminRefundDecision === 'rejected' || b.refundStatus === 'rejected';
+  
+  const isEscrowFrozen = b.escrowStatus === 'frozen' || b.payoutStatus?.toLowerCase() === 'held' || b.providerPayoutStatus?.toLowerCase() === 'held' || b.earningHoldStatus === 'held';
+  const hasPayoutHeld = b.payoutStatus?.toLowerCase() === 'held';
+  const isUnderReview = b.complaint?.status === 'under_review' || b.status === 'under_review';
+
+  const hasFinancialComplaint = b.complaint && (
+    ['cancel_booking', 'poor_quality', 'incomplete_work', 'provider_late', 'overcharged_service', 'provider_no_show', 'wrong_service', 'provider_left_job', 'safety_issue'].includes(b.complaint.complaintType) || 
+    b.complaint.isRefundEligible !== false
+  );
+
+  const isFinancialCase = hasPendingRefund || hasApprovedRefund || hasRejectedRefund || isEscrowFrozen || hasPayoutHeld || hasFinancialComplaint;
+  if (!isFinancialCase) return false;
+
+  if (filterStatus === 'pending') return hasPendingRefund;
+  if (filterStatus === 'under_review') return isUnderReview;
+  if (filterStatus === 'approved') return hasApprovedRefund;
+  if (filterStatus === 'rejected') return hasRejectedRefund;
+  if (filterStatus === 'escrow_hold') return isEscrowFrozen;
+  if (filterStatus === 'payout_hold') return hasPayoutHeld;
+  if (filterStatus === 'completed') return hasApprovedRefund;
+
+  return true;
+};
 // ── Status Badges (Standardized Clean Designs) ────────────────────────
 const RefundStatusBadge = ({ status }) => {
   const cfg = {
@@ -168,6 +200,17 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 >
                   Inspect Booking <ChevronRight size={10} />
                 </button>
+                {complaintDetails && (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                    <button
+                      onClick={() => window.open(`/admin/complaints?search=${complaintDetails.complaintId || complaintDetails._id}`, '_blank')}
+                      className="text-[10px] bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 px-2 py-0.5 rounded font-semibold transition-colors flex items-center gap-1"
+                    >
+                      Inspect Complaint <ChevronRight size={10} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -595,11 +638,11 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 <p className="text-xs text-gray-450 mt-0.5">Determine the refund eligibility and update status instantly.</p>
               </div>
 
-              {/* Status Spec Grid (FIX 7 Consolidated) */}
+              {/* Status Spec Grid (3x2 Expanded) */}
               <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm grid grid-cols-3 gap-4 text-center text-xs">
                 <div className="space-y-1">
                   <span className="text-gray-400 font-bold block text-[10px] uppercase">Booking Status</span>
-                  <RefundStatusBadge status={booking.paymentStatus} />
+                  <span className="font-bold text-secondary uppercase text-[10px]">{booking.status}</span>
                 </div>
                 <div className="space-y-1 border-x border-gray-100">
                   <span className="text-gray-400 font-bold block text-[10px] uppercase">Payout Escrow</span>
@@ -613,16 +656,23 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                   </span>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Refund Judgment</span>
-                  <span className="font-extrabold text-primary text-[10px] uppercase block mt-0.5">
-                    {booking.adminRefundDecision === 'approved'
-                      ? 'Full Approved'
-                      : booking.adminRefundDecision === 'partial'
-                        ? 'Partial Approved'
-                        : booking.adminRefundDecision === 'rejected'
-                          ? 'Denied'
-                          : 'Awaiting Decision'}
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Refund Status</span>
+                  <RefundStatusBadge status={booking.refundStatus || booking.paymentStatus} />
+                </div>
+
+                <div className="space-y-1 border-t border-gray-100 pt-3">
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Complaint ID/Type</span>
+                  <span className="font-semibold text-secondary text-[10px] block truncate" title={booking.complaint?.complaintType}>
+                    {booking.complaint?.complaintId ? `#${booking.complaint.complaintId}` : 'None'} ({booking.complaint?.complaintType || 'N/A'})
                   </span>
+                </div>
+                <div className="space-y-1 border-x border-t border-gray-100 pt-3">
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Current Stage</span>
+                  <span className="font-bold text-gray-650 uppercase text-[10px] block truncate">{booking.cancellationProgress?.status || booking.status}</span>
+                </div>
+                <div className="space-y-1 border-t border-gray-100 pt-3">
+                  <span className="text-gray-400 font-bold block text-[10px] uppercase">Provider Payout</span>
+                  <span className="font-extrabold text-teal-650 text-[10px] block">₹{booking.providerEarnings || 0}</span>
                 </div>
               </div>
 
@@ -1059,12 +1109,11 @@ const RefundPage = () => {
         {/* Data Grid table */}
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] border-collapse">
+            <table className="w-full border-collapse">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   {[
-                    'Booking ID', 'Refund Type', 'Service', 'Customer', 'Provider', 'Amount',
-                    'Status', 'SLA Status', 'Recommendation', 'Date', 'Action'
+                    'Booking ID', 'Customer', 'Provider', 'Refund Status', 'Refund Amount', 'Created Date', 'Action'
                   ].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       {h}
@@ -1075,7 +1124,7 @@ const RefundPage = () => {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="11" className="px-6 py-4">
+                    <td colSpan="7" className="px-6 py-4">
                       <div className="space-y-4 p-4 animate-pulse">
                         {[1, 2, 3].map(i => (
                           <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
@@ -1083,36 +1132,24 @@ const RefundPage = () => {
                       </div>
                     </td>
                   </tr>
-                ) : bookings.length === 0 ? (
+                ) : bookings.filter(b => isBookingEligibleForRefundLedger(b, filterStatus)).length === 0 ? (
                   <tr>
-                    <td colSpan="11" className="px-6 py-16 text-center text-gray-400">
+                    <td colSpan="7" className="px-6 py-16 text-center text-gray-400">
                       <div className="w-12 h-12 bg-gray-50 text-gray-300 rounded-lg flex items-center justify-center mx-auto mb-3 border border-gray-100">
                         <Inbox size={22} className="stroke-[2]" />
                       </div>
-                      <p className="font-bold text-sm text-secondary">No matching refund cases found</p>
-                      <p className="text-xs text-gray-550 mt-1">Refine your active search criteria or toggle the filter status pills.</p>
+                      <p className="font-bold text-sm text-secondary">No matching financial cases found</p>
+                      <p className="text-xs text-gray-550 mt-1">Refine your active search criteria or toggle the filter status options.</p>
                     </td>
                   </tr>
                 ) : (
-                  bookings.map((b) => (
+                  bookings.filter(b => isBookingEligibleForRefundLedger(b, filterStatus)).map((b) => (
                     <tr key={b._id} className="hover:bg-gray-50/40 transition-colors group">
 
                       {/* Booking ID */}
                       <td className="px-4 py-3.5">
                         <span className="text-xs font-semibold text-secondary truncate max-w-[130px] block">
                           #{b.bookingId || b._id?.slice(-8).toUpperCase()}
-                        </span>
-                      </td>
-
-                      {/* Refund Type — NEW COLUMN */}
-                      <td className="px-4 py-3.5">
-                        <RefundCaseTypeBadge booking={b} />
-                      </td>
-
-                      {/* Service Name — NEW COLUMN */}
-                      <td className="px-4 py-3.5">
-                        <span className="text-xs font-semibold text-secondary truncate max-w-[130px] block" title={b.services?.[0]?.service?.title}>
-                          {b.services?.[0]?.service?.title || <span className="text-gray-400 italic text-[10px]">—</span>}
                         </span>
                       </td>
 
@@ -1134,52 +1171,17 @@ const RefundPage = () => {
                         <span className="text-xs font-medium text-gray-600 truncate max-w-[110px] block">{b.provider?.name || <span className="text-gray-350 italic text-[10px]">Unassigned</span>}</span>
                       </td>
 
-                      {/* Amount */}
+                      {/* Refund Status */}
                       <td className="px-4 py-3.5">
-                        <PriceDisplay amount={b.totalAmount} type="bold-secondary" />
+                        <RefundStatusBadge status={b.refundStatus || b.paymentStatus} />
                       </td>
 
-                      {/* Payment / Refund Status */}
+                      {/* Refund Amount */}
                       <td className="px-4 py-3.5">
-                        <RefundStatusBadge status={b.paymentStatus} />
+                        <PriceDisplay amount={b.cancellationProgress?.refundAmount || b.refundAmount || 0} type="bold-secondary" />
                       </td>
 
-                      {/* SLA Status Column */}
-                      <td className="px-4 py-3.5">
-                        {b.complaint?.slaTracking ? (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                            b.complaint.slaTracking.slaStatus === 'breached' 
-                              ? 'bg-red-50 text-red-800 border-red-200' 
-                              : b.complaint.slaTracking.slaStatus === 'warning'
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : 'bg-green-50 text-green-800 border-green-200'
-                          }`}>
-                            {b.complaint.slaTracking.slaStatus === 'breached' ? 'Breached' : 'Within SLA'}
-                          </span>
-                        ) : (
-                          <span className="text-gray-350 italic text-[10px]">—</span>
-                        )}
-                      </td>
-
-                      {/* Recommendation Column */}
-                      <td className="px-4 py-3.5">
-                        {b.complaint?.recommendation ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                              ['approve_refund', 'refund', 'full_refund', 'partial_refund'].includes(b.complaint.recommendation.action) ? 'bg-green-50 text-green-850 border-green-200' :
-                              ['reject_refund', 'reject'].includes(b.complaint.recommendation.action) ? 'bg-red-50 text-red-850 border-red-200' :
-                              'bg-blue-50 text-blue-850 border-blue-200'
-                            }`}>
-                              {b.complaint.recommendation.action.replace('_', ' ')}
-                            </span>
-                            <span className="text-[9px] text-amber-600 font-semibold">Advisory Only</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-350 italic text-[10px]">—</span>
-                        )}
-                      </td>
-
-                      {/* Date */}
+                      {/* Created Date */}
                       <td className="px-4 py-3.5 text-[10px] text-gray-400 font-semibold whitespace-nowrap">
                         {formatDate(b.createdAt)}
                       </td>

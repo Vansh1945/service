@@ -71,7 +71,11 @@ const needsPayment = (b) => {
   if (isPaid || b.status === 'cancelled' || b.status === 'in-progress' || b.status === 'in_progress' || b.status === 'completed') return false;
   return !isPaid;
 };
-const canCancel = (b) => ['pending', 'accepted'].includes(b.status);
+const canCancel = (b) => {
+  const s = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (['started', 'inprogress', 'completed', 'cancelled', 'refunded'].includes(s)) return false;
+  return ['pending', 'accepted', 'ontheway', 'arrived', 'searchingprovider'].includes(s);
+};
 const canReschedule = (b) => b.status === 'pending';
 
 const getStartPin = (booking) => {
@@ -834,23 +838,26 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
             } else if (['assigned', 'accepted'].includes(status)) {
               buttons.push(
                 { label: 'Track Provider', icon: MapPin, onClick: () => navigate(`/customer/track/${booking._id}`), variant: 'primary' },
-                { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' }
+                { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' },
+                { label: 'Cancel Booking', icon: XCircle, onClick: () => onCancel(booking), disabled: actionLoading[booking._id + '-cancel'], variant: 'red' }
               );
             } else if (status === 'ontheway') {
               buttons.push(
                 { label: 'Track Provider', icon: MapPin, onClick: () => navigate(`/customer/track/${booking._id}`), variant: 'primary' },
                 provider?.phone && { label: 'Call', icon: Phone, onClick: () => onCall(provider.phone), variant: 'phone' },
-                { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' }
+                { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' },
+                { label: 'Cancel Booking', icon: XCircle, onClick: () => onCancel(booking), disabled: actionLoading[booking._id + '-cancel'], variant: 'red' }
               );
             } else if (status === 'arrived') {
               buttons.push(
                 provider?.phone && { label: 'Call', icon: Phone, onClick: () => onCall(provider.phone), variant: 'phone' },
-                { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' }
+                { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' },
+                { label: 'Cancel Booking', icon: XCircle, onClick: () => onCancel(booking), disabled: actionLoading[booking._id + '-cancel'], variant: 'red' }
               );
             } else if (['started', 'inprogress'].includes(status)) {
               buttons.push(
                 { label: 'Track Progress', icon: Activity, onClick: () => navigate(`/customer/track/${booking._id}`), variant: 'primary' },
-                { label: 'Upload Issue', icon: AlertCircle, onClick: () => navigate(`/customer/complaints`, { state: { prefilledBookingId: booking._id } }), variant: 'amber' }
+                { label: 'Raise Complaint', icon: AlertCircle, onClick: () => navigate(`/customer/complaints`, { state: { prefilledBookingId: booking._id } }), variant: 'amber' }
               );
             } else if (status === 'completed') {
               buttons.push(

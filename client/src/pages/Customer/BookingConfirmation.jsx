@@ -161,7 +161,7 @@ const BookingConfirmation = () => {
           await fetchBookingDetails();
         }
       } catch (error) {
-      console.error(error);
+        console.error(error);
         setError('Failed to initialize booking confirmation');
       } finally {
         setIsLoading(false);
@@ -403,7 +403,7 @@ const BookingConfirmation = () => {
             axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
             setTimeout(() => navigate('/customer/bookings'), 2000);
           } catch (verificationError) {
-      console.error(verificationError);
+            console.error(verificationError);
             setIsProcessingPayment(false);
             setPaymentProgressMessage('');
             showToast('Payment verification failed. Please contact support.', 'error');
@@ -566,16 +566,6 @@ const BookingConfirmation = () => {
                   {serviceInfo.warranty?.duration && (
                     <div className="text-[10px] text-indigo-600 font-semibold mt-1">
                       🛡️ {serviceInfo.warranty.duration} {serviceInfo.warranty.unit} Warranty
-                    </div>
-                  )}
-
-                  {serviceInfo.tags && serviceInfo.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {serviceInfo.tags.map((tag, idx) => (
-                        <span key={idx} className="text-[9px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                          #{tag}
-                        </span>
-                      ))}
                     </div>
                   )}
 

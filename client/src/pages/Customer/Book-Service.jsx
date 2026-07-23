@@ -95,7 +95,7 @@ const BookService = () => {
             });
           }
         } catch (err) {
-      console.error(err);
+          console.error(err);
           setFavoriteProviderAvailability({
             checked: true,
             available: false,
@@ -114,7 +114,7 @@ const BookService = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const nextDays = [];
-    const maxDays = systemSettings?.bookingSettings?.maxBookingDays || 3;
+    const maxDays = systemSettings?.bookingSettings?.maxBookingDays;
     for (let i = 0; i < maxDays; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
@@ -132,9 +132,9 @@ const BookService = () => {
     const now = new Date();
     const isToday = targetDate.toDateString() === now.toDateString();
 
-    const startTimeSetting = systemSettings?.bookingSettings?.startTime || "09:00";
-    const endTimeSetting = systemSettings?.bookingSettings?.endTime || "21:00";
-    const interval = systemSettings?.bookingSettings?.slotInterval || 30;
+    const startTimeSetting = systemSettings?.bookingSettings?.startTime;
+    const endTimeSetting = systemSettings?.bookingSettings?.endTime;
+    const interval = systemSettings?.bookingSettings?.slotInterval;
 
     const [startH, startM] = startTimeSetting.split(':').map(Number);
     const [endH, endM] = endTimeSetting.split(':').map(Number);
@@ -512,7 +512,7 @@ const BookService = () => {
           }
         }
       } catch (err) {
-      console.error(err);
+        console.error(err);
         navigate('/services');
       } finally {
         setIsLoading(false);
@@ -574,7 +574,8 @@ const BookService = () => {
       return false;
     }
 
-    if (!formData.time) {
+    const isInstantOrEmergency = formData.isEmergency || formData.isInstant;
+    if (!isInstantOrEmergency && !formData.time) {
       toast.error('Please select a time');
       return false;
     }
@@ -879,11 +880,10 @@ const BookService = () => {
                         isInstant: false
                       }));
                     }}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
-                      (!formData.isEmergency && !formData.isInstant)
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-gray-100 bg-white hover:border-gray-200'
-                    }`}
+                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${(!formData.isEmergency && !formData.isInstant)
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-gray-100 bg-white hover:border-gray-200'
+                      }`}
                   >
                     {(!formData.isEmergency && !formData.isInstant) && (
                       <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
@@ -920,11 +920,10 @@ const BookService = () => {
                         time: nextTime
                       }));
                     }}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
-                      formData.isInstant
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-gray-100 bg-white hover:border-gray-200'
-                    }`}
+                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${formData.isInstant
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-gray-100 bg-white hover:border-gray-200'
+                      }`}
                   >
                     {formData.isInstant && (
                       <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
@@ -961,11 +960,10 @@ const BookService = () => {
                         time: nextTime
                       }));
                     }}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
-                      formData.isEmergency
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-gray-100 bg-white hover:border-gray-200'
-                    }`}
+                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${formData.isEmergency
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-gray-100 bg-white hover:border-gray-200'
+                      }`}
                   >
                     {formData.isEmergency && (
                       <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
@@ -1041,7 +1039,7 @@ const BookService = () => {
                         <p className="text-xs font-black">60–90 mins</p>
                       </div>
                     </div>
-                    
+
                     <div className="border-t border-blue-200/60 pt-2">
                       <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-blue-800/90 font-medium">
                         <li className="flex items-center gap-2">
