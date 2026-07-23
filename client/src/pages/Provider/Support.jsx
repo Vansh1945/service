@@ -18,6 +18,8 @@ import Processing from '../../components/ui-skeletons/Processing';
 
 import {
   COMPLAINT_STATUS_CONFIG,
+  COMPLAINT_STATUS_LABELS,
+  COMPLAINT_STATUS_DETAIL_LABELS,
   getComplaintStatusStyle
 } from '../../components/ui/StatusConfig';
 
@@ -322,17 +324,7 @@ const ProviderSupportPage = () => {
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <p className="text-sm font-bold text-secondary truncate">{complaint.title}</p>
                               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${s.bg} ${s.text} border ${s.border}`}>
-                                {complaint.status === 'Solved' ? 'Resolved' :
-                                  complaint.status === 'In-Progress' ? 'In Review' :
-                                    complaint.status === 'Reopened' ? 'Reopened' :
-                                      complaint.status === 'Closed' ? 'Closed' :
-                                        complaint.status === 'submitted' ? 'Submitted' :
-                                          complaint.status === 'under_review' ? 'Under Review' :
-                                            complaint.status === 'provider_responded' ? 'Provider Responded' :
-                                              complaint.status === 'admin_review' ? 'Admin Review' :
-                                                complaint.status === 'resolved' ? 'Resolved' :
-                                                  complaint.status === 'rejected' ? 'Rejected' :
-                                                    complaint.status === 'refunded' ? 'Refunded' : complaint.status}
+                                 {COMPLAINT_STATUS_LABELS[complaint.status] || complaint.status}
                               </span>
                             </div>
                             <p className="text-xs text-neutral-400">#{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}</p>
@@ -487,17 +479,7 @@ const ProviderSupportPage = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-secondary">Status</span>
                   <span className={`text-sm font-bold uppercase tracking-wider ${getStatusStyle(selectedComplaint.status).text}`}>
-                    {selectedComplaint.status === 'Solved' ? '✓ Resolved' :
-                      selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
-                        selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
-                          selectedComplaint.status === 'Closed' ? 'Closed' :
-                            selectedComplaint.status === 'submitted' ? 'Submitted' :
-                              selectedComplaint.status === 'under_review' ? 'Under Review' :
-                                selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
-                                  selectedComplaint.status === 'admin_review' ? 'Admin Review' :
-                                    selectedComplaint.status === 'resolved' ? 'Resolved' :
-                                      selectedComplaint.status === 'rejected' ? 'Rejected' :
-                                        selectedComplaint.status === 'refunded' ? 'Refunded' : selectedComplaint.status}
+                    {COMPLAINT_STATUS_DETAIL_LABELS[selectedComplaint.status] || selectedComplaint.status}
                   </span>
                 </div>
               </div>

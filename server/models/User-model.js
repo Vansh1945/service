@@ -80,7 +80,6 @@ const userSchema = new mongoose.Schema({
   loginAttempts: { type: Number, default: 0 },
   lockUntil: { type: Date },
 
-  providerAuthStatus: { type: String },
   role: {
     type: String,
     default: 'customer',
@@ -181,10 +180,6 @@ const userSchema = new mongoose.Schema({
         source: {
           type: String,
           default: null
-        },
-        status: {
-          type: String,
-          default: 'success'
         },
         booking: {
           type: mongoose.Schema.Types.ObjectId,

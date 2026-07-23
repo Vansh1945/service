@@ -125,7 +125,7 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'SearchingProvider', 'Offered', 'Assigned', 'Accepted', 'OnTheWay', 'Arrived', 'Started', 'InProgress', 'Completed', 'Cancelled', 'Rejected', 'Expired', 'Reassigned', 'Refunded'],
+    enum: ['Pending', 'SearchingProvider', 'Offered', 'Accepted', 'OnTheWay', 'Arrived', 'WorkStarted', 'Completed', 'Cancelled', 'Expired'],
     default: 'Pending',
     set: function (v) {
       if (!v) return v;
@@ -133,21 +133,22 @@ const bookingSchema = new Schema({
         'pending': 'Pending',
         'searchingprovider': 'SearchingProvider',
         'offered': 'Offered',
-        'assigned': 'Assigned',
+        'assigned': 'Accepted',
         'accepted': 'Accepted',
         'ontheway': 'OnTheWay',
         'arrived': 'Arrived',
-        'started': 'Started',
-        'inprogress': 'InProgress',
-        'in-progress': 'InProgress',
-        'in_progress': 'InProgress',
+        'started': 'WorkStarted',
+        'workstarted': 'WorkStarted',
+        'inprogress': 'WorkStarted',
+        'in-progress': 'WorkStarted',
+        'in_progress': 'WorkStarted',
         'completed': 'Completed',
         'cancelled': 'Cancelled',
-        'rejected': 'Rejected',
+        'rejected': 'Cancelled',
         'expired': 'Expired',
-        'reassigned': 'Reassigned',
-        'refunded': 'Refunded',
-        'waiting admin assignment': 'Reassigned',
+        'reassigned': 'SearchingProvider',
+        'refunded': 'Cancelled',
+        'waiting admin assignment': 'SearchingProvider',
         'confirmed': 'Accepted',
         'scheduled': 'Accepted',
         'no-show': 'Cancelled'
@@ -155,6 +156,16 @@ const bookingSchema = new Schema({
       const cleanKey = v.toLowerCase().replace(/[^a-z]/g, '');
       return statusMap[cleanKey] || statusMap[v.toLowerCase()] || v;
     }
+  },
+  assignmentStatus: {
+    type: String,
+    enum: ['Waiting', 'AutoAssigning', 'AutoAssigned', 'ManualAssigned', 'Rejected', 'Timeout', 'Reassigned'],
+    default: 'Waiting'
+  },
+  complaintStatus: {
+    type: String,
+    enum: ['None', 'Raised', 'UnderInvestigation', 'Resolved', 'Closed'],
+    default: 'None'
   },
   rating: {
     type: Number,
@@ -194,8 +205,29 @@ const bookingSchema = new Schema({
 
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'failed', 'refunded', 'processing', 'escrow_hold'],
-    default: 'pending'
+    enum: ['Pending', 'Paid', 'EscrowHold', 'SettlementPending', 'Settled', 'RefundPending', 'RefundApproved', 'Refunded', 'pending', 'paid', 'failed', 'refunded', 'processing', 'escrow_hold'],
+    default: 'Pending',
+    set: function (v) {
+      if (!v) return v;
+      const pMap = {
+        'pending': 'Pending',
+        'paid': 'Paid',
+        'escrow_hold': 'EscrowHold',
+        'escrowhold': 'EscrowHold',
+        'settlement_pending': 'SettlementPending',
+        'settlementpending': 'SettlementPending',
+        'settled': 'Settled',
+        'refund_pending': 'RefundPending',
+        'refundpending': 'RefundPending',
+        'refund_approved': 'RefundApproved',
+        'refundapproved': 'RefundApproved',
+        'refunded': 'Refunded',
+        'processing': 'EscrowHold',
+        'failed': 'Pending'
+      };
+      const clean = v.toLowerCase().replace(/[^a-z]/g, '');
+      return pMap[clean] || pMap[v.toLowerCase()] || v;
+    }
   },
 
 

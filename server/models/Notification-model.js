@@ -117,7 +117,7 @@ const notificationSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['pending', 'sent', 'failed', 'cancelled'],
-        default: 'sent' // Backward compatibility: existing immediate notifications are 'sent'
+        default: 'sent'
     },
     retries: {
         type: Number,

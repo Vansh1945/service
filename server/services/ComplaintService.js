@@ -11,14 +11,14 @@ const checkAndAutoEscalate = async (complaintId) => {
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) return null;
 
-    const isPending = ['submitted', 'under_review', 'Open', 'In-Progress'].includes(complaint.status);
+    const isPending = ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider'].includes(complaint.status);
     if (isPending && complaint.responseDeadline && new Date() > new Date(complaint.responseDeadline)) {
-      complaint.status = 'admin_review';
+      complaint.status = 'Escalated';
       await complaint.save();
 
       if (complaint.booking) {
         await Booking.findByIdAndUpdate(complaint.booking, {
-          disputeStatus: 'admin_review'
+          disputeStatus: 'Escalated'
         });
       }
     }
@@ -405,7 +405,7 @@ class ComplaintService {
         userId: userRole === 'customer' ? userId : undefined,
         providerId: userRole === 'provider' ? userId : undefined,
         role: userRole,
-        status: 'submitted',
+        status: 'Open',
         responseDeadline
       }], { session });
 
@@ -428,7 +428,7 @@ class ComplaintService {
         // If customer raises service issue, mark as dispute ONLY if refund eligible
         if (category === 'Service issue' && userRole === 'customer' && isRefundEligible) {
           updateData.disputeRaised = true;
-          updateData.disputeStatus = 'under_review';
+          updateData.disputeStatus = 'Under Review';
 
           // Hold provider earnings if they exist
           const ProviderEarning = mongoose.model('ProviderEarning');
@@ -492,7 +492,7 @@ class ComplaintService {
     try {
       // Auto-escalate any overdue complaints before fetching
       const overdueComplaints = await Complaint.find({
-        status: { $in: ['submitted', 'under_review', 'Open', 'In-Progress'] },
+        status: { $in: ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider'] },
         responseDeadline: { $ne: null, $lt: new Date() }
       }).select('_id').lean();
       for (const c of overdueComplaints) {
@@ -511,28 +511,45 @@ class ComplaintService {
         providerId
       } = req.query;
 
-      // Build the query
-      const query = {};
-      if (status) query.status = status;
-      if (category) query.category = category;
-      if (userType) query.userType = userType;
-      if (providerId) query.providerId = providerId;
-      if (req.query.booking) query.booking = req.query.booking;
-      if (req.query.bookingId) query.booking = req.query.bookingId;
+      // Build the query conditions safely
+      const conditions = [];
+      if (status) conditions.push({ status });
+      if (category) conditions.push({ category });
+      if (userType) conditions.push({ userType });
+      if (providerId) conditions.push({ providerId });
+
+      const bId = req.query.booking || req.query.bookingId;
+      if (bId) {
+        conditions.push({
+          $or: [{ booking: bId }, { bookingId: bId }]
+        });
+      }
+
+      const cId = req.query.customerId || req.query.customer;
+      if (cId) {
+        conditions.push({
+          $or: [{ customer: cId }, { userId: cId }]
+        });
+      }
 
       if (search) {
-        query.$or = [
-          { complaintId: { $regex: search, $options: 'i' } },
-          { title: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } },
-        ];
+        conditions.push({
+          $or: [
+            { complaintId: { $regex: search, $options: 'i' } },
+            { title: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+          ]
+        });
       }
 
       if (startDate || endDate) {
-        query.createdAt = {};
-        if (startDate) query.createdAt.$gte = new Date(startDate);
-        if (endDate) query.createdAt.$lte = new Date(endDate);
+        const dateCond = {};
+        if (startDate) dateCond.$gte = new Date(startDate);
+        if (endDate) dateCond.$lte = new Date(endDate);
+        conditions.push({ createdAt: dateCond });
       }
+
+      const query = conditions.length > 0 ? { $and: conditions } : {};
 
       // Execute query with pagination
       const complaints = await Complaint.find(query)
@@ -558,7 +575,7 @@ class ComplaintService {
 
       const customerCount = await Complaint.countDocuments({ ...query, userType: 'customer' });
       const providerCount = await Complaint.countDocuments({ ...query, userType: 'provider' });
-      const pendingCount = await Complaint.countDocuments({ ...query, status: { $in: ['submitted', 'Open', 'In-Progress'] } });
+      const pendingCount = await Complaint.countDocuments({ ...query, status: { $in: ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider', 'Escalated'] } });
 
       // Extract all provider IDs to batch-count complaints in a single aggregate query
       const providerIds = complaints.map(c => c.provider?._id || c.provider).filter(Boolean);
@@ -814,7 +831,7 @@ class ComplaintService {
         // 2. Active parallel complaints check
         const activeComplaintsCount = await ComplaintModel.countDocuments({
           $or: [{ userId: customerUserId }, { customer: customerUserId }],
-          status: { $in: ['submitted', 'under_review', 'provider_responded', 'admin_review', 'Reopened', 'Open', 'In-Progress'] },
+          status: { $in: ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider', 'Escalated', 'Resolution Proposed'] },
           _id: { $ne: complaint._id }
         }).session(session);
 
@@ -1392,7 +1409,7 @@ class ComplaintService {
   static async updateComplaintStatus(req, res) {
     try {
       const { status, resolutionNotes } = req.body;
-      const validStatuses = ["Open", "In-Progress", "Solved", "Reopened", "Closed", "submitted", "under_review", "provider_responded", "admin_review", "resolved", "rejected", "refunded", "request_more_evidence"];
+      const validStatuses = ["Open", "Under Review", "Waiting for Customer", "Waiting for Provider", "Escalated", "Resolution Proposed", "Resolved", "Rejected", "Cancelled", "Closed"];
 
       if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({
@@ -1411,24 +1428,20 @@ class ComplaintService {
 
       // --- STATE MACHINE VALIDATION ---
       const VALID_TRANSITIONS = {
-        'submitted': ['under_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open', 'resolved', 'rejected', 'refunded'],
-        'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open', 'resolved', 'rejected', 'refunded'],
-        'provider_responded': ['admin_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open', 'resolved', 'rejected', 'refunded'],
-        'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence', 'In-Progress', 'Open'],
-        'resolved': ['Reopened', 'Closed'],
-        'rejected': ['Reopened', 'Closed'],
-        'refunded': [],
-        'Closed': ['Reopened'],
-        'Reopened': ['under_review', 'Closed', 'request_more_evidence', 'In-Progress', 'Open'],
-        'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
-
-        'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
-        'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
-        'Solved': ['Reopened'],
+        'Open': ['Under Review', 'Waiting for Customer', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Cancelled', 'Closed'],
+        'Under Review': ['Waiting for Customer', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
+        'Waiting for Customer': ['Under Review', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
+        'Waiting for Provider': ['Under Review', 'Waiting for Customer', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
+        'Escalated': ['Under Review', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
+        'Resolution Proposed': ['Resolved', 'Rejected', 'Under Review', 'Closed'],
+        'Resolved': ['Open', 'Closed'],
+        'Rejected': ['Open', 'Closed'],
+        'Cancelled': ['Open'],
+        'Closed': ['Open']
       };
 
-      const currentStatus = complaint.status || 'submitted';
-      const allowed = VALID_TRANSITIONS[currentStatus] || [];
+      const currentStatus = complaint.status || 'Open';
+      const allowed = VALID_TRANSITIONS[currentStatus] || validStatuses;
       if (!allowed.includes(status) && currentStatus !== status) {
         return res.status(400).json({
           success: false,
@@ -1439,7 +1452,7 @@ class ComplaintService {
       complaint.status = status;
       complaint.resolutionNotes = resolutionNotes;
       complaint.resolvedBy = req.admin?._id || req.user?._id;
-      if (['resolved', 'Solved'].includes(status)) {
+      if (['Resolved'].includes(status)) {
         complaint.resolvedAt = new Date();
       }
 
@@ -1696,9 +1709,9 @@ class ComplaintService {
         }
       }
 
-      // Auto status transition: if provider replies, transition to provider_responded
-      if (userRole === 'provider' && ['submitted', 'under_review', 'Open', 'In-Progress'].includes(complaint.status)) {
-        complaint.status = 'provider_responded';
+      // Auto status transition: if provider replies, transition to Waiting for Customer
+      if (userRole === 'provider' && ['Open', 'Under Review', 'Waiting for Provider'].includes(complaint.status)) {
+        complaint.status = 'Waiting for Customer';
         await complaint.save();
       }
 
@@ -2239,13 +2252,13 @@ class ComplaintService {
     const refundSlaHours = systemConfigDoc?.bookingSettings?.refundProcessingSlaHours || 72;
 
     let slaThreshold = configHours; // Admin Review SLA dynamically loaded from System Settings
-    let stage = 'admin_review';
-    if (complaint.status === 'submitted' || complaint.status === 'under_review') {
+    let stage = 'Escalated';
+    if (['Open', 'Under Review', 'Waiting for Provider'].includes(complaint.status)) {
       slaThreshold = providerSlaHours; // Provider Response SLA
-      stage = 'provider_response';
-    } else if (complaint.status === 'resolved' || complaint.status === 'refunded') {
+      stage = 'Waiting for Provider';
+    } else if (['Resolved'].includes(complaint.status)) {
       slaThreshold = refundSlaHours; // Refund Processing SLA
-      stage = 'refund_processing';
+      stage = 'Resolved';
     }
 
     let slaStatus = 'within_sla';

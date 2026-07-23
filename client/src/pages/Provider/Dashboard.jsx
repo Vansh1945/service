@@ -122,10 +122,10 @@ const Dashboard = () => {
     const handleBookingUpdated = (data) => {
       if (!data || !data.booking) return;
       const updated = data.booking;
-      
+
       setDashboardData(prev => {
         if (!prev.summary) return prev;
-        
+
         const updateJobInList = (list) => {
           let updatedExist = false;
           let updatedList = list.map(item => {
@@ -135,7 +135,7 @@ const Dashboard = () => {
             }
             return item;
           });
-          
+
           if (!updatedExist && ['pending', 'accepted', 'in-progress', 'scheduled'].includes(updated.status?.toLowerCase())) {
             updatedList = [updated, ...updatedList];
           }
@@ -144,18 +144,18 @@ const Dashboard = () => {
 
         const activeJobs = updateJobInList(prev.activeJobs || []);
         const recentBookings = updateJobInList(prev.recentBookings || []);
-        
+
         const summary = prev.summary ? { ...prev.summary } : null;
         if (summary) {
           const oldJob = prev.activeJobs?.find(item => item._id === updated._id || item.bookingId === updated.bookingId);
           const oldStatus = oldJob?.status?.toLowerCase();
           const newStatus = updated.status?.toLowerCase();
-          
+
           if (oldStatus !== newStatus) {
             if (oldStatus === 'completed') summary.completedJobs = Math.max(0, summary.completedJobs - 1);
             if (oldStatus === 'cancelled') summary.cancelledJobs = Math.max(0, summary.cancelledJobs - 1);
             if (oldStatus === 'pending') summary.pendingBookings = Math.max(0, summary.pendingBookings - 1);
-            
+
             if (newStatus === 'completed') summary.completedJobs = (summary.completedJobs || 0) + 1;
             if (newStatus === 'cancelled') summary.cancelledJobs = (summary.cancelledJobs || 0) + 1;
             if (newStatus === 'pending') summary.pendingBookings = (summary.pendingBookings || 0) + 1;
@@ -431,12 +431,11 @@ const Dashboard = () => {
                 <p className="text-[10px] text-neutral-400">Based on your recent completed services</p>
               </div>
             </div>
-            <span className={`text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full tracking-wider border shadow-sm ${
-              performanceBadge === 'Platinum' ? 'bg-neutral-900 border-neutral-800 text-white' :
-              performanceBadge === 'Gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
-              performanceBadge === 'Silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
-              'bg-amber-900 border-amber-955 text-white'
-            }`}>
+            <span className={`text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full tracking-wider border shadow-sm ${performanceBadge === 'Platinum' ? 'bg-neutral-900 border-neutral-800 text-white' :
+                performanceBadge === 'Gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
+                  performanceBadge === 'Silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
+                    'bg-amber-900 border-amber-955 text-white'
+              }`}>
               {performanceBadge} Partner
             </span>
           </div>
@@ -475,7 +474,7 @@ const Dashboard = () => {
                 Earnings Trend
               </h3>
             </div>
-            
+
             <div className="h-[180px] w-full flex items-center justify-center my-3">
               {(!earnings?.chartData || earnings.chartData.length < 2) ? (
                 <div className="text-center py-4">
@@ -523,7 +522,7 @@ const Dashboard = () => {
               <FiPieChart className="text-primary w-5 h-5" />
               Bookings Breakdown
             </h3>
-            
+
             <div className="flex flex-row items-center justify-between gap-4 my-3 flex-grow">
               {!bookings?.pieChartData || bookings.pieChartData.length === 0 || totalPieValue === 0 ? (
                 <div className="w-full text-center py-6">
@@ -653,12 +652,11 @@ const Dashboard = () => {
                             {formatDate(booking.date)} • {formatTime(booking.time)}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider border ${
-                              booking.status === 'completed' ? 'bg-success/5 text-success border-success/15' :
-                              booking.status === 'accepted' ? 'bg-info/5 text-info border-info/15' :
-                              booking.status === 'pending' ? 'bg-warning/5 text-warning border-warning/15' :
-                              'bg-neutral-100 text-neutral-500 border-neutral-200'
-                            }`}>
+                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider border ${booking.status === 'completed' ? 'bg-success/5 text-success border-success/15' :
+                                booking.status === 'accepted' ? 'bg-info/5 text-info border-info/15' :
+                                  booking.status === 'pending' ? 'bg-warning/5 text-warning border-warning/15' :
+                                    'bg-neutral-100 text-neutral-500 border-neutral-200'
+                              }`}>
                               {booking.status === 'in-progress' ? 'In Progress' : booking.status}
                             </span>
                             <span className="text-xs sm:text-sm font-extrabold text-neutral-800">{formatCurrency(booking.totalAmount)}</span>

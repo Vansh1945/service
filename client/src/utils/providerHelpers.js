@@ -113,11 +113,19 @@ export const getStatusConfig = (status) => {
     
     // Booking statuses
     pending: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Pending' },
+    searchingprovider: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Searching Provider' },
+    offered: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Offered' },
     assigned: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Assigned' },
     confirmed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Confirmed' },
     accepted: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCheck, label: 'Accepted' },
+    ontheway: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'On The Way' },
+    arrived: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'Arrived' },
+    workstarted: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'Work Started' },
     'in-progress': { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'In Progress' },
-    cancelled: { color: 'bg-red-50 text-red-600 border border-red-200', icon: X, label: 'Cancelled' }
+    inprogress: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'In Progress' },
+    cancelled: { color: 'bg-red-50 text-red-600 border border-red-200', icon: X, label: 'Cancelled' },
+    expired: { color: 'bg-red-50 text-red-600 border border-red-200', icon: X, label: 'Expired' }
   };
-  return configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-secondary/70 border border-gray-200', icon: AlertCircle, label: status || 'Unknown' };
+  const key = status?.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return configs[key] || configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-secondary/70 border border-gray-200', icon: AlertCircle, label: status || 'Unknown' };
 };

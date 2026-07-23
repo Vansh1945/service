@@ -492,6 +492,12 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
     const [complaintId, setComplaintId] = useState('');
     const [adminNotes, setAdminNotes] = useState('');
 
+    useEffect(() => {
+        if (complaints && complaints.length > 0 && !complaintId) {
+            setComplaintId(complaints[0]._id);
+        }
+    }, [complaints, complaintId]);
+
     if (!isOpen || !booking) return null;
 
     const totalPaid = booking.totalAmount || 0;
@@ -550,10 +556,10 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                             onChange={(e) => setComplaintId(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                         >
-                            <option value="">Select Complaint</option>
-                            {complaints.map(c => (
+                            <option value="">Select Complaint (None)</option>
+                            {complaints && complaints.map(c => (
                                 <option key={c._id} value={c._id}>
-                                    {c.complaintId || c._id.slice(-8)} - {c.title}
+                                    {c.complaintId || c._id?.slice(-8)} - {c.title} ({c.status || 'Open'})
                                 </option>
                             ))}
                         </select>
@@ -658,12 +664,66 @@ const AdminBookingsView = () => {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [bookingComplaints, setBookingComplaints] = useState([]);
 
-    const fetchBookingComplaints = useCallback(async (bookingId) => {
+    const fetchBookingComplaints = useCallback(async (bookingId, customerId = null, attachedComplaint = null) => {
         try {
-            const response = await API.get(`/api/complaint?booking=${bookingId}`);
-            if (response.data.success) {
-                setBookingComplaints(response.data.data || []);
+            const list = [];
+            const seenIds = new Set();
+
+            if (attachedComplaint && attachedComplaint._id) {
+                list.push(attachedComplaint);
+                seenIds.add(attachedComplaint._id.toString());
             }
+
+            if (bookingId) {
+                try {
+                    const response = await API.get(`/api/complaint?booking=${bookingId}&limit=50`);
+                    if (response.data.success && Array.isArray(response.data.data)) {
+                        response.data.data.forEach(c => {
+                            if (c && c._id && !seenIds.has(c._id.toString())) {
+                                seenIds.add(c._id.toString());
+                                list.push(c);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error fetching booking specific complaints:', e);
+                }
+            }
+
+            if (customerId) {
+                try {
+                    const response = await API.get(`/api/complaint?customerId=${customerId}&limit=50`);
+                    if (response.data.success && Array.isArray(response.data.data)) {
+                        response.data.data.forEach(c => {
+                            if (c && c._id && !seenIds.has(c._id.toString())) {
+                                seenIds.add(c._id.toString());
+                                list.push(c);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error fetching customer complaints:', e);
+                }
+            }
+
+            // Fallback: fetch open complaints so admin can link any active complaint if desired
+            if (list.length === 0) {
+                try {
+                    const openRes = await API.get('/api/complaint?limit=50');
+                    if (openRes.data.success && Array.isArray(openRes.data.data)) {
+                        openRes.data.data.forEach(c => {
+                            if (c && c._id && !seenIds.has(c._id.toString())) {
+                                seenIds.add(c._id.toString());
+                                list.push(c);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error fetching open complaints fallback:', e);
+                }
+            }
+
+            setBookingComplaints(list);
         } catch (err) {
             console.error('Error fetching complaints for booking:', err);
         }
@@ -906,7 +966,11 @@ const AdminBookingsView = () => {
             const response = await BookingService.getBookingDetails(booking._id);
             const data = response.data;
             setSelectedBooking(data.data);
-            await fetchBookingComplaints(booking._id);
+            const bkData = data.data;
+            const bId = bkData?.booking?._id || booking._id;
+            const cId = bkData?.customer?._id || booking.customer?._id || booking.customer;
+            const attachedComp = bkData?.complaint;
+            await fetchBookingComplaints(bId, cId, attachedComp);
             setShowCancelModal(true);
         } catch (error) {
             console.error('Error initiating cancellation:', error);
@@ -1856,7 +1920,10 @@ const AdminBookingsView = () => {
                                 {!['started', 'in-progress', 'inprogress', 'completed', 'cancelled'].includes(bk.status?.toLowerCase()) && (
                                     <button
                                         onClick={() => {
-                                            fetchBookingComplaints(bk._id);
+                                            const bId = bk._id;
+                                            const cId = selectedBooking?.customer?._id || bk.customer?._id || bk.customer;
+                                            const attachedComp = selectedBooking?.complaint;
+                                            fetchBookingComplaints(bId, cId, attachedComp);
                                             setShowCancelModal(true);
                                         }}
                                         className="px-5 py-1.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors"

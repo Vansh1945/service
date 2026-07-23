@@ -20,7 +20,7 @@ const resolveComplaintSchema = z.object({
 });
 
 const updateComplaintStatusSchema = z.object({
-  status: z.enum(['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'], {
+  status: z.enum(['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Cancelled', 'Closed'], {
     errorMap: () => ({ message: "Invalid status" })
   }),
   resolutionNotes: z.string().min(1, "Admin Remarks (Required) is required")
