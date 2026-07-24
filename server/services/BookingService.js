@@ -3180,7 +3180,7 @@ class BookingService {
 
         const lockQuery = {
           _id: id,
-          status: 'pending',
+          status: { $in: ['pending', 'Pending', 'offered', 'Offered', 'SearchingProvider', 'searchingprovider', 'Assigned', 'assigned'] },
           $or: [
             { provider: null },
             { provider: { $exists: false } },
@@ -3324,7 +3324,7 @@ class BookingService {
             {
               _id: id,
               lockedBy: providerId,
-              status: 'pending'
+              status: { $in: ['pending', 'Pending', 'offered', 'Offered', 'SearchingProvider', 'searchingprovider', 'Assigned', 'assigned'] }
             },
             {
               $set: {
@@ -3355,7 +3355,7 @@ class BookingService {
             {
               _id: id,
               lockedBy: providerId,
-              status: 'pending'
+              status: { $in: ['pending', 'Pending', 'offered', 'Offered', 'SearchingProvider', 'searchingprovider', 'Assigned', 'assigned'] }
             },
             {
               $set: {

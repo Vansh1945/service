@@ -163,13 +163,22 @@ const executePaymentCapturedOperations = async (payment, session) => {
 
   const transaction = await Transaction.findOne({ razorpayOrderId }).session(session);
   if (!transaction) {
-    console.error(`[Webhook Error] Transaction not found for order ${razorpayOrderId}`);
+    console.error(`Transaction not found for order ${razorpayOrderId}`);
     return;
   }
 
-  if (transaction.paymentStatus === 'paid' || transaction.paymentStatus === 'completed') {
-    console.log(`[Webhook] Transaction ${transaction._id} already marked paid.`);
+  if (transaction.paymentStatus === 'paid' || transaction.paymentStatus === 'completed' || (razorpayPaymentId && transaction.razorpayPaymentId === razorpayPaymentId)) {
+    console.log(`Transaction ${transaction._id} already processed/paid.`);
     return;
+  }
+
+  // Double check if razorpayPaymentId was already recorded on another transaction
+  if (razorpayPaymentId) {
+    const existingPaymentTx = await Transaction.findOne({ razorpayPaymentId, paymentStatus: { $in: ['paid', 'completed', 'success'] } }).session(session);
+    if (existingPaymentTx) {
+      console.log(`Payment ID ${razorpayPaymentId} already processed on transaction ${existingPaymentTx._id}.`);
+      return;
+    }
   }
 
   transaction.paymentStatus = 'paid';
