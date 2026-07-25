@@ -499,33 +499,57 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                 </div>
               )}
 
-              {((booking.disputeRaised === true || booking.hasComplaint === true) &&
-                ((booking.disputeStatus && !['none', 'None'].includes(booking.disputeStatus)) ||
-                  (booking.adminRefundDecision && !['none', 'None'].includes(booking.adminRefundDecision)))) && (
-                  <div className="bg-red-50 rounded-xl p-4 border border-red-100">
-                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <ShieldAlert className="w-3.5 h-3.5" /> Dispute & Refund Details
+              {(booking.paymentStatus === 'refunded' || booking.cancellationProgress?.refundAmount > 0 || booking.paymentStatus === 'refund_pending' || booking.refundStatus === 'pending') && (
+                <div className="bg-purple-50/80 rounded-xl p-4 border border-purple-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Wallet className="w-4 h-4 text-purple-600" /> Enterprise Refund Status & Tracking
                     </p>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between items-center">
-                        <span className="text-red-700">Dispute Status</span>
-                        <span className="font-medium text-red-800 capitalize">{booking.disputeStatus?.replace('_', ' ') || 'Under Review'}</span>
-                      </div>
-                      {booking.adminRefundDecision && !['none', 'None'].includes(booking.adminRefundDecision) && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-red-700">Admin Decision</span>
-                          <span className="font-medium text-red-800 capitalize">{booking.adminRefundDecision}</span>
-                        </div>
-                      )}
-                      {booking.paymentStatus === 'refunded' && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-red-700">Refund Status</span>
-                          <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4" /> Refunded to Wallet</span>
-                        </div>
-                      )}
-                    </div>
+                    <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
+                      booking.paymentStatus === 'refunded' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'
+                    }`}>
+                      {booking.paymentStatus === 'refunded' ? 'Refund Completed' : 'Refund Pending'}
+                    </span>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-2 gap-3 text-xs bg-white/70 p-3 rounded-lg border border-purple-100">
+                    <div>
+                      <span className="text-gray-500 text-[10px] uppercase font-semibold block">Total Refund Amount</span>
+                      <span className="font-extrabold text-purple-700 text-sm">₹{booking.cancellationProgress?.refundAmount || booking.refundAmount || booking.totalAmount}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] uppercase font-semibold block">Refund Destination</span>
+                      <span className="font-bold text-gray-800 flex items-center gap-1">
+                        {booking.walletUsed > 0 && booking.onlinePaid > 0
+                          ? '🔀 Hybrid Split (Wallet + Gateway)'
+                          : (booking.paymentMethod === 'wallet' || booking.refundDestination === 'wallet' ? '⚡ Customer Wallet (Instant)' : '💳 Payment Gateway (2-5 Days)')}
+                      </span>
+                    </div>
+
+                    {/* Mixed Payment Breakdown Display */}
+                    {booking.walletUsed > 0 && booking.onlinePaid > 0 && (
+                      <div className="col-span-2 bg-purple-100/50 p-2 rounded-md space-y-1 text-[11px]">
+                        <span className="font-bold text-purple-900 block text-[10px] uppercase">Payment & Refund Breakdown</span>
+                        <div className="flex justify-between text-gray-700">
+                          <span>Wallet Portion (Instant Credit):</span>
+                          <span className="font-bold text-purple-800">₹{booking.walletUsed}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-700">
+                          <span>Gateway Portion (Razorpay / Bank):</span>
+                          <span className="font-bold text-blue-800">₹{booking.onlinePaid}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {booking.cancellationProgress?.refundId && (
+                      <div className="col-span-2 border-t border-purple-100 pt-2 flex justify-between items-center text-[11px]">
+                        <span className="text-gray-500 font-medium">Refund Ledger ID</span>
+                        <span className="font-mono font-bold text-purple-900">{booking.cancellationProgress.refundId}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">

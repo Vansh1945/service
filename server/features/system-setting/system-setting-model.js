@@ -286,6 +286,33 @@ const systemConfigSchema = new mongoose.Schema(
         default: true
       }
     },
+    refundSettings: {
+      autoRefundEnabled: {
+        type: Boolean,
+        default: true
+      },
+      manualApprovalEnabled: {
+        type: Boolean,
+        default: true
+      },
+      maxAutoRefundAmount: {
+        type: Number,
+        default: 5000
+      },
+      defaultDestination: {
+        type: String,
+        enum: ['original_payment', 'wallet', 'hybrid'],
+        default: 'wallet'
+      },
+      allowHybridRefund: {
+        type: Boolean,
+        default: true
+      },
+      refundSlaHours: {
+        type: Number,
+        default: 72
+      }
+    },
     commissionSettings: {
       defaultCommission: {
         type: Number,

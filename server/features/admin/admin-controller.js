@@ -217,6 +217,33 @@ const getDashboardAnalytics = async (req, res, next) => {
   }
 };
 
+const getAllRefunds = async (req, res, next) => {
+  try {
+    await AdminService.getAllRefunds(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.getAllRefunds] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const getRefundById = async (req, res, next) => {
+  try {
+    await AdminService.getRefundById(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.getRefundById] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const retryRefund = async (req, res, next) => {
+  try {
+    await AdminService.retryRefund(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.retryRefund] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 const processAdminRefund = async (req, res, next) => {
   try {
     await AdminService.processAdminRefund(req, res, next);
@@ -369,6 +396,9 @@ module.exports = {
   getDashboardLiveStats,
   getDashboardRecentActivity,
   getDashboardAnalytics,
+  getAllRefunds,
+  getRefundById,
+  retryRefund,
   processAdminRefund,
   rejectAdminRefund,
   togglePayoutHold,

@@ -2459,144 +2459,21 @@ class BookingService {
           const refundAmount = Math.max(0, booking.totalAmount - platformFee - previouslyRefunded);
 
           if (refundAmount > 0) {
-            // Lock transaction to prevent double refund
-            const transaction = await Transaction.findOneAndUpdate(
-              { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success', 'escrow_hold'] }, refundStatus: { $ne: 'completed' } },
-              {
-                refundStatus: 'completed',
-                refundReason: reason || 'Customer cancelled before service start',
-                refundedAt: new Date(),
-                paymentStatus: 'refunded',
-                refundedAmount: refundAmount
-              },
-              { session, new: true }
-            );
+            const RefundEngineService = require('../payment/refund-engine-service');
+            const refundResult = await RefundEngineService.processRefundRequest({
+              bookingId: booking._id,
+              refundSource: 'customer_cancellation',
+              refundReason: reason || 'Customer cancelled booking',
+              cancellationReason: reason,
+              requestedBy: userId,
+              isAutoTrigger: true,
+            });
 
-            if (!transaction) {
-              console.warn(`[Refund Engine] Duplicate cancellation refund attempt for booking ${booking._id}`);
-              throw new Error('Transaction not found or already refunded');
-            }
-
-            const refundToWalletOnly = settings?.walletSettings?.refundToWalletOnly ?? true;
-
-            if (refundToWalletOnly) {
-              // Full refund to wallet atomically
-              await User.findByIdAndUpdate(
-                userId,
-                {
-                  $inc: { 'wallet.availableBalance': refundAmount, 'wallet.totalRefunded': refundAmount },
-                  $push: {
-                    'wallet.walletTransactions': {
-                      type: 'credit',
-                      amount: refundAmount,
-                      reason: 'Booking Refund',
-                      booking: booking._id
-                    }
-                  },
-                  $set: { 'wallet.lastUpdated': new Date() }
-                },
-                { session }
-              );
-
-              // Create or update transaction record for audit
-              let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
-              if (refundTransaction) {
-                refundTransaction.amount = refundAmount;
-                refundTransaction.paymentStatus = 'refunded';
-                refundTransaction.paymentMethod = 'wallet';
-                refundTransaction.type = 'refund';
-                refundTransaction.description = `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`;
-                refundTransaction.refundReason = reason || 'Customer cancelled booking';
-                refundTransaction.updatedAt = new Date();
-                await refundTransaction.save({ session });
-              } else {
-                refundTransaction = new Transaction({
-                  booking: booking._id,
-                  bookingId: booking.bookingId || booking._id.toString(),
-                  user: userId,
-                  amount: refundAmount,
-                  paymentStatus: 'completed',
-                  paymentMethod: 'wallet',
-                  type: 'refund',
-                  description: `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`,
-                  refundReason: reason || 'Customer cancelled booking'
-                });
-                await refundTransaction.save({ session });
-              }
-
-              booking.paymentStatus = 'refunded';
-              booking.cancellationProgress.status = 'refund_completed';
-              booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
-              booking.cancellationProgress.refundCompletedAt = new Date();
-
-              refundDetails = {
-                amount: refundAmount,
-                method: 'wallet',
-                status: 'completed'
-              };
-
-              // Notify customer
-              try {
-                sendNotification(
-                  userId,
-                  'customer',
-                  'Refund Completed',
-                  `A full refund of ₹${refundAmount} has been added to your wallet.`,
-                  'refund',
-                  booking._id
-                );
-              } catch (err) { }
-            } else {
-              // If refund to wallet only is disabled, push to processing_refund (Razorpay automatic payout or manual approval queue)
-              booking.paymentStatus = 'processing';
-              booking.cancellationProgress.status = 'processing_refund';
-              booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
-              booking.cancellationProgress.refundInitiatedAt = new Date();
-
-              // Create or update transaction record for audit trail
-              let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
-              if (refundTransaction) {
-                refundTransaction.amount = refundAmount;
-                refundTransaction.paymentStatus = 'pending';
-                refundTransaction.paymentMethod = 'online';
-                refundTransaction.type = 'refund';
-                refundTransaction.description = `Customer cancelled booking - Automatic gateway refund initiated: ${reason || 'Customer requested cancellation'}`;
-                refundTransaction.refundReason = reason || 'Customer cancelled booking';
-                refundTransaction.updatedAt = new Date();
-                await refundTransaction.save({ session });
-              } else {
-                refundTransaction = new Transaction({
-                  booking: booking._id,
-                  bookingId: booking.bookingId || booking._id.toString(),
-                  user: userId,
-                  amount: refundAmount,
-                  paymentStatus: 'pending',
-                  paymentMethod: 'online',
-                  type: 'refund',
-                  description: `Customer cancelled booking - Automatic gateway refund initiated: ${reason || 'Customer requested cancellation'}`,
-                  refundReason: reason || 'Customer cancelled booking'
-                });
-                await refundTransaction.save({ session });
-              }
-
-              refundDetails = {
-                amount: refundAmount,
-                method: 'gateway',
-                status: 'processing'
-              };
-
-              // Notify customer
-              try {
-                sendNotification(
-                  userId,
-                  'customer',
-                  'Refund Initiated',
-                  `A refund of ₹${refundAmount} has been initiated back to your original payment method.`,
-                  'refund_processing',
-                  booking._id
-                );
-              } catch (err) { }
-            }
+            refundDetails = {
+              amount: refundAmount,
+              method: refundResult.refund?.refundDestination || 'wallet',
+              status: refundResult.refund?.refundStatus || 'completed'
+            };
           }
         }
 

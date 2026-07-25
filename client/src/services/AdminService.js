@@ -93,6 +93,18 @@ export const getDashboardAnalytics = (params) => {
 };
 
 // Dispute & Refund Management
+export const getRefundLedger = (params) => {
+    return axiosInstance.get('/admin/refunds', { params });
+};
+
+export const getRefundDetails = (refundId) => {
+    return axiosInstance.get(`/admin/refunds/${refundId}`);
+};
+
+export const retryRefundLedger = (refundId) => {
+    return axiosInstance.post(`/admin/refunds/${refundId}/retry`);
+};
+
 export const processRefund = (bookingId, data) => {
     return axiosInstance.post(`/admin/refund/${bookingId}/process`, data);
 };

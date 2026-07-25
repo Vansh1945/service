@@ -1144,47 +1144,17 @@ class ComplaintService {
             refundAmount = Math.min(refundAmount, remainingRefundable);
 
             if (refundAmount > 0) {
-              // Lock transaction to prevent double refund
-              const transaction = await Transaction.findOneAndUpdate(
-                { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
-                { refundStatus: 'processing' },
-                { session, new: true }
-              );
-
-              if (transaction) {
-                // Update User wallet
-                const user = await User.findById(booking.customer).session(session);
-                if (user) {
-                  if (!user.wallet) {
-                    user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
-                  }
-                  user.wallet.availableBalance += refundAmount;
-                  user.wallet.totalRefunded += refundAmount;
-                  user.wallet.walletTransactions.push({
-                    type: 'credit',
-                    amount: refundAmount,
-                    reason: 'Booking Refund via Support Resolution',
-                    source: 'booking_refund',
-                    status: 'success',
-                    booking: booking._id
-                  });
-                  user.wallet.lastUpdated = new Date();
-                  await user.save({ session });
-                }
-
-                // Create Transaction record for audit
-                const refundTransaction = new Transaction({
-                  booking: booking._id,
-                  bookingId: booking.bookingId || booking._id,
-                  user: booking.customer,
-                  amount: refundAmount,
-                  paymentStatus: 'completed',
-                  paymentMethod: 'wallet',
-                  type: 'refund',
-                  description: `Refund Approved via Support ticket resolution for booking #${booking.bookingId || booking._id}. Reason: ${resolutionNotes}`,
-                  refundReason: resolutionNotes
-                });
-                await refundTransaction.save({ session });
+              const RefundEngineService = require('../payment/refund-engine-service');
+              await RefundEngineService.processRefundRequest({
+                bookingId: booking._id,
+                refundSource: 'complaint_resolution',
+                refundAmount: refundAmount,
+                refundReason: resolutionNotes || 'Complaint resolution refund',
+                cancellationReason: resolutionNotes,
+                requestedBy: req.admin ? req.admin._id : null,
+                approvedBy: req.admin ? req.admin._id : null,
+                complaintId: complaint._id,
+              });
 
                 // ── REFUND RECOVERY PRIORITY ──
                 let recoveryStatus = 'platform_absorbed';
@@ -1381,7 +1351,6 @@ class ComplaintService {
                     );
                   }
                 } catch (err) { }
-              }
             }
           }
         }

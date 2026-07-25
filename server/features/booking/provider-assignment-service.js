@@ -904,54 +904,24 @@ class ProviderAssignmentService {
       updatedBy: 'system'
     });
 
-    // Handle refunds for online/prepaid bookings
+    // Handle refunds for online/prepaid bookings via Centralized Refund Engine
     if (['paid', 'escrow_hold'].includes(booking.paymentStatus) || ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
       try {
-        const User = require('../user/user-model');
-        const Transaction = require('../payment/transaction-model');
-
-        await User.findByIdAndUpdate(
-          booking.customer,
-          {
-            $inc: { 'wallet.availableBalance': booking.totalAmount, 'wallet.totalRefunded': booking.totalAmount },
-            $push: {
-              'wallet.walletTransactions': {
-                type: 'credit',
-                amount: booking.totalAmount,
-                reason: `System Auto-cancellation refund: ${reason}`,
-                booking: booking._id,
-                createdAt: new Date()
-              }
-            },
-            $set: { 'wallet.lastUpdated': new Date() }
-          }
-        );
-
-        const refundTxn = new Transaction({
-          booking: booking._id,
-          bookingId: booking.bookingId || booking._id.toString(),
-          user: booking.customer,
-          customerId: booking.customer.toString(),
-          amount: booking.totalAmount,
-          paymentStatus: 'completed',
-          paymentMethod: 'wallet',
-          type: 'refund',
-          description: `System auto-cancelled booking - Automatic refund to wallet: ${reason}`,
-          refundReason: reason,
-          completedAt: new Date()
+        const RefundEngineService = require('../payment/refund-engine-service');
+        await RefundEngineService.processRefundRequest({
+          bookingId: booking._id,
+          refundSource: 'auto_cancellation',
+          refundReason: `System Auto-cancellation refund: ${reason}`,
+          cancellationReason: reason,
+          requestedBy: null,
+          isAutoTrigger: true,
         });
-        await refundTxn.save();
-
-        booking.paymentStatus = 'refunded';
-        booking.cancellationProgress.status = 'refund_completed';
-        booking.cancellationProgress.refundAmount = booking.totalAmount;
-        booking.cancellationProgress.refundCompletedAt = new Date();
       } catch (refundErr) {
-        console.error('[Refund Error] Failed to process auto-refund:', refundErr);
+        console.error('[Refund Engine Error] Failed to process auto-refund:', refundErr);
       }
+    } else {
+      await booking.save();
     }
-
-    await booking.save();
 
     // Broadcast Socket events and push notifications
     try {
