@@ -1,0 +1,847 @@
+const mongoose = require('mongoose');
+const Feedback = require('./feedback-model');
+const Booking = require('../booking/booking-model');
+const Service = require('../catalog/service-model');
+const User = require('../user/user-model');
+const Provider = require('../provider/provider-model');
+
+// Helper function to update service feedback in Service model
+const updateServiceFeedback = async (serviceId, feedbackId, updateData) => {
+  try {
+    const service = await Service.findById(serviceId);
+    if (!service) return;
+
+    if (updateData === 'remove') {
+      // Pull feedback by feedbackId reference
+      service.feedback = service.feedback.filter(
+        f => !f.feedbackId || !f.feedbackId.equals(feedbackId)
+      );
+      await service.save();
+      await updateServiceAverageRating(serviceId);
+      return;
+    }
+
+    // Find the index of the feedback to update
+    const feedbackIndex = service.feedback.findIndex(
+      f => f._id.equals(feedbackId)
+    );
+
+    if (feedbackIndex === -1) return;
+
+    // Update the specific feedback
+    if (updateData.rating !== undefined) {
+      service.feedback[feedbackIndex].rating = updateData.rating;
+    }
+    if (updateData.comment !== undefined) {
+      service.feedback[feedbackIndex].comment = updateData.comment;
+    }
+    if (updateData.isApproved !== undefined) {
+      service.feedback[feedbackIndex].isApproved = updateData.isApproved;
+    }
+    service.feedback[feedbackIndex].updatedAt = new Date();
+
+    await service.save();
+    await updateServiceAverageRating(serviceId);
+  } catch (error) {
+    global.logger.error('Error updating service feedback: ' + error.message, error);
+    throw error;
+  }
+};
+
+// Helper function to update service average rating
+const updateServiceAverageRating = async (serviceId) => {
+  try {
+    const service = await Service.findById(serviceId);
+    if (!service) return;
+
+    if (!service.feedback || service.feedback.length === 0) {
+      service.averageRating = 0;
+      service.ratingCount = 0;
+      await service.save();
+      return;
+    }
+
+    const sum = service.feedback.reduce((acc, curr) => acc + curr.rating, 0);
+    const average = sum / service.feedback.length;
+
+    service.averageRating = parseFloat(average.toFixed(1));
+    service.ratingCount = service.feedback.length;
+    await service.save();
+  } catch (error) {
+    global.logger.error('Error updating service average rating: ' + error.message, error);
+    throw error;
+  }
+};
+
+// Helper function to update provider average rating
+const updateProviderAverageRating = async (providerId) => {
+  try {
+    const provider = await Provider.findById(providerId);
+    if (!provider) return;
+
+    if (!provider.feedbacks || provider.feedbacks.length === 0) {
+      if (provider.performanceScore) {
+        provider.performanceScore.rating = 0;
+      }
+      await provider.save();
+      return;
+    }
+
+    const result = await Feedback.aggregate([
+      { $match: { 'providerFeedback.provider': new mongoose.Types.ObjectId(providerId) } },
+      { $group: { _id: null, avgRating: { $avg: '$providerFeedback.rating' } } }
+    ]);
+
+    const averageRating = result.length > 0 ? parseFloat(result[0].avgRating.toFixed(1)) : 0;
+
+    if (!provider.performanceScore) {
+      provider.performanceScore = { rating: averageRating, onTimePercentage: 0, completionPercentage: 0 };
+    } else {
+      provider.performanceScore.rating = averageRating;
+    }
+
+    await provider.save();
+  } catch (error) {
+    global.logger.error('Error updating provider average rating: ' + error.message, error);
+  }
+};
+
+// @desc    Submit feedback for a booking
+// @route   POST /api/feedback
+// @access  Private (Customer)
+const submitFeedback = async (req, res, next) => {
+  try {
+    const {
+      bookingId,
+      providerRating,
+      providerComment,
+      serviceRating,
+      serviceComment
+    } = req.body;
+    const customerId = req.user._id;
+
+    // Validate required fields
+    if (!bookingId || !providerRating || !serviceRating) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking ID, provider rating and service rating are required'
+      });
+    }
+
+    // Check if booking exists and belongs to this customer
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      customer: customerId,
+      status: 'completed'
+    }).populate('provider', 'name email')
+      .populate('services.service', 'title');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Completed booking not found or unauthorized'
+      });
+    }
+
+    // Check if booking has at least one service
+    if (!booking.services || booking.services.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking has no services to provide feedback for'
+      });
+    }
+
+    // Check for existing feedback
+    const existingFeedback = await Feedback.findOne({ booking: bookingId });
+    if (existingFeedback) {
+      return res.status(400).json({
+        success: false,
+        message: 'Feedback already submitted for this booking'
+      });
+    }
+
+    // Create new feedback
+    const feedback = await Feedback.create({
+      customer: customerId,
+      booking: bookingId,
+      providerFeedback: {
+        provider: booking.provider._id,
+        rating: providerRating,
+        comment: providerComment || ''
+      },
+      serviceFeedback: {
+        service: booking.services[0].service._id,
+        rating: serviceRating,
+        comment: serviceComment || ''
+      },
+      metadata: {
+        ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        userAgent: req.headers['user-agent']
+      }
+    });
+
+    // Update booking with feedback reference
+    booking.feedback = feedback._id;
+    await booking.save();
+
+    // Update provider's feedbacks array
+    await Provider.findByIdAndUpdate(
+      booking.provider._id,
+      { $push: { feedbacks: feedback._id } }
+    );
+
+    // Add feedback to service
+    const service = await Service.findById(booking.services[0].service._id);
+    service.feedback.push({
+      rating: serviceRating,
+      comment: serviceComment || '',
+      customer: customerId,
+      feedbackId: feedback._id // Store reference to original feedback
+    });
+    await service.save();
+
+    // Update service average rating
+    await updateServiceAverageRating(service._id);
+    // Update provider average rating
+    await updateProviderAverageRating(booking.provider._id);
+
+    return res.status(201).json({
+      success: true,
+      data: feedback
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.submitFeedback] Route: ${req.originalUrl || req.url} - Error submitting feedback: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Get customer's own feedbacks
+// @route   GET /api/feedback/my-feedbacks
+// @access  Private (Customer)
+const getCustomerFeedbacks = async (req, res, next) => {
+  try {
+    const feedbacks = await Feedback.find({ customer: req.user._id })
+      .populate({
+        path: 'providerFeedback.provider',
+        select: 'name profilePicUrl'
+      })
+      .populate({
+        path: 'serviceFeedback.service',
+        select: 'title image averageRating'
+      })
+      .populate('booking', 'date')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: feedbacks.length,
+      data: feedbacks
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.getCustomerFeedbacks] Route: ${req.originalUrl || req.url} - Error getting customer feedbacks: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Get single feedback (customer and admin can only view their own)
+// @route   GET /api/feedback/:feedbackId
+// @access  Private (Customer)
+const getFeedback = async (req, res, next) => {
+  try {
+    let query = { _id: req.params.feedbackId };
+    if (req.user) {
+      query.customer = req.user._id;
+    }
+
+    const feedback = await Feedback.findOne(query)
+      .populate('customer', 'name email phone') // Added phone as per modal
+      .populate({
+        path: 'providerFeedback.provider',
+        select: 'name email'
+      })
+      .populate({
+        path: 'serviceFeedback.service',
+        select: 'title category'
+      })
+      .populate('booking', 'date time bookingId') // Added bookingId and time
+      .lean();
+
+    if (!feedback) {
+      const message = req.user
+        ? 'Feedback not found or you are not authorized to view it.'
+        : 'Feedback not found.';
+      return res.status(404).json({
+        success: false,
+        message: message
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: feedback
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.getFeedback] Route: ${req.originalUrl || req.url} - Error getting feedback: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Edit feedback (customer can only edit their own)
+// @route   PUT /api/feedback/:feedbackId
+// @access  Private (Customer)
+const editFeedback = async (req, res, next) => {
+  try {
+    const {
+      providerRating,
+      providerComment,
+      serviceRating,
+      serviceComment
+    } = req.body;
+
+    // Validate feedback ID
+    if (!mongoose.Types.ObjectId.isValid(req.params.feedbackId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid feedback ID format'
+      });
+    }
+
+    // Find the feedback
+    const feedback = await Feedback.findOne({
+      _id: req.params.feedbackId,
+      customer: req.user._id
+    });
+
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback not found or unauthorized'
+      });
+    }
+
+    // Check if feedback is too old to edit (e.g., 7 days)
+    const daysOld = (Date.now() - feedback.createdAt) / (1000 * 60 * 60 * 24);
+    if (daysOld > 7) {
+      return res.status(400).json({
+        success: false,
+        message: 'Feedback cannot be edited after 7 days'
+      });
+    }
+
+    // Track changes for service feedback
+    const serviceRatingChanged = serviceRating !== undefined &&
+      serviceRating !== feedback.serviceFeedback.rating;
+    const serviceCommentChanged = serviceComment !== undefined &&
+      serviceComment !== feedback.serviceFeedback.comment;
+
+    const providerRatingChanged = providerRating !== undefined &&
+      providerRating !== feedback.providerFeedback.rating;
+
+    // Update provider feedback if provided
+    if (providerRating !== undefined) {
+      feedback.providerFeedback.rating = providerRating;
+      feedback.providerFeedback.comment = providerComment || feedback.providerFeedback.comment;
+      feedback.providerFeedback.isEdited = true;
+    }
+
+    // Update service feedback if provided
+    if (serviceRating !== undefined) {
+      feedback.serviceFeedback.rating = serviceRating;
+      feedback.serviceFeedback.comment = serviceComment || feedback.serviceFeedback.comment;
+      feedback.serviceFeedback.isEdited = true;
+    }
+
+    await feedback.save();
+
+    // Update service feedback if service rating or comment changed
+    if (serviceRatingChanged || serviceCommentChanged) {
+      await updateServiceFeedback(
+        feedback.serviceFeedback.service,
+        feedback._id,
+        {
+          rating: feedback.serviceFeedback.rating,
+          comment: feedback.serviceFeedback.comment
+        }
+      );
+    }
+
+    // Update provider average rating if rating changed
+    if (providerRatingChanged) {
+      await updateProviderAverageRating(feedback.providerFeedback.provider);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: feedback
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.editFeedback] Route: ${req.originalUrl || req.url} - Error editing feedback: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Delete feedback (customer can only delete their own)
+// @route   DELETE /api/feedback/:feedbackId
+// @access  Private (Customer)
+const deleteFeedback = async (req, res, next) => {
+  try {
+    const feedback = await Feedback.findOneAndDelete({
+      _id: req.params.feedbackId,
+      customer: req.user._id
+    });
+
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback not found or unauthorized'
+      });
+    }
+
+    // Remove feedback reference from booking
+    await Booking.findByIdAndUpdate(
+      feedback.booking,
+      { $unset: { feedback: 1 } }
+    );
+
+    // Remove feedback reference from provider
+    await Provider.findByIdAndUpdate(
+      feedback.providerFeedback.provider,
+      { $pull: { feedbacks: feedback._id } }
+    );
+
+    // Remove feedback from service
+    await updateServiceFeedback(
+      feedback.serviceFeedback.service,
+      feedback._id,
+      'remove'
+    );
+
+    // Update provider average rating
+    await updateProviderAverageRating(feedback.providerFeedback.provider);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Feedback deleted successfully'
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.deleteFeedback] Route: ${req.originalUrl || req.url} - Error deleting feedback: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Delete feedback (Admin)
+// @route   DELETE /api/feedback/admin/:feedbackId
+// @access  Private (Admin)
+const deleteFeedbackAdmin = async (req, res, next) => {
+  try {
+    const feedback = await Feedback.findByIdAndDelete(req.params.feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback not found'
+      });
+    }
+
+    // Remove feedback reference from booking
+    await Booking.findByIdAndUpdate(
+      feedback.booking,
+      { $unset: { feedback: 1 } }
+    );
+
+    // Remove feedback reference from provider
+    await Provider.findByIdAndUpdate(
+      feedback.providerFeedback.provider,
+      { $pull: { feedbacks: feedback._id } }
+    );
+
+    // Remove feedback from service
+    await updateServiceFeedback(
+      feedback.serviceFeedback.service,
+      feedback._id,
+      'remove'
+    );
+
+    // Update provider average rating
+    await updateProviderAverageRating(feedback.providerFeedback.provider);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Feedback deleted successfully by Admin'
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.deleteFeedbackAdmin] Route: ${req.originalUrl || req.url} - Error deleting feedback by admin: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Get provider's feedbacks
+// @route   GET /api/feedback/provider/my-feedbacks
+// @access  Private (Provider)
+const getProviderFeedbacks = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, rating, timeRange, search } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const query = {
+      'providerFeedback.provider': req.provider._id
+    };
+
+    if (rating && rating !== 'all') {
+      query['providerFeedback.rating'] = parseInt(rating);
+    }
+
+    if (timeRange && timeRange !== 'all') {
+      const now = new Date();
+      let startDate = new Date(now);
+      if (timeRange === 'week') startDate.setDate(now.getDate() - 7);
+      else if (timeRange === 'month') startDate.setMonth(now.getMonth() - 1);
+      query.createdAt = { $gte: startDate };
+    }
+
+    // Since we populate, if search term is provided, we query by bookingId if matches or service title
+    // However, to keep it fast, we do matching if search exists
+    let matchStage = { ...query };
+
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find(matchStage)
+        .populate('customer', 'name profilePicUrl')
+        .populate({
+          path: 'serviceFeedback.service',
+          select: 'title image'
+        })
+        .populate({
+          path: 'booking',
+          select: '_id bookingId date time status totalAmount address services',
+          populate: {
+            path: 'services.service',
+            select: 'title'
+          }
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Feedback.countDocuments(matchStage)
+    ]);
+
+    // Apply search filter in memory if present to avoid complicated populate joins
+    let filteredFeedbacks = feedbacks;
+    if (search && search.trim() !== '') {
+      const searchLower = search.toLowerCase();
+      filteredFeedbacks = feedbacks.filter(f => 
+        (f.booking?.bookingId && f.booking.bookingId.toLowerCase().includes(searchLower)) ||
+        (f.booking?.services?.[0]?.service?.title && f.booking.services[0].service.title.toLowerCase().includes(searchLower))
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: filteredFeedbacks.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limitNum),
+      data: filteredFeedbacks
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.getProviderFeedbacks] Route: ${req.originalUrl || req.url} - Error getting provider feedbacks: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Get provider's average rating
+// @route   GET /api/feedback/provider/average-rating
+// @access  Private (Provider)
+const getProviderAverageRating = async (req, res, next) => {
+  try {
+    const providerId = req.provider._id;
+
+    // 1. Overall Rating & Total Reviews
+    const overallStats = await Feedback.aggregate([
+      { $match: { 'providerFeedback.provider': providerId } },
+      { $group: { _id: null, avgRating: { $avg: '$providerFeedback.rating' }, count: { $sum: 1 } } }
+    ]);
+    const averageRating = overallStats.length > 0 ? parseFloat(overallStats[0].avgRating.toFixed(1)) : 0;
+    const ratingCount = overallStats.length > 0 ? overallStats[0].count : 0;
+
+    // 2. Rating Breakdown
+    const breakdownStats = await Feedback.aggregate([
+      { $match: { 'providerFeedback.provider': providerId } },
+      { $group: { _id: '$providerFeedback.rating', count: { $sum: 1 } } }
+    ]);
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    breakdownStats.forEach(stat => {
+      if (stat._id >= 1 && stat._id <= 5) {
+        breakdown[stat._id] = stat.count;
+      }
+    });
+
+    // 3. This Month Reviews
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonthReviews = await Feedback.countDocuments({
+      'providerFeedback.provider': providerId,
+      createdAt: { $gte: startOfMonth }
+    });
+
+    // 4. Weekly Performance (current week vs last week)
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+    currentWeekStart.setHours(0, 0, 0, 0);
+    const lastWeekStart = new Date(currentWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const weeklyStats = await Feedback.aggregate([
+      {
+        $match: {
+          'providerFeedback.provider': providerId,
+          createdAt: { $gte: lastWeekStart }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $gte: ['$createdAt', currentWeekStart] },
+              'current',
+              'last'
+            ]
+          },
+          avgRating: { $avg: '$providerFeedback.rating' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    let currentWeekAvg = 0;
+    let lastWeekAvg = 0;
+    weeklyStats.forEach(stat => {
+      if (stat._id === 'current') currentWeekAvg = stat.avgRating;
+      if (stat._id === 'last') lastWeekAvg = stat.avgRating;
+    });
+    const weeklyTrend = currentWeekAvg > lastWeekAvg ? 'up' : (currentWeekAvg < lastWeekAvg ? 'down' : 'same');
+
+    // 5. Monthly Trend (last 6 months)
+    const monthlyTrendData = [];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (let i = 5; i >= 0; i--) {
+      const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const targetMonth = targetDate.getMonth();
+      const targetYear = targetDate.getFullYear();
+      const startOfTargetMonth = new Date(targetYear, targetMonth, 1);
+      const endOfTargetMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+
+      const monthStats = await Feedback.aggregate([
+        {
+          $match: {
+            'providerFeedback.provider': providerId,
+            createdAt: { $gte: startOfTargetMonth, $lte: endOfTargetMonth }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            avgRating: { $avg: '$providerFeedback.rating' },
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const avgRating = monthStats.length > 0 ? monthStats[0].avgRating : 0;
+      monthlyTrendData.push({
+        month: months[targetMonth],
+        rating: parseFloat(avgRating.toFixed(1)),
+        count: monthStats.length > 0 ? monthStats[0].count : 0
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        averageRating,
+        ratingCount,
+        ratingBreakdown: breakdown,
+        thisMonthReviews,
+        weeklyPerformance: {
+          currentWeek: parseFloat(currentWeekAvg.toFixed(1)),
+          lastWeek: parseFloat(lastWeekAvg.toFixed(1)),
+          trend: weeklyTrend
+        },
+        monthlyTrend: monthlyTrendData
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.getProviderAverageRating] Route: ${req.originalUrl || req.url} - Error getting provider average rating: ${error.message}`, error);
+    next(error);
+  }
+};
+
+// @desc    Get all feedbacks (admin only)
+// @route   GET /api/feedback/admin/all-feedbacks
+// @access  Private (Admin)
+const getAllFeedbacks = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find()
+        .populate('customer', 'name email')
+        .populate({
+          path: 'providerFeedback.provider',
+          select: 'name email'
+        })
+        .populate({
+          path: 'serviceFeedback.service',
+          select: 'title category'
+        })
+        .populate('booking', 'date bookingId')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Feedback.countDocuments()
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: feedbacks.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limit),
+      data: feedbacks,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.getAllFeedbacks] Route: ${req.originalUrl || req.url} - Error getting all feedbacks: ${error.message}`, error);
+    next(error);
+  }
+};
+
+
+/**
+ * @desc    Get all feedbacks for a specific service (public)
+ * @route   GET /api/feedback/service/:serviceId
+ * @access  Public
+ */
+const getServiceFeedbacks = async (req, res, next) => {
+  try {
+    const { serviceId } = req.params;
+
+    // Validate serviceId
+    if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+      throw new BadRequestError('Invalid service ID');
+    }
+
+    // Check if service exists
+    const serviceExists = await Service.exists({ _id: serviceId });
+    if (!serviceExists) {
+      throw new NotFoundError('Service not found');
+    }
+
+    // Get all feedbacks for this service that have serviceFeedback
+    const feedbacks = await Feedback.find({
+      'serviceFeedback.service': serviceId
+    })
+      .select('serviceFeedback customer createdAt')
+      .populate({
+        path: 'customer',
+        select: 'name avatar'
+      })
+      .sort({ createdAt: -1 }) // Newest first
+      .lean();
+
+    // Format the response
+    const formattedFeedbacks = feedbacks.map(feedback => ({
+      _id: feedback._id,
+      rating: feedback.serviceFeedback.rating,
+      comment: feedback.serviceFeedback.isApproved ? feedback.serviceFeedback.comment : '',
+      isApproved: feedback.serviceFeedback.isApproved,
+      isEdited: feedback.serviceFeedback.isEdited,
+      createdAt: feedback.createdAt,
+      customer: {
+        _id: feedback.customer?._id,
+        name: feedback.customer?.name || 'Anonymous',
+        avatar: feedback.customer?.avatar
+      }
+    }));
+
+    // Calculate average rating
+    let averageRating = 0;
+    if (formattedFeedbacks.length > 0) {
+      const sum = formattedFeedbacks.reduce((acc, curr) => acc + curr.rating, 0);
+      averageRating = parseFloat((sum / formattedFeedbacks.length).toFixed(1));
+    }
+
+    res.status(200).json({
+      success: true,
+      count: formattedFeedbacks.length,
+      averageRating,
+      data: formattedFeedbacks
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Toggle feedback approval (admin only)
+ * @route   PATCH /api/feedback/admin/toggle-approval/:feedbackId
+ * @access  Private (Admin)
+ */
+const toggleFeedbackApproval = async (req, res, next) => {
+  try {
+    const { feedbackId } = req.params;
+
+    const feedback = await Feedback.findById(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback not found'
+      });
+    }
+
+    // Toggle approval status
+    feedback.serviceFeedback.isApproved = !feedback.serviceFeedback.isApproved;
+    await feedback.save();
+
+    // Sync with Service model
+    await updateServiceFeedback(
+      feedback.serviceFeedback.service,
+      feedback._id,
+      { isApproved: feedback.serviceFeedback.isApproved }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Feedback ${feedback.serviceFeedback.isApproved ? 'approved' : 'unapproved'} successfully`,
+      data: feedback
+    });
+  } catch (error) {
+    global.logger.error(`[FeedbackController.toggleFeedbackApproval] Route: ${req.originalUrl || req.url} - Error toggling feedback approval: ${error.message}`, error);
+    next(error);
+  }
+};
+
+module.exports = {
+  submitFeedback,
+  getCustomerFeedbacks,
+  getFeedback,
+  editFeedback,
+  deleteFeedback,
+  deleteFeedbackAdmin,
+  getProviderFeedbacks,
+  getProviderAverageRating,
+  getAllFeedbacks,
+  updateServiceAverageRating,
+  getServiceFeedbacks,
+  toggleFeedbackApproval
+};

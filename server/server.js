@@ -9,39 +9,39 @@ const compression = require("compression");
 const helmet = require("helmet");
 
 const http = require('http');
-const mongoSanitize = require("./middlewares/mongo-sanitize");
+const mongoSanitize = require('./shared/middlewares/mongo-sanitize');
 
 // Database & Socket imports
-const connectDB = require("./config/db");
-const { initSocket } = require('./socket/socketServer');
+const connectDB = require('./shared/config/db');
+const { initSocket } = require('./shared/socket/socket-server');
 
 // Middleware imports
-const { parseFraudHeaders } = require('./middlewares/fraud-middleware');
+const { parseFraudHeaders } = require('./shared/middlewares/fraud-middleware');
 
 // Route imports
-const adminRoutes = require("./routes/Admin-Routes");
-const providerRoutes = require("./routes/Provider-Routes");
-const customerRoutes = require("./routes/User-Routes");
-const authRoutes = require("./routes/Auth-routes");
-const questionRoutes = require("./routes/Question-route");
-const testRoutes = require("./routes/Test-routes");
-const serviceRoutes = require("./routes/Service-route");
-const categoryRoutes = require("./routes/Category-routes");
-const couponRoutes = require("./routes/Coupon-route");
-const bookingRoutes = require("./routes/Booking-route");
-const transactionRoutes = require("./routes/Transaction-route");
-const complaintRoutes = require("./routes/Complaint-routes");
-const feedbackRoutes = require("./routes/Feedback-routes");
-const commissionRoutes = require('./routes/Commission-routes');
-const paymentRoutes = require('./routes/Payment-routes');
-const systemSettingRoutes = require('./routes/SystemSetting-routes');
-const contactRoutes = require('./routes/Contact-routes');
-const notificationRoutes = require('./routes/Notification-routes');
-const chatRoutes = require('./routes/Chat-route');
-const zoneRoutes = require('./routes/Zone-routes');
-const surgeRoutes = require('./routes/Surge-routes');
-const referralRoutes = require('./routes/Referral-routes');
-const templateRoutes = require('./routes/Template-routes');
+const adminRoutes = require('./features/admin/admin-routes');
+const providerRoutes = require('./features/provider/provider-routes');
+const customerRoutes = require('./features/user/user-routes');
+const authRoutes = require('./features/auth/auth-routes');
+const questionRoutes = require('./features/zone/question-routes');
+const testRoutes = require('./features/zone/test-routes');
+const serviceRoutes = require('./features/catalog/service-routes');
+const categoryRoutes = require('./features/catalog/category-routes');
+const couponRoutes = require('./features/coupon/coupon-routes');
+const bookingRoutes = require('./features/booking/booking-routes');
+const transactionRoutes = require('./features/payment/transaction-routes');
+const complaintRoutes = require('./features/complaint/complaint-routes');
+const feedbackRoutes = require('./features/feedback/feedback-routes');
+const commissionRoutes = require('./features/payment/commission-routes');
+const paymentRoutes = require('./features/payment/payment-routes');
+const systemSettingRoutes = require('./features/system-setting/system-setting-routes');
+const contactRoutes = require('./features/contact/contact-routes');
+const notificationRoutes = require('./features/notification/notification-routes');
+const chatRoutes = require('./features/chat/chat-routes');
+const zoneRoutes = require('./features/zone/zone-routes');
+const surgeRoutes = require('./features/zone/surge-routes');
+const referralRoutes = require('./features/referral/referral-routes');
+const templateRoutes = require('./features/template/template-routes');
 
 
 // Initialize express app
@@ -195,7 +195,7 @@ app.use("/assets", express.static("assets"));
 // 4️⃣ MAINTENANCE MODE MIDDLEWARE
 // ─────────────────────────────────────────────────────────────────────────────
 
-const cache = require('./utils/cache');
+const cache = require('./shared/utils/cache');
 
 app.use(async (req, res, next) => {
   // Always allow health checks, test-routes, static assets, and uploads
@@ -209,7 +209,7 @@ app.use(async (req, res, next) => {
   }
 
   try {
-    const { SystemConfig } = require('./models/SystemSetting-model');
+    const { SystemConfig } = require('./features/system-setting/system-setting-model');
     const jwt = require('jsonwebtoken');
 
     let settings = cache.get('system_config');
@@ -355,7 +355,7 @@ const startServer = async () => {
 
     // Auto-migrate branding defaults
     try {
-      const { SystemConfig } = require('./models/SystemSetting-model');
+      const { SystemConfig } = require('./features/system-setting/system-setting-model');
       const existingConfig = await SystemConfig.findOne();
       if (existingConfig) {
         let modified = false;
@@ -399,8 +399,8 @@ const startServer = async () => {
     }
 
     // Initialize background tasks
-    const { releaseHeldEarnings } = require('./controllers/Payment-controller');
-    const { startCronJobs } = require('./cron/cronScheduler');
+    const { releaseHeldEarnings } = require('./features/payment/payment-controller');
+    const { startCronJobs } = require('./shared/cron/cron-scheduler');
 
     // Start background cron scheduler
     startCronJobs();
