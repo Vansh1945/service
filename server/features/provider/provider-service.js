@@ -1854,7 +1854,7 @@ class ProviderService {
                 Booking.find({
                     provider: providerId,
                     date: { $gte: today, $lt: tomorrow },
-                    status: { $in: ['pending', 'accepted', 'in-progress', 'scheduled'] }
+                    status: { $in: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted'] }
                 })
                     .populate('customer', 'name phone')
                     .populate('services.service', 'title')
@@ -1921,10 +1921,15 @@ class ProviderService {
             const statusLabels = {
                 completed: 'Completed',
                 cancelled: 'Cancelled',
-                'in-progress': 'In Progress',
+                workstarted: 'Work Started',
                 pending: 'Pending',
+                searchingprovider: 'Searching Provider',
+                offered: 'Offered',
                 accepted: 'Accepted',
-                'no-show': 'No Show'
+                ontheway: 'On The Way',
+                arrived: 'Arrived',
+                rejected: 'Rejected',
+                noshow: 'No Show'
             };
 
             bookingStats.forEach(stat => {
@@ -2011,7 +2016,7 @@ class ProviderService {
             let totalRelevant = 0;
             bookingStats.forEach(stat => {
                 const statusKey = stat._id ? stat._id.toLowerCase() : '';
-                if (['accepted', 'inprogress', 'in-progress', 'completed', 'cancelled', 'scheduled'].includes(statusKey)) {
+                if (['accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'].includes(statusKey)) {
                     totalRelevant += stat.count;
                 }
             });
@@ -2085,7 +2090,7 @@ class ProviderService {
                         totalReviews: ratingStats[0]?.totalReviews || 0,
                         completionRate: performance.completionPercentage !== undefined ? performance.completionPercentage : completionRate,
                         onTimeRate: performance.onTimePercentage !== undefined ? performance.onTimePercentage : onTimeRate,
-                        performanceBadge: performance.badge || 'Bronze',
+                        performanceBadge: performance.badge || 'bronze',
                         restrictionsActive: performance.restrictionsActive || false,
                         restrictedUntil: performance.restrictedUntil || null,
                         restrictionReason: performance.restrictionReason || null

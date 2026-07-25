@@ -435,7 +435,7 @@ const verifyPayment = async (req, res, next) => {
     booking.paymentStatus = 'escrow_hold';
     booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
     booking.confirmedBooking = true;
-    if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+    if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
       booking.status = 'pending';
     }
     booking.updatedAt = new Date();
@@ -608,7 +608,7 @@ const handleSuccessfulPayment = async (payment, session) => {
   booking.paidAmount = transaction.amount;
   booking.paymentDate = new Date();
   booking.confirmedBooking = true;
-  if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+  if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
     booking.status = 'pending';
   }
   await booking.save({ session });
@@ -1026,7 +1026,7 @@ const adminRetryVerify = async (req, res, next) => {
       booking.paidAmount = transaction.amount;
       booking.paymentDate = new Date();
       booking.confirmedBooking = true;
-      if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+      if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
         booking.status = 'pending';
       }
       await booking.save({ session });
@@ -1106,7 +1106,7 @@ const adminMarkPaid = async (req, res, next) => {
     // Update booking
     booking.paymentStatus = 'paid';
     booking.confirmedBooking = true;
-    if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+    if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
       booking.status = 'pending';
     }
     await booking.save({ session });

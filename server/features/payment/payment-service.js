@@ -433,7 +433,7 @@ class PaymentService {
         {
           $match: {
             provider: providerId,
-            status: { $in: ['requested', 'processing', 'under_review', 'approved'] }
+            status: { $in: ['requested', 'processing', 'underreview', 'under_review', 'approved'] }
           }
         },
         {
@@ -453,7 +453,7 @@ class PaymentService {
         {
           $match: {
             provider: providerId,
-            status: { $in: ['held', 'under_review', 'pending_release'] }
+            status: { $in: ['held', 'underreview', 'under_review', 'pendingrelease', 'pending_release'] }
           }
         },
         {
@@ -3033,7 +3033,7 @@ class PaymentService {
                 'provider',
                 'Earnings Released',
                 `Your earning of ₹${netAmount} for booking ${earning.booking?.bookingId || earning.booking?._id} has been released and is now available in your wallet.`,
-                'earning_released',
+                'earningreleased',
                 earning.booking?._id
               );
             } catch (err) { /* ignore */ }

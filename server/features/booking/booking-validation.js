@@ -82,52 +82,23 @@ const updateBookingPaymentSchema = z.object({
 });
 
 const validateBookingTransition = (currentStatus, targetStatus) => {
-  const normalize = (status) => {
-    if (!status) return 'Pending';
-    const statusMap = {
-      'pending': 'Pending',
-      'searchingprovider': 'SearchingProvider',
-      'offered': 'Offered',
-      'assigned': 'Accepted',
-      'accepted': 'Accepted',
-      'ontheway': 'OnTheWay',
-      'arrived': 'Arrived',
-      'started': 'WorkStarted',
-      'workstarted': 'WorkStarted',
-      'inprogress': 'WorkStarted',
-      'in-progress': 'WorkStarted',
-      'in_progress': 'WorkStarted',
-      'completed': 'Completed',
-      'cancelled': 'Cancelled',
-      'rejected': 'Cancelled',
-      'expired': 'Expired',
-      'reassigned': 'SearchingProvider',
-      'refunded': 'Cancelled',
-      'waiting admin assignment': 'SearchingProvider',
-      'confirmed': 'Accepted',
-      'scheduled': 'Accepted',
-      'no-show': 'Cancelled'
-    };
-    const cleanKey = status.toLowerCase().replace(/[^a-z]/g, '');
-    return statusMap[cleanKey] || statusMap[status.toLowerCase()] || status;
-  };
-
-  const curr = normalize(currentStatus);
-  const tgt = normalize(targetStatus);
+  const curr = currentStatus || 'pending';
+  const tgt = targetStatus;
 
   if (curr === tgt) return true;
 
   const transitions = {
-    'Pending': ['SearchingProvider', 'Cancelled', 'Accepted', 'Offered'],
-    'SearchingProvider': ['Offered', 'Cancelled', 'Expired', 'Accepted'],
-    'Offered': ['Accepted', 'Expired', 'Cancelled'],
-    'Accepted': ['OnTheWay', 'WorkStarted', 'Cancelled'],
-    'OnTheWay': ['Arrived', 'WorkStarted', 'Cancelled'],
-    'Arrived': ['WorkStarted', 'Cancelled'],
-    'WorkStarted': ['Completed', 'Cancelled'],
-    'Completed': [],
-    'Cancelled': [],
-    'Expired': ['SearchingProvider', 'Cancelled', 'Pending']
+    'pending': ['searchingprovider', 'offered', 'accepted', 'cancelled', 'rejected'],
+    'searchingprovider': ['offered', 'accepted', 'cancelled', 'rejected'],
+    'offered': ['accepted', 'cancelled', 'rejected'],
+    'accepted': ['ontheway', 'workstarted', 'cancelled', 'noshow'],
+    'ontheway': ['arrived', 'workstarted', 'cancelled', 'noshow'],
+    'arrived': ['workstarted', 'cancelled', 'noshow'],
+    'workstarted': ['completed', 'cancelled', 'noshow'],
+    'completed': [],
+    'cancelled': [],
+    'rejected': [],
+    'noshow': []
   };
 
   const allowed = transitions[curr] || [];

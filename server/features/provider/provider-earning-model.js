@@ -46,8 +46,17 @@ const providerEarningSchema = new Schema({
   
   status: {
     type: String,
-    enum: ['held', 'available', 'paid', 'withdrawn', 'cancelled', 'under_review', 'pending_release'],
-    default: 'held'
+    enum: ['held', 'available', 'paid', 'withdrawn', 'cancelled', 'underreview', 'pendingrelease'],
+    default: 'held',
+    set: function (v) {
+      if (!v) return v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const eMap = {
+        'under_review': 'underreview',
+        'pending_release': 'pendingrelease'
+      };
+      return eMap[clean] || clean;
+    }
   },
   availableAfter: {
     type: Date,
@@ -226,7 +235,11 @@ const recoveryLedgerSchema = new Schema({
   source: {
     type: String,
     required: true,
-    enum: ['wallet', 'held_earnings', 'pending_release', 'available', 'platform_credit_reserve', 'platform_absorbed']
+    enum: ['wallet', 'heldearnings', 'pendingrelease', 'available', 'platformcreditreserve', 'platformabsorbed'],
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
   reason: {
     type: String,

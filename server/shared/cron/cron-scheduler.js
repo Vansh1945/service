@@ -41,7 +41,7 @@ const startCronJobs = () => {
                 const timeoutMinutes = settings?.bookingSettings?.providerAcceptTimeoutMinutes || 5;
                 const timeoutThreshold = new Date(Date.now() - timeoutMinutes * 60 * 1000);
                 const expiredBookings = await Booking.find({
-                    status: 'assigned',
+                    status: { $in: ['offered', 'searchingprovider'] },
                     provider: { $ne: null },
                     'metadata.assignedAt': { $lte: timeoutThreshold }
                 });
@@ -54,7 +54,7 @@ const startCronJobs = () => {
                     booking.metadata.ignoredProviders.push(booking.provider);
                     
                     booking.provider = null;
-                    booking.status = 'pending';
+                    booking.status = 'searchingprovider';
                     await booking.save();
 
                     const ProviderAssignmentService = require('../../features/booking/provider-assignment-service');

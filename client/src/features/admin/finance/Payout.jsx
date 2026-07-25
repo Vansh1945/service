@@ -112,7 +112,7 @@ const PayoutModal = ({
                   value={formData.paymentMethod}
                   onChange={e => setFormData(p => ({ ...p, paymentMethod: e.target.value }))}
                 >
-                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="banktransfer">Bank Transfer</option>
                   <option value="upi">UPI</option>
                   <option value="neft">NEFT</option>
                   <option value="rtgs">RTGS</option>
@@ -195,7 +195,7 @@ const AdminPayout = () => {
   const [selectedDetails, setSelectedDetails] = useState(null);
   const [approveForm, setApproveForm] = useState({ utrNo: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' });
   const [rejectReason, setRejectReason] = useState('');
-  const [directPayoutForm, setDirectPayoutForm] = useState({ providerId: '', amount: '', paymentMethod: 'bank_transfer', utrNo: '', notes: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5) });
+  const [directPayoutForm, setDirectPayoutForm] = useState({ providerId: '', amount: '', paymentMethod: 'banktransfer', utrNo: '', notes: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5) });
   const [submitting, setSubmitting] = useState(false);
 
   const [searchParams] = useSearchParams();
@@ -289,7 +289,7 @@ const AdminPayout = () => {
     setDirectPayoutForm({
       providerId: '',
       amount: '',
-      paymentMethod: 'bank_transfer',
+      paymentMethod: 'banktransfer',
       utrNo: '',
       notes: '',
       transferDate: new Date().toISOString().split('T')[0],

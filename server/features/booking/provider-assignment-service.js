@@ -192,7 +192,7 @@ class ProviderAssignmentService {
     const providerIds = providersWithDetails.map(item => item.provider._id);
     const activeBookings = await Booking.find({
       provider: { $in: providerIds },
-      status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+      status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
     }).select('provider date time services');
 
     const workloadMap = {};
@@ -429,7 +429,7 @@ class ProviderAssignmentService {
         const providerIds = providersWithDetails.map(item => item.provider._id);
         const activeBookings = await Booking.find({
           provider: { $in: providerIds },
-          status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+          status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
         }).select('provider date time services');
 
         const workloadMap = {};
@@ -800,16 +800,16 @@ class ProviderAssignmentService {
   try {
     console.log(`[Escalation] Escalating booking ${bookingId} to Admin. Reason: ${reason}`);
     const booking = await Booking.findById(bookingId).populate('customer');
-    if (!booking || ['accepted', 'in-progress', 'started', 'completed', 'cancelled', 'Waiting Admin Assignment'].includes(booking.status)) {
+    if (!booking || ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled', 'searchingprovider'].includes(booking.status)) {
       return;
     }
 
-    booking.status = 'Waiting Admin Assignment';
+    booking.status = 'searchingprovider';
     booking.provider = undefined;
     booking.providerAcceptanceStatus = null;
     booking.providerResponseDeadline = null;
     booking.statusHistory.push({
-      status: 'Waiting Admin Assignment',
+      status: 'searchingprovider',
       timestamp: new Date(),
       note: `Escalated to Admin: ${reason}`,
       updatedBy: 'system'
@@ -825,7 +825,7 @@ class ProviderAssignmentService {
     setTimeout(async () => {
       try {
         const currentBooking = await Booking.findById(bookingId);
-        if (currentBooking && currentBooking.status === 'Waiting Admin Assignment') {
+        if (currentBooking && currentBooking.status === 'searchingprovider') {
           console.log(`[Admin Timeout] Admin failed to respond to escalated booking ${bookingId} within ${adminTimeoutMin} minutes. Auto-cancelling...`);
           await ProviderAssignmentService.autoCancelBooking(bookingId, 'Admin response timeout');
         }
@@ -842,7 +842,7 @@ class ProviderAssignmentService {
         io.to('admin_live_room').emit('admin-booking-update', {
           bookingId: booking._id,
           event: 'booking-escalated',
-          status: 'Waiting Admin Assignment',
+          status: 'searchingprovider',
           bookingType: booking.bookingType,
           reason
         });
@@ -880,7 +880,7 @@ class ProviderAssignmentService {
   try {
     console.log(`[AutoCancel] Auto-cancelling booking ${bookingId}. Reason: ${reason}`);
     const booking = await Booking.findById(bookingId);
-    if (!booking || ['completed', 'cancelled', 'accepted', 'in-progress', 'started'].includes(booking.status)) {
+    if (!booking || ['completed', 'cancelled', 'accepted', 'workstarted', 'ontheway', 'arrived'].includes(booking.status)) {
       return;
     }
 

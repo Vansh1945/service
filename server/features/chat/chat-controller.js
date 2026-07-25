@@ -37,7 +37,7 @@ const getChatAccessStatus = (booking) => {
   }
 
   // Before confirmed - no chat allowed
-  if (['pending', 'cancelled', 'no-show'].includes(booking.status)) {
+  if (['pending', 'searchingprovider', 'offered', 'cancelled', 'rejected', 'noshow'].includes(booking.status)) {
     return { allowed: false, reason: 'Chat is not available before the booking is confirmed.' };
   }
 
@@ -133,7 +133,7 @@ const createRoom = async (req, res) => {
       // Provider assigned and booking accepted checks
       // Enable ONLY when booking status is: assigned, accepted, on_the_way, arrived, in_progress, completed, etc.
       // Else reject: "Chat available after booking acceptance"
-      const allowedStatuses = ['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'in-progress', 'started', 'completed'];
+      const allowedStatuses = ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'];
       if (!booking.provider || !allowedStatuses.includes(booking.status)) {
         return res.status(403).json({ success: false, message: 'Chat available after booking acceptance' });
       }

@@ -341,7 +341,15 @@ const providerSchema = new mongoose.Schema({
         rating: { type: Number, default: 0 },
         onTimePercentage: { type: Number, default: 0 },
         completionPercentage: { type: Number, default: 0 },
-        badge: { type: String, enum: ['Bronze', 'Silver', 'Gold', 'Platinum'], default: 'Bronze' },
+        badge: {
+            type: String,
+            enum: ['bronze', 'silver', 'gold', 'platinum'],
+            default: 'bronze',
+            set: function (v) {
+                if (!v) return v;
+                return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+            }
+        },
         cancellationRatio: { type: Number, default: 0 },
         complaintRatio: { type: Number, default: 0 },
         codAbuseRisk: { type: String, default: 'LOW' },

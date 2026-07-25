@@ -55,7 +55,11 @@ const transactionSchema = new Schema({
     type: String,
     required: true,
     enum: ['pending', 'success', 'failed', 'processing', 'completed', 'refunded'],
-    default: 'pending'
+    default: 'pending',
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
   currency: {
     type: String,
@@ -63,13 +67,15 @@ const transactionSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'UPI', 'Card', 'Cash', 'mixed'],
-    default: 'online'
+    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'mixed'],
+    default: 'online',
+
   },
   type: {
     type: String,
-    enum: ['payment', 'refund', 'referral_reward', 'penalty', 'commission_deduction', 'withdrawal', 'withdrawal_rejection', 'refund_recovery'],
-    default: 'payment'
+    enum: ['payment', 'refund', 'referralreward', 'penalty', 'commissiondeduction', 'withdrawal', 'withdrawalrejection', 'refundrecovery'],
+    default: 'payment',
+
   },
   balanceBefore: {
     type: Number,
@@ -91,8 +97,12 @@ const transactionSchema = new Schema({
   },
   recoveryType: {
     type: String,
-    enum: ['wallet', 'held_earnings', 'pending_release', 'available', 'platform_credit_reserve', 'platform_absorbed'],
-    default: null
+    enum: ['wallet', 'heldearnings', 'pendingrelease', 'available', 'platformcreditreserve', 'platformabsorbed'],
+    default: null,
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
   deductionType: {
     type: String,
@@ -106,7 +116,11 @@ const transactionSchema = new Schema({
   refundStatus: {
     type: String,
     enum: ['none', 'pending', 'completed'],
-    default: 'none'
+    default: 'none',
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
   refundReason: String,
   refundedAt: Date,

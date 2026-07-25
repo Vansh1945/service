@@ -2,29 +2,27 @@ import { Timer, CheckCircle, Activity, XCircle, CreditCard, AlertCircle } from '
 
 export const BOOKING_STATUS_CONFIG = {
   pending: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
-  Pending: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
-  SearchingProvider: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
-  Offered: { color: 'bg-indigo-50 text-indigo-700 border-indigo-200', bar: 'bg-indigo-400', icon: Timer, label: 'Job Offered' },
-  Accepted: { color: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-500', icon: CheckCircle, label: 'Confirmed' },
+  searchingprovider: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
+  offered: { color: 'bg-indigo-50 text-indigo-700 border-indigo-200', bar: 'bg-indigo-400', icon: Timer, label: 'Job Offered' },
   accepted: { color: 'bg-blue-50 text-blue-700 border-blue-200', bar: 'bg-blue-500', icon: CheckCircle, label: 'Confirmed' },
-  OnTheWay: { color: 'bg-sky-50 text-sky-700 border-sky-200', bar: 'bg-sky-500', icon: Activity, label: 'On The Way' },
-  Arrived: { color: 'bg-cyan-50 text-cyan-700 border-cyan-200', bar: 'bg-cyan-500', icon: Activity, label: 'Arrived' },
-  WorkStarted: { color: 'bg-violet-50 text-violet-700 border-violet-200', bar: 'bg-violet-500', icon: Activity, label: 'Work Started' },
-  in_progress: { color: 'bg-violet-50 text-violet-700 border-violet-200', bar: 'bg-violet-500', icon: Activity, label: 'In Progress' },
-  'in-progress': { color: 'bg-violet-50 text-violet-700 border-violet-200', bar: 'bg-violet-500', icon: Activity, label: 'In Progress' },
-  Completed: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-500', icon: CheckCircle, label: 'Completed' },
+  ontheway: { color: 'bg-sky-50 text-sky-700 border-sky-200', bar: 'bg-sky-500', icon: Activity, label: 'On The Way' },
+  arrived: { color: 'bg-cyan-50 text-cyan-700 border-cyan-200', bar: 'bg-cyan-500', icon: Activity, label: 'Arrived' },
+  workstarted: { color: 'bg-violet-50 text-violet-700 border-violet-200', bar: 'bg-violet-500', icon: Activity, label: 'Work Started' },
   completed: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-500', icon: CheckCircle, label: 'Completed' },
-  Cancelled: { color: 'bg-red-50 text-red-600 border-red-200', bar: 'bg-red-400', icon: XCircle, label: 'Cancelled' },
   cancelled: { color: 'bg-red-50 text-red-600 border-red-200', bar: 'bg-red-400', icon: XCircle, label: 'Cancelled' },
+  rejected: { color: 'bg-rose-50 text-rose-600 border-rose-200', bar: 'bg-rose-400', icon: XCircle, label: 'Rejected' },
+  noshow: { color: 'bg-orange-50 text-orange-700 border-orange-200', bar: 'bg-orange-400', icon: XCircle, label: 'No Show' },
   payment_pending: { color: 'bg-orange-50 text-orange-700 border-orange-200', bar: 'bg-orange-400', icon: CreditCard, label: 'Payment Due' },
 };
 
 export const getBookingStatusCfg = (status) => {
-  return BOOKING_STATUS_CONFIG[status] || {
+  if (!status) return BOOKING_STATUS_CONFIG.pending;
+  const key = String(status).toLowerCase();
+  return BOOKING_STATUS_CONFIG[key] || {
     color: 'bg-gray-100 text-gray-600 border-gray-200',
     bar: 'bg-gray-400',
     icon: AlertCircle,
-    label: status || 'Unknown'
+    label: status ? (status.charAt(0).toUpperCase() + status.slice(1)) : 'Unknown'
   };
 };
 

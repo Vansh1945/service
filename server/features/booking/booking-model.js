@@ -125,47 +125,43 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'SearchingProvider', 'Offered', 'Accepted', 'OnTheWay', 'Arrived', 'WorkStarted', 'Completed', 'Cancelled', 'Expired'],
-    default: 'Pending',
+    enum: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled', 'rejected', 'noshow'],
+    default: 'pending',
     set: function (v) {
       if (!v) return v;
-      const statusMap = {
-        'pending': 'Pending',
-        'searchingprovider': 'SearchingProvider',
-        'offered': 'Offered',
-        'assigned': 'Accepted',
-        'accepted': 'Accepted',
-        'ontheway': 'OnTheWay',
-        'arrived': 'Arrived',
-        'started': 'WorkStarted',
-        'workstarted': 'WorkStarted',
-        'inprogress': 'WorkStarted',
-        'in-progress': 'WorkStarted',
-        'in_progress': 'WorkStarted',
-        'completed': 'Completed',
-        'cancelled': 'Cancelled',
-        'rejected': 'Cancelled',
-        'expired': 'Expired',
-        'reassigned': 'SearchingProvider',
-        'refunded': 'Cancelled',
-        'waiting admin assignment': 'SearchingProvider',
-        'confirmed': 'Accepted',
-        'scheduled': 'Accepted',
-        'no-show': 'Cancelled'
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sMap = {
+        'inprogress': 'workstarted',
+        'in_progress': 'workstarted',
+        'in-progress': 'workstarted',
+        'started': 'workstarted',
+        'assigned': 'accepted'
       };
-      const cleanKey = v.toLowerCase().replace(/[^a-z]/g, '');
-      return statusMap[cleanKey] || statusMap[v.toLowerCase()] || v;
+      return sMap[clean] || clean;
     }
   },
   assignmentStatus: {
     type: String,
-    enum: ['Waiting', 'AutoAssigning', 'AutoAssigned', 'ManualAssigned', 'Rejected', 'Timeout', 'Reassigned'],
-    default: 'Waiting'
+    enum: ['waiting', 'autoassigning', 'autoassigned', 'manualassigned', 'rejected', 'timeout', 'reassigned'],
+    default: 'waiting',
+    set: function (v) {
+      if (!v) return v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const aMap = {
+        'assigned': 'autoassigned',
+        'accepted': 'autoassigned'
+      };
+      return aMap[clean] || clean;
+    }
   },
   complaintStatus: {
     type: String,
-    enum: ['None', 'Raised', 'UnderInvestigation', 'Resolved', 'Closed'],
-    default: 'None'
+    enum: ['none', 'raised', 'underreview', 'resolved', 'closed'],
+    default: 'none',
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
   rating: {
     type: Number,
@@ -200,33 +196,37 @@ const bookingSchema = new Schema({
   paymentMethod: {
     type: String,
     enum: ['online', 'cash', 'wallet', 'mixed'],
-    required: [true, 'Payment method is required']
+    required: [true, 'Payment method is required'],
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
 
   paymentStatus: {
     type: String,
-    enum: ['Pending', 'Paid', 'EscrowHold', 'SettlementPending', 'Settled', 'RefundPending', 'RefundApproved', 'Refunded', 'pending', 'paid', 'failed', 'refunded', 'processing', 'escrow_hold'],
-    default: 'Pending',
+    enum: ['pending', 'paid', 'escrowhold', 'settlementpending', 'settled', 'refundpending', 'refundapproved', 'refunded', 'failed', 'processing'],
+    default: 'pending',
     set: function (v) {
       if (!v) return v;
       const pMap = {
-        'pending': 'Pending',
-        'paid': 'Paid',
-        'escrow_hold': 'EscrowHold',
-        'escrowhold': 'EscrowHold',
-        'settlement_pending': 'SettlementPending',
-        'settlementpending': 'SettlementPending',
-        'settled': 'Settled',
-        'refund_pending': 'RefundPending',
-        'refundpending': 'RefundPending',
-        'refund_approved': 'RefundApproved',
-        'refundapproved': 'RefundApproved',
-        'refunded': 'Refunded',
-        'processing': 'EscrowHold',
-        'failed': 'Pending'
+        'pending': 'pending',
+        'paid': 'paid',
+        'escrow_hold': 'escrowhold',
+        'escrowhold': 'escrowhold',
+        'settlement_pending': 'settlementpending',
+        'settlementpending': 'settlementpending',
+        'settled': 'settled',
+        'refund_pending': 'refundpending',
+        'refundpending': 'refundpending',
+        'refund_approved': 'refundapproved',
+        'refundapproved': 'refundapproved',
+        'refunded': 'refunded',
+        'processing': 'escrowhold',
+        'failed': 'failed'
       };
-      const clean = v.toLowerCase().replace(/[^a-z]/g, '');
-      return pMap[clean] || pMap[v.toLowerCase()] || v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return pMap[clean] || pMap[v.toLowerCase()] || clean;
     }
   },
 
@@ -246,8 +246,22 @@ const bookingSchema = new Schema({
   cancellationProgress: {
     status: {
       type: String,
-      enum: ['not_cancelled', 'cancelled', 'processing_refund', 'refund_completed'],
-      default: 'not_cancelled'
+      enum: ['notcancelled', 'cancelled', 'processingrefund', 'refundcompleted'],
+      default: 'notcancelled',
+      set: function (v) {
+        if (!v) return v;
+        const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const cMap = {
+          'notcancelled': 'notcancelled',
+          'not_cancelled': 'notcancelled',
+          'cancelled': 'cancelled',
+          'processingrefund': 'processingrefund',
+          'processing_refund': 'processingrefund',
+          'refundcompleted': 'refundcompleted',
+          'refund_completed': 'refundcompleted'
+        };
+        return cMap[clean] || clean;
+      }
     },
     reason: {
       type: String,
@@ -501,8 +515,20 @@ const bookingSchema = new Schema({
   },
   disputeStatus: {
     type: String,
-    enum: ['none', 'pending', 'under_review', 'provider_responded', 'customer_responded', 'resolved', 'refund_approved', 'refund_rejected'],
-    default: 'none'
+    enum: ['none', 'pending', 'underreview', 'providerresponded', 'customerresponded', 'resolved', 'refundapproved', 'refundrejected'],
+    default: 'none',
+    set: function (v) {
+      if (!v) return v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const dMap = {
+        'under_review': 'underreview',
+        'provider_responded': 'providerresponded',
+        'customer_responded': 'customerresponded',
+        'refund_approved': 'refundapproved',
+        'refund_rejected': 'refundrejected'
+      };
+      return dMap[clean] || clean;
+    }
   },
   adminRefundDecision: {
     type: String,

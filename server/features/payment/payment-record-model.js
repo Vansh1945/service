@@ -33,7 +33,13 @@ const paymentRecordSchema = new Schema({
   // Payment method selected for withdrawal
   paymentMethod: {
     type: String,
-    enum: ['bank_transfer', 'upi', 'neft', 'rtgs', 'other'],
+    enum: ['banktransfer', 'upi', 'neft', 'rtgs', 'other'],
+    set: function (v) {
+      if (!v) return v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (clean === 'banktransfer') return 'banktransfer';
+      return clean;
+    }
   },
 
   // Provider ke model ke bankDetails se sync hoga
@@ -59,14 +65,26 @@ const paymentRecordSchema = new Schema({
   },
   withdrawalType: {
     type: String,
-    enum: ['manual_bulk']
+    enum: ['manualbulk'],
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
 
 
   status: {
     type: String,
-    enum: ['requested', 'under_review', 'approved', 'transferred', 'completed', 'failed', 'processing', 'rejected'],
-    default: 'requested'
+    enum: ['requested', 'underreview', 'approved', 'transferred', 'completed', 'failed', 'processing', 'rejected'],
+    default: 'requested',
+    set: function (v) {
+      if (!v) return v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const wMap = {
+        'under_review': 'underreview'
+      };
+      return wMap[clean] || clean;
+    }
   },
 
   rejectionReason: String,

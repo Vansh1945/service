@@ -494,7 +494,7 @@ const ReferralManagement = () => {
                             <p>Referred: {l.referral?.referredUser?.name || 'N/A'}</p>
                           </td>
                           <td className="py-3 px-2 text-xs font-semibold text-secondary capitalize">
-                            {l.rewardType === 'customer_referral' ? 'Customer Promo' : 'Partner Milestone'}
+                            {l.rewardType === 'customer_referral' || l.rewardType === 'customerreferral' ? 'Customer Promo' : 'Partner Milestone'}
                           </td>
                           <td className="py-3 px-2 text-green-600 font-bold">₹{l.amount}</td>
                           <td className="py-3 px-2 text-gray-500 text-xs">

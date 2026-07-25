@@ -63,9 +63,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   const statusHistory = booking.statusHistory || [];
 
   const getStatusTime = (statusName) => {
-    const normalize = (s) => s?.toLowerCase().replace(/[^a-z]/g, '') || '';
-    const target = normalize(statusName);
-    const history = [...statusHistory].reverse().find(h => normalize(h.status) === target);
+    const history = [...statusHistory].reverse().find(h => h.status === statusName);
     return history ? history.timestamp : null;
   };
 
@@ -89,15 +87,14 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   steps.push({
     title: isAssigned ? `Provider Assigned: ${booking.provider?.name || 'Assigned'}` : "Provider Assigned",
     completed: isAssigned,
-    time: isAssigned ? (getStatusTime('assigned') || getStatusTime('scheduled') || booking.updatedAt) : null,
+    time: isAssigned ? (getStatusTime('accepted') || booking.updatedAt) : null,
     status: isAssigned ? 'completed' : 'pending'
   });
 
-  // BOOKING STATUS STATE MACHINE UPGRADE
-  const bStatus = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  const bStatus = booking.status || 'pending';
 
   // 3. Provider Accepted
-  const isAccepted = ['accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'].includes(bStatus);
+  const isAccepted = ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(bStatus);
   steps.push({
     title: "Provider Accepted",
     completed: isAccepted,
@@ -106,7 +103,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   });
 
   // 4. Provider Arrived
-  const isArrived = ['arrived', 'started', 'inprogress', 'completed'].includes(bStatus);
+  const isArrived = ['arrived', 'workstarted', 'completed'].includes(bStatus);
   steps.push({
     title: "Provider Arrived",
     completed: isArrived,
@@ -115,20 +112,20 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   });
 
   // 5. OTP Verified
-  const isOtpVerified = ['started', 'inprogress', 'completed'].includes(bStatus) || !!getOTPVerifiedTime();
+  const isOtpVerified = ['workstarted', 'completed'].includes(bStatus) || !!getOTPVerifiedTime();
   steps.push({
     title: "OTP Verified",
     completed: isOtpVerified,
-    time: isOtpVerified ? (getOTPVerifiedTime() || getStatusTime('started') || getStatusTime('inprogress')) : null,
+    time: isOtpVerified ? (getOTPVerifiedTime() || getStatusTime('workstarted')) : null,
     status: isOtpVerified ? 'completed' : 'pending'
   });
 
   // 6. Work Started
-  const isStarted = ['started', 'inprogress', 'completed'].includes(bStatus);
+  const isStarted = ['workstarted', 'completed'].includes(bStatus);
   steps.push({
     title: "Work Started",
     completed: isStarted,
-    time: booking.serviceStartedAt || getStatusTime('started') || getStatusTime('inprogress'),
+    time: booking.serviceStartedAt || getStatusTime('workstarted'),
     status: isStarted ? 'completed' : 'pending'
   });
 
@@ -177,7 +174,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   });
 
   // If booking is cancelled, append Cancellation status
-  if (['cancelled', 'refunded'].includes(bStatus)) {
+  if (bStatus === 'cancelled') {
     const isCancelledByAdmin = booking.cancelledBy === 'admin';
     steps.push({
       title: isCancelledByAdmin ? "Booking Cancelled By Support Team" : "Booking Cancelled",

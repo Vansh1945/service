@@ -38,8 +38,16 @@ const referralSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'qualified', 'approved', 'released', 'rejected', 'fraud_flagged', 'expired'],
-    default: 'pending'
+    enum: ['pending', 'qualified', 'approved', 'released', 'rejected', 'fraudflagged', 'expired'],
+    default: 'pending',
+    set: function (v) {
+      if (!v) return v;
+      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const rMap = {
+        'fraud_flagged': 'fraudflagged'
+      };
+      return rMap[clean] || clean;
+    }
   },
   customerRewardReleased: {
     type: Boolean,
@@ -50,7 +58,11 @@ const referralSchema = new mongoose.Schema({
   }],
   abuseFlags: [{
     type: String,
-    enum: ['self_referral', 'same_email', 'same_phone', 'same_bank_account', 'same_upi', 'same_device', 'same_ip']
+    enum: ['selfreferral', 'sameemail', 'samephone', 'samebankaccount', 'sameupi', 'samedevice', 'sameip'],
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   }],
   deviceInfo: {
     ip: String,
@@ -93,7 +105,7 @@ const referralRewardLogSchema = new mongoose.Schema({
   },
   rewardType: {
     type: String,
-    enum: ['customer_referral', 'provider_milestone'],
+    enum: ['customerreferral', 'providermilestone'],
     required: true
   },
   recipient: {

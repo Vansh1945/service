@@ -440,14 +440,14 @@ const LiveTrackingPage = () => {
         </div>
 
         {/* 3. Secure Service PIN (Customer Only) */}
-        {!isProvider && ['scheduled', 'accepted', 'inprogress', 'assigned', 'ontheway', 'arrived', 'started'].includes((booking?.status || '').toLowerCase().replace(/[^a-z]/g, '')) && (
+        {!isProvider && ['accepted', 'ontheway', 'arrived', 'workstarted'].includes((booking?.status || '').toLowerCase()) && (
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-3 flex items-center justify-between gap-3">
             <div>
               <span className="text-[9px] font-black text-blue-600/60 uppercase tracking-wider block mb-0.5">
-                {['in-progress', 'in_progress'].includes(booking?.status) ? 'Completion PIN' : 'Start PIN'}
+                {booking?.status === 'workstarted' ? 'Completion PIN' : 'Start PIN'}
               </span>
               <span className="text-xl font-black text-secondary tracking-widest font-mono">
-                {['in-progress', 'in_progress'].includes(booking?.status) ? getCompletionPin(booking) : getStartPin(booking)}
+                {booking?.status === 'workstarted' ? getCompletionPin(booking) : getStartPin(booking)}
               </span>
             </div>
             <p className="text-[10px] text-slate-500 font-semibold max-w-[170px] text-right">

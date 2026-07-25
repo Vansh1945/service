@@ -464,7 +464,7 @@ const AdminProviders = () => {
                                 <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
                               </div>
                               <div className="text-xs font-semibold flex items-center mt-0.5">
-                                <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Badge: <span className="ml-1 font-bold text-gray-800">{provider.performanceBadge || provider.performanceScore?.badge || 'Bronze'}</span>
+                                <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Badge: <span className="ml-1 font-bold text-gray-800 font-mono capitalize">{provider.performanceBadge || provider.performanceScore?.badge || 'bronze'}</span>
                               </div>
                             </div>
                           </td>
@@ -665,7 +665,7 @@ const ProviderModal = ({
             />
             <StatPill
               label="Performance Badge"
-              value={ps.badge || 'Bronze'}
+              value={ps.badge || 'bronze'}
               color="bg-warning-light text-warning"
             />
           </div>

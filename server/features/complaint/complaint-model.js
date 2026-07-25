@@ -67,7 +67,7 @@ const complaintSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Payment", "Booking", "Account", "Other"],
+      enum: ["serviceissue", "paymentissue", "deliveryissue", "suggestion", "payment", "booking", "account", "other"],
     },
 
     // 5. File Storage (Cloudinary)
@@ -79,8 +79,12 @@ const complaintSchema = new mongoose.Schema(
     // Complaint Status
     status: {
       type: String,
-      enum: ["Open", "Under Review", "Waiting for Customer", "Waiting for Provider", "Escalated", "Resolution Proposed", "Resolved", "Rejected", "Cancelled", "Closed"],
-      default: "Open"
+      enum: ["open", "underreview", "waitingforcustomer", "waitingforprovider", "escalated", "resolutionproposed", "resolved", "rejected", "cancelled", "closed"],
+      default: "open",
+      set: function (v) {
+        if (!v) return v;
+        return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
     },
 
     // Response deadline for provider replies

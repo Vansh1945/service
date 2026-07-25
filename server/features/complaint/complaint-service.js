@@ -224,7 +224,7 @@ class ComplaintService {
         }
 
         // BEFORE WORK STARTS
-        const beforeWorkStatuses = ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived'];
+        const beforeWorkStatuses = ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived'];
         if (beforeWorkStatuses.includes(bookingStatusNorm)) {
           const allowedBeforeStart = ['cancel_booking', 'provider_late', 'provider_no_show', 'provider_not_responding'];
           if (!complaintType || !allowedBeforeStart.includes(complaintType)) {
@@ -238,7 +238,7 @@ class ComplaintService {
         }
 
         // AFTER WORK STARTS
-        const activeStatuses = ['started', 'inprogress'];
+        const activeStatuses = ['workstarted'];
         if (activeStatuses.includes(bookingStatusNorm)) {
           const allowedAfterStart = ['poor_quality', 'incomplete_work', 'wrong_service', 'provider_left_job', 'behaviour_issue', 'overcharged_service', 'safety_issue'];
           if (!complaintType || !allowedAfterStart.includes(complaintType)) {
@@ -796,7 +796,7 @@ class ComplaintService {
         const booking = complaint.booking;
         if (booking) {
           const isWorkStartedOrCompleted = booking.timeline?.some(t => t.label === 'Work Started') ||
-            ['started', 'inprogress', 'completed'].includes((booking.status || '').toLowerCase());
+            ['workstarted', 'completed'].includes((booking.status || '').toLowerCase());
           if (isWorkStartedOrCompleted) {
             await session.abortTransaction();
             session.endSession();

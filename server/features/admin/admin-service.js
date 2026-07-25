@@ -1266,7 +1266,7 @@ class AdminService {
                     provider.age = age;
                 }
 
-                provider.performanceBadge = provider.performanceScore?.badge || 'Bronze';
+                provider.performanceBadge = provider.performanceScore?.badge || 'bronze';
                 provider.completionRate = provider.performanceScore?.completionPercentage || 0;
                 provider.onTimeRate = provider.performanceScore?.onTimePercentage || 0;
             });
@@ -1371,7 +1371,7 @@ class AdminService {
                     provider.age = age;
                 }
 
-                provider.performanceBadge = provider.performanceScore?.badge || 'Bronze';
+                provider.performanceBadge = provider.performanceScore?.badge || 'bronze';
                 provider.completionRate = provider.performanceScore?.completionPercentage || 0;
                 provider.onTimeRate = provider.performanceScore?.onTimePercentage || 0;
             });
@@ -1466,7 +1466,7 @@ class AdminService {
                 provider.age = age;
             }
 
-            provider.performanceBadge = provider.performanceScore?.badge || 'Bronze';
+            provider.performanceBadge = provider.performanceScore?.badge || 'bronze';
             provider.completionRate = provider.performanceScore?.completionPercentage || 0;
             provider.onTimeRate = provider.performanceScore?.onTimePercentage || 0;
 
@@ -1751,7 +1751,7 @@ class AdminService {
                         },
                         ongoingBookings: {
                             $sum: {
-                                $cond: [{ $in: ["$status", ["in-progress", "accepted", "scheduled"]] }, 1, 0]
+                                $cond: [{ $in: ["$status", ["accepted", "ontheway", "arrived", "workstarted"]] }, 1, 0]
                             }
                         },
                         cancelledBookings: {
@@ -2243,9 +2243,9 @@ class AdminService {
                 activeProviders,
                 delayedBookings
             ] = await Promise.all([
-                Booking.countDocuments({ status: { $in: ['in-progress', 'accepted', 'scheduled'] } }),
+                Booking.countDocuments({ status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] } }),
                 Provider.countDocuments({ approved: true, isActive: true, blockedTill: { $lte: new Date() } }),
-                Booking.countDocuments({ status: { $in: ['scheduled', 'accepted'] }, date: { $lt: moment().subtract(1, 'hours').toDate() } })
+                Booking.countDocuments({ status: 'accepted', date: { $lt: moment().subtract(1, 'hours').toDate() } })
             ]);
 
             res.status(200).json({
@@ -2548,8 +2548,8 @@ class AdminService {
             const totalBookings = stats?.statusDistribution ? stats.statusDistribution.reduce((acc, curr) => acc + curr.count, 0) : 0;
             const completedCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['completed'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : (stats?.revenueOverview?.[0]?.completedCount || 0);
             const cancelledCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['cancelled'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
-            const inProgressCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['inprogress', 'in-progress', 'in_progress', 'ontheway', 'arrived', 'started', 'accepted'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
-            const pendingCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['pending', 'searchingprovider', 'offered', 'assigned'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
+            const inProgressCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['accepted', 'ontheway', 'arrived', 'workstarted'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
+            const pendingCount = stats?.statusDistribution ? stats.statusDistribution.filter(s => ['pending', 'searchingprovider', 'offered'].includes((s._id || '').toLowerCase())).reduce((acc, curr) => acc + curr.count, 0) : 0;
 
             // Rebook and Favorite Provider Analytics
             const [totalRebooks, topRepeatedServices, mostFavoritedProviders, repeatCustomerCount, totalFavBookings, unassignedBookingsByZone] = await Promise.all([

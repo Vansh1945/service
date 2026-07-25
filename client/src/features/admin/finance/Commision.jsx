@@ -198,7 +198,7 @@ const AdminCommissionPage = () => {
   const debouncedSearch = useDebounce(filters.search, 500);
 
   // Available options matching backend enum
-  const performanceScores = ['Bronze', 'Silver', 'Gold', 'Platinum'];
+  const performanceScores = ['bronze', 'silver', 'gold', 'platinum'];
   const applyToOptions = ['all', 'performanceScore', 'specificProvider'];
 
   // Fetch commission rules
@@ -620,7 +620,7 @@ const AdminCommissionPage = () => {
     // 3. Filter by Performance Score
     if (rule.applyTo === 'performanceScore') {
       list = list.filter(p => {
-        const badge = p.performanceBadge || p.performanceScore?.badge || 'Bronze';
+        const badge = (p.performanceBadge || p.performanceScore?.badge || 'bronze').toLowerCase();
         return badge === rule.performanceScore;
       });
     }
@@ -736,10 +736,10 @@ const AdminCommissionPage = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
                 >
                   <option value="">All Tiers</option>
-                  <option value="Bronze">Bronze</option>
-                  <option value="Silver">Silver</option>
-                  <option value="Gold">Gold</option>
-                  <option value="Platinum">Platinum</option>
+                  <option value="bronze">Bronze</option>
+                  <option value="silver">Silver</option>
+                  <option value="gold">Gold</option>
+                  <option value="platinum">Platinum</option>
                 </select>
               </div>
             </div>
@@ -1075,10 +1075,10 @@ const AdminCommissionPage = () => {
                       {(() => {
                         const provider = providers.find(p => p.providerId === ruleForm.specificProvider);
                         const badgeColor = {
-                          'Platinum': 'text-purple-650 font-black',
-                          'Gold': 'text-amber-550 font-black',
-                          'Silver': 'text-slate-500 font-black',
-                          'Bronze': 'text-orange-750 font-black'
+                          'platinum': 'text-purple-650 font-black',
+                          'gold': 'text-amber-550 font-black',
+                          'silver': 'text-slate-500 font-black',
+                          'bronze': 'text-orange-750 font-black'
                         }[provider.performanceBadge] || 'text-secondary';
 
                         return (
@@ -1113,10 +1113,10 @@ const AdminCommissionPage = () => {
                     </div>
                     <div className="p-3 grid grid-cols-2 md:grid-cols-4 gap-2">
                       {[
-                        { name: 'Platinum', criteria: '4.5★ | 95%', color: 'bg-indigo-50 text-indigo-700 border border-indigo-200/60' },
-                        { name: 'Gold', criteria: '4.0★ | 90%', color: 'bg-amber-50 text-amber-700 border border-amber-200/60' },
-                        { name: 'Silver', criteria: '3.5★ | 85%', color: 'bg-slate-100 text-slate-700 border border-slate-250/50' },
-                        { name: 'Bronze', criteria: '< 3.5★ | < 85%', color: 'bg-orange-50 text-orange-700 border border-orange-200/60' }
+                        { name: 'platinum', criteria: '4.5★ | 95%', color: 'bg-indigo-50 text-indigo-700 border border-indigo-200/60' },
+                        { name: 'gold', criteria: '4.0★ | 90%', color: 'bg-amber-50 text-amber-700 border border-amber-200/60' },
+                        { name: 'silver', criteria: '3.5★ | 85%', color: 'bg-slate-100 text-slate-700 border border-slate-250/50' },
+                        { name: 'bronze', criteria: '< 3.5★ | < 85%', color: 'bg-orange-50 text-orange-700 border border-orange-200/60' }
                       ].map((badge) => (
                         <div key={badge.name} className="flex flex-col items-center justify-center p-2 bg-white rounded-lg border border-slate-150 shadow-xs">
                           <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider mb-1 ${badge.color}`}>{badge.name}</span>
@@ -1343,18 +1343,18 @@ const AdminCommissionPage = () => {
                               <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
                                 {matchedProvs.map(prov => {
                                   const badgeColor = {
-                                    'Platinum': 'bg-indigo-50 text-indigo-700 border-indigo-200/65',
-                                    'Gold': 'bg-amber-50 text-amber-700 border-amber-200/65',
-                                    'Silver': 'bg-slate-100 text-slate-700 border-slate-200/70',
-                                    'Bronze': 'bg-orange-50 text-orange-700 border-orange-200/65'
-                                  }[prov.performanceBadge] || 'bg-slate-50 text-slate-650 border-slate-150';
+                                    'platinum': 'bg-indigo-50 text-indigo-700 border-indigo-200/65',
+                                    'gold': 'bg-amber-50 text-amber-700 border-amber-200/65',
+                                    'silver': 'bg-slate-100 text-slate-700 border-slate-200/70',
+                                    'bronze': 'bg-orange-50 text-orange-700 border-orange-200/65'
+                                  }[(prov.performanceBadge || '').toLowerCase()] || 'bg-slate-50 text-slate-650 border-slate-150';
 
                                   return (
                                     <span key={prov._id} className="inline-flex items-center px-2 py-0.8 rounded-full text-[10px] font-bold bg-white text-slate-700 border border-slate-200 hover:border-slate-350 hover:bg-slate-50/50 shadow-xs transition-colors duration-150">
                                       <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 animate-pulse" />
                                       {prov.name} ({prov.providerId || 'N/A'})
                                       <span className={`ml-2 px-1.5 py-0.2 rounded-full text-[8px] font-black uppercase border ${badgeColor}`}>
-                                        {prov.performanceBadge || 'Bronze'}
+                                        {prov.performanceBadge || 'bronze'}
                                       </span>
                                     </span>
                                   );

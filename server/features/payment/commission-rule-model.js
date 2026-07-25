@@ -49,8 +49,12 @@ const commissionRuleSchema = new Schema({
   performanceScore: {
     type: String,
     enum: {
-      values: ['Bronze', 'Silver', 'Gold', 'Platinum'],
-      message: 'Performance tier must be one of: Bronze, Silver, Gold, Platinum'
+      values: ['bronze', 'silver', 'gold', 'platinum'],
+      message: 'Performance tier must be one of: bronze, silver, gold, platinum'
+    },
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
     },
     required: function () {
       return this.applyTo === 'performanceScore';
@@ -147,9 +151,9 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
         .select('performanceScore');
 
       if (provider) {
-        providerperformanceScore = provider.performanceScore?.badge || 'Bronze';
+        providerperformanceScore = provider.performanceScore?.badge || 'bronze';
       } else {
-        providerperformanceScore = 'Bronze';
+        providerperformanceScore = 'bronze';
       }
     }
 

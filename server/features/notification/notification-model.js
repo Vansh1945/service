@@ -22,7 +22,7 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['booking', 'payment', 'withdrawal', 'system', 'broadcast', 'approved', 'rejected', 'payout', 'payout_hold', 'complaint', 'earning_released'],
+        enum: ['booking', 'payment', 'withdrawal', 'system', 'broadcast', 'approved', 'rejected', 'payout', 'payouthold', 'complaint', 'earningreleased'],
         default: 'system'
     },
     referenceId: {

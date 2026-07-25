@@ -973,7 +973,7 @@ const ProviderBooking = () => {
           <div className="flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-1.5 text-neutral-600 truncate">
               <CreditCard className="w-3.5 h-3.5 text-neutral-400" />
-              <span className="truncate">{(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? 'COD' : 'Online'}</span>
+              <span className="truncate">{booking.paymentMethod === 'cash' ? 'COD' : 'Online'}</span>
             </div>
             <span className="text-amber-500 font-bold flex items-center shrink-0">
               ⭐ {Number(customerRating).toFixed(1)}
@@ -1065,7 +1065,7 @@ const ProviderBooking = () => {
               <div className="w-full">
                 {isAccepted ? (
                   <button
-                    disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
+                    disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
                     onClick={() => handleBookingAction(booking._id, 'start')}
                     className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300 disabled:cursor-not-allowed"
                   >
@@ -1949,7 +1949,7 @@ const ProviderBooking = () => {
               )}
               {(selectedBooking.status === 'accepted' || selectedBooking.status === 'assigned') && (
                 <button
-                  disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}
+                  disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}
                   onClick={() => handleBookingAction(selectedBooking._id, 'start')}
                   className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5 disabled:opacity-50"
                 >
@@ -1994,7 +1994,7 @@ const ProviderBooking = () => {
         minCompletedImages={systemSettings?.bookingSettings?.minCompletedImages || 1}
         onConfirm={(images, location, pin, notes) => {
           const booking = selectedBooking || bookings['in-progress']?.find(b => b._id === proofModal.bookingId) || bookings.accepted?.find(b => b._id === proofModal.bookingId);
-          const isCash = booking?.paymentMethod === 'cash' || booking?.paymentType === 'pay_after_service';
+          const isCash = booking?.paymentMethod === 'cash';
           if (isCash) {
             setConfirmDialog({
               isOpen: true,

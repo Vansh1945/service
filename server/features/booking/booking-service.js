@@ -315,7 +315,7 @@ const getZoneRelation = async (bookingZoneId, providerZoneId) => {
 class BookingService {
   static getPayoutStatus(earning, booking) {
     if (!earning) return 'Not Processed';
-    if (booking.disputeRaised || booking.disputeStatus === 'under_review') return 'Dispute Hold';
+    if (booking.disputeRaised || booking.disputeStatus === 'underreview' || booking.disputeStatus === 'under_review') return 'Dispute Hold';
 
     switch (earning.status) {
       case 'held': return 'Payout On Hold';
@@ -599,7 +599,7 @@ class BookingService {
         ]
       }).session(session).lean();
 
-      const totalAccepted = bookings.filter(b => b.provider?.toString() === providerId.toString() && ['accepted', 'in-progress', 'completed', 'cancelled'].includes(b.status)).length;
+      const totalAccepted = bookings.filter(b => b.provider?.toString() === providerId.toString() && ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'].includes(b.status)).length;
       const completedCount = bookings.filter(b => b.provider?.toString() === providerId.toString() && b.status === 'completed').length;
       const providerCancelledCount = bookings.filter(b => b.status === 'cancelled' && b.rejectedBy?.toString() === providerId.toString()).length;
       const totalRejected = bookings.filter(b => b.rejectedBy?.toString() === providerId.toString() || b.metadata?.ignoredProviders?.map(id => id.toString()).includes(providerId.toString())).length;
@@ -613,7 +613,7 @@ class BookingService {
       const cancellationRate = cancellationRatio;
 
       const emergencyBookings = bookings.filter(b => (b.bookingType === 'emergency' || b.isEmergency) && b.provider?.toString() === providerId.toString());
-      const emergencyAccepted = emergencyBookings.filter(b => ['accepted', 'in-progress', 'completed', 'cancelled'].includes(b.status)).length;
+      const emergencyAccepted = emergencyBookings.filter(b => ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'].includes(b.status)).length;
       const emergencyCompleted = emergencyBookings.filter(b => b.status === 'completed').length;
       const emergencySuccessRate = emergencyAccepted > 0 ? (emergencyCompleted / emergencyAccepted) * 100 : 100;
 
@@ -1610,7 +1610,7 @@ class BookingService {
       // Status filter
       if (status) {
         if (status === 'upcoming') {
-          query.status = { $in: ['scheduled', 'accepted', 'in-progress'] };
+          query.status = { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] };
         } else if (status === 'pending_payment') {
           query.paymentStatus = 'pending';
         } else if (status !== 'all') {
@@ -1729,9 +1729,9 @@ class BookingService {
 
           // Ensure and persist PINs, then attach based on visibility rules
           const { startPin, completionPin } = await BookingService.ensureAndPersistPins(bookingObj._id, bookingObj);
-          if (['pending', 'accepted', 'scheduled', 'assigned', 'on_the_way', 'arriving', 'arrived'].includes(bookingObj.status)) {
+          if (['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived'].includes(bookingObj.status)) {
             bookingObj.startPin = startPin;
-          } else if (bookingObj.status === 'in-progress' || bookingObj.status === 'inprogress') {
+          } else if (bookingObj.status === 'workstarted') {
             bookingObj.completionPin = completionPin;
           }
 
@@ -1992,7 +1992,7 @@ class BookingService {
         return res.status(404).json({ success: false, message: 'Booking not found' });
       }
 
-      if (['in-progress', 'in_progress', 'completed', 'cancelled'].includes(booking.status)) {
+      if (['workstarted', 'completed', 'cancelled'].includes(booking.status)) {
         await safeAbort(session);
         safeEnd(session);
         return res.status(400).json({ success: false, message: 'Cannot pay for a booking that is in progress, completed, or cancelled' });
@@ -2123,7 +2123,7 @@ class BookingService {
       // Update booking
       booking.paymentStatus = 'escrow_hold';
       booking.confirmedBooking = true;
-      if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+      if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
         booking.status = 'pending';
       }
       await booking.save({ session });
@@ -2198,8 +2198,7 @@ class BookingService {
       if (booking.provider) {
         const isThisBookingActive = booking.provider.activeBooking &&
           booking.provider.activeBooking.toString() === booking._id.toString();
-        const isTrackable = (isThisBookingActive && ['accepted'].includes(booking.status)) ||
-          ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
+        const isTrackable = ['accepted', 'ontheway', 'arrived', 'workstarted'].includes(booking.status);
         if (!isTrackable) {
           if (booking.provider.currentLocation) {
             booking.provider.currentLocation = null;
@@ -2239,9 +2238,9 @@ class BookingService {
 
       // Ensure and persist PINs, then attach based on visibility rules
       const { startPin, completionPin } = await BookingService.ensureAndPersistPins(bookingObj._id, bookingObj);
-      if (bookingObj.status === 'accepted' || bookingObj.status === 'scheduled') {
+      if (['accepted', 'ontheway', 'arrived'].includes(bookingObj.status)) {
         bookingObj.startPin = startPin;
-      } else if (bookingObj.status === 'in-progress') {
+      } else if (bookingObj.status === 'workstarted') {
         bookingObj.completionPin = completionPin;
       }
 
@@ -2904,33 +2903,12 @@ class BookingService {
       // BOOKING STATUS STATE MACHINE UPGRADE
       const normalizeParam = (s) => {
         if (!s) return 'all';
-        const map = {
-          'pending': 'Pending',
-          'searchingprovider': 'SearchingProvider',
-          'offered': 'Offered',
-          'assigned': 'Assigned',
-          'accepted': 'Accepted',
-          'ontheway': 'OnTheWay',
-          'arrived': 'Arrived',
-          'started': 'Started',
-          'inprogress': 'InProgress',
-          'in-progress': 'InProgress',
-          'in_progress': 'InProgress',
-          'completed': 'Completed',
-          'cancelled': 'Cancelled',
-          'rejected': 'Rejected',
-          'expired': 'Expired',
-          'reassigned': 'Reassigned',
-          'refunded': 'Refunded',
-          'all': 'all'
-        };
-        const clean = s.toLowerCase().replace(/[^a-z]/g, '');
-        return map[clean] || map[s.toLowerCase()] || s;
+        return s.toLowerCase();
       };
 
       const normalizedStatus = normalizeParam(status);
 
-      const validStatuses = ['Pending', 'SearchingProvider', 'Offered', 'Assigned', 'Accepted', 'OnTheWay', 'Arrived', 'Started', 'InProgress', 'Completed', 'Cancelled', 'Rejected', 'Expired', 'Reassigned', 'Refunded', 'all'];
+      const validStatuses = ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed', 'cancelled', 'rejected', 'expired', 'reassigned', 'refunded', 'all'];
       if (!validStatuses.includes(normalizedStatus)) {
         return res.status(400).json({
           success: false,
@@ -2993,9 +2971,9 @@ class BookingService {
           'services.service': { $in: serviceIds },
           'metadata.ignoredProviders': { $ne: providerId },
           $or: [
-            { status: { $in: ['Pending', 'SearchingProvider', 'pending', 'searchingprovider'] }, $or: [{ provider: { $exists: false } }, { provider: null }] },
-            { status: { $in: ['Assigned', 'assigned'] }, provider: providerId },
-            { status: { $in: ['Offered', 'offered'] }, provider: providerId }
+            { status: { $in: ['pending', 'searchingprovider'] }, $or: [{ provider: { $exists: false } }, { provider: null }] },
+            { status: 'accepted', provider: providerId },
+            { status: 'offered', provider: providerId }
           ]
         };
       } else if (normalizedStatus === 'Completed') {
@@ -3273,11 +3251,11 @@ class BookingService {
           const providerBookings = session
             ? await Booking.find({
               provider: providerId,
-              status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned', 'Accepted', 'InProgress', 'Started', 'Confirmed', 'Scheduled', 'Assigned'] }
+              status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
             }).session(session)
             : await Booking.find({
               provider: providerId,
-              status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned', 'Accepted', 'InProgress', 'Started', 'Confirmed', 'Scheduled', 'Assigned'] }
+              status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
             });
 
           if (providerBookings.length >= maxBookings) {
@@ -3291,7 +3269,7 @@ class BookingService {
           // Wallet Balance Check for Cash/PAS Bookings
           // For cash bookings, provider collects full amount from customer but must remit platform commission.
           // Ensure provider has sufficient wallet balance to cover the commission before accepting.
-          const isCashBooking = lockedBooking.paymentMethod === 'cash' || lockedBooking.paymentType === 'pay_after_service';
+          const isCashBooking = lockedBooking.paymentMethod === 'cash';
           if (isCashBooking) {
             const commissionRequired = lockedBooking.commissionAmount || 0;
             const providerBalance = provider.wallet?.availableBalance || 0;
@@ -3539,7 +3517,7 @@ class BookingService {
       }
 
       // STEP 4 — PAYMENT BEFORE SERVICE START (Accepts either paid, escrow_hold, or cash payment method)
-      const isCashOrPayAfterService = booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service';
+      const isCashOrPayAfterService = booking.paymentMethod === 'cash';
       if (!isCashOrPayAfterService && booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'escrow_hold') {
         return res.status(400).json({
           success: false,
@@ -3675,7 +3653,7 @@ class BookingService {
       await BookingService.resetPinFailures(booking);
 
       // Update booking status to in-progress
-      booking.status = 'in-progress';
+      booking.status = 'workstarted';
       booking.serviceStartedAt = new Date();
       booking.workStartedAt = new Date();
       booking.updatedAt = new Date();
@@ -3693,7 +3671,7 @@ class BookingService {
 
       // Add to status history
       booking.statusHistory.push({
-        status: 'in-progress',
+        status: 'workstarted',
         timestamp: new Date(),
         note: 'Work proof submitted. Service started. Verification successful.',
         updatedBy: 'provider'
@@ -3779,7 +3757,7 @@ class BookingService {
       // Find the booking
       const booking = await Booking.findOne({
         _id: id,
-        status: { $in: ['pending', 'assigned'] },
+        status: { $in: ['pending', 'searchingprovider', 'offered'] },
         $or: [
           { provider: { $exists: false } },
           { provider: providerId }
@@ -3904,7 +3882,7 @@ class BookingService {
       const booking = await Booking.findOne({
         _id: id,
         provider: providerId,
-        status: { $in: ['in-progress', 'InProgress', 'started', 'Started'] }
+        status: 'workstarted'
       }).populate('customer', '_id name').session(session);
 
       if (!booking) {
@@ -4194,7 +4172,7 @@ class BookingService {
         if (fraudScore >= 50) {
           holdPeriodHours = 168; // 7 days (168 hours)
           booking.disputeRaised = true; // Flag for review
-          booking.disputeStatus = 'under_review';
+          booking.disputeStatus = 'underreview';
         }
         booking.payoutHoldUntil = new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
       }
@@ -4363,7 +4341,7 @@ class BookingService {
             'provider',
             'Payout Under Review',
             `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for ${holdPeriodHours} hours.`,
-            'payout_hold',
+            'payouthold',
             booking._id
           );
         } catch (err) { console.error("Error sending payout hold notification:", err); }
@@ -4746,7 +4724,7 @@ class BookingService {
                 then: 'Not Processed',
                 else: {
                   $cond: {
-                    if: { $or: [{ $eq: ['$disputeRaised', true] }, { $eq: ['$disputeStatus', 'under_review'] }] },
+                    if: { $or: [{ $eq: ['$disputeRaised', true] }, { $eq: ['$disputeStatus', 'underreview'] }, { $eq: ['$disputeStatus', 'under_review'] }] },
                     then: 'Dispute Hold',
                     else: {
                       $switch: {
@@ -5208,8 +5186,8 @@ class BookingService {
         }
 
         // EMERGENCY BOOKING ENGINE UPGRADE
-        if (booking.status !== 'pending' && booking.status !== 'Waiting Admin Assignment') {
-          throw new Error('Only pending or waiting admin assignment bookings can be assigned');
+        if (booking.status !== 'pending' && booking.status !== 'searchingprovider') {
+          throw new Error('Only pending or searching provider bookings can be assigned');
         }
         // END EMERGENCY BOOKING ENGINE UPGRADE
 
@@ -5227,11 +5205,11 @@ class BookingService {
         const providerBookings = session
           ? await Booking.find({
             provider: providerId,
-            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+            status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
           }).session(session)
           : await Booking.find({
             provider: providerId,
-            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+            status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
           });
 
         if (providerBookings.length >= maxBookings) {
@@ -5242,12 +5220,12 @@ class BookingService {
           throw new Error(`Scheduling conflict: This provider already has another booking scheduled around this time. Please complete their current booking first.`);
         }
 
-        if (!validateBookingTransition(booking.status, 'assigned') && !validateBookingTransition(booking.status, 'scheduled')) {
+        if (!validateBookingTransition(booking.status, 'accepted')) {
           throw new Error(`Cannot assign provider from current status: ${booking.status}`);
         }
 
         booking.provider = providerId;
-        booking.status = 'scheduled';
+        booking.status = 'accepted';
         await booking.save({ session });
 
         // Sync transaction record with the new provider and calculated commission
@@ -5332,7 +5310,7 @@ class BookingService {
         });
       }
 
-      if (['completed', 'in-progress'].includes(booking.status)) {
+      if (['completed', 'workstarted'].includes(booking.status)) {
         return res.status(400).json({
           success: false,
           message: `Cannot delete ${booking.status} booking`
@@ -5383,7 +5361,7 @@ class BookingService {
         });
       }
 
-      if (['completed', 'cancelled', 'in-progress'].includes(booking.status)) {
+      if (['completed', 'cancelled', 'workstarted'].includes(booking.status)) {
         return res.status(400).json({
           success: false,
           message: `Cannot delete ${booking.status} booking`
@@ -5437,7 +5415,7 @@ class BookingService {
         });
       }
 
-      if (['completed', 'in-progress'].includes(booking.status)) {
+      if (['completed', 'workstarted'].includes(booking.status)) {
         return res.status(400).json({
           success: false,
           message: `Cannot reschedule a ${booking.status} booking.`
@@ -5629,7 +5607,7 @@ class BookingService {
       const now = new Date();
       // Fetch all bookings that are not in Completed/Cancelled/Rejected/Expired state
       const activeBookings = await Booking.find({
-        status: { $in: ['Offered', 'offered', 'Assigned', 'assigned', 'Accepted', 'accepted', 'OnTheWay', 'ontheway', 'Arrived', 'arrived', 'Started', 'started', 'InProgress', 'inprogress', 'in-progress'] }
+        status: { $in: ['offered', 'accepted', 'ontheway', 'arrived', 'workstarted'] }
       }).populate('provider customer');
 
       for (const booking of activeBookings) {

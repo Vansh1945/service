@@ -229,7 +229,7 @@ const Dashboard = () => {
   const COLORS = ['#0D9488', '#F97316', '#F59E0B', '#EF4444', '#8B5CF6'];
 
   const totalPieValue = (bookings?.pieChartData || []).reduce((sum, item) => sum + item.value, 0) || 1;
-  const performanceBadge = ratings?.performanceBadge || 'Bronze';
+  const performanceBadge = (ratings?.performanceBadge || 'bronze').toLowerCase();
 
   const getRecentBookingServiceTitle = (booking) => {
     if (booking.services && booking.services.length > 0) {

@@ -22,20 +22,20 @@ const refundOptions = [
   { value: 'approved', label: 'Approved Refund' },
   { value: 'rejected', label: 'Rejected Refund' },
   { value: 'escrow_hold', label: 'Escrow Hold' },
-  { value: 'payout_hold', label: 'Provider Payout Hold' },
+  { value: 'payouthold', label: 'Provider Payout Hold' },
   { value: 'completed', label: 'Completed Refund' }
 ];
 
 const isBookingEligibleForRefundLedger = (b, filterStatus) => {
   if (!b) return false;
 
-  const hasPendingRefund = b.paymentStatus === 'refund_pending' || b.refundStatus === 'pending' || b.cancellationProgress?.status === 'refund_pending';
+  const hasPendingRefund = b.paymentStatus === 'refund_pending' || b.paymentStatus === 'refundpending' || b.refundStatus === 'pending' || b.cancellationProgress?.status === 'refund_pending' || b.cancellationProgress?.status === 'refundpending';
   const hasApprovedRefund = b.paymentStatus === 'refunded' || b.adminRefundDecision === 'approved' || b.refundStatus === 'completed';
   const hasRejectedRefund = b.adminRefundDecision === 'rejected' || b.refundStatus === 'rejected';
   
   const isEscrowFrozen = b.escrowStatus === 'frozen' || b.payoutStatus?.toLowerCase() === 'held' || b.providerPayoutStatus?.toLowerCase() === 'held' || b.earningHoldStatus === 'held';
   const hasPayoutHeld = b.payoutStatus?.toLowerCase() === 'held';
-  const isUnderReview = b.complaint?.status === 'under_review' || b.status === 'under_review';
+  const isUnderReview = b.complaint?.status === 'under_review' || b.complaint?.status === 'underreview' || b.status === 'under_review' || b.status === 'underreview';
 
   const hasFinancialComplaint = b.complaint && (
     ['cancel_booking', 'poor_quality', 'incomplete_work', 'provider_late', 'overcharged_service', 'provider_no_show', 'wrong_service', 'provider_left_job', 'safety_issue'].includes(b.complaint.complaintType) || 
@@ -49,8 +49,8 @@ const isBookingEligibleForRefundLedger = (b, filterStatus) => {
   if (filterStatus === 'under_review') return isUnderReview;
   if (filterStatus === 'approved') return hasApprovedRefund;
   if (filterStatus === 'rejected') return hasRejectedRefund;
-  if (filterStatus === 'escrow_hold') return isEscrowFrozen;
-  if (filterStatus === 'payout_hold') return hasPayoutHeld;
+  if (filterStatus === 'escrow_hold' || filterStatus === 'escrowhold') return isEscrowFrozen;
+  if (filterStatus === 'payout_hold' || filterStatus === 'payouthold') return hasPayoutHeld;
   if (filterStatus === 'completed') return hasApprovedRefund;
 
   return true;

@@ -10,10 +10,10 @@ import { readCachedSystemSettings } from './systemSettingsCache';
  * or if there is an active complaint/dispute.
  */
 export const isChatVisible = (b) => {
-  const statusStr = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  const statusStr = (b.status || '').toLowerCase();
   if (b.disputeStatus === 'resolved' || statusStr === 'resolved') return false;
   if (b.hasComplaint || b.disputeRaised || statusStr === 'complaint') return true;
-  if (['pending', 'cancelled', 'noshow', 'completed', 'refunded', 'rejected', 'expired'].includes(statusStr)) return false;
+  if (['pending', 'cancelled', 'noshow', 'completed', 'rejected'].includes(statusStr)) return false;
 
   return true;
 };
@@ -50,28 +50,30 @@ export const calculateNetAmount = (booking) => {
     return booking.providerEarnings.toFixed(2);
   }
   const systemSettings = readCachedSystemSettings();
-  
+
   const getSplit = (bookingSplits, systemSplits, key, defaultVal) => {
     let bSplits = bookingSplits;
     if (typeof bSplits === 'string') {
       try { bSplits = JSON.parse(bSplits); } catch (err) {
-      console.error(err); bSplits = null; }
+        console.error(err); bSplits = null;
+      }
     }
     if (bSplits && typeof bSplits === 'object' && bSplits[key] !== undefined && bSplits[key] !== null) {
       const val = parseFloat(bSplits[key]);
       if (!isNaN(val)) return val;
     }
-    
+
     let sSplits = systemSplits;
     if (typeof sSplits === 'string') {
       try { sSplits = JSON.parse(sSplits); } catch (err) {
-      console.error(err); sSplits = null; }
+        console.error(err); sSplits = null;
+      }
     }
     if (sSplits && typeof sSplits === 'object' && sSplits[key] !== undefined && sSplits[key] !== null) {
       const val = parseFloat(sSplits[key]);
       if (!isNaN(val)) return val;
     }
-    
+
     return defaultVal;
   };
 
@@ -100,32 +102,33 @@ export const getStatusConfig = (status) => {
     completed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Success' },
     paid: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Paid' },
     processing: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Processing' },
+    underreview: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Clock, label: 'Review' },
     under_review: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Clock, label: 'Review' },
+    pendingrelease: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Pending Release' },
+    pending_release: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Pending Release' },
     approved: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Approved' },
     requested: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Requested' },
     failed: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Failed' },
     rejected: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Rejected' },
     withdrawn: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: CheckCircle, label: 'Withdrawn' },
+    disputehold: { color: 'bg-red-50 text-red-700 border border-red-200', icon: ShieldAlert, label: 'Dispute Hold' },
     'dispute hold': { color: 'bg-red-50 text-red-700 border border-red-200', icon: ShieldAlert, label: 'Dispute Hold' },
+    adminhold: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Admin Hold' },
     'admin hold': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Admin Hold' },
-    'held': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Held' },
-    'available': { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Ready for withdrawal' },
-    
+    held: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Held' },
+    available: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Ready for withdrawal' },
+
     // Booking statuses
     pending: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Pending' },
     searchingprovider: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Searching Provider' },
     offered: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Offered' },
-    assigned: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Assigned' },
-    confirmed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Confirmed' },
     accepted: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCheck, label: 'Accepted' },
     ontheway: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'On The Way' },
     arrived: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'Arrived' },
     workstarted: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'Work Started' },
-    'in-progress': { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'In Progress' },
-    inprogress: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'In Progress' },
     cancelled: { color: 'bg-red-50 text-red-600 border border-red-200', icon: X, label: 'Cancelled' },
-    expired: { color: 'bg-red-50 text-red-600 border border-red-200', icon: X, label: 'Expired' }
+    noshow: { color: 'bg-orange-50 text-orange-700 border border-orange-200', icon: AlertCircle, label: 'No Show' }
   };
-  const key = status?.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const key = status?.toLowerCase()?.replace(/[^a-z0-9]/g, '');
   return configs[key] || configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-secondary/70 border border-gray-200', icon: AlertCircle, label: status || 'Unknown' };
 };

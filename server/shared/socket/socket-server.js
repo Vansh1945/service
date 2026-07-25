@@ -370,8 +370,7 @@ const initSocket = (httpServer) => {
                     } else if (provider && socket.userRole === 'customer') {
                         const isThisBookingActive = provider.activeBooking && 
                                                     provider.activeBooking.toString() === bookingId.toString();
-                        const isTrackable = (isThisBookingActive && ['accepted', 'assigned'].includes(booking.status)) ||
-                                            ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
+                        const isTrackable = ['accepted', 'ontheway', 'arrived', 'workstarted'].includes(booking.status);
                         if (!isTrackable) {
                             trackingEnabled = false;
                             providerLiveLocation = null;
@@ -441,8 +440,8 @@ const initSocket = (httpServer) => {
                 }
 
                 // Security: tracking only while en route / in service
-                const blockedStatuses = ['completed', 'cancelled', 'pending', 'no-show'];
-                const allowedStatuses = ['accepted', 'arriving', 'started', 'in-progress', 'in_progress', 'assigned'];
+                const blockedStatuses = ['completed', 'cancelled', 'pending', 'noshow', 'rejected'];
+                const allowedStatuses = ['accepted', 'ontheway', 'arrived', 'workstarted'];
                 if (blockedStatuses.includes(booking.status) || !allowedStatuses.includes(booking.status)) {
                     return socket.emit('error-alert', { message: 'Location tracking is inactive for this status' });
                 }
@@ -721,7 +720,7 @@ const initSocket = (httpServer) => {
 
                     if (booking.disputeStatus === 'resolved' && !isAdmin) return;
 
-                    const allowedStatuses = ['accepted', 'confirmed', 'scheduled', 'in-progress', 'in_progress', 'assigned', 'started', 'completed'];
+                    const allowedStatuses = ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'];
                     if (!allowedStatuses.includes(booking.status) && !isAdmin) return;
 
                     if (booking.status === 'completed' && !isAdmin) {

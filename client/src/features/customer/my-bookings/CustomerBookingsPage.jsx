@@ -68,13 +68,13 @@ const getStatusCfg = getBookingStatusCfg;
 
 const needsPayment = (b) => {
   const isPaid = ['paid', 'escrow_hold'].includes(b.paymentStatus);
-  if (isPaid || b.status === 'cancelled' || b.status === 'in-progress' || b.status === 'in_progress' || b.status === 'completed') return false;
+  if (isPaid || ['cancelled', 'workstarted', 'completed', 'rejected', 'noshow'].includes(b.status)) return false;
   return !isPaid;
 };
 const canCancel = (b) => {
-  const s = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
-  if (['started', 'inprogress', 'completed', 'cancelled', 'refunded'].includes(s)) return false;
-  return ['pending', 'accepted', 'ontheway', 'arrived', 'searchingprovider'].includes(s);
+  const s = (b.status || '').toLowerCase();
+  if (['workstarted', 'completed', 'cancelled', 'rejected', 'noshow'].includes(s)) return false;
+  return ['pending', 'accepted', 'ontheway', 'arrived', 'searchingprovider', 'offered'].includes(s);
 };
 const canReschedule = (b) => b.status === 'pending';
 
@@ -536,15 +536,15 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                     {(() => {
                       const isCancelled = (booking.status || '').toLowerCase() === 'cancelled';
                       const stepsList = isCancelled ? [
-                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed', 'cancelled'] },
+                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'] },
                         { label: 'Booking Cancelled', statuses: ['cancelled'], isRed: true }
                       ] : [
-                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
-                        { label: 'Provider Assigned', statuses: ['assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
-                        { label: 'Accepted', statuses: ['accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
-                        { label: 'On The Way', statuses: ['ontheway', 'arrived', 'started', 'inprogress', 'completed'] },
-                        { label: 'Arrived', statuses: ['arrived', 'started', 'inprogress', 'completed'] },
-                        { label: 'Started', statuses: ['started', 'inprogress', 'completed'] },
+                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
+                        { label: 'Provider Assigned', statuses: ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
+                        { label: 'Accepted', statuses: ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
+                        { label: 'On The Way', statuses: ['ontheway', 'arrived', 'workstarted', 'completed'] },
+                        { label: 'Arrived', statuses: ['arrived', 'workstarted', 'completed'] },
+                        { label: 'Work Started', statuses: ['workstarted', 'completed'] },
                         { label: 'Completed', statuses: ['completed'] }
                       ];
 
@@ -777,7 +777,7 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
                   ? 'bg-green-100 text-green-600'
                   : booking.paymentStatus === 'refunded'
                     ? 'bg-purple-100 text-purple-600'
-                    : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                    : (booking.paymentMethod === 'cash'
                       ? 'bg-yellow-100 text-yellow-600'
                       : 'bg-red-50 text-accent')
                   }`}>
@@ -785,7 +785,7 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
                     ? `✓ Paid`
                     : booking.paymentStatus === 'refunded'
                       ? '✓ Refunded'
-                      : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                      : (booking.paymentMethod === 'cash'
                         ? 'Pay After Service'
                         : 'Unpaid')}
                 </p>
@@ -827,15 +827,15 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 mt-4 pt-4 border-t border-gray-100">
           <ActionBtn label="View Details" icon={Eye} onClick={() => onView(booking._id)} />
           {(() => {
-            const status = (booking.status || 'pending').toLowerCase().replace(/[^a-z]/g, '');
+            const status = (booking.status || 'pending').toLowerCase();
             const buttons = [];
 
-            if (['pending', 'searchingprovider'].includes(status)) {
+            if (['pending', 'searchingprovider', 'offered'].includes(status)) {
               buttons.push(
                 { label: 'Reschedule', icon: Edit3, onClick: () => onReschedule(booking), disabled: actionLoading[booking._id + '-reschedule'] },
                 { label: 'Cancel Booking', icon: XCircle, onClick: () => onCancel(booking), disabled: actionLoading[booking._id + '-cancel'], variant: 'red', mlAuto: true }
               );
-            } else if (['assigned', 'accepted'].includes(status)) {
+            } else if (status === 'accepted') {
               buttons.push(
                 { label: 'Track Provider', icon: MapPin, onClick: () => navigate(`/customer/track/${booking._id}`), variant: 'primary' },
                 { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' },
@@ -854,7 +854,7 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
                 { label: provider?.name ? `Chat with ${provider.name}` : 'Chat with Provider', icon: MessageSquare, onClick: () => onChat(booking._id, 'provider_customer'), variant: 'teal' },
                 { label: 'Cancel Booking', icon: XCircle, onClick: () => onCancel(booking), disabled: actionLoading[booking._id + '-cancel'], variant: 'red' }
               );
-            } else if (['started', 'inprogress'].includes(status)) {
+            } else if (status === 'workstarted') {
               buttons.push(
                 { label: 'Track Progress', icon: Activity, onClick: () => navigate(`/customer/track/${booking._id}`), variant: 'primary' },
                 { label: 'Raise Complaint', icon: AlertCircle, onClick: () => navigate(`/customer/complaints`, { state: { prefilledBookingId: booking._id } }), variant: 'amber' }

@@ -292,7 +292,7 @@ const releaseReferralReward = async (referral, referrer, rewardAmount, booking, 
   try {
     const rewardLog = new ReferralRewardLog({
       referral: referral._id,
-      rewardType: type === 'customer' ? 'customer_referral' : 'provider_milestone',
+      rewardType: type === 'customer' ? 'customerreferral' : 'providermilestone',
       recipient: referrer._id,
       recipientModel: referrer.role === 'provider' ? 'Provider' : 'User',
       recipientType: referrer.role === 'provider' ? 'provider' : 'customer',
