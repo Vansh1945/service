@@ -51,6 +51,7 @@ router.get('/provider/booking-report', providerAuthMiddleware, requireProvider, 
 
 // ADMIN ROUTES 
 router.get('/admin/bookings', adminAuthMiddleware, requireAdmin, bookingController.getAllBookings);
+router.get('/admin/sla-analytics', adminAuthMiddleware, requireAdmin, bookingController.getSlaAnalytics);
 router.get('/bookings/:id', adminAuthMiddleware, requireAdmin, bookingController.getBookingDetails);
 router.patch('/admin/:id/assign', adminAuthMiddleware, requireAdmin, bookingController.assignProvider);
 router.delete('/admin/:id', adminAuthMiddleware, requireAdmin, bookingController.deleteBooking);

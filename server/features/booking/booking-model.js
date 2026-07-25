@@ -1004,23 +1004,20 @@ bookingSchema.virtual('progressStatus').get(function () {
 
 // Dynamic SLA status virtual calculator
 bookingSchema.virtual('slaStatus').get(function () {
-  if (this.status === 'Completed' || this.status === 'completed') return 'COMPLETED';
-  if (['Cancelled', 'cancelled', 'Rejected', 'rejected', 'Expired', 'expired'].includes(this.status)) return 'COMPLETED';
+  if (['Completed', 'completed', 'Cancelled', 'cancelled', 'Rejected', 'rejected', 'Expired', 'expired'].includes(this.status)) {
+    return 'COMPLETED';
+  }
 
   const now = new Date();
   const type = (this.bookingType || '').toLowerCase();
 
-  // Fetch dynamic system settings if available
   let settings = null;
   try {
-    const SystemSetting = mongoose.model('SystemSetting');
-    // Using a synchronous check or mock since virtual getters must be synchronous.
-    // We can rely on global cache or fetch dynamically if pre-loaded, otherwise fall back to database defaults.
     if (global.systemSettingsCache) {
       settings = global.systemSettingsCache;
     }
   } catch (e) {
-    // Ignore model or cache fetch errors
+    // Ignore cache fetch errors
   }
 
   const thresholds = settings?.bookingSettings?.slaThresholds || {
@@ -1034,62 +1031,53 @@ bookingSchema.virtual('slaStatus').get(function () {
     const scheduledTime = new Date(this.date);
     if (this.time) {
       const [hours, minutes] = this.time.split(':').map(Number);
-      scheduledTime.setHours(hours, minutes, 0, 0);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        scheduledTime.setHours(hours, minutes, 0, 0);
+      }
     }
     const diffMs = scheduledTime.getTime() - now.getTime();
     const diffMins = diffMs / (60 * 1000);
 
-    const atRisk = thresholds.scheduled.atRiskMinutes;
-    const delayed = thresholds.scheduled.delayedMinutes;
-    const critical = thresholds.scheduled.criticalMinutes;
+    const atRisk = thresholds.scheduled?.atRiskMinutes ?? 10;
+    const delayed = thresholds.scheduled?.delayedMinutes ?? 15;
+    const critical = thresholds.scheduled?.criticalMinutes ?? 30;
 
-    // If journey has not started before scheduled time
+    if (this.arrivedAt || this.workStartedAt) {
+      return 'ON_TIME';
+    }
+
     if (!this.journeyStartedAt && diffMins <= atRisk && diffMins > -delayed) {
       return 'AT_RISK';
     }
-    // If not arrived and booking time is past
     if (!this.arrivedAt && diffMins <= 0) {
-      if (diffMins > -delayed) {
-        return 'AT_RISK';
-      } else if (diffMins <= -delayed && diffMins > -critical) {
-        return 'DELAYED';
-      } else if (diffMins <= -critical) {
+      if (diffMins <= -critical) {
         return 'CRITICAL';
+      } else if (diffMins <= -delayed) {
+        return 'DELAYED';
+      } else {
+        return 'AT_RISK';
       }
     }
-  } else if (type === 'instant') {
-    if (this.acceptedAt) {
-      const diffMins = (now.getTime() - new Date(this.acceptedAt).getTime()) / (60 * 1000);
-      const atRisk = thresholds.instant.atRiskMinutes;
-      const delayed = thresholds.instant.delayedMinutes;
-      const critical = thresholds.instant.criticalMinutes;
-
-      if (!this.journeyStartedAt && diffMins >= atRisk && diffMins < delayed) {
-        return 'AT_RISK';
-      }
-      if (diffMins >= delayed && diffMins < critical) {
-        return 'DELAYED';
-      }
-      if (diffMins >= critical) {
-        return 'CRITICAL';
-      }
+  } else if (type === 'instant' || type === 'emergency') {
+    if (this.arrivedAt || this.workStartedAt) {
+      return 'ON_TIME';
     }
-  } else if (type === 'emergency') {
-    if (this.acceptedAt) {
-      const diffMins = (now.getTime() - new Date(this.acceptedAt).getTime()) / (60 * 1000);
-      const atRisk = thresholds.emergency.atRiskMinutes;
-      const delayed = thresholds.emergency.delayedMinutes;
-      const critical = thresholds.emergency.criticalMinutes;
+    const category = type === 'emergency' ? 'emergency' : 'instant';
+    const atRisk = thresholds[category]?.atRiskMinutes ?? (category === 'emergency' ? 5 : 15);
+    const delayed = thresholds[category]?.delayedMinutes ?? (category === 'emergency' ? 15 : 45);
+    const critical = thresholds[category]?.criticalMinutes ?? (category === 'emergency' ? 20 : 60);
 
-      if (!this.journeyStartedAt && diffMins >= atRisk && diffMins < delayed) {
-        return 'AT_RISK';
-      }
-      if (diffMins >= delayed && diffMins < critical) {
-        return 'DELAYED';
-      }
-      if (diffMins >= critical) {
-        return 'CRITICAL';
-      }
+    const refTime = this.acceptedAt ? new Date(this.acceptedAt) : new Date(this.createdAt);
+    const diffMins = (now.getTime() - refTime.getTime()) / (60 * 1000);
+
+    if (diffMins >= critical) {
+      return 'CRITICAL';
+    }
+    if (diffMins >= delayed) {
+      return 'DELAYED';
+    }
+    if (!this.journeyStartedAt && diffMins >= atRisk) {
+      return 'AT_RISK';
     }
   }
 

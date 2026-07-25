@@ -1027,8 +1027,15 @@ const CustomerBookingsPage = () => {
       });
     };
 
+    const handleSlaStatusChanged = (data) => {
+      if (!data || !data.bookingId) return;
+      setBookings(prev => prev.map(b => b._id === data.bookingId ? { ...b, slaStatus: data.slaStatus, updatedAt: data.updatedAt || b.updatedAt } : b));
+      setSelectedBooking(prev => (prev && prev._id === data.bookingId ? { ...prev, slaStatus: data.slaStatus } : prev));
+    };
+
     socket.on('booking-updated', handleBookingUpdated);
     socket.on('booking-deleted', handleBookingDeleted);
+    socket.on('sla_status_changed', handleSlaStatusChanged);
 
     const handleReconnect = () => {
       fetchBookings(true);
@@ -1039,6 +1046,7 @@ const CustomerBookingsPage = () => {
     return () => {
       socket.off('booking-updated', handleBookingUpdated);
       socket.off('booking-deleted', handleBookingDeleted);
+      socket.off('sla_status_changed', handleSlaStatusChanged);
       socket.off('connect', handleReconnect);
       socket.off('reconnect', handleReconnect);
     };

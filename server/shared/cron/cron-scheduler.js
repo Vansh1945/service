@@ -47,19 +47,33 @@ const startCronJobs = () => {
                 });
 
                 for (const booking of expiredBookings) {
-                    console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Re-assigning...`);
+                    if (booking.metadata?.assignmentInProgress) continue;
+                    console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Delegating to Retry Manager...`);
                     
-                    if (!booking.metadata) booking.metadata = {};
-                    if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
-                    booking.metadata.ignoredProviders.push(booking.provider);
-                    
-                    booking.provider = null;
-                    booking.status = 'searchingprovider';
-                    await booking.save();
-
                     const ProviderAssignmentService = require('../../features/booking/provider-assignment-service');
-                    ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
+                    await ProviderAssignmentService.handleRetry(booking._id, {
+                        reason: 'Provider accept timeout',
+                        providerId: booking.provider
+                    });
                 }
+            }
+
+            // 2b. Admin Timeout Cleanup (Stuck searchingprovider recovery)
+            try {
+                const adminTimeoutMin = settings?.bookingSettings?.adminResponseTime || 30;
+                const adminThreshold = new Date(Date.now() - adminTimeoutMin * 60 * 1000);
+                const stuckAdminBookings = await Booking.find({
+                    status: 'searchingprovider',
+                    provider: { $in: [null, undefined] },
+                    updatedAt: { $lte: adminThreshold }
+                });
+
+                for (const b of stuckAdminBookings) {
+                    const ProviderAssignmentService = require('../../features/booking/provider-assignment-service');
+                    await ProviderAssignmentService.autoCancelBooking(b._id, 'Admin response timeout (recovered by cron)');
+                }
+            } catch (adminCronErr) {
+                console.error('[CronScheduler] Error in Admin timeout cleanup:', adminCronErr);
             }
 
             // 3. Pending Scheduled Notifications

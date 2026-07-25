@@ -192,9 +192,14 @@ const Dashboard = () => {
       fetchDashboardData(true);
     };
 
+    const handleSlaStatusChanged = () => {
+      fetchDashboardData(true);
+    };
+
     socket.on('booking-updated', handleBookingUpdated);
     socket.on('booking-deleted', handleBookingDeleted);
     socket.on('provider-status-changed', handleProviderStatusChanged);
+    socket.on('sla_status_changed', handleSlaStatusChanged);
 
     const handleReconnect = () => {
       fetchDashboardData(true);
@@ -206,6 +211,7 @@ const Dashboard = () => {
       socket.off('booking-updated', handleBookingUpdated);
       socket.off('booking-deleted', handleBookingDeleted);
       socket.off('provider-status-changed', handleProviderStatusChanged);
+      socket.off('sla_status_changed', handleSlaStatusChanged);
       socket.off('connect', handleReconnect);
       socket.off('reconnect', handleReconnect);
     };

@@ -285,9 +285,13 @@ class ProviderAssignmentService {
     }
 
     const booking = await Booking.findById(bookingId).populate('services.service');
-    if (!booking || booking.provider) {
+    if (!booking || booking.provider || booking.metadata?.assignmentInProgress) {
       return null;
     }
+
+    if (!booking.metadata) booking.metadata = {};
+    booking.metadata.assignmentInProgress = true;
+    await booking.save();
 
     // EMERGENCY BOOKING ENGINE UPGRADE
     const isEmergency = booking.bookingType === 'emergency' || booking.isEmergency;
@@ -792,6 +796,10 @@ class ProviderAssignmentService {
   } catch (error) {
     console.error('Error in autoAssignProviderIfEnabled:', error);
     return null;
+  } finally {
+    try {
+      await Booking.findByIdAndUpdate(bookingId, { $set: { 'metadata.assignmentInProgress': false } });
+    } catch (e) {}
   }
 }
 
@@ -980,6 +988,74 @@ class ProviderAssignmentService {
     console.error('Error in autoCancelBooking:', err);
   }
 }
+
+  static async dispatchBooking(bookingId, options = {}) {
+    return await ProviderAssignmentService.autoAssignProviderIfEnabled(bookingId);
+  }
+
+  static async handleRetry(bookingId, { reason = 'Provider declined or timed out', providerId = null } = {}) {
+    try {
+      console.log(`[RetryManager] Handling retry for booking ${bookingId}. Provider: ${providerId}, Reason: ${reason}`);
+      const booking = await Booking.findById(bookingId);
+      if (!booking || ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'].includes(booking.status)) {
+        return null;
+      }
+
+      if (!booking.metadata) booking.metadata = {};
+      if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
+
+      if (providerId && !booking.metadata.ignoredProviders.some(id => id.toString() === providerId.toString())) {
+        booking.metadata.ignoredProviders.push(providerId);
+      }
+
+      booking.status = 'searchingprovider';
+      booking.provider = null;
+      booking.providerAcceptanceStatus = null;
+      booking.providerResponseDeadline = null;
+
+      booking.statusHistory.push({
+        status: 'searchingprovider',
+        timestamp: new Date(),
+        note: `Retry requested: ${reason}`,
+        updatedBy: 'system'
+      });
+
+      await booking.save();
+
+      // Trigger Dispatch Engine
+      const assigned = await ProviderAssignmentService.dispatchBooking(bookingId);
+      if (!assigned) {
+        // If no providers match right away, check if we should escalate to admin queue
+        await ProviderAssignmentService.escalateToAdmin(bookingId, reason);
+      }
+      return assigned;
+    } catch (err) {
+      console.error('[RetryManager] Error in handleRetry:', err);
+      return null;
+    }
+  }
+
+  static async handleSlaBreach(bookingId, reason) {
+    console.log(`[SLAEngine] SLA breach trigger for booking ${bookingId}. Delegating to Retry Manager...`);
+    const BookingService = require('./booking-service');
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return;
+
+    if (booking.provider) {
+      const oldProviderId = booking.provider;
+      const ProviderModel = require('../provider/provider-model');
+      await ProviderModel.findByIdAndUpdate(oldProviderId, { $set: { activeBooking: null } });
+      await ProviderModel.findByIdAndUpdate(oldProviderId, {
+        $inc: {
+          'performanceScore.lateArrival': 1,
+          'performanceScore.reassignmentCount': 1
+        }
+      });
+      await BookingService.recalculateProviderPerformance(oldProviderId);
+    }
+
+    return await ProviderAssignmentService.handleRetry(bookingId, { reason, providerId: booking.provider });
+  }
 
 }
 

@@ -95,6 +95,50 @@ const updateSystemSetting = async (req, res) => {
       }
     }
 
+    // Dependent Settings Validation
+    if (updateData.bookingSettings) {
+      const bs = updateData.bookingSettings;
+      
+      // Validate working hours: startTime < endTime
+      if (bs.startTime && bs.endTime) {
+        const parseMinutes = (tStr) => {
+          if (!tStr || typeof tStr !== 'string') return null;
+          const [h, m] = tStr.split(':').map(Number);
+          return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
+        };
+        const startMin = parseMinutes(bs.startTime);
+        const endMin = parseMinutes(bs.endTime);
+        if (startMin !== null && endMin !== null && startMin >= endMin) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid business working hours: startTime must be earlier than endTime.'
+          });
+        }
+      }
+
+      // Validate numeric SLA & radius boundaries
+      if (bs.autoAssignRadius !== undefined && (typeof bs.autoAssignRadius !== 'number' || bs.autoAssignRadius <= 0)) {
+        return res.status(400).json({ success: false, message: 'Auto Assign Radius must be a positive number.' });
+      }
+      if (bs.cancellationWindowMinutes !== undefined && (typeof bs.cancellationWindowMinutes !== 'number' || bs.cancellationWindowMinutes < 0)) {
+        return res.status(400).json({ success: false, message: 'Cancellation Window Minutes cannot be negative.' });
+      }
+      if (bs.providerAcceptTimeoutMinutes !== undefined && (typeof bs.providerAcceptTimeoutMinutes !== 'number' || bs.providerAcceptTimeoutMinutes <= 0)) {
+        return res.status(400).json({ success: false, message: 'Provider Acceptance Timeout must be a positive number.' });
+      }
+
+      // Validate trustedProviderRules bounds if present
+      if (bs.trustedProviderRules) {
+        const rules = bs.trustedProviderRules;
+        if (rules.minRating !== undefined && (rules.minRating < 0 || rules.minRating > 5)) {
+          return res.status(400).json({ success: false, message: 'Trusted Provider Minimum Rating must be between 0 and 5.' });
+        }
+        if (rules.maxCancellationRate !== undefined && (rules.maxCancellationRate < 0 || rules.maxCancellationRate > 100)) {
+          return res.status(400).json({ success: false, message: 'Trusted Provider Maximum Cancellation Rate must be between 0% and 100%.' });
+        }
+      }
+    }
+
     const config = await SystemConfig.findOneAndUpdate(
       {},
       { $set: updateData },
@@ -106,6 +150,23 @@ const updateSystemSetting = async (req, res) => {
     );
 
     clearSystemConfigCache();
+    if (global) {
+      global.systemSettingsCache = config;
+    }
+
+    try {
+      const BookingService = require('../booking/booking-service');
+      if (BookingService && typeof BookingService.monitorActiveBookingsSLA === 'function') {
+        BookingService.monitorActiveBookingsSLA().catch(err => console.error('[SLA Engine] Error after settings update:', err));
+      }
+      const { getIO } = require('../../shared/socket/socket-server');
+      const io = getIO();
+      if (io) {
+        io.emit('system_settings_updated', { bookingSettings: config.bookingSettings, updatedAt: config.updatedAt });
+      }
+    } catch (e) {
+      console.error('[SystemSettingController] Error broadcasting SLA settings update:', e.message);
+    }
 
     res.status(200).json({
       success: true,

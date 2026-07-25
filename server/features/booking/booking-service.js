@@ -2966,14 +2966,13 @@ class BookingService {
       const serviceIds = servicesInCategory.map(s => s._id);
 
       let query;
-      if (normalizedStatus === 'Pending') {
+      if (normalizedStatus === 'pending' || normalizedStatus === 'Pending') {
         query = {
           'services.service': { $in: serviceIds },
           'metadata.ignoredProviders': { $ne: providerId },
           $or: [
-            { status: { $in: ['pending', 'searchingprovider'] }, $or: [{ provider: { $exists: false } }, { provider: null }] },
-            { status: 'accepted', provider: providerId },
-            { status: 'offered', provider: providerId }
+            { status: { $in: ['pending', 'searchingprovider'] }, provider: { $in: [null, undefined] } },
+            { status: { $in: ['accepted', 'offered'] }, provider: providerId }
           ]
         };
       } else if (normalizedStatus === 'Completed') {
@@ -3159,15 +3158,21 @@ class BookingService {
         const lockQuery = {
           _id: id,
           status: { $in: ['pending', 'Pending', 'offered', 'Offered', 'SearchingProvider', 'searchingprovider', 'Assigned', 'assigned'] },
-          $or: [
-            { provider: null },
-            { provider: { $exists: false } },
-            { provider: providerId }
-          ],
-          $or: [
-            { lockedBy: null },
-            { lockedBy: { $exists: false } },
-            { lockExpiresAt: { $lt: new Date() } }
+          $and: [
+            {
+              $or: [
+                { provider: null },
+                { provider: { $exists: false } },
+                { provider: providerId }
+              ]
+            },
+            {
+              $or: [
+                { lockedBy: null },
+                { lockedBy: { $exists: false } },
+                { lockExpiresAt: { $lt: new Date() } }
+              ]
+            }
           ]
         };
 
@@ -3803,21 +3808,12 @@ class BookingService {
       safeEnd(session);
       emitBookingUpdate(booking._id, booking, 'rejected');
 
-      // Trigger auto-reassignment
+      // Trigger auto-reassignment via Retry Manager
       const ProviderAssignmentService = require('./provider-assignment-service');
-      const newProvider = await ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
-
-      if (!newProvider) {
-        try {
-          const { notifyAdmins } = require('../notification/notification-helper');
-          await notifyAdmins({
-            title: `${booking.bookingType ? booking.bookingType.charAt(0).toUpperCase() + booking.bookingType.slice(1) : 'Booking'} Reassignment Failure`,
-            message: `Booking ${booking.bookingId || booking._id} could not be automatically reassigned and is placed in the Admin Queue.`
-          });
-        } catch (adminErr) {
-          console.error("Error notifying admins for booking reassignment failure:", adminErr);
-        }
-      }
+      const newProvider = await ProviderAssignmentService.handleRetry(booking._id, {
+        reason: reason || 'Provider declined booking',
+        providerId
+      });
 
       // Recalculate provider stats and trust score dynamically
       try {
@@ -5615,6 +5611,36 @@ class BookingService {
           const type = (booking.bookingType || '').toLowerCase();
           const currentSla = booking.slaStatus; // dynamically evaluates via virtual
 
+          // Broadcast SLA status via socket to ensure client synchronization
+          try {
+            const { getIO } = require('../../shared/socket/socket-server');
+            const io = getIO();
+            if (io) {
+              const payload = {
+                bookingId: booking._id.toString(),
+                slaStatus: currentSla,
+                bookingType: booking.bookingType,
+                status: booking.status,
+                journeyStartedAt: booking.journeyStartedAt,
+                arrivedAt: booking.arrivedAt,
+                acceptedAt: booking.acceptedAt,
+                updatedAt: new Date()
+              };
+              io.to(`booking_${booking._id}`).emit('sla_status_changed', payload);
+              if (booking.customer) {
+                const custId = booking.customer._id || booking.customer;
+                io.to(custId.toString()).emit('sla_status_changed', payload);
+              }
+              if (booking.provider) {
+                const provId = booking.provider._id || booking.provider;
+                io.to(provId.toString()).emit('sla_status_changed', payload);
+              }
+              io.to('admin_live_room').emit('sla_status_changed', payload);
+            }
+          } catch (socketErr) {
+            console.error('[SLA Engine] Socket emission error:', socketErr.message);
+          }
+
           // Trigger notifications/events based on SLA status
           if (type === 'scheduled') {
             if (!booking.date) continue;
@@ -5636,16 +5662,16 @@ class BookingService {
             // 10 minutes before: If not started, warning & status AT_RISK
             if (diffMins <= 10 && diffMins > 9 && booking.provider && !booking.journeyStartedAt) {
               await sendNotification(booking.provider._id, 'provider', '⚠️ Travel Warning', `You have not started navigation for booking ${booking.bookingId || booking._id}. You are running late!`, 'booking', booking._id);
-              await sendNotification(booking.customer._id, 'customer', '⏳ Provider Running Late', `Your service professional is running late. We are monitoring the status.`, 'booking', booking._id);
+              await sendNotification(booking.customer._id, 'customer', '⏳ Service Scheduled Update', `Your service professional's status has been updated. We are actively monitoring progress.`, 'booking', booking._id);
             }
             // At booking time: If not arrived
             if (diffMins <= 0 && diffMins > -1 && booking.provider && !booking.arrivedAt) {
               await sendNotification(booking.provider._id, 'provider', '🚨 Late Arrival Warning', `Booking time has arrived but you haven't marked arrival.`, 'booking', booking._id);
-              await sendNotification(booking.customer._id, 'customer', '⏳ Provider Running Late', `Your service professional is delayed.`, 'booking', booking._id);
+              await sendNotification(booking.customer._id, 'customer', '⏳ Service Partner Status', `Your service professional is currently en route.`, 'booking', booking._id);
               await notifyAdmins('🚨 Provider Late Arrival', `Provider ${booking.provider.name} is late for booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
             }
             // 30 minutes late: Status CRITICAL -> Auto reassignment
-            if (diffMins <= -30 && booking.provider && !booking.arrivedAt && booking.status !== 'Reassigned' && booking.status !== 'reassigned') {
+            if (diffMins <= -30 && booking.provider && !booking.arrivedAt && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
               await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (30 mins late)');
             }
           } else if (type === 'instant') {
@@ -5658,15 +5684,15 @@ class BookingService {
             }
             // 30 mins: Notify customer & admin
             if (diffMins >= 30 && diffMins < 31 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.customer._id, 'customer', '⏳ Partner Delayed', 'Your service professional has not started traveling. We are following up.', 'booking', booking._id);
+              await sendNotification(booking.customer._id, 'customer', '⏳ Partner Update', 'Your service professional status is being updated by our support team.', 'booking', booking._id);
               await notifyAdmins('⏳ Instant Delay Alert', `Provider ${booking.provider.name} has no movement for 30 minutes on booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
             }
             // 45 mins: Search backup provider
-            if (diffMins >= 45 && diffMins < 46 && booking.status !== 'Reassigned') {
+            if (diffMins >= 45 && diffMins < 46 && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
               await sendNotification(booking.provider._id, 'provider', '⚠️ Critical delay', 'You have not moved for 45 minutes. Booking is being reassigned.', 'booking', booking._id);
             }
             // 60 mins: Transfer booking
-            if (diffMins >= 60 && booking.status !== 'Reassigned') {
+            if (diffMins >= 60 && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
               await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (Instant 60 mins)');
             }
           } else if (type === 'emergency') {
@@ -5682,7 +5708,7 @@ class BookingService {
               await notifyAdmins('🚨 Emergency Delay Alert', `No movement for 10 minutes on emergency booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
             }
             // 20 mins: Transfer booking if better provider available
-            if (diffMins >= 20 && booking.status !== 'Reassigned') {
+            if (diffMins >= 20 && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
               await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (Emergency 20 mins)');
             }
           }
@@ -5698,60 +5724,79 @@ class BookingService {
   static async triggerSlaReassignment(booking, reason) {
     try {
       console.log(`[SLA Reassignment] Triggering auto-reassignment for booking ${booking._id}. Reason: ${reason}`);
-      const oldProviderId = booking.provider ? booking.provider._id : null;
-
-      // Disassociate current provider
-      if (oldProviderId) {
-        await Provider.findByIdAndUpdate(oldProviderId, { $set: { activeBooking: null } });
-        // Increment reassignment/late counts
-        await Provider.findByIdAndUpdate(oldProviderId, {
-          $inc: {
-            'performanceScore.lateArrival': 1,
-            'performanceScore.reassignmentCount': 1
-          }
-        });
-        await BookingService.recalculateProviderPerformance(oldProviderId);
-      }
-
-      booking.status = 'pending';
-      booking.provider = null;
-      booking.journeyStartedAt = null;
-      booking.arrivedAt = null;
-      booking.providerAcceptanceStatus = null;
-      booking.reassignmentReason = reason;
-
-      if (!booking.metadata) booking.metadata = {};
-      if (!booking.metadata.ignoredProviders) booking.metadata.ignoredProviders = [];
-      if (oldProviderId && !booking.metadata.ignoredProviders.some(id => id.toString() === oldProviderId.toString())) {
-        booking.metadata.ignoredProviders.push(oldProviderId);
-      }
-
-      await booking.save();
-      emitBookingUpdate(booking._id, booking, 'reassigned');
-
-      // Notify customer and old provider
-      if (oldProviderId) {
-        await sendNotification(oldProviderId, 'provider', '⚠️ Booking Reassigned', 'A booking has been reassigned from you due to SLA breach.', 'booking', booking._id);
-      }
-      await sendNotification(booking.customer._id, 'customer', '🔍 Finding another provider', 'We are searching for a backup service professional for your booking.', 'booking', booking._id);
-      await notifyAdmins('⚠️ Booking Reassigned', `Booking ${booking.bookingId || booking._id} has been automatically reassigned from provider.`, 'booking', booking._id);
-
-      // Trigger actual autoassign routing
       const ProviderAssignmentService = require('./provider-assignment-service');
-      const newProvider = await ProviderAssignmentService.autoAssignProviderIfEnabled(booking._id);
-      if (newProvider) {
-        // Emit Socket event update ETA
-        const { getIO } = require('../../shared/socket/socket-server');
-        const io = getIO();
-        if (io) {
-          io.to(`booking_${booking._id}`).emit('eta-updated', {
-            bookingId: booking._id,
-            eta: 'Updated dynamically based on backup provider location'
-          });
-        }
-      }
+      await ProviderAssignmentService.handleSlaBreach(booking._id, reason);
     } catch (err) {
       console.error('[SLA Reassignment] Error during reassignment:', err);
+    }
+  }
+
+  static async getSlaAnalytics() {
+    try {
+      const activeBookings = await Booking.find({
+        status: { $nin: ['cancelled', 'expired', 'rejected'] }
+      }).lean({ virtuals: true });
+
+      let onTimeCount = 0;
+      let atRiskCount = 0;
+      let delayedCount = 0;
+      let criticalCount = 0;
+      let completedCount = 0;
+
+      let totalResponseTimeMs = 0;
+      let responseCount = 0;
+      let totalArrivalTimeMs = 0;
+      let arrivalCount = 0;
+
+      for (const bk of activeBookings) {
+        const status = bk.slaStatus || 'ON_TIME';
+        if (status === 'ON_TIME') onTimeCount++;
+        else if (status === 'AT_RISK') atRiskCount++;
+        else if (status === 'DELAYED') delayedCount++;
+        else if (status === 'CRITICAL') criticalCount++;
+        else if (status === 'COMPLETED') completedCount++;
+
+        if (bk.acceptedAt && bk.createdAt) {
+          const resp = new Date(bk.acceptedAt).getTime() - new Date(bk.createdAt).getTime();
+          if (resp > 0) {
+            totalResponseTimeMs += resp;
+            responseCount++;
+          }
+        }
+
+        if (bk.arrivedAt && (bk.acceptedAt || bk.journeyStartedAt)) {
+          const startRef = bk.journeyStartedAt || bk.acceptedAt;
+          const arr = new Date(bk.arrivedAt).getTime() - new Date(startRef).getTime();
+          if (arr > 0) {
+            totalArrivalTimeMs += arr;
+            arrivalCount++;
+          }
+        }
+      }
+
+      const avgResponseMins = responseCount > 0 ? Math.round(totalResponseTimeMs / (responseCount * 60000)) : 0;
+      const avgArrivalMins = arrivalCount > 0 ? Math.round(totalArrivalTimeMs / (arrivalCount * 60000)) : 0;
+
+      return {
+        success: true,
+        counts: {
+          onTime: onTimeCount,
+          atRisk: atRiskCount,
+          delayed: delayedCount,
+          critical: criticalCount,
+          completed: completedCount,
+          total: activeBookings.length
+        },
+        metrics: {
+          avgResponseMinutes: avgResponseMins,
+          avgArrivalMinutes: avgArrivalMins,
+          slaBreaches: delayedCount + criticalCount,
+          criticalRate: activeBookings.length > 0 ? Math.round((criticalCount / activeBookings.length) * 100) : 0
+        }
+      };
+    } catch (err) {
+      console.error('[BookingService.getSlaAnalytics] Error:', err);
+      return { success: false, error: err.message };
     }
   }
 

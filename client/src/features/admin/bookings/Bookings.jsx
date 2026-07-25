@@ -141,6 +141,15 @@ const paymentStatusOptions = [
     { value: 'refunded', label: 'Refunded' }
 ];
 
+const slaStatusOptions = [
+    { value: '', label: 'All SLA Statuses' },
+    { value: 'ON_TIME', label: '🟢 On Time' },
+    { value: 'AT_RISK', label: '🟡 At Risk' },
+    { value: 'DELAYED', label: '🟠 Delayed' },
+    { value: 'CRITICAL', label: '🔴 Critical' },
+    { value: 'COMPLETED', label: '✅ Completed' }
+];
+
 
 
 
@@ -1302,6 +1311,12 @@ const AdminBookingsView = () => {
                         label: 'Payment Status',
                         type: 'select',
                         options: paymentStatusOptions
+                    },
+                    {
+                        key: 'slaStatus',
+                        label: 'SLA Status',
+                        type: 'select',
+                        options: slaStatusOptions
                     }
                 ]}
             />

@@ -287,9 +287,27 @@ const initSocket = (httpServer) => {
         if (socket.userRole === 'provider') {
             socket.join(`provider_${userId}`);
             // Keep persistent online status on connection, notify admin of current status
-            Provider.findById(userId).then((provider) => {
+            Provider.findById(userId).then(async (provider) => {
                 if (provider) {
                     io.to('admin_live_room').emit('provider-status-changed', { providerId: userId, isOnline: provider.isOnline });
+                    
+                    if (provider.isOnline && provider.approved && !provider.isSuspended) {
+                        try {
+                            const ProviderAssignmentService = require('../../features/booking/provider-assignment-service');
+                            const waitingBookings = await Booking.find({
+                                status: { $in: ['pending', 'searchingprovider'] },
+                                provider: { $in: [null, undefined] },
+                                'metadata.ignoredProviders': { $ne: userId },
+                                'metadata.assignmentInProgress': { $ne: true }
+                            }).select('_id').lean();
+
+                            for (const b of waitingBookings) {
+                                ProviderAssignmentService.dispatchBooking(b._id);
+                            }
+                        } catch (assignErr) {
+                            console.error('[Socket] Error evaluating waiting bookings on provider online:', assignErr.message);
+                        }
+                    }
                 }
             }).catch(err => console.error('Error fetching provider status on connect:', err.message));
         }

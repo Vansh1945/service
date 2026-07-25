@@ -307,5 +307,14 @@ module.exports = {
         message: error.message
       });
     }
+  },
+
+  getSlaAnalytics: async (req, res) => {
+    try {
+      const analytics = await BookingService.getSlaAnalytics();
+      return res.status(200).json(analytics);
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
   }
 };
