@@ -11,16 +11,16 @@ const lazyWithPreload = (factory) => {
 };
 
 const ProviderLayout = lazyWithPreload(() => import("../layouts/ProviderLayout"));
-const ProviderProfile = lazyWithPreload(() => import("../pages/Provider/Profile"));
-const ProviderDashboard = lazyWithPreload(() => import("../pages/Provider/Dashboard"));
-const ProviderBookingDashboard = lazyWithPreload(() => import("../pages/Provider/Provider-Booking"));
-const ProviderTestPage = lazyWithPreload(() => import("../pages/Provider/Test"));
-const ProviderEarning = lazyWithPreload(() => import("../pages/Provider/Earning"));
-const ProviderFeedback = lazyWithPreload(() => import("../pages/Provider/Feedback"));
-const ProviderSupport = lazyWithPreload(() => import("../pages/Provider/Support"));
-const ReferProviders = lazyWithPreload(() => import("../pages/Provider/ReferProviders"));
-const ProviderCalendar = lazyWithPreload(() => import("../pages/Provider/Calendar"));
-const ProviderTrackingPage = lazyWithPreload(() => import("../pages/Shared/LiveTrackingPage"));
+const ProviderProfile = lazyWithPreload(() => import("../features/provider/profile/Profile"));
+const ProviderDashboard = lazyWithPreload(() => import("../features/provider/dashboard/Dashboard"));
+const ProviderBookingDashboard = lazyWithPreload(() => import("../features/provider/bookings/Provider-Booking"));
+const ProviderTestPage = lazyWithPreload(() => import("../features/provider/dashboard/Test"));
+const ProviderEarning = lazyWithPreload(() => import("../features/provider/earnings/Earning"));
+const ProviderFeedback = lazyWithPreload(() => import("../features/provider/feedback/Feedback"));
+const ProviderSupport = lazyWithPreload(() => import("../features/provider/support/Support"));
+const ReferProviders = lazyWithPreload(() => import("../features/provider/support/ReferProviders"));
+const ProviderCalendar = lazyWithPreload(() => import("../features/provider/bookings/Calendar"));
+const ProviderTrackingPage = lazyWithPreload(() => import("../features/shared/live-tracking/LiveTrackingPage"));
 
 const ProviderRoutes = () => {
     // ⚡ Preload critical components on mount for smoother interactions

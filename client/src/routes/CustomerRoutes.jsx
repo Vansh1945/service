@@ -4,17 +4,17 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import LoadingSpinner from "../components/ui-skeletons/Loader";
 
 const CustomerLayout = lazy(() => import("../layouts/CustomerLayout"));
-const ServiceListingPage = lazy(() => import("../pages/Customer/Services"));
-const ServiceListingNew = lazy(() => import("../pages/Customer/ServiceListing"));
-const ServiceDetailPage = lazy(() => import("../pages/Customer/Servicedetail"));
-const BookService = lazy(() => import("../pages/Customer/Book-Service"));
-const UserProfile = lazy(() => import("../pages/Customer/Profile"));
-const CustomerBookingsPage = lazy(() => import("../pages/Customer/CustomerBookingsPage"));
-const BookingConfirmation = lazy(() => import("../pages/Customer/BookingConfirmation"));
-const FeedbackManagement = lazy(() => import("../pages/Customer/Feedback"));
-const ComplaintsPage = lazy(() => import("../pages/Customer/Complaint"));
-const ReferEarn = lazy(() => import("../pages/Customer/ReferEarn"));
-const LiveTrackingPage = lazy(() => import("../pages/Shared/LiveTrackingPage"));
+const ServiceListingPage = lazy(() => import("../features/customer/services/Services"));
+const ServiceListingNew = lazy(() => import("../features/customer/services/ServiceListing"));
+const ServiceDetailPage = lazy(() => import("../features/customer/services/Servicedetail"));
+const BookService = lazy(() => import("../features/customer/booking-flow/Book-Service"));
+const UserProfile = lazy(() => import("../features/customer/profile/Profile"));
+const CustomerBookingsPage = lazy(() => import("../features/customer/my-bookings/CustomerBookingsPage"));
+const BookingConfirmation = lazy(() => import("../features/customer/booking-flow/BookingConfirmation"));
+const FeedbackManagement = lazy(() => import("../features/customer/complaints/Feedback"));
+const ComplaintsPage = lazy(() => import("../features/customer/complaints/Complaint"));
+const ReferEarn = lazy(() => import("../features/customer/marketing/ReferEarn"));
+const LiveTrackingPage = lazy(() => import("../features/shared/live-tracking/LiveTrackingPage"));
 
 const CustomerRoutes = () => {
     return (

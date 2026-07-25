@@ -8,7 +8,7 @@ import {
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
-import SearchBar from '../pages/Customer/components/Customer-SearchBar';
+import SearchBar from '../features/customer/services/components/Customer-SearchBar';
 
 export const DEFAULT_COMPANY_NAME = 'Raj Electrical Services';
 export const DEFAULT_CUSTOMER_APP_NAME = 'Customer App';

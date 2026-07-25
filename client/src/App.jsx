@@ -12,22 +12,22 @@ import Footer from "./components/Footer";
 import { SocketProvider } from "./socket/SocketContext";
 
 // Public Pages (Optimized: Lazy loaded with retry)
-const Home = lazyWithRetry(() => import("./pages/Home"));
-const AboutPage = lazyWithRetry(() => import("./pages/About"));
-const ServicesPage = lazyWithRetry(() => import("./pages/Service"));
-const CareersPage = lazyWithRetry(() => import("./pages/Careers"));
-const ContactPage = lazyWithRetry(() => import("./pages/Contact"));
-const LoginPage = lazyWithRetry(() => import("./pages/Login"));
-const ForgotPassword = lazyWithRetry(() => import("./pages/ForgetPassword"));
-const CustomerRegistration = lazyWithRetry(() => import("./pages/Customer/Customer-Register"));
-const ProviderRegistration = lazyWithRetry(() => import("./pages/Provider/Provider-Register"));
-const Unauthorized = lazyWithRetry(() => import("./pages/Unauthorized"));
-const TermsAndConditions = lazyWithRetry(() => import("./pages/TermsAndConditions"));
-const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
-const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const Home = lazyWithRetry(() => import("./features/shared/static/Home"));
+const AboutPage = lazyWithRetry(() => import("./features/shared/static/About"));
+const ServicesPage = lazyWithRetry(() => import("./features/shared/static/Service"));
+const CareersPage = lazyWithRetry(() => import("./features/shared/static/Careers"));
+const ContactPage = lazyWithRetry(() => import("./features/shared/static/Contact"));
+const LoginPage = lazyWithRetry(() => import("./features/shared/auth/Login"));
+const ForgotPassword = lazyWithRetry(() => import("./features/shared/auth/ForgetPassword"));
+const CustomerRegistration = lazyWithRetry(() => import("./features/customer/profile/Customer-Register"));
+const ProviderRegistration = lazyWithRetry(() => import("./features/provider/profile/Provider-Register"));
+const Unauthorized = lazyWithRetry(() => import("./features/shared/auth/Unauthorized"));
+const TermsAndConditions = lazyWithRetry(() => import("./features/shared/static/TermsAndConditions"));
+const PrivacyPolicy = lazyWithRetry(() => import("./features/shared/static/PrivacyPolicy"));
+const NotFound = lazyWithRetry(() => import("./features/shared/static/NotFound"));
 
 import LoadingSpinner from "./components/ui-skeletons/Loader";
-import RefundPolicy from "./pages/RefundPolicy";
+import RefundPolicy from "./features/shared/static/RefundPolicy";
 
 // Lazy-load wrapper: auto-reloads page once on chunk load failure (stale deployment)
 function lazyWithRetry(importFn) {
