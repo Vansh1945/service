@@ -579,12 +579,8 @@ const AdminProvidersPage = () => {
           </button>
         </div>
 
-        {/* Reusable Premium Filter Bar */}
-        <AdminFilterBar onApply={fetchProviders} />
-
-
-
         {/* Filters and Sorting */}
+
         <AdminLocalFilterBar
           filters={filters}
           onChange={(key, val) => setFilters({ ...filters, [key]: val })}

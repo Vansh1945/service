@@ -765,6 +765,8 @@ class PaymentService {
             paymentStatus: 'completed',
             paymentMethod: 'wallet',
             type: 'withdrawal',
+            ledgerType: 'withdrawal',
+            entryType: 'debit',
             balanceBefore: balanceBefore,
             balanceAfter: balanceAfter,
             deductionType: 'payout_withdrawal',

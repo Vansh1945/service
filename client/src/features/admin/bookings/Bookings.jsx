@@ -1291,10 +1291,8 @@ const AdminBookingsView = () => {
                 />
             </div>
 
-            {/* Reusable Premium Filter Bar */}
-            <AdminFilterBar onApply={fetchBookings} />
-
             {/* Local Page Filters Section */}
+
             <AdminLocalFilterBar
                 filters={filters}
                 onChange={handleFilterChange}

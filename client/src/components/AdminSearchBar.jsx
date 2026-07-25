@@ -58,12 +58,15 @@ const AdminSearchBar = ({
 
   const handleInputChange = (e) => {
     if (isGlobal) {
-      setLocalQuery(e.target.value);
+      const val = e.target.value;
+      setLocalQuery(val);
+      if (setSearchQuery) setSearchQuery(val);
       setIsOpen(true);
     } else if (propOnChange) {
       propOnChange(e);
     }
   };
+
 
   // Generate suggestions dynamically from menuGroups, matching standard and sub-route aliases
   const getFilteredSuggestions = () => {

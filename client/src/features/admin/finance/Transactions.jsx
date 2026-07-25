@@ -107,15 +107,20 @@ const AdminTransactions = () => {
         month,
         quarter,
         zoneIds,
-        getMergedQuery
+        getMergedQuery,
+        openInvestigationDrawer,
+        searchQuery
     } = useAdminFilter();
 
-    // Filters - initialize from URL to prevent race conditions
+
+    // Ledger and Filters state
+    const [activeLedger, setActiveLedger] = useState('all');
     const [filters, setFilters] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return {
             bookingId: params.get('bookingId') || params.get('search') || '',
-            status: 'all'
+            status: 'all',
+            paymentMethod: 'all'
         };
     });
 
@@ -138,6 +143,8 @@ const AdminTransactions = () => {
                 limit: pagination.limit,
                 bookingId: filters.bookingId,
                 status: filters.status,
+                paymentMethod: filters.paymentMethod !== 'all' ? filters.paymentMethod : undefined,
+                ledgerType: activeLedger !== 'all' ? activeLedger : undefined,
                 ...getMergedQuery()
             };
             const response = await TransactionService.getAllTransactions(params);
@@ -180,17 +187,9 @@ const AdminTransactions = () => {
     };
 
     const handleRowClick = async (id) => {
-        try {
-            const response = await TransactionService.getTransactionById(id);
-            if (response.data.success) {
-                setSelectedTransaction(response.data.data);
-                setShowModal(true);
-            }
-        } catch (error) {
-      console.error(error);
-            showToast('Failed to fetch transaction details', 'error');
-        }
+        openInvestigationDrawer('transaction', id);
     };
+
 
     const navigateToBooking = (bookingId) => {
         if (!bookingId) {
@@ -258,29 +257,34 @@ const AdminTransactions = () => {
                 </div>
             </div>
 
-            {/* Reusable Premium Filter Bar */}
-            <AdminFilterBar onApply={fetchTransactions} />
+            {/* Ledger Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-4 border-b border-gray-100">
+                {[
+                    { id: 'all', label: 'All Ledgers' },
+                    { id: 'payment', label: 'Payment Ledger' },
+                    { id: 'wallet', label: 'Wallet Ledger' },
+                    { id: 'refund', label: 'Refund Ledger' },
+                    { id: 'withdrawal', label: 'Withdrawal Ledger' },
+                    { id: 'commission', label: 'Commission Ledger' },
+                    { id: 'settlement', label: 'Settlement Ledger' }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => {
+                            setActiveLedger(tab.id);
+                            setPagination(prev => ({ ...prev, page: 1 }));
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                            activeLedger === tab.id
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
-            {/* Local Page Filters */}
-            <AdminLocalFilterBar
-                filters={filters}
-                onChange={(key, value) => {
-                    setFilters(prev => ({ ...prev, [key]: value }));
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                }}
-                onClear={() => {
-                    setFilters({ bookingId: '', status: 'all' });
-                    setPagination(prev => ({ ...prev, page: 1 }));
-                }}
-                fields={[
-                    {
-                        key: 'status',
-                        label: 'Payment Status',
-                        type: 'select',
-                        options: statusOptions
-                    }
-                ]}
-            />
 
             {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

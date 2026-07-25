@@ -41,4 +41,14 @@ router.get('/admin/details/:id', adminAuthMiddleware, adminRoleCheck, paymentCon
 router.post('/admin/retry-verify/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminRetryVerify);
 router.post('/admin/mark-paid/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminMarkPaid);
 
+// Additional Finance Admin Endpoints
+router.get('/admin/finance-overview', adminAuthMiddleware, adminRoleCheck, paymentController.getFinanceOverview);
+router.get('/admin/cash-ledger', adminAuthMiddleware, adminRoleCheck, paymentController.getCashLedger);
+router.get('/admin/wallets/customers', adminAuthMiddleware, adminRoleCheck, paymentController.getCustomerWallets);
+router.get('/admin/wallets/providers', adminAuthMiddleware, adminRoleCheck, paymentController.getProviderWallets);
+router.get('/admin/settlements', adminAuthMiddleware, adminRoleCheck, paymentController.getSettlements);
+router.get('/admin/razorpay/logs', adminAuthMiddleware, adminRoleCheck, paymentController.getRazorpayLogs);
+router.get('/admin/failed-payments', adminAuthMiddleware, adminRoleCheck, paymentController.getFailedPayments);
+router.get('/admin/audit-logs', adminAuthMiddleware, adminRoleCheck, paymentController.getAuditLogs);
+
 module.exports = router;

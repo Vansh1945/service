@@ -880,10 +880,8 @@ const AdminCoupons = () => {
           />
         </div>
 
-        {/* Reusable Premium Filter Bar */}
-        <AdminFilterBar onApply={fetchCoupons} />
-
         {/* Filters and Search */}
+
         <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
           <div className="flex flex-col md:flex-row gap-3 md:gap-4">
             <div className="flex items-center gap-2 md:gap-3">

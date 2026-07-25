@@ -19,8 +19,17 @@ const AdminFilterBar = ({ onApply }) => {
     setZoneIds,
     zones,
     earliestYear,
-    resetGlobalFilters
+    resetGlobalFilters,
+    paymentMethod,
+    setPaymentMethod,
+    bookingStatus,
+    setBookingStatus,
+    transactionType,
+    setTransactionType,
+    refundStatus,
+    setRefundStatus
   } = useAdminFilter();
+
 
   const currentYear = new Date().getFullYear();
 
@@ -87,21 +96,19 @@ const AdminFilterBar = ({ onApply }) => {
           <div className="flex bg-gray-100 p-0.5 rounded-lg w-fit border border-gray-200">
             <button
               onClick={() => setFilterType('calendar')}
-              className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
-                filterType === 'calendar'
+              className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${filterType === 'calendar'
                   ? 'bg-white text-secondary shadow-sm'
                   : 'text-gray-500 hover:text-secondary'
-              }`}
+                }`}
             >
               Calendar Year
             </button>
             <button
               onClick={() => setFilterType('financial')}
-              className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
-                filterType === 'financial'
+              className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${filterType === 'financial'
                   ? 'bg-white text-secondary shadow-sm'
                   : 'text-gray-500 hover:text-secondary'
-              }`}
+                }`}
             >
               Financial Year
             </button>
@@ -129,15 +136,15 @@ const AdminFilterBar = ({ onApply }) => {
               >
                 {filterType === 'financial'
                   ? financialYears.map((fy) => (
-                      <option key={fy} value={fy}>
-                        {fy}
-                      </option>
-                    ))
+                    <option key={fy} value={fy}>
+                      {fy}
+                    </option>
+                  ))
                   : calendarYears.map((cy) => (
-                      <option key={cy} value={cy}>
-                        {cy}
-                      </option>
-                    ))}
+                    <option key={cy} value={cy}>
+                      {cy}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>

@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import { formatDate, formatDateTime, formatTime, formatCurrency } from '../../../utils/format';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import * as AdminService from '../../../services/AdminService';
+
 
 const PayoutModal = ({
   isOpen,
@@ -180,7 +182,9 @@ const PayoutModal = ({
 };
 
 const AdminPayout = () => {
+
   const { user, API } = useAuth();
+  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
   const [loading, setLoading] = useState(true);
   const [withdrawals, setWithdrawals] = useState([]);
   const [total, setTotal] = useState(0);
@@ -200,23 +204,24 @@ const AdminPayout = () => {
 
   const [searchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
-  const [filters, setFilters] = useState({ status: '', startDate: '', endDate: '', providerSearch: urlSearch, sortBy: '' });
+  const [filters, setFilters] = useState({ status: '', startDate: '', endDate: '', providerSearch: urlSearch || searchQuery || '', sortBy: '' });
 
   useEffect(() => {
-    setFilters(prev => ({ ...prev, providerSearch: urlSearch }));
+    setFilters(prev => ({ ...prev, providerSearch: urlSearch || searchQuery || '' }));
     setPage(1);
-  }, [urlSearch]);
+  }, [urlSearch, searchQuery]);
 
-  useEffect(() => { fetchWithdrawals(); }, [page, filters]);
+  useEffect(() => { fetchWithdrawals(); }, [page, filters, searchQuery]);
 
   const fetchWithdrawals = async () => {
     try {
       setLoading(true);
-      const params = {
+      const params = getMergedQuery({
         page: page,
         limit: limit,
         ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
-      };
+      });
+
 
       const response = await PaymentService.getAllWithdrawalRequests(params);
       const data = response.data;

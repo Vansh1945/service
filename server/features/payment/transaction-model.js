@@ -67,15 +67,33 @@ const transactionSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'mixed'],
+    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'mixed', 'bank_transfer', 'system'],
     default: 'online',
 
   },
   type: {
     type: String,
-    enum: ['payment', 'refund', 'referralreward', 'penalty', 'commissiondeduction', 'withdrawal', 'withdrawalrejection', 'refundrecovery'],
+    enum: [
+      'payment', 'refund', 'referralreward', 'penalty', 'commissiondeduction', 
+      'withdrawal', 'withdrawalrejection', 'refundrecovery', 'wallet_topup', 
+      'settlement', 'cashback', 'adjustment', 'escrow_hold', 'escrow_release'
+    ],
     default: 'payment',
 
+  },
+  ledgerType: {
+    type: String,
+    enum: ['payment', 'wallet', 'refund', 'withdrawal', 'commission', 'settlement', 'adjustment'],
+    default: 'payment'
+  },
+  entryType: {
+    type: String,
+    enum: ['debit', 'credit'],
+    default: 'credit'
+  },
+  idempotencyKey: {
+    type: String,
+    sparse: true
   },
   balanceBefore: {
     type: Number,
@@ -112,6 +130,40 @@ const transactionSchema = new Schema({
   razorpayPaymentId: String,
   razorpaySignature: String,
   razorpayResponse: Object,
+  razorpaySettlementId: String,
+  settlementBatchId: String,
+  settlementStatus: {
+    type: String,
+    enum: ['authorized', 'captured', 'queued', 'processing', 'settled', 'failed', 'reversed', 'refunded', 'partial_refund', 'disputed'],
+    default: 'settled',
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    }
+  },
+  gatewayFee: {
+    type: Number,
+    default: 0
+  },
+  gatewayTax: {
+    type: Number,
+    default: 0
+  },
+  settlementAmount: {
+    type: Number,
+    default: 0
+  },
+  netSettlementAmount: {
+    type: Number,
+    default: 0
+  },
+  bankReference: String,
+  bankAccountReceived: {
+    type: Boolean,
+    default: true
+  },
+  settlementDate: Date,
+  reconciledAt: Date,
   description: String,
   refundStatus: {
     type: String,
@@ -124,6 +176,7 @@ const transactionSchema = new Schema({
   },
   refundReason: String,
   refundedAt: Date,
+
   isRupees: {
     type: Boolean,
     default: true

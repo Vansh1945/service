@@ -165,6 +165,27 @@ const createOrder = async (req, res, next) => {
         });
         user.wallet.lastUpdated = new Date();
         await user.save({ session });
+
+        // Record explicit Wallet Ledger Transaction for financial audit trail
+        const walletDebitTx = new Transaction({
+          amount: walletDeduction,
+          currency: systemCurrency,
+          paymentMethod: 'wallet',
+          booking: booking._id,
+          bookingId: booking.bookingId,
+          user: userId,
+          customerId: req.user.customerId || userId.toString(),
+          provider: booking.provider,
+          providerId: booking.providerId || (booking.provider ? booking.provider.toString() : null),
+          type: 'payment',
+          ledgerType: 'wallet',
+          entryType: 'debit',
+          paymentStatus: 'pending',
+          balanceBefore: walletBalance,
+          balanceAfter: user.wallet.availableBalance,
+          description: `Wallet Debit (₹${walletDeduction}) for Booking ${booking.bookingId}`
+        });
+        await walletDebitTx.save({ session });
       }
     }
 
@@ -742,6 +763,24 @@ const getAllTransactions = async (req, res, next) => {
       filter.paymentStatus = status;
     }
 
+    if (req.query.ledgerType && req.query.ledgerType !== 'all') {
+      filter.ledgerType = req.query.ledgerType;
+    }
+
+    if (req.query.paymentMethod && req.query.paymentMethod !== 'all') {
+      const pm = req.query.paymentMethod.toLowerCase();
+      if (pm === 'razorpay' || pm === 'online') {
+        filter.$or = filter.$or || [];
+        filter.paymentMethod = { $in: ['online', 'razorpay', 'card', 'netbanking', 'upi', 'emi'] };
+      } else {
+        filter.paymentMethod = req.query.paymentMethod;
+      }
+    }
+
+    if (req.query.type && req.query.type !== 'all') {
+      filter.type = req.query.type;
+    }
+
     const transactions = await Transaction.find(filter)
       .populate('user', 'name email phone')
       .populate({
@@ -1126,6 +1165,498 @@ const adminMarkPaid = async (req, res, next) => {
   }
 };
 
+/**
+ * Get executive finance overview KPIs
+ */
+const getFinanceOverview = async (req, res, next) => {
+  try {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const Refund = require('./refund-model');
+
+    const [
+      allSuccessful,
+      todayTxns,
+      weeklyTxns,
+      monthlyTxns,
+      refunds,
+      providers,
+      failedTxns
+    ] = await Promise.all([
+      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] } }).lean(),
+      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfToday } }).lean(),
+      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfWeek } }).lean(),
+      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfMonth } }).lean(),
+      Refund.find({}).lean(),
+      Provider.find({}).select('wallet pendingPayout earnings').lean(),
+      Transaction.find({ paymentStatus: 'failed' }).lean()
+    ]);
+
+    let totalRevenue = 0, onlineCollection = 0, cashCollection = 0, walletCollection = 0, mixedCollection = 0;
+    let platformEarnings = 0;
+
+    allSuccessful.forEach(t => {
+      const amt = t.amount || 0;
+      totalRevenue += amt;
+      platformEarnings += (t.commission || (amt * 0.2));
+
+      const method = t.paymentMethod?.toLowerCase();
+      if (method === 'razorpay' || method === 'online') onlineCollection += amt;
+      else if (method === 'cash' || method === 'cod') cashCollection += amt;
+      else if (method === 'wallet') walletCollection += amt;
+      else if (method === 'mixed') mixedCollection += amt;
+      else onlineCollection += amt;
+    });
+
+    const todayRevenue = todayTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const weeklyRevenue = weeklyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const monthlyRevenue = monthlyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    let pendingRefunds = 0, completedRefunds = 0;
+    refunds.forEach(r => {
+      const amt = r.amount || 0;
+      if (r.status === 'completed') completedRefunds += amt;
+      else if (r.status === 'pending' || r.status === 'processing') pendingRefunds += amt;
+    });
+
+    let providerPendingPayout = 0, completedPayout = 0;
+    providers.forEach(p => {
+      providerPendingPayout += (p.wallet?.pendingPayout || p.pendingPayout || 0);
+      completedPayout += (p.wallet?.totalWithdrawn || 0);
+    });
+
+    const recentActivities = await Transaction.find({})
+      .populate('user', 'name email phone')
+      .populate('provider', 'name email phone')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const totalCaptured = onlineCollection + mixedCollection;
+    const gatewayFees = Math.round(totalCaptured * 0.02);
+    const gatewayTax = Math.round(gatewayFees * 0.18);
+    const totalSettled = Math.max(0, totalCaptured);
+    const bankReceived = Math.max(0, totalSettled - gatewayFees - gatewayTax);
+    const pendingSettlement = 0;
+    const failedSettlement = 0;
+    const reconciliationDifference = 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalRevenue,
+        todayRevenue,
+        weeklyRevenue,
+        monthlyRevenue,
+        onlineCollection,
+        cashCollection,
+        walletCollection,
+        mixedCollection,
+        pendingRefunds,
+        completedRefunds,
+        totalRefunds: completedRefunds + pendingRefunds,
+        providerPendingPayout,
+        completedPayout,
+        platformEarnings,
+        failedPaymentsCount: failedTxns.length,
+        recentActivities,
+        reconciliation: {
+          totalCaptured,
+          totalSettled,
+          pendingSettlement,
+          failedSettlement,
+          bankReceived,
+          gatewayFees,
+          gatewayTax,
+          providerPending: providerPendingPayout,
+          refundPending: pendingRefunds,
+          difference: reconciliationDifference
+        }
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getFinanceOverview] Executive dashboard overview error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+
+/**
+ * Get cash payment management & ledger details
+ */
+const getCashLedger = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const filter = { paymentMethod: { $in: ['cash', 'cod', 'mixed'] } };
+    if (req.query.status && req.query.status !== 'all') {
+      filter.paymentStatus = req.query.status;
+    }
+
+    const [transactions, total, aggregateStats] = await Promise.all([
+      Transaction.find(filter)
+        .populate('user', 'name email phone')
+        .populate('provider', 'name email phone')
+        .populate('booking', 'bookingId status totalAmount cashCollectionVerified')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(filter),
+      Transaction.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: '$paymentStatus',
+            totalAmount: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ])
+    ]);
+
+    let pendingVerification = 0, verifiedCash = 0, disputedCash = 0;
+    aggregateStats.forEach(s => {
+      if (s._id === 'success' || s._id === 'completed') verifiedCash += s.totalAmount;
+      else if (s._id === 'pending') pendingVerification += s.totalAmount;
+      else if (s._id === 'failed') disputedCash += s.totalAmount;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        transactions,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        summary: {
+          pendingVerification,
+          verifiedCash,
+          disputedCash,
+          providerCashLiability: pendingVerification
+        }
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getCashLedger] Cash ledger error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Get customer wallet overview & list
+ */
+const getCustomerWallets = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    const userFilter = {};
+    if (search) {
+      userFilter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(userFilter)
+        .select('name email phone wallet createdAt')
+        .sort({ 'wallet.availableBalance': -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(userFilter)
+    ]);
+
+    const totalStats = await User.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalAvailableBalance: { $sum: '$wallet.availableBalance' },
+          totalRefunded: { $sum: '$wallet.totalRefunded' }
+        }
+      }
+    ]);
+
+    const summary = totalStats[0] || { totalAvailableBalance: 0, totalRefunded: 0 };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        users,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        summary: {
+          totalAvailableBalance: summary.totalAvailableBalance || 0,
+          totalRefunded: summary.totalRefunded || 0
+        }
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getCustomerWallets] Customer wallets error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Get provider wallets overview & list
+ */
+const getProviderWallets = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    const providerFilter = {};
+    if (search) {
+      providerFilter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [providers, total] = await Promise.all([
+      Provider.find(providerFilter)
+        .select('name email phone wallet pendingPayout earnings payoutHold payoutHoldReason createdAt')
+        .sort({ 'wallet.availableBalance': -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Provider.countDocuments(providerFilter)
+    ]);
+
+    const summaryStats = await Provider.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalBalance: { $sum: '$wallet.availableBalance' },
+          totalEscrow: { $sum: '$wallet.escrowBalance' },
+          totalPendingPayout: { $sum: '$wallet.pendingPayout' },
+          totalPenalty: { $sum: '$wallet.totalPenalty' }
+        }
+      }
+    ]);
+
+    const summary = summaryStats[0] || { totalBalance: 0, totalEscrow: 0, totalPendingPayout: 0, totalPenalty: 0 };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        providers,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        summary: {
+          totalBalance: summary.totalBalance || 0,
+          totalEscrow: summary.totalEscrow || 0,
+          totalPendingPayout: summary.totalPendingPayout || 0,
+          totalPenalty: summary.totalPenalty || 0
+        }
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getProviderWallets] Provider wallets error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Get settlements breakdown
+ */
+const getSettlements = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const [settlementTxns, total] = await Promise.all([
+      Transaction.find({
+        type: { $in: ['settlement', 'payment', 'commissiondeduction', 'withdrawal'] }
+      })
+        .populate('booking', 'bookingId totalAmount commissionAmount providerEarnings status')
+        .populate('user', 'name email')
+        .populate('provider', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments({
+        type: { $in: ['settlement', 'payment', 'commissiondeduction', 'withdrawal'] }
+      })
+    ]);
+
+    const stats = await Transaction.aggregate([
+      {
+        $group: {
+          _id: '$type',
+          totalAmount: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    let bookingSettlement = 0, providerSettlement = 0, commissionSettlement = 0, walletSettlement = 0;
+    stats.forEach(s => {
+      if (s._id === 'payment') bookingSettlement += s.totalAmount;
+      else if (s._id === 'settlement' || s._id === 'withdrawal') providerSettlement += s.totalAmount;
+      else if (s._id === 'commissiondeduction') commissionSettlement += s.totalAmount;
+      else if (s._id === 'wallet_topup') walletSettlement += s.totalAmount;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        settlements: settlementTxns,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        summary: {
+          bookingSettlement,
+          providerSettlement,
+          commissionSettlement,
+          walletSettlement,
+          settlementDifference: bookingSettlement - (providerSettlement + commissionSettlement)
+        }
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getSettlements] Settlements error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Get Razorpay gateway logs & records
+ */
+const getRazorpayLogs = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const filter = {
+      $or: [
+        { paymentMethod: { $in: ['online', 'razorpay'] } },
+        { razorpayOrderId: { $exists: true, $ne: null } },
+        { razorpayPaymentId: { $exists: true, $ne: null } }
+      ]
+    };
+
+    if (req.query.status && req.query.status !== 'all') {
+      filter.paymentStatus = req.query.status;
+    }
+
+    const [transactions, total] = await Promise.all([
+      Transaction.find(filter)
+        .populate('user', 'name email phone')
+        .populate('booking', 'bookingId totalAmount status')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(filter)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        transactions,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getRazorpayLogs] Razorpay logs error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Get failed payment records & error diagnostics
+ */
+const getFailedPayments = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const filter = { paymentStatus: 'failed' };
+
+    const [transactions, total] = await Promise.all([
+      Transaction.find(filter)
+        .populate('user', 'name email phone')
+        .populate('booking', 'bookingId totalAmount status')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(filter)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        transactions,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getFailedPayments] Failed payments error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Get finance audit logs
+ */
+const getAuditLogs = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const FraudLog = require('../fraud/fraud-log-model');
+    const filter = {};
+
+    const [logs, total] = await Promise.all([
+      FraudLog.find(filter)
+        .populate('userId', 'name email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      FraudLog.countDocuments(filter)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        logs,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getAuditLogs] Audit logs error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
@@ -1135,6 +1666,15 @@ module.exports = {
   getCustomerTransactions,
   adminRetryVerify,
   adminMarkPaid,
-  rollbackWalletDeduction
+  rollbackWalletDeduction,
+  getFinanceOverview,
+  getCashLedger,
+  getCustomerWallets,
+  getProviderWallets,
+  getSettlements,
+  getRazorpayLogs,
+  getFailedPayments,
+  getAuditLogs
 };
+
 

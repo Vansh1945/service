@@ -154,12 +154,85 @@ export const AdminFilterProvider = ({ children }) => {
     };
   }, [filterType, year, financialYear, month, quarter]);
 
+  // Global Search State across finance console
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Finance Filter States
+  const [paymentMethod, setPaymentMethod] = useState('all');
+  const [bookingStatus, setBookingStatus] = useState('all');
+  const [transactionType, setTransactionType] = useState('all');
+  const [refundStatus, setRefundStatus] = useState('all');
+  const [gatewayStatus, setGatewayStatus] = useState('all');
+  const [settlementStatus, setSettlementStatus] = useState('all');
+
+  // Investigation Side-Drawer State
+  const [drawerConfig, setDrawerConfig] = useState({
+    isOpen: false,
+    entityType: null, // 'booking' | 'payment' | 'transaction' | 'refund' | 'complaint' | 'provider' | 'customer' | 'wallet' | 'settlement' | 'razorpay'
+    entityId: null,
+    entityData: null,
+  });
+
+  const [drawerHistory, setDrawerHistory] = useState([]);
+
+  const openInvestigationDrawer = useCallback((entityType, entityId, initialData = null) => {
+    if (!entityId && !initialData) return;
+    setDrawerConfig((prev) => {
+      if (prev.isOpen && prev.entityId) {
+        setDrawerHistory((hist) => [...hist, { entityType: prev.entityType, entityId: prev.entityId, entityData: prev.entityData }]);
+      } else {
+        setDrawerHistory([]);
+      }
+      return {
+        isOpen: true,
+        entityType,
+        entityId: entityId || initialData?._id || initialData?.id || initialData?.bookingId,
+        entityData: initialData
+      };
+    });
+  }, []);
+
+  const closeInvestigationDrawer = useCallback(() => {
+    setDrawerConfig({
+      isOpen: false,
+      entityType: null,
+      entityId: null,
+      entityData: null
+    });
+    setDrawerHistory([]);
+  }, []);
+
+  const popDrawerHistory = useCallback(() => {
+    setDrawerHistory((prev) => {
+      if (prev.length === 0) {
+        closeInvestigationDrawer();
+        return [];
+      }
+      const last = prev[prev.length - 1];
+      const updated = prev.slice(0, prev.length - 1);
+      setDrawerConfig({
+        isOpen: true,
+        entityType: last.entityType,
+        entityId: last.entityId,
+        entityData: last.entityData
+      });
+      return updated;
+    });
+  }, [closeInvestigationDrawer]);
+
   const resetGlobalFilters = () => {
     setFilterType('calendar');
     setYear(new Date().getFullYear());
     setMonth('');
     setQuarter('');
     setZoneIds([]);
+    setSearchQuery('');
+    setPaymentMethod('all');
+    setBookingStatus('all');
+    setTransactionType('all');
+    setRefundStatus('all');
+    setGatewayStatus('all');
+    setSettlementStatus('all');
   };
 
   const getMergedQuery = useCallback((localFilters = {}) => {
@@ -167,10 +240,17 @@ export const AdminFilterProvider = ({ children }) => {
     const query = {
       ...dates,
       ...(zoneIds.length > 0 && { zoneIds: zoneIds.join(',') }),
+      ...(searchQuery && { search: searchQuery, bookingId: searchQuery }),
+      ...(paymentMethod !== 'all' && { paymentMethod }),
+      ...(bookingStatus !== 'all' && { status: bookingStatus }),
+      ...(transactionType !== 'all' && { type: transactionType }),
+      ...(refundStatus !== 'all' && { refundStatus }),
+      ...(gatewayStatus !== 'all' && { gatewayStatus }),
+      ...(settlementStatus !== 'all' && { settlementStatus }),
       ...localFilters
     };
     return query;
-  }, [getComputedDateRange, zoneIds]);
+  }, [getComputedDateRange, zoneIds, searchQuery, paymentMethod, bookingStatus, transactionType, refundStatus, gatewayStatus, settlementStatus]);
 
   return (
     <AdminFilterContext.Provider
@@ -189,6 +269,25 @@ export const AdminFilterProvider = ({ children }) => {
         setZoneIds,
         zones,
         earliestYear,
+        searchQuery,
+        setSearchQuery,
+        paymentMethod,
+        setPaymentMethod,
+        bookingStatus,
+        setBookingStatus,
+        transactionType,
+        setTransactionType,
+        refundStatus,
+        setRefundStatus,
+        gatewayStatus,
+        setGatewayStatus,
+        settlementStatus,
+        setSettlementStatus,
+        drawerConfig,
+        drawerHistory,
+        openInvestigationDrawer,
+        closeInvestigationDrawer,
+        popDrawerHistory,
         getComputedDateRange,
         resetGlobalFilters,
         getMergedQuery
@@ -206,3 +305,4 @@ export const useAdminFilter = () => {
   }
   return context;
 };
+

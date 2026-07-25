@@ -20,8 +20,9 @@ import AdminFilterBar, { AdminLocalFilterBar } from '../../../components/AdminFi
 
 const AdminEarningReports = () => {
   const { API, _token, showToast } = useAuth();
-  const { getComputedDateRange, getMergedQuery, resetGlobalFilters } = useAdminFilter();
+  const { getComputedDateRange, getMergedQuery, resetGlobalFilters, openInvestigationDrawer } = useAdminFilter();
   const [loading, setLoading] = useState(false);
+
   const [activeReport, setActiveReport] = useState(null);
   const [dateRange, setDateRange] = useState({
     startDate: '',
@@ -268,8 +269,8 @@ const AdminEarningReports = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <AdminFilterBar />
       <div className="p-4 md:p-6 flex-1">
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">

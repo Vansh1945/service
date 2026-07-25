@@ -38,6 +38,17 @@ const AdminChatMonitor = lazy(() => import("../features/admin/chat/AdminChatMoni
 const ReferralManagement = lazy(() => import("../features/admin/marketing/ReferralManagement"));
 const SurgeManagement = lazy(() => import("../features/admin/services/SurgeManagement"));
 
+const FinanceDashboardPage = lazy(() => import("../features/admin/finance/FinanceDashboardPage"));
+const PaymentManagementPage = lazy(() => import("../features/admin/finance/PaymentManagementPage"));
+const CashPaymentsPage = lazy(() => import("../features/admin/finance/CashPaymentsPage"));
+const CustomerWalletsPage = lazy(() => import("../features/admin/finance/CustomerWalletsPage"));
+const ProviderWalletsPage = lazy(() => import("../features/admin/finance/ProviderWalletsPage"));
+const ProviderEarningsPage = lazy(() => import("../features/admin/finance/ProviderEarningsPage"));
+const SettlementsPage = lazy(() => import("../features/admin/finance/SettlementsPage"));
+const RazorpayManagementPage = lazy(() => import("../features/admin/finance/RazorpayManagementPage"));
+const FailedPaymentsPage = lazy(() => import("../features/admin/finance/FailedPaymentsPage"));
+const AuditLogsPage = lazy(() => import("../features/admin/finance/AuditLogsPage"));
+
 import { AdminFilterProvider } from "../context/AdminFilterContext";
 
 const AdminRoutes = () => {
@@ -75,7 +86,19 @@ const AdminRoutes = () => {
                             <Route path="compose-notification" element={<ComposeNotification />} />
                             <Route path="event-templates" element={<RuleBasedTemplates />} />
                             <Route path="broadcast-history" element={<BroadcastHistory />} />
+                            
+                            <Route path="finance-dashboard" element={<FinanceDashboardPage />} />
+                            <Route path="payments" element={<PaymentManagementPage />} />
                             <Route path="transactions" element={<AdminTransactions />} />
+                            <Route path="cash-payments" element={<CashPaymentsPage />} />
+                            <Route path="customer-wallets" element={<CustomerWalletsPage />} />
+                            <Route path="provider-wallets" element={<ProviderWalletsPage />} />
+                            <Route path="provider-earnings" element={<ProviderEarningsPage />} />
+                            <Route path="settlements" element={<SettlementsPage />} />
+                            <Route path="razorpay" element={<RazorpayManagementPage />} />
+                            <Route path="failed-payments" element={<FailedPaymentsPage />} />
+                            <Route path="audit-logs" element={<AuditLogsPage />} />
+
                             <Route path="fraud" element={<AdminFraud />} />
                             <Route path="system-logs" element={<SystemLogs />} />
                             <Route path="live-map" element={<LiveTrackingPage />} />

@@ -119,10 +119,8 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Reusable Premium Filter Bar */}
-      <AdminFilterBar onApply={() => fetchDashboardData()} />
-
       {/* LIVE COMMAND CENTER */}
+
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-900 text-white p-6 rounded-2xl border border-slate-700 shadow-xl mb-6 relative overflow-hidden">
         {/* Glow effect */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>

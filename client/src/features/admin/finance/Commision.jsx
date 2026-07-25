@@ -39,8 +39,10 @@ const AdminCommissionPage = () => {
     month,
     quarter,
     zoneIds,
-    getMergedQuery
+    getMergedQuery,
+    openInvestigationDrawer
   } = useAdminFilter();
+
 
   // Data states
   const [commissionRules, setCommissionRules] = useState([]);
@@ -682,10 +684,8 @@ const AdminCommissionPage = () => {
           </div>
         </div>
 
-        {/* Reusable Premium Filter Bar */}
-        <AdminFilterBar onApply={() => fetchCommissionRules(1, pagination.limit)} />
-
         {/* Content */}
+
         <div className="space-y-6">
           {/* Local Filters */}
           <div className="bg-white rounded-xl shadow-lg p-6 space-y-4">

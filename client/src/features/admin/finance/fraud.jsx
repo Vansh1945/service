@@ -48,9 +48,13 @@ const EmptyState = ({ icon: Icon, message, subMessage }) => (
   </tr>
 );
 
+import { useAdminFilter } from '../../../context/AdminFilterContext';
+
 const AdminFraud = () => {
   const { showToast } = useAuth();
+  const { openInvestigationDrawer } = useAdminFilter();
   const [activeTab, setActiveTab] = useState('ip');
+
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({
     ip: [],

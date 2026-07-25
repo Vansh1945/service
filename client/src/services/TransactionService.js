@@ -37,3 +37,36 @@ export const adminRetryVerify = (id) => {
 export const adminMarkPaid = (id, reason) => {
     return axiosInstance.post(`/transaction/admin/mark-paid/${id}`, { reason });
 };
+
+export const getFinanceOverview = () => {
+    return axiosInstance.get("/transaction/admin/finance-overview");
+};
+
+export const getCashLedger = (params) => {
+    return axiosInstance.get("/transaction/admin/cash-ledger", { params });
+};
+
+export const getCustomerWallets = (params) => {
+    return axiosInstance.get("/transaction/admin/wallets/customers", { params });
+};
+
+export const getProviderWallets = (params) => {
+    return axiosInstance.get("/transaction/admin/wallets/providers", { params });
+};
+
+export const getSettlements = (params) => {
+    return axiosInstance.get("/transaction/admin/settlements", { params });
+};
+
+export const getRazorpayLogs = (params) => {
+    return axiosInstance.get("/transaction/admin/razorpay/logs", { params });
+};
+
+export const getFailedPayments = (params) => {
+    return axiosInstance.get("/transaction/admin/failed-payments", { params });
+};
+
+export const getAuditLogs = (params) => {
+    return axiosInstance.get("/transaction/admin/audit-logs", { params });
+};
+
