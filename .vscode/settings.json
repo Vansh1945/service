@@ -3,5 +3,6 @@
         "Jalandhar",
         "systemsetting"
     ],
-    "css.lint.unknownAtRules": "ignore"
+    "css.lint.unknownAtRules": "ignore",
+    "git.decorations.enabled": false
 }
