@@ -6,7 +6,7 @@ import {
   FiPieChart, FiBriefcase, FiChevronRight, FiAlertTriangle
 } from 'react-icons/fi';
 import DashboardSkeleton from '../../../components/ui-skeletons/DashboardSkeleton';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';
 import { useSocket } from '../../../socket/SocketContext';
 import * as ProviderService from '../../../services/ProviderService';
@@ -282,7 +282,7 @@ const Dashboard = () => {
               <p className="text-neutral-500 text-xs sm:text-sm mt-1">Here's what's happening today.</p>
             </div>
           </div>
-          <div className="flex flex-row flex-nowrap items-center gap-1.5 sm:gap-3 self-start sm:self-center w-full sm:w-auto overflow-x-auto scrollbar-none whitespace-nowrap">
+          <div className="flex flex-row flex-nowrap items-center gap-1.5 sm:gap-3 self-start sm:self-center w-full sm:w-auto overflow-x-auto scrollbar-hide whitespace-nowrap">
             {/* Provider ID */}
             {profile?.providerId && (
               <span className="text-xs font-bold px-2.5 py-1 bg-neutral-50 text-neutral-600 rounded-full border border-neutral-200/60 shrink-0">
@@ -367,7 +367,7 @@ const Dashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <StatsCard
+          <StatCard
             to="/provider/earnings"
             title="Total Earnings"
             value={formatCurrency(totalEarnings)}
@@ -377,7 +377,7 @@ const Dashboard = () => {
             className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
-          <StatsCard
+          <StatCard
             to="/provider/earnings"
             title="Today's Earnings"
             value={formatCurrency(todaysEarnings)}
@@ -387,7 +387,7 @@ const Dashboard = () => {
             className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
-          <StatsCard
+          <StatCard
             to="/provider/earnings"
             title="Available Balance"
             value={formatCurrency(wallet?.currentBalance || 0)}
@@ -397,7 +397,7 @@ const Dashboard = () => {
             className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
-          <StatsCard
+          <StatCard
             title="Released Payouts"
             value={formatCurrency(wallet?.releasedPayouts || 0)}
             icon={FiCheckCircle}
@@ -406,7 +406,7 @@ const Dashboard = () => {
             className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
-          <StatsCard
+          <StatCard
             title="Refund Deductions"
             value={formatCurrency(wallet?.refundedDeductions || 0)}
             icon={FiTrendingUp}
@@ -415,7 +415,7 @@ const Dashboard = () => {
             className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 border-neutral-100 h-full"
           />
 
-          <StatsCard
+          <StatCard
             title="Completed"
             value={summary?.completedJobs || 0}
             icon={FiCheckCircle}
@@ -438,9 +438,9 @@ const Dashboard = () => {
               </div>
             </div>
             <span className={`text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full tracking-wider border shadow-sm ${performanceBadge === 'Platinum' ? 'bg-neutral-900 border-neutral-800 text-white' :
-                performanceBadge === 'Gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
-                  performanceBadge === 'Silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
-                    'bg-amber-900 border-amber-955 text-white'
+              performanceBadge === 'Gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
+                performanceBadge === 'Silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
+                  'bg-amber-900 border-amber-955 text-white'
               }`}>
               {performanceBadge} Partner
             </span>
@@ -659,9 +659,9 @@ const Dashboard = () => {
                           </span>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className={`px-2 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider border ${booking.status === 'completed' ? 'bg-success/5 text-success border-success/15' :
-                                booking.status === 'accepted' ? 'bg-info/5 text-info border-info/15' :
-                                  booking.status === 'pending' ? 'bg-warning/5 text-warning border-warning/15' :
-                                    'bg-neutral-100 text-neutral-500 border-neutral-200'
+                              booking.status === 'accepted' ? 'bg-info/5 text-info border-info/15' :
+                                booking.status === 'pending' ? 'bg-warning/5 text-warning border-warning/15' :
+                                  'bg-neutral-100 text-neutral-500 border-neutral-200'
                               }`}>
                               {booking.status === 'in-progress' ? 'In Progress' : booking.status}
                             </span>

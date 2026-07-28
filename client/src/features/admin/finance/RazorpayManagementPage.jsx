@@ -1,35 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { FiZap, FiCheckCircle, FiClock, FiXCircle, FiRefreshCw, FiEye, FiDownload } from 'react-icons/fi';
+import { FiZap, FiCheckCircle, FiClock, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import AdminFilterBar from '../../../components/AdminFilterBar';
+import { fmtDate } from '../../../utils/format';
+import usePagination from '../../../hooks/usePagination';
+import useDebounce from '../../../hooks/useDebounce';
 
 const RazorpayManagementPage = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+
+  const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const debouncedSearch = useDebounce(searchQuery, 500);
 
   const fetchRazorpayLogs = async () => {
     try {
       setLoading(true);
       setError(null);
       const params = getMergedQuery({
-        page,
-        limit: 10,
+        page: currentPage,
+        limit,
         paymentMethod: 'razorpay',
-        search: searchQuery
+        search: debouncedSearch
       });
       const res = await TransactionService.getAllTransactions(params);
       if (res.data?.success) {
-        setTransactions(res.data.data.transactions || res.data.data || []);
-        setTotalPages(res.data.data.totalPages || res.data.totalPages || 1);
+        const list = res.data.data.transactions || res.data.data || [];
+        setTransactions(list);
+        setPaginationData({
+          total: res.data.data.total || res.data.total || list.length,
+          pages: res.data.data.totalPages || res.data.totalPages || 1
+        });
       }
     } catch (err) {
       console.error("Razorpay logs fetch error:", err);
@@ -41,116 +49,181 @@ const RazorpayManagementPage = () => {
 
   useEffect(() => {
     fetchRazorpayLogs();
-  }, [page, searchQuery]);
+  }, [currentPage, limit, debouncedSearch]);
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+      {/* Header Banner */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center">
             <span className="p-2 bg-blue-50 text-blue-600 rounded-xl mr-3">
               <FiZap className="w-6 h-6" />
             </span>
-            Razorpay Gateway Management & Bank Settlement Logs
+            Razorpay Live Gateway Console
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Complete Razorpay Order IDs, Payment IDs, Gateway Fees, GST Taxes, and Automated Bank Settlement Reconciliation.
+          <p className="text-sm text-slate-500 mt-1">
+            Real-time gateway synchronization merging stored MongoDB business source of truth with official Razorpay gateway records.
           </p>
         </div>
-        <button 
+        <button
           onClick={fetchRazorpayLogs}
-          className="flex items-center text-xs bg-blue-50 text-blue-600 px-3.5 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors"
+          className="text-xs bg-blue-700 text-white px-4 py-2.5 rounded-xl hover:bg-blue-800 font-bold shadow-xs transition-all flex items-center gap-1.5 self-start md:self-auto"
         >
-          <FiRefreshCw className="mr-1.5" /> Sync Gateway Logs
+          <FiShield className="w-4 h-4" /> Refresh Gateway Logs
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-
+      {/* Exact 14-Column Razorpay Gateway Table */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-6"><TableSkeleton rows={5} columns={8} /></div>
+          <div className="overflow-x-auto p-6">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1400px]">
+              <tbody>
+                <TableSkeleton rows={6} cols={14} />
+              </tbody>
+            </table>
+          </div>
         ) : error ? (
-          <div className="p-6 text-center text-red-600 font-semibold text-sm">{error}</div>
+          <div className="p-6 text-center text-rose-600 font-semibold text-sm">{error}</div>
         ) : transactions.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 text-sm">
-            No online Razorpay transactions found in live database yet.
+          <div className="p-12 text-center text-slate-500 text-sm">
+            No Razorpay gateway transaction logs found in live database yet.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-600">
-              <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1400px]">
+              <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
-                  <th className="p-3.5">Gateway IDs</th>
-                  <th className="p-3.5">Booking & Customer</th>
-                  <th className="p-3.5">Captured Amount</th>
-                  <th className="p-3.5">Fee & Tax</th>
-                  <th className="p-3.5">Net Bank Settled</th>
-                  <th className="p-3.5">Settlement Status</th>
-                  <th className="p-3.5">Bank Reference / UTR</th>
-                  <th className="p-3.5 text-right">Actions</th>
+                  <th className="p-3">Payment ID</th>
+                  <th className="p-3">Order ID</th>
+                  <th className="p-3">Customer</th>
+                  <th className="p-3">Booking ID</th>
+                  <th className="p-3">Payment Method</th>
+                  <th className="p-3">Sub-Method</th>
+                  <th className="p-3">Bank</th>
+                  <th className="p-3">Captured Amount</th>
+                  <th className="p-3">Refund Amount</th>
+                  <th className="p-3">Settlement Status</th>
+                  <th className="p-3">Gateway Status</th>
+                  <th className="p-3">Payment Status</th>
+                  <th className="p-3">Created Date</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {transactions.map((txn) => {
                   const gross = txn.amount || 0;
-                  const fee = txn.gatewayFee || Math.round(gross * 0.02);
-                  const tax = txn.gatewayTax || Math.round(fee * 0.18);
-                  const netSettled = txn.netSettlementAmount || Math.max(0, gross - fee - tax);
-                  const settStatus = txn.settlementStatus || (txn.paymentStatus === 'success' || txn.paymentStatus === 'completed' ? 'settled' : 'processing');
-                  const utr = txn.bankReference || (txn.razorpayPaymentId ? `UTR_${txn.razorpayPaymentId.slice(-8).toUpperCase()}` : 'N/A');
+                  const razorpayResp = txn.razorpayResponse || {};
+                  const subMethod = razorpayResp.vpa ? 'UPI' : (razorpayResp.card ? `Card (${razorpayResp.card.network || 'Card'})` : (razorpayResp.bank ? `NetBanking (${razorpayResp.bank})` : (txn.paymentMethod || 'Online')));
+                  const bank = razorpayResp.bank || 'N/A';
+                  const refundAmt = txn.refundAmount || txn.booking?.refundAmount || 0;
+                  const gatewayStatus = razorpayResp.status || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'pending');
+                  const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Processing');
 
                   return (
-                    <tr key={txn._id} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-3.5">
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            onClick={() => openInvestigationDrawer('payment', txn.razorpayPaymentId || txn._id, txn)}
-                            className="font-mono text-xs font-bold text-emerald-700 hover:underline"
-                          >
-                            {txn.razorpayPaymentId || 'pay_Pending'}
-                          </button>
-                          <span className="font-mono text-[10px] text-gray-400">
-                            Order: {txn.razorpayOrderId || 'order_N/A'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
+                    <tr key={txn._id} className="hover:bg-blue-50/20 transition-colors">
+
+                      {/* 1. Payment ID */}
+                      <td className="p-3 font-mono font-bold text-blue-700">
                         <button
-                          onClick={() => openInvestigationDrawer('booking', txn.booking?.bookingId || txn.bookingId || txn.booking?._id, txn.booking)}
-                          className="hover:underline text-gray-900 font-bold text-xs"
+                          onClick={() => openInvestigationDrawer('razorpay', txn._id, txn)}
+                          className="hover:underline"
                         >
-                          {txn.booking?.bookingId || txn.bookingId || `#${txn._id.slice(-6)}`}
+                          {txn.razorpayPaymentId || txn.transactionId || `#${txn._id.slice(-6)}`}
                         </button>
-                        <div className="text-[11px] text-gray-500">
-                          {txn.user?.name || txn.customer?.name || 'Customer'}
-                        </div>
                       </td>
-                      <td className="p-3.5 font-bold text-gray-900">
-                        <PriceDisplay amount={gross} />
+
+                      {/* 2. Order ID */}
+                      <td className="p-3 font-mono text-slate-500">
+                        {txn.razorpayOrderId || 'order_N/A'}
                       </td>
-                      <td className="p-3.5 text-xs text-amber-700 font-semibold">
-                        <div>Fee: <PriceDisplay amount={fee} /></div>
-                        <div className="text-[10px] text-gray-400">GST: <PriceDisplay amount={tax} /></div>
+
+                      {/* 3. Customer */}
+                      <td className="p-3 font-bold text-slate-900">
+                        <button
+                          onClick={() => openInvestigationDrawer('customer', txn.user?._id || txn.user)}
+                          className="text-blue-700 hover:underline"
+                        >
+                          {txn.user?.name || 'Customer'}
+                        </button>
                       </td>
-                      <td className="p-3.5 font-black text-emerald-700">
-                        <PriceDisplay amount={netSettled} />
+
+                      {/* 4. Booking ID */}
+                      <td className="p-3 font-mono font-bold text-slate-900">
+                        <button
+                          onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking)}
+                          className="text-blue-600 hover:underline font-mono"
+                        >
+                          {txn.booking?.bookingId || txn.bookingId || 'N/A'}
+                        </button>
                       </td>
-                      <td className="p-3.5">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
-                          settStatus === 'settled' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
-                        }`}>
-                          <FiCheckCircle className="mr-1" /> {settStatus}
+
+                      {/* 5. Payment Method */}
+                      <td className="p-3 font-bold uppercase text-slate-700">
+                        {txn.paymentMethod || 'Razorpay'}
+                      </td>
+
+                      {/* 6. UPI / Card / NetBanking / Wallet / EMI */}
+                      <td className="p-3 font-semibold text-primary">
+                        <span className="inline-flex items-center px-2 py-0.5 bg-primary/10 text-primary rounded-md text-[11px] font-bold">
+                          {subMethod}
                         </span>
                       </td>
-                      <td className="p-3.5 text-xs font-mono text-gray-600">
-                        {utr}
+
+                      {/* 7. Bank */}
+                      <td className="p-3 text-slate-700 font-medium">{bank}</td>
+
+                      {/* 8. Captured Amount */}
+                      <td className="p-3 font-black text-slate-900 text-sm">
+                        <PriceDisplay amount={gross} />
                       </td>
-                      <td className="p-3.5 text-right">
+
+                      {/* 9. Refund Amount */}
+                      <td className="p-3 font-bold text-rose-600">
+                        <PriceDisplay amount={refundAmt} />
+                      </td>
+
+                      {/* 10. Settlement Status */}
+                      <td className="p-3 font-bold text-emerald-600">
+                        <span className="inline-flex items-center px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold uppercase">
+                          {settlementStatus}
+                        </span>
+                      </td>
+
+                      {/* 11. Gateway Status */}
+                      <td className="p-3 font-bold text-blue-600">
+                        <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-extrabold uppercase">
+                          {gatewayStatus}
+                        </span>
+                      </td>
+
+                      {/* 12. Payment Status */}
+                      <td className="p-3">
+                        {['success', 'completed'].includes(txn.paymentStatus) ? (
+                          <span className="inline-flex items-center px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold uppercase">
+                            <FiCheckCircle className="mr-1" /> SUCCESS
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-extrabold uppercase">
+                            <FiClock className="mr-1" /> PENDING
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 13. Created Date */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">
+                        {fmtDate(txn.createdAt)}
+                      </td>
+
+                      {/* 14. Actions */}
+                      <td className="p-3 text-right whitespace-nowrap">
                         <button
-                          onClick={() => openInvestigationDrawer('payment', txn._id, txn)}
-                          className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all"
+                          onClick={() => openInvestigationDrawer('razorpay', txn._id, txn)}
+                          className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
                         >
-                          <FiEye className="mr-1.5" /> Details
+                          <FiEye className="mr-1.5" /> View Details
                         </button>
                       </td>
                     </tr>
@@ -162,8 +235,14 @@ const RazorpayManagementPage = () => {
         )}
 
         {totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex justify-end">
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          <div className="border-t border-slate-100 flex justify-end">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              limit={limit}
+              onPageChange={onPageChange}
+            />
           </div>
         )}
       </div>

@@ -370,6 +370,32 @@ const getProviderApprovalLetter = async (req, res, next) => {
   }
 };
 
+const createManualRefund = async (req, res, next) => {
+  try {
+    await AdminService.createManualRefund(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.createManualRefund] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const approveRefundById = async (req, res, next) => {
+  try {
+    await AdminService.approveRefundById(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.approveRefundById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const rejectRefundById = async (req, res, next) => {
+  try {
+    await AdminService.rejectRefundById(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.rejectRefundById] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
 
 module.exports = {
   cancelBookingByAdmin,
@@ -398,6 +424,9 @@ module.exports = {
   getDashboardAnalytics,
   getAllRefunds,
   getRefundById,
+  createManualRefund,
+  approveRefundById,
+  rejectRefundById,
   retryRefund,
   processAdminRefund,
   rejectAdminRefund,

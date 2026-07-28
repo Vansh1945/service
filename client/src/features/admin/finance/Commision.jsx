@@ -16,16 +16,17 @@ import {
   Percent,
   Info,
   Globe,
-  Calendar} from 'lucide-react';
+  Calendar
+} from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format';
 import * as CommissionService from '../../../services/CommissionService';
 import * as AdminService from '../../../services/AdminService';
 import * as ZoneService from '../../../services/ZoneService';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import AdminFilterBar from '../../../components/AdminFilterBar';
 import HierarchicalZoneSelector from '../../../components/HierarchicalZoneSelector';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 const AdminCommissionPage = () => {
   const { API, _token, showToast } = useAuth();
@@ -223,19 +224,13 @@ const AdminCommissionPage = () => {
         setCommissionRules(data.data);
         setPagination(data.pagination);
 
-        const activeCount = data.data.filter(rule => rule.isActive).length;
-        setStats(prev => ({
-          ...prev,
-          activeRules: activeCount,
-          totalRules: data.pagination.total
-        }));
-
-        if (data.data.length > 0) {
-          const percentageRules = data.data.filter(rule => rule.type === 'percentage');
-          const avgRate = percentageRules.length > 0
-            ? percentageRules.reduce((sum, rule) => sum + rule.value, 0) / percentageRules.length
-            : 0;
-          setStats(prev => ({ ...prev, avgCommissionRate: avgRate.toFixed(1) }));
+        if (data.stats) {
+          setStats(prev => ({
+            ...prev,
+            activeRules: data.stats.activeRules || 0,
+            totalRules: data.stats.totalRules || 0,
+            avgCommissionRate: data.stats.avgCommissionRate || '0.0'
+          }));
         }
       }
     } catch (error) {
@@ -660,21 +655,21 @@ const AdminCommissionPage = () => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
-            <StatsCard
+            <StatCard
               title="Active Rules"
               value={stats.activeRules}
               icon={CheckCircle}
               iconBg="bg-green-100"
               iconColor="text-green-600"
             />
-            <StatsCard
+            <StatCard
               title="Total Providers"
               value={stats.totalProviders}
               icon={Users}
               iconBg="bg-blue-100"
               iconColor="text-blue-600"
             />
-            <StatsCard
+            <StatCard
               title="Avg Commission Rate"
               value={`${stats.avgCommissionRate}%`}
               icon={Percent}
@@ -825,11 +820,10 @@ const AdminCommissionPage = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                            rule.isActive
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${rule.isActive
                               ? 'bg-green-50 text-green-800 border-green-200'
                               : 'bg-red-50 text-red-800 border-red-200'
-                          }`}>{rule.isActive ? 'Active' : 'Inactive'}</span>
+                            }`}>{rule.isActive ? 'Active' : 'Inactive'}</span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(rule.createdAt)}
@@ -1203,7 +1197,7 @@ const AdminCommissionPage = () => {
                 <div className="relative bg-slate-50/50 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm overflow-hidden">
                   <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-r border-dashed border-primary/30" />
                   <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-l border-dashed border-primary/30" />
-                  
+
                   <div className="flex flex-col items-center sm:items-start text-center sm:text-left pl-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2.5">
                       {viewingRule.isActive ? 'Active Commission Rule' : 'Inactive Commission Rule'}
@@ -1304,12 +1298,11 @@ const AdminCommissionPage = () => {
                           {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
                         </span>
                         {viewingRule.performanceScore && (
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border shadow-xs ${
-                            viewingRule.performanceScore === 'Platinum' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
-                            viewingRule.performanceScore === 'Gold' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
-                            viewingRule.performanceScore === 'Silver' ? 'bg-slate-100 text-slate-700 border-slate-250/50' :
-                            'bg-orange-50 text-orange-700 border-orange-200/60'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border shadow-xs ${viewingRule.performanceScore === 'Platinum' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
+                              viewingRule.performanceScore === 'Gold' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
+                                viewingRule.performanceScore === 'Silver' ? 'bg-slate-100 text-slate-700 border-slate-250/50' :
+                                  'bg-orange-50 text-orange-700 border-orange-200/60'
+                            }`}>
                             🏆 {viewingRule.performanceScore} Tier
                           </span>
                         )}

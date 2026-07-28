@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useSearchParams } from 'react-router-dom';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import * as ComplaintService from '../../../services/ComplaintService';
 import {
   FiRefreshCw, FiEye, FiCheckCircle, FiAlertTriangle,
@@ -10,7 +10,9 @@ import {
   FiMail, FiMessageSquare,
   FiInbox, FiShield
 } from 'react-icons/fi';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
+import SectionHeader from '../../../components/ui/SectionHeader';
+import ImagePreviewModal from '../../../components/modals/ImagePreviewModal';
 import { formatDate, formatDateTime } from '../../../utils/format';
 import CDNImage from '../../../components/CDNImage';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
@@ -512,8 +514,8 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     <FiBarChart2 className="text-blue-600" size={16} />
                     <span className="text-xs font-bold text-gray-500 uppercase">AI Suggested Action:</span>
                     <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${['approve_refund', 'refund'].includes(complaint.recommendation.action) ? 'bg-green-100 text-green-700' :
-                        ['reject_refund', 'reject'].includes(complaint.recommendation.action) ? 'bg-red-100 text-red-700' :
-                          'bg-amber-100 text-amber-700'
+                      ['reject_refund', 'reject'].includes(complaint.recommendation.action) ? 'bg-red-100 text-red-700' :
+                        'bg-amber-100 text-amber-700'
                       }`}>
                       {complaint.recommendation.action.replace(/_/g, ' ')}
                     </span>
@@ -1190,6 +1192,7 @@ const ComplaintsPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   const [filters, setFilters] = useState({
     status: '', category: '', search: urlSearch, startDate: '',
@@ -1236,6 +1239,22 @@ const ComplaintsPage = () => {
     } catch { showToast('Error fetching complaints', 'error'); }
     finally { if (!silent) setLoading(false); }
   };
+
+  useEffect(() => {
+    if (searchParams.get('openDetail') === 'true' && complaints.length > 0 && !showModal) {
+      const searchVal = searchParams.get('search') || searchParams.get('entityId') || searchParams.get('complaintId');
+      const target = complaints.find(c =>
+        c.complaintId === searchVal ||
+        c._id === searchVal ||
+        c.bookingId === searchVal ||
+        c.booking?.bookingId === searchVal
+      ) || complaints[0];
+      if (target) {
+        setSelectedComplaint(target);
+        setShowModal(true);
+      }
+    }
+  }, [searchParams, complaints, showModal]);
 
   // Silent Refresh on window focus and online status
   useEffect(() => {
@@ -1335,48 +1354,43 @@ const ComplaintsPage = () => {
     <div className="p-4 md:p-6 min-h-screen bg-gray-50/50">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* ── Page Header ── */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-secondary font-poppins flex items-center gap-3">
-              <span className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                <FiMessageSquare className="text-primary" size={20} />
-              </span>
-              Complaint Management
-            </h1>
-            <p className="text-sm text-gray-400 mt-1 ml-13 pl-0.5">Monitor and manage all customer &amp; provider complaints</p>
-          </div>
-          <button
-            onClick={fetchComplaints}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-secondary hover:text-primary border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-all font-semibold text-sm cursor-pointer shrink-0"
-          >
-            <FiRefreshCw size={14} /> Refresh
-          </button>
-        </div>
+        <SectionHeader
+          title="Complaint Management"
+          subtitle="Monitor and manage all customer & provider complaints"
+          action={
+            <button
+              onClick={fetchComplaints}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-secondary hover:text-primary border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-all font-semibold text-sm cursor-pointer shrink-0"
+            >
+              <FiRefreshCw size={14} /> Refresh
+            </button>
+          }
+        />
 
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard
+          <StatCard
             title="Total Complaints"
             value={pagination.total}
             icon={FiBarChart2}
             iconBg="bg-primary bg-opacity-10"
             iconColor="text-primary"
           />
-          <StatsCard
+          <StatCard
             title="Customer Complaints"
             value={customerCount}
             icon={FiUser}
             iconBg="bg-blue-500 bg-opacity-10"
             iconColor="text-blue-600"
           />
-          <StatsCard
+          <StatCard
             title="Provider Complaints"
             value={providerCount}
             icon={FiTool}
             iconBg="bg-purple-500 bg-opacity-10"
             iconColor="text-purple-600"
           />
-          <StatsCard
+          <StatCard
             title="Pending"
             value={pendingCount}
             icon={FiClock}
@@ -1552,8 +1566,14 @@ const ComplaintsPage = () => {
           onClose={() => setShowModal(false)}
           onUpdateStatus={updateComplaintStatus}
           onResolve={resolveComplaint}
+          onPreviewImage={(url) => setPreviewImage(url)}
         />
       )}
+      <ImagePreviewModal
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        imageUrl={previewImage}
+      />
     </div>
   );
 };

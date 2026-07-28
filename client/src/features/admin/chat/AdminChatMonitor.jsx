@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime } from '../../../utils/format';
 import CDNImage from '../../../components/CDNImage';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import AdminSearchBar from '../../../components/AdminSearchBar';
 import { getQuickReplies } from '../../../components/chat/quickReplies';
 
@@ -212,20 +212,20 @@ const AdminChatMonitor = () => {
     if (e) e.preventDefault();
     const text = (textToSend || newMessage).trim();
     if (!text || !selectedRoom?._id) return;
- 
-     try {
+
+    try {
       if (!textToSend) setNewMessage('');
- 
-       await axiosInstance.post('/chat/send', {
-         roomId: selectedRoom._id,
-         messageType: 'text',
-         content: text
-       });
- 
-     } catch (err) {
-       console.error('Error sending administrative message:', err);
-     }
-   };
+
+      await axiosInstance.post('/chat/send', {
+        roomId: selectedRoom._id,
+        messageType: 'text',
+        content: text
+      });
+
+    } catch (err) {
+      console.error('Error sending administrative message:', err);
+    }
+  };
 
   // 7. Warn Provider Mock Action
   const handleWarnProvider = () => {
@@ -362,21 +362,21 @@ const AdminChatMonitor = () => {
 
       {/* 1. TOP ANALYTICS TILES */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard
+        <StatCard
           title="Total Active Chats"
           value={activeChats}
           icon={MessageSquare}
           iconBg="bg-primary/10"
           iconColor="text-primary"
         />
-        <StatsCard
+        <StatCard
           title="Unresolved Complaints"
           value={complaintsCount}
           icon={ShieldAlert}
           iconBg="bg-red-50"
           iconColor="text-red-600"
         />
-        <StatsCard
+        <StatCard
           title="Admin Unread"
           value={totalUnread}
           icon={Inbox}
@@ -384,7 +384,7 @@ const AdminChatMonitor = () => {
           iconColor={totalUnread > 0 ? "text-amber-600" : "text-gray-500"}
           className={totalUnread > 0 ? "animate-pulse" : ""}
         />
-        <StatsCard
+        <StatCard
           title="Interventions Injected"
           value={interventionsCount}
           icon={Award}
@@ -418,7 +418,7 @@ const AdminChatMonitor = () => {
             />
 
             {/* Sleek Category Filter Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-none">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-hide">
               {[
                 { id: 'all', label: 'All' },
                 { id: 'customer_admin', label: 'Clients' },

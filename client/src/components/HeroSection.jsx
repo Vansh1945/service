@@ -7,7 +7,7 @@ import "swiper/css";
 import "swiper/css/pagination";
 
 import ServiceImg from "../assets/ServiceImg.png";
-import LoadingSpinner from "./ui-skeletons/Loader";
+import LoadingSpinner from "./ui/Loader";
 import { getBanners } from "../services/SystemService";
 
 const HeroSection = ({ noMargin = false }) => {

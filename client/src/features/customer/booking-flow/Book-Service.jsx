@@ -6,7 +6,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle } from 'lucide-react';
 import AddressSelector from '../../../components/AddressSelector';
-import Loader from '../../../components/ui-skeletons/Loader';
+import Loader from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
 import { getPublicServiceById } from '../../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../../services/CouponService';

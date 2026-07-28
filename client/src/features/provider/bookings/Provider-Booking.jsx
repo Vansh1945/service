@@ -14,8 +14,9 @@ import {
 } from 'lucide-react';
 import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSkeleton';
 import * as BookingService from '../../../services/BookingService';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../../utils/format';
+import { getStatusColor } from '../../../utils/status';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { isChatVisible, formatAddress, calculateNetAmount } from '../../../utils/providerHelpers';
 import * as ComplaintService from '../../../services/ComplaintService';
@@ -753,27 +754,8 @@ const ProviderBooking = () => {
   // ── Formatters ───────────────────────────────────────────────────────────
 
 
-  const getStatusColor = useCallback((status) => {
-    const map = {
-      pending: 'bg-accent/10 text-accent border border-accent/20',
-      searchingprovider: 'bg-accent/10 text-accent border border-accent/20',
-      offered: 'bg-accent/10 text-accent border border-accent/20',
-      assigned: 'bg-primary/10 text-primary border border-primary/20',
-      accepted: 'bg-primary/10 text-primary border border-primary/20',
-      ontheway: 'bg-secondary/10 text-secondary border border-secondary/20',
-      arrived: 'bg-secondary/10 text-secondary border border-secondary/20',
-      started: 'bg-secondary/10 text-secondary border border-secondary/20',
-      inprogress: 'bg-secondary/10 text-secondary border border-secondary/20',
-      completed: 'bg-primary/15 text-primary border border-primary/25',
-      cancelled: 'bg-red-50 text-red-600 border border-red-200',
-      rejected: 'bg-red-50 text-red-600 border border-red-200',
-      expired: 'bg-red-50 text-red-600 border border-red-200',
-      reassigned: 'bg-accent/10 text-accent border border-accent/20',
-      refunded: 'bg-red-50 text-red-600 border border-red-200'
-    };
-    const key = status?.toLowerCase().replace(/[^a-z]/g, '') || 'pending';
-    return map[key] || map[status?.toLowerCase()] || 'bg-gray-100 text-secondary/70 border border-gray-200';
-  }, []);
+  const getStatusColorCallback = useCallback((status) => getStatusColor(status, 'booking'), []);
+  const getStatusColor = getStatusColorCallback;
 
   const getStatusIcon = useCallback((status) => {
     const map = {
@@ -1355,7 +1337,7 @@ const ProviderBooking = () => {
               </div>
 
               {/* Tabs Selector Row - instant loaded */}
-              <div className="flex border-b border-gray-200 mt-2 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div className="flex border-b border-gray-200 mt-2 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {selectedBookingTabs.map((tab) => (
                   <button
                     key={tab.id}

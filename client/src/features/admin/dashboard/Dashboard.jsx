@@ -14,16 +14,9 @@ import * as AdminService from '../../../services/AdminService';
 import { formatDate, formatCurrency } from '../../../utils/format';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import AdminFilterBar from '../../../components/AdminFilterBar';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 // Pure helpers at module scope — created once, never re-allocated
-
-const STATUS_COLORS = {
-  completed: '#10B981',
-  confirmed: '#F59E0B',
-  pending: '#6B7280',
-  cancelled: '#EF4444'
-};
 
 const AdminDashboard = () => {
   const { user, API } = useAuth();
@@ -247,7 +240,7 @@ const AdminDashboard = () => {
         </div>
       </div>      {/* Core Non-Financial Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-fade-in">
-        <StatsCard
+        <StatCard
           title="Total Bookings"
           value={analytics?.bookingStats?.total || 0}
           icon={FiCalendar}
@@ -256,7 +249,7 @@ const AdminDashboard = () => {
           subtext={`Total vs ${analytics?.bookingStats?.completed || 0} Done. Filter: ${filters.period}`}
         />
 
-        <StatsCard
+        <StatCard
           title="Booking Status Breakdown"
           icon={FiPieChart}
           iconBg="bg-purple-50"
@@ -283,7 +276,7 @@ const AdminDashboard = () => {
           }
         />
 
-        <StatsCard
+        <StatCard
           title="Customer Growth"
           value={`+${analytics?.customerStats?.new || 0}`}
           icon={FiUsers}
@@ -309,7 +302,7 @@ const AdminDashboard = () => {
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6 animate-fade-in">
         {/* Gross Billed */}
-        <StatsCard
+        <StatCard
           title="Gross Billed"
           value={formatCurrency(analytics?.revenueStats?.grossRevenue || analytics?.revenueStats?.totalRevenue || 0)}
           icon={FiDollarSign}
@@ -319,7 +312,7 @@ const AdminDashboard = () => {
         />
 
         {/* Net Revenue */}
-        <StatsCard
+        <StatCard
           title="Net Revenue"
           value={<span className="text-green-600">{formatCurrency(analytics?.revenueStats?.netRevenue || analytics?.revenueStats?.totalRevenue || 0)}</span>}
           icon={FiTrendingUp}
@@ -329,7 +322,7 @@ const AdminDashboard = () => {
         />
 
         {/* Commission */}
-        <StatsCard
+        <StatCard
           title="Commission"
           value={<span className="text-primary">{formatCurrency(analytics?.revenueStats?.netEarnings || analytics?.revenueStats?.platformCommission || 0)}</span>}
           icon={FiPieChart}
@@ -339,7 +332,7 @@ const AdminDashboard = () => {
         />
 
         {/* Surge Revenue */}
-        <StatsCard
+        <StatCard
           title="Surge Revenue"
           value={<span className="text-orange-655">{formatCurrency(analytics?.revenueStats?.surgeRevenue || 0)}</span>}
           icon={FiTrendingUp}
@@ -349,7 +342,7 @@ const AdminDashboard = () => {
         />
 
         {/* Platform Fee */}
-        <StatsCard
+        <StatCard
           title="Platform Fee"
           value={<span className="text-indigo-650">{formatCurrency(analytics?.revenueStats?.platformFeeRevenue || 0)}</span>}
           icon={FiActivity}
@@ -359,7 +352,7 @@ const AdminDashboard = () => {
         />
 
         {/* Admin Earnings */}
-        <StatsCard
+        <StatCard
           title="Admin Earnings"
           value={<span className="text-teal-600 font-black">{formatCurrency((analytics?.revenueStats?.netEarnings || 0) + (analytics?.revenueStats?.surgeSplits?.companySurgeShare || 0) || analytics?.totalAdminEarnings || 0)}</span>}
           icon={FiDollarSign}

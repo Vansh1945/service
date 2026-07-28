@@ -10,8 +10,8 @@ import * as ProviderService from '../../../services/ProviderService';
 import { formatDate, formatCurrency, formatTime } from '../../../utils/format';
 import { getStatusConfig } from '../../../utils/providerHelpers';
 import DashboardSkeleton from '../../../components/ui-skeletons/DashboardSkeleton';
-import StatsCard from '../../../components/ui/StatsCard';
-import Pagination from '../../../components/Pagination';
+import StatCard from '../../../components/ui/StatCard';
+import Pagination from '../../../components/ui/Pagination';
 import usePagination from '../../../hooks/usePagination';
 
 // ── Shared UI Badge ──────────────────────────────────────────────────────────
@@ -249,12 +249,12 @@ const ProviderEarningsDashboard = () => {
       let errMsg = 'Download failed';
       if (err.response?.data instanceof Blob) {
         try {
-           const text = await err.response.data.text();
-           const errorJson = JSON.parse(text);
-           errMsg = errorJson.message || errorJson.error || errMsg;
-         } catch {
-           return;
-         }
+          const text = await err.response.data.text();
+          const errorJson = JSON.parse(text);
+          errMsg = errorJson.message || errorJson.error || errMsg;
+        } catch {
+          return;
+        }
       } else if (err.response?.data?.error) {
         errMsg = err.response.data.error;
       } else if (err.response?.data?.message) {
@@ -389,7 +389,7 @@ const ProviderEarningsDashboard = () => {
             { title: 'Processing', val: summary.totalPendingWithdrawals, iconBg: 'bg-warning/10', iconColor: 'text-warning', icon: Clock },
             { title: 'Held Amount', val: summary.heldAmount, iconBg: 'bg-danger/10', iconColor: 'text-danger', icon: Lock }
           ].map((card, i) => (
-            <StatsCard
+            <StatCard
               key={i}
               title={card.title}
               value={formatCurrency(card.val)}

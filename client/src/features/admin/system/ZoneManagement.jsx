@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import * as BookingService from '../../../services/BookingService';
 import * as ZoneService from '../../../services/ZoneService';
 import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents, LayersControl, FeatureGroup } from 'react-leaflet';
@@ -1232,7 +1232,7 @@ const ZoneManagement = () => {
 
       {/* Analytics Counter Header */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">
-        <StatsCard
+        <StatCard
           title="Total Zones"
           value={stats.totalZones}
           icon={Layers}
@@ -1242,7 +1242,7 @@ const ZoneManagement = () => {
           className="border border-gray-250 hover:border-primary/40 shadow-sm"
         />
 
-        <StatsCard
+        <StatCard
           title="Active Zones"
           value={stats.activeZones}
           icon={Compass}
@@ -1252,7 +1252,7 @@ const ZoneManagement = () => {
           className="border border-gray-250 hover:border-primary/40 shadow-sm"
         />
 
-        <StatsCard
+        <StatCard
           title="Total Providers"
           value={stats.totalProviders}
           icon={Users}
@@ -1262,7 +1262,7 @@ const ZoneManagement = () => {
           className="border border-gray-250 hover:border-primary/40 shadow-sm"
         />
 
-        <StatsCard
+        <StatCard
           title="Zone Coverage %"
           value={`${stats.coverage}%`}
           icon={Activity}
@@ -1355,9 +1355,9 @@ const ZoneManagement = () => {
                         ℹ️
                         <span className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block w-56 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
                           <strong className="text-primary block mb-1 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
-                          • <strong>City:</strong> Pure City/State boundary (Bada level).<br/>
-                          • <strong>Service:</strong> Category-wise dispatch level.<br/>
-                          • <strong>Local:</strong> Sectors aur localities ke liye.<br/>
+                          • <strong>City:</strong> Pure City/State boundary (Bada level).<br />
+                          • <strong>Service:</strong> Category-wise dispatch level.<br />
+                          • <strong>Local:</strong> Sectors aur localities ke liye.<br />
                           • <strong>Micro:</strong> Hyper-local building/galiyon ke liye.
                         </span>
                       </span>
@@ -1449,9 +1449,9 @@ const ZoneManagement = () => {
                         ℹ️
                         <span className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
                           <strong className="text-primary block mb-0.5 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
-                          • City: <strong>0</strong> (unlimited) ya 200+<br/>
-                          • Service: <strong>50 - 150</strong> providers<br/>
-                          • Local: <strong>20 - 50</strong> providers<br/>
+                          • City: <strong>0</strong> (unlimited) ya 200+<br />
+                          • Service: <strong>50 - 150</strong> providers<br />
+                          • Local: <strong>20 - 50</strong> providers<br />
                           • Micro: <strong>5 - 15</strong> providers
                         </span>
                       </span>
@@ -1487,9 +1487,9 @@ const ZoneManagement = () => {
                         ℹ️
                         <span className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
                           <strong className="text-primary block mb-0.5 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
-                          • City: <strong>15 - 30 KM</strong><br/>
-                          • Service: <strong>5 - 10 KM</strong><br/>
-                          • Local: <strong>2 - 5 KM</strong><br/>
+                          • City: <strong>15 - 30 KM</strong><br />
+                          • Service: <strong>5 - 10 KM</strong><br />
+                          • Local: <strong>2 - 5 KM</strong><br />
                           • Micro: <strong>0.5 - 2 KM</strong>
                         </span>
                       </span>
@@ -1672,16 +1672,15 @@ const ZoneManagement = () => {
                           {zone.zoneLevel || 'city'}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center space-x-1 shrink-0">
                         <button
                           onClick={() => handleToggleStatus(zone.id, zone.status)}
                           title={zone.status === 'active' ? 'Deactivate' : 'Activate'}
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${
-                            zone.status === 'active'
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${zone.status === 'active'
                               ? 'bg-success-light border-success/30 text-success'
                               : 'bg-neutral-55 border-neutral-200 text-neutral-500'
-                          }`}
+                            }`}
                         >
                           {zone.status === 'active' ? 'Active' : 'Disabled'}
                         </button>
@@ -1708,9 +1707,8 @@ const ZoneManagement = () => {
                       <span className="text-neutral-300">•</span>
                       <span>{zone.serviceRadius} km Radius</span>
                       <span className="text-neutral-300">•</span>
-                      <span className={`font-semibold ${
-                        zone.priority === 'high' ? 'text-danger' : zone.priority === 'medium' ? 'text-warning' : 'text-success'
-                      }`}>{zone.priority} Priority</span>
+                      <span className={`font-semibold ${zone.priority === 'high' ? 'text-danger' : zone.priority === 'medium' ? 'text-warning' : 'text-success'
+                        }`}>{zone.priority} Priority</span>
                       {zone.parentZone && (
                         <>
                           <span className="text-neutral-300">•</span>

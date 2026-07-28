@@ -4,15 +4,15 @@ import {
     ChevronLeft, ChevronRight, TrendingUp, Clock, Filter, ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../../../context/auth';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import * as FeedbackService from '../../../services/FeedbackService';
 import { formatDate } from '../../../utils/format';
 import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSkeleton';
 import usePagination from '../../../hooks/usePagination';
 import { useNavigate } from 'react-router-dom';
-import ErrorState from '../../../components/Error';
+import ErrorState from '../../../components/ui/Error';
 import Rating from '../../../components/Rating';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 // Hoisted Components
 const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab }) => {
@@ -265,28 +265,28 @@ const ProviderFeedback = () => {
             <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatsCard
+                    <StatCard
                         title="Total Reviews"
                         value={ratingsStats.totalReviews}
                         icon={MessageSquare}
                         iconBg="bg-primary/10"
                         iconColor="text-primary"
                     />
-                    <StatsCard
+                    <StatCard
                         title="Avg Rating"
                         value={ratingsStats.overallRating.toFixed(1)}
                         icon={Star}
                         iconBg="bg-accent/10"
                         iconColor="text-accent"
                     />
-                    <StatsCard
+                    <StatCard
                         title="This Month"
                         value={ratingsStats.thisMonthReviews}
                         icon={Calendar}
                         iconBg="bg-warning/10"
                         iconColor="text-warning"
                     />
-                    <StatsCard
+                    <StatCard
                         title="5-Star Ratio"
                         value={`${ratingsStats.totalReviews > 0 ? Math.round((ratingsStats.ratingBreakdown[5] / ratingsStats.totalReviews) * 100) : 0}%`}
                         icon={TrendingUp}

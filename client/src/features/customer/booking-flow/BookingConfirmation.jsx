@@ -12,9 +12,9 @@ import { getBooking, updateBookingPayment, payBooking } from '../../../services/
 import axiosInstance from '../../../api/axiosInstance';
 import * as TransactionService from '../../../services/TransactionService';
 import * as CustomerService from '../../../services/CustomerService';
-import Loader from '../../../components/ui-skeletons/Loader';
+import Loader from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
-import ErrorState from '../../../components/Error';
+import ErrorState from '../../../components/ui/Error';
 import { formatDate, formatTime } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
 import PwaInstallBanner from '../../../components/PwaInstallBanner';

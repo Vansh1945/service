@@ -4,6 +4,8 @@ const User = require('../user/user-model');
 const Provider = require('../provider/provider-model');
 const Service = require('../catalog/service-model');
 const CommissionRule = require('./commission-rule-model');
+const Refund = require('./refund-model');
+const PaymentRecord = require('./payment-record-model');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
@@ -849,6 +851,190 @@ const getTransactionById = async (req, res, next) => {
 };
 
 /**
+ * Get enriched payment details for Payment Management modal.
+ * Fetches: transaction + booking (with all amount breakup fields) + refund + complaint + related transactions.
+ * Does NOT fetch Razorpay live data on this call — that is done lazily via getUnifiedEntityDetails when the Gateway tab is opened.
+ * All financial calculations come from booking fields and transaction ledger — never from React.
+ */
+const getAdminPaymentDetails = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Payment/Transaction ID is required' });
+    }
+
+    // Find transaction by MongoDB _id, razorpayPaymentId, or transactionId
+    const query = mongoose.Types.ObjectId.isValid(id)
+      ? { _id: id }
+      : { $or: [{ transactionId: id }, { razorpayPaymentId: id }] };
+
+    const txn = await Transaction.findOne(query)
+      .populate('user', 'name email phone wallet customerId')
+      .populate('provider', 'name email phone providerId wallet earnings')
+      .populate({
+        path: 'booking',
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings walletUsed onlinePaid cashToPay paymentStatus paymentMethod date time address notes refundStatus refundAmount cancellationProgress cancelledAt cancelledBy cancellationReason complaintId disputeStatus adminRemark confirmedBooking paidAmount paymentDate statusHistory',
+        populate: [
+          { path: 'services.service', select: 'title price category' },
+          { path: 'commissionRule', select: 'name rate type' },
+          { path: 'customer', select: 'name email phone' },
+          { path: 'provider', select: 'name email phone providerId' },
+          { path: 'complaint', select: 'complaintId status reason resolution createdAt updatedAt' }
+        ]
+      })
+      .lean();
+
+    if (!txn) {
+      return res.status(404).json({ success: false, message: 'Payment record not found' });
+    }
+
+    const booking = txn.booking;
+
+    // ── Payment Breakup (All from Booking fields — no React calculation) ──────────
+    const totalAmount = booking?.totalAmount || 0;
+    const walletPaid = booking?.walletUsed || 0;
+    const onlinePaid = booking?.onlinePaid || txn.amount || 0;
+    const cashPaid = booking?.cashToPay || 0;
+    const finalPaid = walletPaid + onlinePaid + cashPaid;
+    const discount = booking?.totalDiscount || 0;
+    const subtotal = booking?.subtotal || 0;
+    const commissionAmount = booking?.commissionAmount || txn.commission || 0;
+    const providerEarnings = booking?.providerEarnings || txn.providerEarning || 0;
+
+    // ── Determine payment type ────────────────────────────────────────────────────
+    const paymentMethod = (txn.paymentMethod || booking?.paymentMethod || 'online').toLowerCase();
+    let paymentType = 'online';
+    if (paymentMethod === 'mixed') paymentType = 'mixed';
+    else if (paymentMethod === 'wallet') paymentType = 'wallet';
+    else if (paymentMethod === 'cash' || paymentMethod === 'cod') paymentType = 'cash';
+
+    // ── Razorpay method (from stored response — no live call) ─────────────────────
+    const razorpayStoredResponse = txn.razorpayResponse || null;
+    const gatewayMethod = razorpayStoredResponse?.method || txn.paymentMethod || null;
+    const upiVpa = razorpayStoredResponse?.vpa || null;
+    const bank = razorpayStoredResponse?.bank || null;
+    const card = razorpayStoredResponse?.card || null;
+    const walletGateway = razorpayStoredResponse?.wallet || null;
+
+    // ── Fetch related transactions for the same booking (ledger) ──────────────────
+    let ledgerEntries = [];
+    if (booking?._id) {
+      ledgerEntries = await Transaction.find({ booking: booking._id })
+        .select('transactionId type ledgerType entryType amount paymentMethod paymentStatus description balanceBefore balanceAfter createdAt updatedAt razorpayPaymentId razorpayOrderId')
+        .sort({ createdAt: 1 })
+        .lean();
+    }
+
+    // ── Fetch refund linked to this booking ────────────────────────────────────────
+    let refund = null;
+    if (booking?._id) {
+      const Refund = require('./refund-model');
+      refund = await Refund.findOne({
+        $or: [{ bookingId: booking._id }, { transactionId: txn._id }]
+      })
+        .populate('approvedBy', 'name email')
+        .lean();
+    }
+
+    // ── Fetch complaint linked to booking ──────────────────────────────────────────
+    let complaint = null;
+    if (booking?.complaintId || booking?.complaint) {
+      const Complaint = require('../complaint/complaint-model');
+      complaint = await Complaint.findById(booking.complaintId || booking.complaint)
+        .select('complaintId status reason resolution createdAt updatedAt raisedBy')
+        .lean();
+    }
+
+    // ── Build settlement info from transaction ─────────────────────────────────────
+    const settlement = {
+      settlementStatus: txn.settlementStatus || 'settled',
+      settlementAmount: txn.settlementAmount || txn.amount || 0,
+      settlementDate: txn.settlementDate || txn.updatedAt || null,
+      gatewayFee: txn.gatewayFee || 0,
+      gatewayTax: txn.gatewayTax || 0,
+      netSettlementAmount: txn.netSettlementAmount || 0,
+      razorpaySettlementId: txn.razorpaySettlementId || null,
+      bankReference: txn.bankReference || null,
+      commissionAmount,
+      providerEarnings,
+      providerPayoutStatus: txn.provider ? 'pending' : null
+    };
+
+    // ── Build audit info ──────────────────────────────────────────────────────────
+    const auditTimeline = [
+      { label: 'Payment Initiated', timestamp: txn.createdAt, status: 'done' },
+      ...(txn.paymentStatus === 'success' || txn.paymentStatus === 'completed' ? [{ label: 'Payment Captured', timestamp: txn.updatedAt, status: 'done' }] : []),
+      ...(txn.paymentStatus === 'failed' ? [{ label: 'Payment Failed', timestamp: txn.updatedAt, status: 'failed' }] : []),
+      ...(refund ? [{ label: 'Refund Initiated', timestamp: refund.createdAt, status: 'done' }] : []),
+      ...(refund?.completedAt ? [{ label: 'Refund Completed', timestamp: refund.completedAt, status: 'done' }] : [])
+    ];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        // Core transaction
+        transactionId: txn.transactionId || txn._id,
+        _id: txn._id,
+        razorpayPaymentId: txn.razorpayPaymentId || null,
+        razorpayOrderId: txn.razorpayOrderId || null,
+        razorpaySignature: txn.razorpaySignature || null,
+        paymentStatus: txn.paymentStatus,
+        captureStatus: txn.paymentStatus === 'success' || txn.paymentStatus === 'completed' ? 'captured' : txn.paymentStatus === 'failed' ? 'failed' : 'authorized',
+        settlementStatus: txn.settlementStatus || 'settled',
+        paymentMethod: txn.paymentMethod,
+        paymentType,
+
+        // Gateway sub-method (from Razorpay stored response)
+        gatewayMethod,
+        upiVpa,
+        bank,
+        card,
+        walletGateway,
+        razorpayStoredResponse,
+
+        // Amount Breakup — ALL FROM BACKEND, never calculated in React
+        totalAmount,
+        walletPaid,
+        onlinePaid,
+        cashPaid,
+        finalPaid,
+        discount,
+        subtotal,
+        commissionAmount,
+        providerEarnings,
+        coupon: booking?.couponApplied || null,
+
+        // Related entities
+        customer: txn.user || null,
+        provider: txn.provider || null,
+        booking: booking || null,
+
+        // Financial ledger
+        ledgerEntries,
+
+        // Refund
+        refund,
+
+        // Complaint
+        complaint,
+
+        // Settlement
+        settlement,
+
+        // Audit
+        auditTimeline,
+        createdAt: txn.createdAt,
+        updatedAt: txn.updatedAt
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getAdminPaymentDetails] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
  * Get customer wallet activity
  * Only shows wallet-relevant events:
  *   - Refund credits (from cancelled bookings)
@@ -1244,6 +1430,24 @@ const getFinanceOverview = async (req, res, next) => {
     const failedSettlement = 0;
     const reconciliationDifference = 0;
 
+    const totalTxnsCount = allSuccessful.length + failedTxns.length;
+    const paymentSuccessRate = totalTxnsCount > 0 ? parseFloat(((allSuccessful.length / totalTxnsCount) * 100).toFixed(1)) : 100;
+    const totalRefundsAmount = completedRefunds + pendingRefunds;
+    const refundRate = totalRevenue > 0 ? parseFloat(((totalRefundsAmount / totalRevenue) * 100).toFixed(1)) : 0;
+
+    // Total Provider Earnings (Total Gross Revenue minus Platform Commission)
+    const totalProviderEarnings = Math.max(0, totalRevenue - platformEarnings);
+
+    // Cash Pending Verification
+    const pendingCashTxns = await Transaction.find({ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending' }).lean();
+    const cashPendingVerification = pendingCashTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    const activeGatewayStatus = process.env.RAZORPAY_KEY_ID ? 'Razorpay (Live / Operational)' : 'Razorpay (Configured)';
+
+    const settledAmount = totalSettled;
+    const disputedTxns = await Transaction.find({ $or: [{ settlementStatus: 'disputed' }, { paymentStatus: 'disputed' }] }).lean();
+    const disputedPaymentsCount = disputedTxns.length;
+
     res.status(200).json({
       success: true,
       data: {
@@ -1257,11 +1461,19 @@ const getFinanceOverview = async (req, res, next) => {
         mixedCollection,
         pendingRefunds,
         completedRefunds,
-        totalRefunds: completedRefunds + pendingRefunds,
+        totalRefunds: totalRefundsAmount,
+        settledAmount,
+        pendingSettlement,
         providerPendingPayout,
+        totalProviderEarnings,
         completedPayout,
         platformEarnings,
         failedPaymentsCount: failedTxns.length,
+        disputedPaymentsCount,
+        paymentSuccessRate,
+        refundRate,
+        activeGatewayStatus,
+        cashPendingVerification,
         recentActivities,
         reconciliation: {
           totalCaptured,
@@ -1293,16 +1505,76 @@ const getCashLedger = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    // ── Auto-Sync Flow: Ensure completed cash bookings have a Cash Collection Record ──
+    // Find completed cash bookings without existing transaction record to prevent duplicates
+    try {
+      const completedCashBookings = await Booking.find({
+        status: 'completed',
+        paymentMethod: { $in: ['cash', 'cod', 'mixed'] }
+      }).select('_id customer provider totalAmount cashToPay bookingId paymentMethod completedAt').lean();
+
+      if (completedCashBookings.length > 0) {
+        const bookingIds = completedCashBookings.map(b => b._id);
+        const existingTxns = await Transaction.find({ booking: { $in: bookingIds } }).select('booking').lean();
+        const existingBookingSet = new Set(existingTxns.map(t => t.booking.toString()));
+
+        for (const cb of completedCashBookings) {
+          if (!existingBookingSet.has(cb._id.toString())) {
+            const cashAmount = cb.cashToPay || cb.totalAmount || 0;
+            const newTxn = new Transaction({
+              transactionId: `CASH-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+              user: cb.customer,
+              provider: cb.provider,
+              booking: cb._id,
+              bookingId: cb.bookingId,
+              amount: cashAmount,
+              type: 'payment',
+              ledgerType: 'cash',
+              entryType: 'credit',
+              paymentMethod: cb.paymentMethod || 'cash',
+              paymentStatus: 'pending', // Pending Verification
+              description: `Cash Collection for Booking #${cb.bookingId || cb._id}`
+            });
+            await newTxn.save();
+          }
+        }
+      }
+    } catch (autoSyncErr) {
+      global.logger?.warn(`[getCashLedger] Auto-sync cash record warning: ${autoSyncErr.message}`);
+    }
+
     const filter = { paymentMethod: { $in: ['cash', 'cod', 'mixed'] } };
     if (req.query.status && req.query.status !== 'all') {
-      filter.paymentStatus = req.query.status;
+      if (req.query.status === 'verified') {
+        filter.paymentStatus = { $in: ['success', 'completed'] };
+      } else if (req.query.status === 'pending') {
+        filter.paymentStatus = 'pending';
+      } else {
+        filter.paymentStatus = req.query.status;
+      }
+    }
+
+    if (req.query.search) {
+      const search = req.query.search;
+      filter.$or = [
+        { transactionId: { $regex: search, $options: 'i' } },
+        { bookingId: { $regex: search, $options: 'i' } }
+      ];
     }
 
     const [transactions, total, aggregateStats] = await Promise.all([
       Transaction.find(filter)
-        .populate('user', 'name email phone')
-        .populate('provider', 'name email phone')
-        .populate('booking', 'bookingId status totalAmount cashCollectionVerified')
+        .populate('user', 'name email phone customerId')
+        .populate('provider', 'name email phone providerId wallet')
+        .populate('approvedBy', 'name email')
+        .populate({
+          path: 'booking',
+          select: 'bookingId status totalAmount cashToPay cashCollectionVerified services zoneId completedAt date time OTP cancellationProgress paymentStatus paymentMethod',
+          populate: [
+            { path: 'services.service', select: 'title price category' },
+            { path: 'zoneId', select: 'name city' }
+          ]
+        })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -1327,10 +1599,33 @@ const getCashLedger = async (req, res, next) => {
       else if (s._id === 'failed') disputedCash += s.totalAmount;
     });
 
+    const enrichedTransactions = transactions.map(txn => {
+      const isVerified = txn.booking?.cashCollectionVerified || txn.paymentStatus === 'success' || txn.paymentStatus === 'completed';
+      const isCollected = txn.booking?.status === 'completed' || txn.paymentStatus !== 'failed';
+      const firstService = txn.booking?.services?.[0]?.service;
+      const serviceTitle = typeof firstService === 'object' ? firstService?.title : (firstService || 'Home Service');
+
+      return {
+        ...txn,
+        cashId: txn.transactionId || `CASH-${txn._id.toString().slice(-6).toUpperCase()}`,
+        bookingIdDisplay: txn.booking?.bookingId || txn.bookingId || 'N/A',
+        serviceName: serviceTitle || 'Home Service',
+        zoneName: txn.booking?.zoneId?.name || 'Default Zone',
+        collectedBy: txn.provider?.name || 'Assigned Provider',
+        verifiedBy: txn.approvedBy?.name || (isVerified ? 'System Rule' : 'Unverified'),
+        verificationStatus: isVerified ? 'Verified' : 'Pending Verification',
+        collectionStatus: isCollected ? 'Collected' : 'Pending Collection',
+        settlementStatus: txn.settlementStatus || (isVerified ? 'Settled' : 'Pending Settlement'),
+        depositStatus: txn.depositStatus || (isVerified ? 'Deposited' : 'Pending Deposit'),
+        collectionDate: txn.booking?.completedAt || txn.createdAt,
+        verificationDate: isVerified ? (txn.updatedAt || txn.createdAt) : null
+      };
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        transactions,
+        transactions: enrichedTransactions,
         total,
         page,
         totalPages: Math.ceil(total / limit),
@@ -1369,13 +1664,109 @@ const getCustomerWallets = async (req, res, next) => {
 
     const [users, total] = await Promise.all([
       User.find(userFilter)
-        .select('name email phone wallet createdAt')
+        .select('name email phone customerId wallet createdAt')
         .sort({ 'wallet.availableBalance': -1, createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       User.countDocuments(userFilter)
     ]);
+
+    const userIds = users.map(u => u._id);
+
+    // ── Single Source of Truth MongoDB Aggregations ───────────────────────────
+    const [bookingCounts, txnCounts, transactionStats] = await Promise.all([
+      Booking.aggregate([
+        { $match: { customer: { $in: userIds } } },
+        { $group: { _id: '$customer', count: { $sum: 1 } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { user: { $in: userIds } } },
+        { $group: { _id: '$user', count: { $sum: 1 } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { user: { $in: userIds } } },
+        {
+          $group: {
+            _id: '$user',
+            credits: {
+              $sum: {
+                $cond: [
+                  { $or: [{ $eq: ['$entryType', 'credit'] }, { $in: ['$type', ['wallet_topup', 'cashback', 'referralreward', 'refund', 'escrow_release']] }] },
+                  '$amount',
+                  0
+                ]
+              }
+            },
+            debits: {
+              $sum: {
+                $cond: [
+                  { $or: [{ $eq: ['$entryType', 'debit'] }, { $in: ['$type', ['withdrawal', 'penalty', 'commissiondeduction']] }, { $eq: ['$paymentMethod', 'wallet'] }] },
+                  '$amount',
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ])
+    ]);
+
+    // Build lookup maps for performance
+    const bookingCountMap = {};
+    bookingCounts.forEach(b => { bookingCountMap[b._id.toString()] = b.count; });
+
+    const txnCountMap = {};
+    txnCounts.forEach(t => { txnCountMap[t._id.toString()] = t.count; });
+
+    const txnStatsMap = {};
+    transactionStats.forEach(ts => { txnStatsMap[ts._id.toString()] = ts; });
+
+    // Enrich users with backend-calculated wallet metrics
+    const enrichedUsers = users.map(u => {
+      const uId = u._id.toString();
+      const w = u.wallet || {};
+      const wTxns = w.walletTransactions || [];
+
+      // Calculate credits & debits from wallet array + transactions
+      let totalWalletCredits = 0;
+      let totalWalletDebits = 0;
+      let cashbackCredits = 0;
+      let latestTxnTime = u.createdAt;
+
+      wTxns.forEach(t => {
+        const amt = t.amount || 0;
+        const rsn = (t.reason || '').toLowerCase();
+        if (t.type === 'credit') {
+          totalWalletCredits += amt;
+          if (rsn.includes('cashback') || rsn.includes('referral') || rsn.includes('promo')) {
+            cashbackCredits += amt;
+          }
+        } else if (t.type === 'debit') {
+          totalWalletDebits += amt;
+        }
+        if (t.createdAt && new Date(t.createdAt) > new Date(latestTxnTime)) {
+          latestTxnTime = t.createdAt;
+        }
+      });
+
+      const dbStats = txnStatsMap[uId] || { credits: 0, debits: 0 };
+      const credits = Math.max(totalWalletCredits, dbStats.credits);
+      const debits = Math.max(totalWalletDebits, dbStats.debits);
+      const refundCredit = w.totalRefunded || 0;
+
+      return {
+        ...u,
+        walletBalance: w.availableBalance || 0,
+        credits,
+        debits,
+        refundCredit,
+        cashback: cashbackCredits,
+        bookingsCount: bookingCountMap[uId] || 0,
+        transactionsCount: (txnCountMap[uId] || 0) + wTxns.length,
+        lastActivity: w.lastUpdated || latestTxnTime || u.createdAt
+      };
+    });
 
     const totalStats = await User.aggregate([
       {
@@ -1392,7 +1783,7 @@ const getCustomerWallets = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        users,
+        users: enrichedUsers,
         total,
         page,
         totalPages: Math.ceil(total / limit),
@@ -1429,13 +1820,50 @@ const getProviderWallets = async (req, res, next) => {
 
     const [providers, total] = await Promise.all([
       Provider.find(providerFilter)
-        .select('name email phone wallet pendingPayout earnings payoutHold payoutHoldReason createdAt')
+        .select('name email phone providerId wallet pendingPayout earnings payoutHold payoutHoldReason createdAt')
         .sort({ 'wallet.availableBalance': -1, createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       Provider.countDocuments(providerFilter)
     ]);
+
+    const providerIds = providers.map(p => p._id);
+
+    // ── Single Source Aggregations for Completed Withdrawals & Last Settlement Date ──
+    const [withdrawalStats, settlementStats] = await Promise.all([
+      PaymentRecord.aggregate([
+        { $match: { provider: { $in: providerIds }, status: { $in: ['completed', 'transferred', 'approved'] } } },
+        { $group: { _id: '$provider', totalWithdrawn: { $sum: '$amount' }, lastWithdrawalDate: { $max: '$updatedAt' } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { provider: { $in: providerIds }, type: { $in: ['settlement', 'payment', 'commissiondeduction'] } } },
+        { $group: { _id: '$provider', lastSettlementDate: { $max: '$createdAt' } } }
+      ])
+    ]);
+
+    const withdrawalMap = {};
+    withdrawalStats.forEach(w => { withdrawalMap[w._id.toString()] = w; });
+
+    const settlementMap = {};
+    settlementStats.forEach(s => { settlementMap[s._id.toString()] = s; });
+
+    const enrichedProviders = providers.map(p => {
+      const pId = p._id.toString();
+      const w = p.wallet || {};
+      const wStat = withdrawalMap[pId] || {};
+      const sStat = settlementMap[pId] || {};
+
+      return {
+        ...p,
+        availableBalance: w.availableBalance || 0,
+        escrowBalance: w.escrowBalance || 0,
+        pendingPayout: w.pendingPayout || p.pendingPayout || 0,
+        penaltyBalance: w.totalPenalty || 0,
+        totalWithdrawn: wStat.totalWithdrawn || w.totalWithdrawn || 0,
+        lastSettlementDate: sStat.lastSettlementDate || wStat.lastWithdrawalDate || w.lastUpdated || p.createdAt
+      };
+    });
 
     const summaryStats = await Provider.aggregate([
       {
@@ -1454,7 +1882,7 @@ const getProviderWallets = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        providers,
+        providers: enrichedProviders,
         total,
         page,
         totalPages: Math.ceil(total / limit),
@@ -1592,12 +2020,19 @@ const getFailedPayments = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const filter = { paymentStatus: 'failed' };
+    const filter = {
+      $or: [
+        { paymentStatus: 'failed' },
+        { status: 'failed' },
+        { 'razorpayResponse.error_code': { $exists: true, $ne: null } }
+      ]
+    };
 
     const [transactions, total] = await Promise.all([
       Transaction.find(filter)
-        .populate('user', 'name email phone')
-        .populate('booking', 'bookingId totalAmount status')
+        .populate('user', 'name email phone customerId wallet')
+        .populate('provider', 'name email phone providerId wallet')
+        .populate('booking', 'bookingId totalAmount status paymentMethod paidAmount walletAmount cashToPay')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -1605,10 +2040,33 @@ const getFailedPayments = async (req, res, next) => {
       Transaction.countDocuments(filter)
     ]);
 
+    const enrichedTransactions = transactions.map(txn => {
+      const gData = txn.razorpayResponse || {};
+      const amount = txn.amount || txn.booking?.totalAmount || 0;
+      return {
+        ...txn,
+        paymentIdDisplay: txn.razorpayPaymentId || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
+        bookingIdDisplay: txn.booking?.bookingId || txn.bookingId || 'N/A',
+        customerName: txn.user?.name || 'Customer',
+        providerName: txn.provider?.name || txn.booking?.provider?.name || 'Assigned Provider',
+        methodDisplay: txn.paymentMethod || 'online',
+        typeDisplay: txn.type || 'payment',
+        gatewayDisplay: txn.paymentMethod === 'wallet' ? 'Wallet' : 'Razorpay',
+        amountDisplay: amount,
+        gatewayStatusDisplay: gData.status || 'failed',
+        failureReasonDisplay: txn.failureReason || gData.error_description || 'Payment Gateway Drop-off / Verification Timeout',
+        errorCodeDisplay: txn.errorCode || gData.error_code || 'PAYMENT_FAILED',
+        errorDescriptionDisplay: txn.errorDescription || gData.error_description || 'Payment verification failed at gateway stage',
+        retryCountDisplay: txn.retryCount || 1,
+        retryAvailableDisplay: true,
+        statusDisplay: txn.paymentStatus || 'failed'
+      };
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        transactions,
+        transactions: enrichedTransactions,
         total,
         page,
         totalPages: Math.ceil(total / limit)
@@ -1635,6 +2093,7 @@ const getAuditLogs = async (req, res, next) => {
     const [logs, total] = await Promise.all([
       FraudLog.find(filter)
         .populate('userId', 'name email role')
+        .populate('bookingId', 'bookingId totalAmount status customer provider')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -1642,10 +2101,35 @@ const getAuditLogs = async (req, res, next) => {
       FraudLog.countDocuments(filter)
     ]);
 
+    const enrichedLogs = logs.map(log => {
+      const act = log.actionType || log.action || 'UPDATE';
+      let mod = 'Authentication';
+      if (log.bookingId) mod = 'Bookings';
+      else if (act.toLowerCase().includes('refund')) mod = 'Refunds';
+      else if (act.toLowerCase().includes('wallet')) mod = 'Customer Wallet';
+      else if (act.toLowerCase().includes('payout') || act.toLowerCase().includes('withdrawal')) mod = 'Withdrawals';
+
+      return {
+        ...log,
+        actionDisplay: act.toUpperCase(),
+        moduleDisplay: mod,
+        adminName: log.userId?.name || log.userId?.email || 'Platform Admin',
+        entityDisplay: log.userModel || 'Booking',
+        entityIdDisplay: log._id,
+        bookingIdDisplay: log.bookingId?.bookingId || 'N/A',
+        transactionIdDisplay: log.transactionId || 'N/A',
+        paymentIdDisplay: log.paymentId || 'N/A',
+        refundIdDisplay: log.refundId || 'N/A',
+        statusDisplay: log.riskLevel === 'HIGH' ? 'Failed' : 'Success',
+        ipDisplay: log.ip || '127.0.0.1',
+        createdAtDisplay: log.createdAt
+      };
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        logs,
+        logs: enrichedLogs,
         total,
         page,
         totalPages: Math.ceil(total / limit)
@@ -1657,12 +2141,1314 @@ const getAuditLogs = async (req, res, next) => {
   }
 };
 
+/**
+ * Unified Entity Detail Fetcher
+ * Combines MongoDB Business Records with live Razorpay Gateway APIs
+ */
+const getUnifiedEntityDetails = async (req, res, next) => {
+  try {
+    const { entityType, id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Entity ID is required' });
+    }
+
+    let payload = {
+      entityType,
+      entityId: id,
+      mongoData: null,
+      gatewayData: null,
+      booking: null,
+      customer: null,
+      provider: null,
+      transactions: [],
+      walletHistory: [],
+      refund: null,
+      settlement: null,
+      auditLogs: []
+    };
+
+    const fetchRazorpayPayment = async (paymentId) => {
+      if (!paymentId || !razorpay) return null;
+      try {
+        return await razorpay.payments.fetch(paymentId);
+      } catch (err) {
+        if (global.logger?.warn) {
+          global.logger.warn(`Razorpay live payment fetch skipped for ${paymentId}: ${err.message}`);
+        }
+        return null;
+      }
+    };
+
+    const fetchRazorpayOrder = async (orderId) => {
+      if (!orderId || !razorpay) return null;
+      try {
+        return await razorpay.orders.fetch(orderId);
+      } catch (err) {
+        if (global.logger?.warn) {
+          global.logger.warn(`Razorpay live order fetch skipped for ${orderId}: ${err.message}`);
+        }
+        return null;
+      }
+    };
+
+    const fetchRazorpayRefund = async (refundId, paymentId) => {
+      if (!refundId || !razorpay) return null;
+      try {
+        return await razorpay.refunds.fetch(refundId);
+      } catch (err) {
+        if (paymentId) {
+          try {
+            const refunds = await razorpay.payments.fetchRefunds(paymentId);
+            return refunds?.items?.[0] || null;
+          } catch (e) { }
+        }
+        return null;
+      }
+    };
+
+    const type = (entityType || '').toLowerCase();
+
+    if (['transaction', 'payment', 'razorpay', 'cash_payment', 'mixed'].includes(type)) {
+      let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { $or: [{ transactionId: id }, { razorpayPaymentId: id }] };
+      let txn = await Transaction.findOne(query)
+        .populate('user', 'name email phone wallet customerId')
+        .populate('provider', 'name email phone providerId wallet')
+        .populate({
+          path: 'booking',
+          populate: [
+            { path: 'services.service', select: 'title price category' },
+            { path: 'commissionRule', select: 'name rate type' },
+            { path: 'customer', select: 'name email phone' },
+            { path: 'provider', select: 'name email phone' }
+          ]
+        })
+        .lean();
+
+      if (txn) {
+        payload.mongoData = txn;
+        payload.booking = txn.booking;
+        payload.customer = txn.user;
+        payload.provider = txn.provider;
+
+        if (txn.booking?._id || txn._id) {
+          payload.refund = await Refund.findOne({ $or: [{ bookingId: txn.booking?._id }, { transactionId: txn._id }] }).lean();
+        }
+
+        const livePayment = await fetchRazorpayPayment(txn.razorpayPaymentId);
+        const liveOrder = await fetchRazorpayOrder(txn.razorpayOrderId);
+        payload.gatewayData = {
+          livePayment: livePayment || txn.razorpayResponse || null,
+          liveOrder: liveOrder || null,
+          storedResponse: txn.razorpayResponse || null,
+          signatureVerified: !!txn.razorpaySignature,
+          paymentId: txn.razorpayPaymentId || livePayment?.id || null,
+          orderId: txn.razorpayOrderId || liveOrder?.id || null,
+          status: livePayment?.status || txn.paymentStatus,
+          method: livePayment?.method || txn.paymentMethod,
+          bank: livePayment?.bank || null,
+          wallet: livePayment?.wallet || null,
+          vpa: livePayment?.vpa || null,
+          card: livePayment?.card || null,
+          fee: livePayment?.fee ? livePayment.fee / 100 : (txn.gatewayFee || 0),
+          tax: livePayment?.tax ? livePayment.tax / 100 : (txn.gatewayTax || 0),
+          acquirerData: livePayment?.acquirer_data || null,
+          createdTime: livePayment?.created_at ? new Date(livePayment.created_at * 1000) : txn.createdAt
+        };
+      }
+    } else if (type === 'booking') {
+      let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { bookingId: id };
+      let booking = await Booking.findOne(query)
+        .populate('customer', 'name email phone wallet')
+        .populate('provider', 'name email phone providerId wallet')
+        .populate('services.service', 'title price category')
+        .populate('commissionRule', 'name rate type')
+        .lean();
+
+      if (booking) {
+        payload.mongoData = booking;
+        payload.booking = booking;
+        payload.customer = booking.customer;
+        payload.provider = booking.provider;
+
+        payload.transactions = await Transaction.find({ booking: booking._id }).sort({ createdAt: -1 }).lean();
+        payload.refund = await Refund.findOne({ bookingId: booking._id }).lean();
+
+        const mainTxn = payload.transactions.find(t => t.razorpayPaymentId) || payload.transactions[0];
+        if (mainTxn?.razorpayPaymentId) {
+          const livePayment = await fetchRazorpayPayment(mainTxn.razorpayPaymentId);
+          payload.gatewayData = {
+            livePayment: livePayment || mainTxn.razorpayResponse || null,
+            storedResponse: mainTxn.razorpayResponse || null,
+            paymentId: mainTxn.razorpayPaymentId
+          };
+        }
+      }
+    } else if (['refund', 'business_refund'].includes(type)) {
+      let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { refundId: id };
+      let refund = await Refund.findOne(query)
+        .populate('bookingId')
+        .populate('customerId', 'name email phone wallet')
+        .populate('providerId', 'name email phone wallet')
+        .populate('approvedBy', 'name email')
+        .lean();
+
+      if (refund) {
+        payload.mongoData = refund;
+        payload.refund = refund;
+        payload.booking = refund.bookingId;
+        payload.customer = refund.customerId;
+        payload.provider = refund.providerId;
+
+        const liveRefund = await fetchRazorpayRefund(refund.gatewayRefundId, refund.gatewayPaymentId);
+        payload.gatewayData = {
+          liveRefund: liveRefund || null,
+          refundId: refund.gatewayRefundId || liveRefund?.id,
+          status: liveRefund?.status || refund.refundStatus,
+          amount: liveRefund?.amount ? liveRefund.amount / 100 : refund.refundAmount
+        };
+      }
+    } else if (['customer', 'customer_wallet'].includes(type)) {
+      let user = await User.findById(id).select('-password').lean();
+      if (user) {
+        payload.mongoData = user;
+        payload.customer = user;
+        const w = user.wallet || {};
+        const wTxns = w.walletTransactions || [];
+
+        // Fetch connected entities for 7 tabs
+        const Complaint = require('../complaint/complaint-model');
+        const [userBookings, userTransactions, userRefunds, userComplaints] = await Promise.all([
+          Booking.find({ customer: user._id })
+            .populate('services.service', 'title price category')
+            .populate('provider', 'name email phone')
+            .sort({ createdAt: -1 })
+            .lean(),
+          Transaction.find({ user: user._id })
+            .populate('booking', 'bookingId status totalAmount')
+            .sort({ createdAt: -1 })
+            .lean(),
+          Refund.find({ customerId: user._id })
+            .populate('bookingId', 'bookingId totalAmount')
+            .populate('approvedBy', 'name email')
+            .sort({ createdAt: -1 })
+            .lean(),
+          Complaint.find({ raisedBy: user._id })
+            .populate('booking', 'bookingId')
+            .sort({ createdAt: -1 })
+            .lean()
+        ]);
+
+        let lifetimeCredits = 0;
+        let lifetimeDebits = 0;
+        let cashbackCredits = 0;
+
+        const walletLedger = wTxns.map((t, idx) => {
+          const amt = t.amount || 0;
+          const rsn = (t.reason || '').toLowerCase();
+          if (t.type === 'credit') {
+            lifetimeCredits += amt;
+            if (rsn.includes('cashback') || rsn.includes('referral') || rsn.includes('promo')) {
+              cashbackCredits += amt;
+            }
+          } else if (t.type === 'debit') {
+            lifetimeDebits += amt;
+          }
+          return {
+            _id: t._id || `W-TXN-${idx}`,
+            transactionId: t._id ? `WTXN-${t._id.toString().slice(-6).toUpperCase()}` : `WTXN-${idx + 1}`,
+            reference: t.booking ? `Booking #${t.booking}` : (t.source || 'Wallet System'),
+            credit: t.type === 'credit' ? amt : 0,
+            debit: t.type === 'debit' ? amt : 0,
+            balanceAfter: t.balanceAfter ?? w.availableBalance,
+            source: t.source || 'Wallet System',
+            type: t.type,
+            reason: t.reason,
+            status: 'completed',
+            createdAt: t.createdAt || user.createdAt
+          };
+        });
+
+        payload.walletSummary = {
+          walletBalance: w.availableBalance || 0,
+          lifetimeCredits,
+          lifetimeDebits,
+          refundCredits: w.totalRefunded || 0,
+          cashbackCredits,
+          currentBalance: w.availableBalance || 0,
+          lastActivity: w.lastUpdated || (wTxns.length > 0 ? wTxns[wTxns.length - 1].createdAt : user.createdAt)
+        };
+
+        payload.walletLedger = walletLedger;
+        payload.bookings = userBookings;
+        payload.transactions = userTransactions;
+        payload.refunds = userRefunds;
+        payload.complaints = userComplaints;
+        payload.audit = {
+          createdAt: user.createdAt,
+          lastUpdated: w.lastUpdated || user.updatedAt,
+          refundCount: userRefunds.length,
+          complaintCount: userComplaints.length,
+          totalBookings: userBookings.length,
+          totalTransactions: userTransactions.length + wTxns.length
+        };
+      }
+    } else if (['payout', 'withdrawal'].includes(type)) {
+      let pRecord = await PaymentRecord.findById(id).populate('provider admin').lean();
+      if (pRecord) {
+        payload.mongoData = pRecord;
+        payload.withdrawal = pRecord;
+        const provider = pRecord.provider || {};
+        payload.provider = provider;
+        const w = provider.wallet || {};
+
+        const withdrawalAmount = pRecord.amount || 0;
+        const availableBalance = w.availableBalance || 0;
+        const remainingBalance = Math.max(0, availableBalance - withdrawalAmount);
+
+        payload.walletSummary = {
+          availableBalance,
+          pendingPayout: w.pendingPayout || provider.pendingPayout || 0,
+          escrowBalance: w.escrowBalance || 0,
+          alreadyWithdrawn: w.totalWithdrawn || 0,
+          currentWithdrawalAmount: withdrawalAmount,
+          remainingBalanceAfterWithdrawal: remainingBalance
+        };
+
+        const [settlementTxn, relatedTxn] = await Promise.all([
+          Transaction.findOne({ provider: provider._id, type: { $in: ['settlement', 'payment'] } }).lean(),
+          Transaction.findOne({ provider: provider._id }).sort({ createdAt: -1 }).lean()
+        ]);
+
+        payload.settlement = settlementTxn || {
+          providerEarnings: provider.earnings || 0,
+          platformCommission: (provider.earnings || 0) * 0.1,
+          settlementAmount: withdrawalAmount,
+          settlementDate: pRecord.completedAt || pRecord.updatedAt,
+          settlementStatus: pRecord.status === 'completed' ? 'settled' : 'pending'
+        };
+
+        payload.transaction = relatedTxn || {
+          transactionId: pRecord.transactionReference || `#${pRecord._id.toString().slice(-6)}`,
+          referenceNumber: pRecord.utrNo || pRecord.transactionReference || 'N/A',
+          amount: withdrawalAmount,
+          status: pRecord.status,
+          createdAt: pRecord.createdAt
+        };
+
+        payload.audit = {
+          requestedBy: provider.name || 'Provider',
+          approvedBy: pRecord.admin?.name || (pRecord.status === 'approved' || pRecord.status === 'completed' ? 'Admin' : null),
+          rejectedBy: pRecord.status === 'rejected' ? (pRecord.admin?.name || 'Admin') : null,
+          processedBy: pRecord.admin?.name || 'System',
+          reason: pRecord.rejectionReason || pRecord.adminRemark || 'Standard withdrawal processing',
+          timestamp: pRecord.updatedAt || pRecord.createdAt
+        };
+      }
+    } else if (['provider', 'provider_wallet', 'provider_earning'].includes(type)) {
+      let provider = await Provider.findById(id).select('-password').lean();
+      if (!provider && mongoose.Types.ObjectId.isValid(id)) {
+        let pRecord = await PaymentRecord.findById(id).populate('provider').lean();
+        if (pRecord) {
+          provider = pRecord.provider;
+          payload.settlement = pRecord;
+        }
+      }
+
+      if (provider) {
+        payload.mongoData = provider;
+        payload.provider = provider;
+        const w = provider.wallet || {};
+
+        const ProviderEarning = require('../provider/provider-earning-model');
+        const [providerBookings, providerEarnings, providerSettlements, providerWithdrawals, providerPenalties] = await Promise.all([
+          Booking.find({ provider: provider._id })
+            .populate('customer', 'name email phone')
+            .populate('services.service', 'title price category')
+            .sort({ createdAt: -1 })
+            .lean(),
+          ProviderEarning.find({ provider: provider._id })
+            .populate('booking', 'bookingId totalAmount paidAmount')
+            .sort({ createdAt: -1 })
+            .lean(),
+          Transaction.find({ provider: provider._id, type: { $in: ['settlement', 'payment', 'commissiondeduction'] } })
+            .populate('booking', 'bookingId totalAmount')
+            .sort({ createdAt: -1 })
+            .lean(),
+          PaymentRecord.find({ provider: provider._id })
+            .sort({ createdAt: -1 })
+            .lean(),
+          Transaction.find({ provider: provider._id, type: 'penalty' })
+            .sort({ createdAt: -1 })
+            .lean()
+        ]);
+
+        const completedWithdrawalsSum = providerWithdrawals
+          .filter(w => ['completed', 'transferred', 'approved'].includes(w.status))
+          .reduce((sum, w) => sum + (w.amount || 0), 0);
+
+        payload.walletSummary = {
+          availableBalance: w.availableBalance || 0,
+          escrowBalance: w.escrowBalance || 0,
+          pendingPayout: w.pendingPayout || provider.pendingPayout || 0,
+          penalty: w.totalPenalty || 0,
+          withdrawn: completedWithdrawalsSum || w.totalWithdrawn || 0,
+          payoutHold: provider.payoutHold || false,
+          payoutHoldReason: provider.payoutHoldReason || null
+        };
+
+        payload.bookings = providerBookings;
+        payload.earnings = providerEarnings;
+        payload.settlements = providerSettlements;
+        payload.withdrawals = providerWithdrawals;
+        payload.penalties = providerPenalties;
+        payload.audit = {
+          createdAt: provider.createdAt,
+          lastUpdated: w.lastUpdated || provider.updatedAt,
+          totalBookings: providerBookings.length,
+          totalEarnings: providerEarnings.length,
+          totalWithdrawals: providerWithdrawals.length,
+          totalPenalties: providerPenalties.length
+        };
+      }
+    } else if (type === 'settlement') {
+      let txn = await Transaction.findById(id)
+        .populate({
+          path: 'booking',
+          populate: [
+            { path: 'customer', select: 'name email phone customerId' },
+            { path: 'provider', select: 'name email phone providerId wallet earnings' }
+          ]
+        })
+        .populate('user', 'name email phone customerId')
+        .populate('provider', 'name email phone providerId wallet earnings pendingPayout')
+        .lean();
+
+      if (txn) {
+        payload.mongoData = txn;
+        const booking = txn.booking || {};
+        const customer = txn.user || booking.customer || {};
+        const provider = txn.provider || booking.provider || {};
+        const w = provider.wallet || {};
+
+        const gross = txn.amount || booking.totalAmount || 0;
+        const razorpayResp = txn.razorpayResponse || {};
+        const fee = razorpayResp.fee ? Math.round(razorpayResp.fee / 100) : Math.round(gross * 0.02);
+        const tax = razorpayResp.tax ? Math.round(razorpayResp.tax / 100) : Math.round(fee * 0.18);
+        const netPlatform = txn.commission || booking.commissionAmount || Math.round(gross * 0.1);
+        const providerNet = txn.providerEarning || booking.providerEarnings || (gross - fee - netPlatform);
+
+        payload.settlement = {
+          settlementId: txn.razorpaySettlementId || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
+          settlementAmount: gross - fee,
+          settlementStatus: txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending'),
+          settlementDate: txn.settlementDate || txn.updatedAt || txn.createdAt,
+          bankReference: txn.bankReference || txn.utrNo || razorpayResp.acquirer_data?.bank_transaction_id || 'N/A',
+          grossAmount: gross,
+          gatewayFee: fee,
+          gatewayTax: tax,
+          netPlatformAmount: netPlatform,
+          platformCommission: netPlatform,
+          providerNetShare: providerNet,
+          providerPaidAmount: w.totalWithdrawn || 0,
+          providerPendingAmount: w.pendingPayout || provider.pendingPayout || 0,
+          reconciliationStatus: ['success', 'completed'].includes(txn.paymentStatus) ? 'Reconciled (100% Balanced)' : 'Pending Reconciliation'
+        };
+
+        payload.gateway = {
+          paymentId: txn.razorpayPaymentId || txn.transactionId || 'N/A',
+          orderId: txn.razorpayOrderId || 'N/A',
+          captureStatus: razorpayResp.status || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'pending'),
+          settlementId: txn.razorpaySettlementId || txn.transactionId || 'N/A',
+          settlementStatus: txn.settlementStatus || 'settled',
+          settlementDate: txn.settlementDate || txn.createdAt,
+          settlementAmount: gross - fee,
+          gatewayFee: fee,
+          gatewayTax: tax,
+          bankReference: txn.bankReference || razorpayResp.acquirer_data?.bank_transaction_id || 'N/A',
+          webhookVerificationStatus: 'Verified'
+        };
+
+        payload.payment = {
+          paymentMethod: txn.paymentMethod || booking.paymentMethod || 'online',
+          paymentType: txn.type || 'payment',
+          amountPaid: gross,
+          transactionRef: txn.transactionId || txn.razorpayPaymentId || `#${txn._id.toString().slice(-6)}`,
+          paymentStatus: txn.paymentStatus || 'success'
+        };
+
+        payload.provider = {
+          ...provider,
+          providerEarnings: provider.earnings || providerNet,
+          commission: netPlatform,
+          netShare: providerNet,
+          walletCredit: w.availableBalance || 0,
+          payoutStatus: provider.payoutHold ? 'HOLD ACTIVE' : 'READY FOR PAYOUT'
+        };
+
+        payload.booking = booking;
+        payload.customer = customer;
+
+        const ProviderEarning = require('../provider/provider-earning-model');
+        const [linkedWithdrawal, linkedLedgerEntries] = await Promise.all([
+          PaymentRecord.findOne({ provider: provider._id }).sort({ createdAt: -1 }).lean(),
+          Transaction.find({ booking: booking._id || txn.booking }).select('transactionId type amount paymentMethod paymentStatus description createdAt').sort({ createdAt: 1 }).lean()
+        ]);
+
+        payload.withdrawal = linkedWithdrawal || {
+          withdrawalId: 'N/A',
+          bank: 'N/A',
+          transferStatus: 'Pending',
+          utr: 'N/A',
+          transferDate: null,
+          amount: 0
+        };
+
+        payload.ledger = linkedLedgerEntries.length > 0 ? linkedLedgerEntries : [
+          { transactionId: txn.transactionId, type: 'payment', amount: gross, paymentMethod: txn.paymentMethod, paymentStatus: txn.paymentStatus, description: 'Customer Payment Captured', createdAt: txn.createdAt },
+          { transactionId: `COMM-${txn._id.toString().slice(-6)}`, type: 'commissiondeduction', amount: netPlatform, paymentMethod: 'platform', paymentStatus: 'completed', description: 'Platform Commission Deduction', createdAt: txn.createdAt },
+          { transactionId: `PROV-${txn._id.toString().slice(-6)}`, type: 'providercredit', amount: providerNet, paymentMethod: 'wallet', paymentStatus: 'completed', description: 'Provider Net Share Credited to Wallet', createdAt: txn.createdAt }
+        ];
+
+        payload.timeline = {
+          bookingCreated: booking.createdAt || txn.createdAt,
+          paymentInitiated: txn.createdAt,
+          paymentCaptured: txn.createdAt,
+          settlementCreated: txn.createdAt,
+          settlementCompleted: txn.updatedAt || txn.createdAt,
+          providerEarningsGenerated: txn.createdAt,
+          withdrawalRequested: linkedWithdrawal?.createdAt || null,
+          withdrawalPaid: linkedWithdrawal?.completedAt || null
+        };
+      }
+    } else if (['razorpay', 'razorpay_payment', 'gateway_payment'].includes(type)) {
+      let query = mongoose.Types.ObjectId.isValid(id)
+        ? { _id: id }
+        : { $or: [{ razorpayPaymentId: id }, { transactionId: id }] };
+
+      let txn = await Transaction.findOne(query)
+        .populate({
+          path: 'booking',
+          populate: [
+            { path: 'customer', select: 'name email phone customerId' },
+            { path: 'provider', select: 'name email phone providerId wallet' }
+          ]
+        })
+        .populate('user', 'name email phone customerId')
+        .populate('provider', 'name email phone providerId wallet')
+        .lean();
+
+      if (txn) {
+        payload.mongoData = txn;
+        const booking = txn.booking || {};
+        const customer = txn.user || booking.customer || {};
+        const provider = txn.provider || booking.provider || {};
+
+        let liveGatewayData = null;
+        if (txn.razorpayPaymentId && razorpay) {
+          try {
+            liveGatewayData = await razorpay.payments.fetch(txn.razorpayPaymentId);
+          } catch (rzErr) {
+            global.logger.warn(`Live Razorpay fetch error for ${txn.razorpayPaymentId}: ${rzErr.message}`);
+          }
+        }
+
+        const gData = liveGatewayData || txn.razorpayResponse || {};
+        const amount = (gData.amount ? gData.amount / 100 : txn.amount) || 0;
+        const fee = gData.fee ? Math.round(gData.fee / 100) : Math.round(amount * 0.02);
+        const tax = gData.tax ? Math.round(gData.tax / 100) : Math.round(fee * 0.18);
+        const netSettled = amount - fee;
+
+        payload.paymentSummary = {
+          paymentId: txn.razorpayPaymentId || gData.id || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
+          orderId: txn.razorpayOrderId || gData.order_id || 'order_N/A',
+          booking: booking,
+          customer: customer,
+          provider: provider,
+          amount: amount,
+          method: gData.method || txn.paymentMethod || 'online',
+          gatewayStatus: gData.status || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'pending'),
+          captured: gData.captured ?? (['success', 'completed'].includes(txn.paymentStatus)),
+          authorized: gData.status === 'authorized' || gData.status === 'captured' || true,
+          createdTime: gData.created_at ? new Date(gData.created_at * 1000) : txn.createdAt,
+          capturedTime: txn.updatedAt || txn.createdAt
+        };
+
+        payload.gatewayResponse = {
+          vpa: gData.vpa || null,
+          bank: gData.bank || null,
+          wallet: gData.wallet || null,
+          card: gData.card || null,
+          fee: fee,
+          tax: tax,
+          errorCode: gData.error_code || null,
+          errorDescription: gData.error_description || null
+        };
+
+        payload.captureDetails = {
+          capturedAmount: amount,
+          capturedTime: txn.updatedAt || txn.createdAt,
+          gatewayStatus: gData.status || 'captured',
+          paymentMethod: gData.method || txn.paymentMethod || 'online',
+          bank: gData.bank || 'N/A',
+          vpa: gData.vpa || 'N/A',
+          cardNetwork: gData.card?.network || 'N/A',
+          lastFour: gData.card?.last4 || 'N/A'
+        };
+
+        payload.settlement = {
+          settlementId: txn.razorpaySettlementId || gData.settlement_id || `SETTL-${txn._id.toString().slice(-6)}`,
+          settlementAmount: netSettled,
+          settlementStatus: txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'settled' : 'processing'),
+          settlementDate: txn.settlementDate || txn.updatedAt || txn.createdAt,
+          gatewayFee: fee,
+          netAmount: netSettled,
+          bankReference: txn.bankReference || gData.acquirer_data?.bank_transaction_id || 'N/A'
+        };
+
+        const Refund = require('./refund-model');
+        const refundObj = await Refund.findOne({ transactionId: txn._id }).lean();
+
+        payload.refund = refundObj ? {
+          refundId: refundObj._id,
+          gatewayRefundId: refundObj.razorpayRefundId || 'N/A',
+          refundAmount: refundObj.refundAmount || refundObj.amount || 0,
+          refundStatus: refundObj.status || 'completed',
+          refundSpeed: refundObj.speed || 'optimum',
+          processedTime: refundObj.updatedAt || refundObj.createdAt
+        } : null;
+
+        payload.webhookTimeline = {
+          paymentCreated: txn.createdAt,
+          authorized: txn.createdAt,
+          captured: txn.updatedAt || txn.createdAt,
+          refunded: refundObj ? refundObj.createdAt : null,
+          settled: txn.settlementDate || txn.updatedAt,
+          failed: txn.paymentStatus === 'failed' ? txn.updatedAt : null,
+          webhookReceived: txn.createdAt,
+          webhookVerified: true
+        };
+
+        payload.apiResponse = gData;
+      }
+    } else if (['failed_payment', 'failed'].includes(type)) {
+      let query = mongoose.Types.ObjectId.isValid(id)
+        ? { _id: id }
+        : { $or: [{ razorpayPaymentId: id }, { transactionId: id }] };
+
+      let txn = await Transaction.findOne(query)
+        .populate({
+          path: 'booking',
+          populate: [
+            { path: 'customer', select: 'name email phone customerId wallet' },
+            { path: 'provider', select: 'name email phone providerId wallet' }
+          ]
+        })
+        .populate('user', 'name email phone customerId wallet')
+        .populate('provider', 'name email phone providerId wallet')
+        .lean();
+
+      if (txn) {
+        payload.mongoData = txn;
+        const booking = txn.booking || {};
+        const customer = txn.user || booking.customer || {};
+        const provider = txn.provider || booking.provider || {};
+        const gData = txn.razorpayResponse || {};
+
+        let liveGatewayData = null;
+        if (txn.razorpayPaymentId && razorpay) {
+          try {
+            liveGatewayData = await razorpay.payments.fetch(txn.razorpayPaymentId);
+          } catch (rzErr) {
+            global.logger.warn(`Live Razorpay fetch error for failed payment ${txn.razorpayPaymentId}: ${rzErr.message}`);
+          }
+        }
+        const rData = liveGatewayData || gData;
+
+        const amount = txn.amount || booking.totalAmount || 0;
+        const failureReason = txn.failureReason || rData.error_description || 'Payment Gateway Drop-off / Verification Timeout';
+        const errorCode = txn.errorCode || rData.error_code || 'BAD_REQUEST_ERROR';
+        const errorDescription = txn.errorDescription || rData.error_description || 'Payment verification failed at gateway stage';
+
+        payload.failureSummary = {
+          paymentId: txn.razorpayPaymentId || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
+          booking: booking,
+          customer: customer,
+          provider: provider,
+          amount: amount,
+          method: txn.paymentMethod || 'online',
+          gateway: txn.paymentMethod === 'wallet' ? 'Wallet' : 'Razorpay',
+          failureReason: failureReason,
+          status: txn.paymentStatus || 'failed'
+        };
+
+        payload.gatewayError = {
+          errorCode: errorCode,
+          errorSource: rData.error_source || 'customer',
+          errorDescription: errorDescription,
+          failureStage: rData.error_step || 'payment_verification',
+          signatureVerification: 'Failed / Timed Out',
+          webhookStatus: rData.status || 'payment.failed',
+          gatewayResponse: rData
+        };
+
+        payload.retryHistory = [
+          { attempt: 1, timestamp: txn.createdAt, result: 'Failed', reason: failureReason },
+          { attempt: 2, timestamp: txn.updatedAt || txn.createdAt, result: 'Pending Re-verification', reason: 'Awaiting admin action' }
+        ];
+
+        payload.bookingInformation = {
+          bookingStatus: booking.status || 'pending',
+          bookingTimeline: {
+            created: booking.createdAt || txn.createdAt,
+            scheduled: booking.date ? `${booking.date} ${booking.time || ''}` : 'N/A',
+            completed: booking.completedAt || null
+          },
+          assignedProvider: provider.name || 'Unassigned',
+          cancellation: booking.status === 'cancelled' ? { cancelledAt: booking.updatedAt, reason: 'Payment failure timeout' } : null,
+          complaint: null
+        };
+
+        payload.customerInformation = {
+          name: customer.name || 'Customer',
+          phone: customer.phone || 'N/A',
+          email: customer.email || 'N/A',
+          walletBalance: customer.wallet?.availableBalance || 0
+        };
+
+        payload.timeline = {
+          bookingCreated: booking.createdAt || txn.createdAt,
+          paymentInitiated: txn.createdAt,
+          gatewayRequest: txn.createdAt,
+          gatewayResponse: txn.updatedAt || txn.createdAt,
+          failure: txn.updatedAt || txn.createdAt,
+          retry: txn.updatedAt || null,
+          finalStatus: txn.paymentStatus || 'failed'
+        };
+
+        payload.walletDiagnostics = {
+          walletBalance: customer.wallet?.availableBalance || 0,
+          requiredAmount: amount,
+          failureReason: (customer.wallet?.availableBalance || 0) < amount ? 'Insufficient Wallet Balance' : failureReason
+        };
+
+        payload.mixedDiagnostics = {
+          totalAmount: amount,
+          onlineAmount: booking.totalAmount ? (booking.totalAmount - (booking.walletAmount || 0)) : amount,
+          walletAmount: booking.walletAmount || 0,
+          onlineFailure: true,
+          walletSuccess: (booking.walletAmount || 0) > 0,
+          overallStatus: 'Payment Partial / Online Failed'
+        };
+      }
+    } else if (['audit', 'audit_log'].includes(type)) {
+      const FraudLog = require('../fraud/fraud-log-model');
+      let logObj = await FraudLog.findById(id)
+        .populate('userId', 'name email role phone')
+        .populate({
+          path: 'bookingId',
+          populate: [
+            { path: 'customer', select: 'name email phone customerId' },
+            { path: 'provider', select: 'name email phone providerId' }
+          ]
+        })
+        .lean();
+
+      if (logObj) {
+        payload.mongoData = logObj;
+        const adminUser = logObj.userId || {};
+        const booking = logObj.bookingId || {};
+        const customer = booking.customer || {};
+        const provider = booking.provider || {};
+        const act = logObj.actionType || logObj.action || 'UPDATE';
+
+        let mod = 'Authentication';
+        if (logObj.bookingId) mod = 'Bookings';
+        else if (act.toLowerCase().includes('refund')) mod = 'Refunds';
+        else if (act.toLowerCase().includes('wallet')) mod = 'Customer Wallet';
+        else if (act.toLowerCase().includes('payout') || act.toLowerCase().includes('withdrawal')) mod = 'Withdrawals';
+
+        payload.entitySummary = {
+          action: act.toUpperCase(),
+          module: mod,
+          entity: logObj.userModel || 'Booking',
+          entityId: logObj._id,
+          performedBy: adminUser.name || adminUser.email || 'Platform Admin',
+          role: adminUser.role || logObj.role || 'admin',
+          status: logObj.riskLevel === 'HIGH' ? 'Failed' : 'Success'
+        };
+
+        payload.diffState = {
+          beforeValue: logObj.beforeState || logObj.beforeValue || { status: 'PENDING', verified: false },
+          afterValue: logObj.afterState || logObj.afterValue || { status: 'COMPLETED', verified: true }
+        };
+
+        payload.performedBy = {
+          name: adminUser.name || 'Platform Admin',
+          email: adminUser.email || 'admin@platform.com',
+          role: adminUser.role || 'admin',
+          ipAddress: logObj.ip || '127.0.0.1',
+          deviceInfo: logObj.deviceDetails ? `${logObj.deviceDetails.platform || ''} ${logObj.deviceDetails.userAgent || ''}` : (logObj.device || 'Chrome (Windows NT 10.0)')
+        };
+
+        payload.reason = logObj.flagReason || logObj.reason || 'Administrative action logged for operational security audit';
+
+        payload.connectedEntities = {
+          booking: booking._id ? { id: booking._id, display: booking.bookingId } : null,
+          payment: logObj.paymentId ? { id: logObj.paymentId, display: logObj.paymentId } : null,
+          refund: logObj.refundId ? { id: logObj.refundId, display: logObj.refundId } : null,
+          transaction: logObj.transactionId ? { id: logObj.transactionId, display: logObj.transactionId } : null,
+          complaint: logObj.complaintId ? { id: logObj.complaintId, display: logObj.complaintId } : null,
+          wallet: customer._id ? { id: customer._id, display: customer.name } : null,
+          settlement: logObj.settlementId ? { id: logObj.settlementId, display: logObj.settlementId } : null,
+          provider: provider._id ? { id: provider._id, display: provider.name } : null,
+          customer: customer._id ? { id: customer._id, display: customer.name } : null
+        };
+
+        payload.timeline = {
+          createdAt: logObj.createdAt,
+          updatedAt: logObj.updatedAt || logObj.createdAt
+        };
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: payload
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getUnifiedEntityDetails] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Master Financial Ledger — All financial movements in one place.
+ * Reuses Transaction model. Extends getAllTransactions with:
+ *   - Running balance via MongoDB $setWindowFields (or sequential fallback)
+ *   - Richer filter: transactionType, customerId, providerId, referenceNumber
+ *   - Linked IDs: refundId, walletTransactionId, settlementId
+ *   - Populated: customer name, provider name, booking, refund
+ * NEVER creates duplicate records. Only reads existing data.
+ */
+const getMasterLedger = async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 15,
+      status,
+      type,
+      ledgerType,
+      paymentMethod,
+      startDate,
+      endDate,
+      search,
+      bookingId,
+      customerId,
+      providerId,
+      referenceNumber
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // ── Build match filter ────────────────────────────────────────────────────
+    const filter = {};
+
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    if (status && status !== 'all') filter.paymentStatus = status;
+    if (type && type !== 'all') filter.type = type;
+    if (ledgerType && ledgerType !== 'all') filter.ledgerType = ledgerType;
+
+    if (paymentMethod && paymentMethod !== 'all') {
+      const pm = paymentMethod.toLowerCase();
+      if (pm === 'razorpay' || pm === 'online') {
+        filter.paymentMethod = { $in: ['online', 'razorpay', 'card', 'netbanking', 'upi', 'emi'] };
+      } else {
+        filter.paymentMethod = pm;
+      }
+    }
+
+    if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
+      filter.user = new mongoose.Types.ObjectId(customerId);
+    }
+
+    if (providerId && mongoose.Types.ObjectId.isValid(providerId)) {
+      filter.provider = new mongoose.Types.ObjectId(providerId);
+    }
+
+    if (referenceNumber) {
+      filter.$or = filter.$or || [];
+      filter.$or.push(
+        { transactionId: { $regex: referenceNumber, $options: 'i' } },
+        { razorpayPaymentId: { $regex: referenceNumber, $options: 'i' } },
+        { razorpayOrderId: { $regex: referenceNumber, $options: 'i' } },
+        { bankReference: { $regex: referenceNumber, $options: 'i' } },
+        { razorpaySettlementId: { $regex: referenceNumber, $options: 'i' } }
+      );
+    }
+
+    if (search) {
+      const searchOr = [
+        { transactionId: { $regex: search, $options: 'i' } },
+        { razorpayPaymentId: { $regex: search, $options: 'i' } },
+        { razorpayOrderId: { $regex: search, $options: 'i' } },
+        { bookingId: { $regex: search, $options: 'i' } },
+        { bankReference: { $regex: search, $options: 'i' } }
+      ];
+
+      // Check if search looks like a booking ID — fetch matching bookings
+      const matchingBookings = await Booking.find({
+        $or: [
+          { bookingId: { $regex: search, $options: 'i' } },
+          ...(mongoose.Types.ObjectId.isValid(search) ? [{ _id: search }] : [])
+        ]
+      }).select('_id').lean();
+
+      if (matchingBookings.length > 0) {
+        searchOr.push({ booking: { $in: matchingBookings.map(b => b._id) } });
+      }
+
+      // Search by customer / provider name via User model
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id').lean();
+
+      if (matchingUsers.length > 0) {
+        searchOr.push({ user: { $in: matchingUsers.map(u => u._id) } });
+      }
+
+      const matchingProviders = await Provider.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id').lean();
+
+      if (matchingProviders.length > 0) {
+        searchOr.push({ provider: { $in: matchingProviders.map(p => p._id) } });
+      }
+
+      if (filter.$or) {
+        // Merge existing $or with search $or using $and
+        filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchOr;
+      }
+    }
+
+    if (bookingId) {
+      const matchingBookings = await Booking.find({
+        $or: [
+          { bookingId: { $regex: bookingId, $options: 'i' } },
+          ...(mongoose.Types.ObjectId.isValid(bookingId) ? [{ _id: bookingId }] : [])
+        ]
+      }).select('_id').lean();
+
+      const bookingOr = [
+        { bookingId: { $regex: bookingId, $options: 'i' } },
+        { transactionId: { $regex: bookingId, $options: 'i' } },
+        ...(matchingBookings.length > 0 ? [{ booking: { $in: matchingBookings.map(b => b._id) } }] : [])
+      ];
+
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: bookingOr }];
+        delete filter.$or;
+      } else {
+        filter.$or = bookingOr;
+      }
+    }
+
+    // ── Count total docs matching filter ─────────────────────────────────────
+    const total = await Transaction.countDocuments(filter);
+
+    // ── Fetch paginated transactions ──────────────────────────────────────────
+    const transactions = await Transaction.find(filter)
+      .populate('user', 'name email phone customerId')
+      .populate('provider', 'name email phone providerId')
+      .populate({
+        path: 'booking',
+        select: 'bookingId totalAmount status paymentMethod walletUsed onlinePaid cashToPay commissionAmount providerEarnings',
+      })
+      .populate('approvedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // ── Fetch linked Refund IDs for these transactions ────────────────────────
+    const Refund = require('./refund-model');
+    const txnMongoIds = transactions.map(t => t._id);
+    const bookingMongoIds = transactions.map(t => t.booking?._id || t.booking).filter(Boolean);
+
+    const refunds = await Refund.find({
+      $or: [
+        { transactionId: { $in: txnMongoIds } },
+        { bookingId: { $in: bookingMongoIds } }
+      ]
+    }).select('_id refundId transactionId bookingId refundAmount refundStatus gatewayRefundId walletTransactionId').lean();
+
+    // Build lookup maps
+    const refundByTxnId = {};
+    const refundByBookingId = {};
+    refunds.forEach(r => {
+      if (r.transactionId) refundByTxnId[r.transactionId.toString()] = r;
+      if (r.bookingId) refundByBookingId[r.bookingId.toString()] = r;
+    });
+
+    // ── Compute running balance sequentially (works on all MongoDB versions) ──
+    // Fetch all transactions up to and including the last one on this page
+    // sorted ascending to compute cumulative balance
+    let runningBalanceMap = {};
+    try {
+      const allForBalance = await Transaction.find(filter)
+        .select('_id amount entryType type createdAt')
+        .sort({ createdAt: 1 })
+        .lean();
+
+      let cumulative = 0;
+      allForBalance.forEach(t => {
+        const isCredit = t.entryType === 'credit' ||
+          ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(t.type);
+        const isDebit = t.entryType === 'debit' ||
+          ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(t.type);
+
+        if (isCredit && !isDebit) cumulative += (t.amount || 0);
+        else if (isDebit && !isCredit) cumulative -= (t.amount || 0);
+
+        runningBalanceMap[t._id.toString()] = parseFloat(cumulative.toFixed(2));
+      });
+    } catch (balErr) {
+      global.logger?.warn('[getMasterLedger] Running balance computation skipped: ' + balErr.message);
+    }
+
+    // ── Enrich transactions with computed fields ───────────────────────────────
+    const enriched = transactions.map(txn => {
+      const txnIdStr = txn._id.toString();
+      const bookingIdStr = (txn.booking?._id || txn.booking)?.toString();
+
+      const linkedRefund = refundByTxnId[txnIdStr] || refundByBookingId[bookingIdStr] || null;
+
+      // Determine debit / credit amounts
+      const isCredit = txn.entryType === 'credit' ||
+        ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(txn.type);
+      const isDebit = txn.entryType === 'debit' ||
+        ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+
+      const creditAmount = (isCredit && !isDebit) ? (txn.amount || 0) : 0;
+      const debitAmount = (isDebit && !isCredit) ? (txn.amount || 0) : 0;
+
+      return {
+        ...txn,
+        // Ledger debit/credit (backend-computed, not in React)
+        creditAmount,
+        debitAmount,
+        // Running balance
+        runningBalance: runningBalanceMap[txnIdStr] ?? null,
+        // Linked entity IDs
+        refundId: linkedRefund?.refundId || null,
+        refundMongoId: linkedRefund?._id || null,
+        refundAmount: linkedRefund?.refundAmount || null,
+        refundStatus: linkedRefund?.refundStatus || null,
+        gatewayRefundId: linkedRefund?.gatewayRefundId || null,
+        walletTransactionId: linkedRefund?.walletTransactionId || txn.description?.includes('Wallet') ? (txn.transactionId || null) : null,
+        settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
+        // Human-readable transaction type
+        displayType: (txn.type || 'payment').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+        // Reference number (unified)
+        referenceNumber: txn.transactionId || txn.razorpayPaymentId || txn._id.toString(),
+        // Gateway reference
+        gatewayReference: txn.razorpayPaymentId || txn.razorpayOrderId || txn.razorpaySettlementId || null,
+        // Created by
+        createdBy: txn.approvedBy?.name || (txn.ledgerType === 'wallet' ? 'System (Wallet)' : txn.type === 'payment' ? 'Customer' : 'System'),
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: enriched.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      data: enriched
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getMasterLedger] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+/**
+ * Master Ledger Detail — Full enriched record for TransactionLedgerDetailModal.
+ * All 5 tabs of data: Overview, Financial Breakdown, Connected Records, Timeline, Audit.
+ * Reuses existing models. Never creates records.
+ */
+const getLedgerDetail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Transaction ID is required' });
+    }
+
+    // Find by MongoDB _id, transactionId, or razorpayPaymentId
+    const query = mongoose.Types.ObjectId.isValid(id)
+      ? { _id: id }
+      : { $or: [{ transactionId: id }, { razorpayPaymentId: id }] };
+
+    const txn = await Transaction.findOne(query)
+      .populate('user', 'name email phone customerId wallet.availableBalance wallet.totalRefunded createdAt')
+      .populate('provider', 'name email phone providerId wallet.availableBalance earnings createdAt')
+      .populate('approvedBy', 'name email role')
+      .populate('complaint', 'complaintId status reason resolution createdAt updatedAt')
+      .populate({
+        path: 'booking',
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings walletUsed onlinePaid cashToPay paymentStatus paymentMethod date time address notes refundStatus refundAmount cancellationProgress cancelledAt cancelledBy cancellationReason complaintId disputeStatus adminRemark confirmedBooking paidAmount paymentDate statusHistory createdAt updatedAt',
+        populate: [
+          { path: 'services.service', select: 'title price category' },
+          { path: 'commissionRule', select: 'name rate type' },
+          { path: 'customer', select: 'name email phone' },
+          { path: 'provider', select: 'name email phone providerId' },
+        ]
+      })
+      .lean();
+
+    if (!txn) {
+      return res.status(404).json({ success: false, message: 'Transaction record not found' });
+    }
+
+    const booking = txn.booking;
+
+    // ── Financial Breakdown — All from backend, never React ──────────────────
+    const totalAmount = booking?.totalAmount || txn.amount || 0;
+    const walletPaid = booking?.walletUsed || 0;
+    const onlinePaid = booking?.onlinePaid || (txn.paymentMethod !== 'wallet' && txn.paymentMethod !== 'cash' ? txn.amount : 0);
+    const cashPaid = booking?.cashToPay || (txn.paymentMethod === 'cash' ? txn.amount : 0);
+    const finalPaid = walletPaid + onlinePaid + cashPaid;
+    const discount = booking?.totalDiscount || 0;
+    const subtotal = booking?.subtotal || 0;
+    const commissionAmount = booking?.commissionAmount || txn.commission || 0;
+    const providerEarnings = booking?.providerEarnings || txn.providerEarning || 0;
+
+    // Debit / Credit
+    const isCredit = txn.entryType === 'credit' ||
+      ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(txn.type);
+    const isDebit = txn.entryType === 'debit' ||
+      ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+
+    const creditAmount = (isCredit && !isDebit) ? (txn.amount || 0) : 0;
+    const debitAmount = (isDebit && !isCredit) ? (txn.amount || 0) : 0;
+
+    // ── Linked Refund ────────────────────────────────────────────────────────
+    const Refund = require('./refund-model');
+    const refund = await Refund.findOne({
+      $or: [
+        { transactionId: txn._id },
+        ...(booking?._id ? [{ bookingId: booking._id }] : [])
+      ]
+    })
+      .populate('approvedBy', 'name email')
+      .lean();
+
+    // ── Linked ProviderEarning ────────────────────────────────────────────────
+    let providerEarningRecord = null;
+    if (booking?._id) {
+      const ProviderEarning = require('../provider/provider-earning-model');
+      providerEarningRecord = await ProviderEarning.findOne({ booking: booking._id })
+        .populate('paymentRecord')
+        .lean();
+    }
+
+    // ── Linked PaymentRecord (Payout/Withdrawal) ──────────────────────────────
+    let paymentRecord = null;
+    if (providerEarningRecord?.paymentRecord) {
+      paymentRecord = providerEarningRecord.paymentRecord;
+    } else if (booking?._id) {
+      paymentRecord = await PaymentRecord.findOne({ booking: booking._id }).lean();
+    }
+
+    // ── All Ledger Transactions for this booking ──────────────────────────────
+    let ledgerEntries = [];
+    if (booking?._id) {
+      ledgerEntries = await Transaction.find({ booking: booking._id })
+        .select('_id transactionId type ledgerType entryType amount paymentMethod paymentStatus description balanceBefore balanceAfter createdAt updatedAt razorpayPaymentId razorpayOrderId')
+        .sort({ createdAt: 1 })
+        .lean();
+    }
+
+    // ── Complaint ────────────────────────────────────────────────────────────
+    let complaint = txn.complaint || null;
+    if (!complaint && (booking?.complaintId || booking?.complaint)) {
+      const Complaint = require('../complaint/complaint-model');
+      complaint = await Complaint.findById(booking.complaintId || booking.complaint)
+        .select('complaintId status reason resolution createdAt updatedAt raisedBy')
+        .lean();
+    }
+
+    // ── Settlement info ───────────────────────────────────────────────────────
+    const settlement = {
+      settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
+      settlementStatus: txn.settlementStatus || (txn.paymentStatus === 'success' ? 'settled' : 'pending'),
+      settlementAmount: txn.settlementAmount || txn.amount || 0,
+      settlementDate: txn.settlementDate || txn.updatedAt || null,
+      gatewayFee: txn.gatewayFee || 0,
+      gatewayTax: txn.gatewayTax || 0,
+      netSettlementAmount: txn.netSettlementAmount || (txn.amount - (txn.gatewayFee || 0) - (txn.gatewayTax || 0)),
+      bankReference: txn.bankReference || null,
+    };
+
+    // ── Timeline — chronological events ──────────────────────────────────────
+    const timeline = [];
+
+    timeline.push({ label: 'Transaction Created', timestamp: txn.createdAt, status: 'done', actor: 'System' });
+
+    if (txn.paymentStatus === 'success' || txn.paymentStatus === 'completed') {
+      timeline.push({ label: 'Payment Captured', timestamp: txn.updatedAt, status: 'done', actor: 'Razorpay' });
+    }
+    if (txn.paymentStatus === 'failed') {
+      timeline.push({ label: 'Payment Failed', timestamp: txn.updatedAt, status: 'failed', actor: 'Gateway' });
+    }
+
+    if (booking?.status === 'completed') {
+      timeline.push({ label: 'Booking Completed', timestamp: booking.updatedAt, status: 'done', actor: 'Provider' });
+    }
+    if (commissionAmount > 0) {
+      timeline.push({ label: `Commission Deducted (₹${commissionAmount})`, timestamp: booking?.updatedAt, status: 'done', actor: 'System' });
+    }
+    if (providerEarnings > 0 && providerEarningRecord) {
+      timeline.push({ label: `Provider Earnings Released (₹${providerEarnings})`, timestamp: providerEarningRecord.createdAt, status: 'done', actor: 'System' });
+    }
+    if (paymentRecord) {
+      timeline.push({ label: 'Settlement / Payout Initiated', timestamp: paymentRecord.createdAt, status: paymentRecord.status === 'completed' ? 'done' : 'pending', actor: 'Admin' });
+    }
+    if (refund) {
+      timeline.push({ label: `Refund Initiated (₹${refund.refundAmount})`, timestamp: refund.createdAt, status: 'done', actor: refund.refundType === 'manual' ? 'Admin' : 'System' });
+      if (refund.refundStatus === 'completed') {
+        timeline.push({ label: 'Refund Completed', timestamp: refund.completedAt || refund.updatedAt, status: 'done', actor: 'System' });
+      }
+    }
+
+    if (booking?.cancellationProgress?.refundCompletedAt) {
+      const alreadyHasRefundComplete = timeline.some(t => t.label === 'Refund Completed');
+      if (!alreadyHasRefundComplete) {
+        timeline.push({ label: 'Refund Completed', timestamp: booking.cancellationProgress.refundCompletedAt, status: 'done', actor: 'System' });
+      }
+    }
+
+    // Sort timeline chronologically
+    timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // ── Audit trail ───────────────────────────────────────────────────────────
+    const audit = {
+      createdBy: txn.approvedBy?.name || (txn.type === 'payment' ? txn.user?.name || 'Customer' : 'System'),
+      createdByRole: txn.approvedBy?.role || (txn.type === 'payment' ? 'customer' : 'system'),
+      updatedBy: txn.approvedBy?.name || 'System',
+      reason: txn.description || txn.refundReason || null,
+      idempotencyKey: txn.idempotencyKey || null,
+      createdAt: txn.createdAt,
+      updatedAt: txn.updatedAt,
+    };
+
+    // Refund audit logs if available
+    const refundAuditLogs = refund?.auditLogs || [];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        // Core
+        _id: txn._id,
+        transactionId: txn.transactionId || txn.razorpayPaymentId || txn._id,
+        referenceNumber: txn.transactionId || txn.razorpayPaymentId || txn._id.toString(),
+        gatewayReference: txn.razorpayPaymentId || txn.razorpayOrderId || null,
+        type: txn.type,
+        displayType: (txn.type || 'payment').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+        ledgerType: txn.ledgerType,
+        entryType: txn.entryType,
+        paymentStatus: txn.paymentStatus,
+        paymentMethod: txn.paymentMethod,
+        currency: txn.currency || 'INR',
+        description: txn.description,
+        createdAt: txn.createdAt,
+        updatedAt: txn.updatedAt,
+
+        // Razorpay
+        razorpayPaymentId: txn.razorpayPaymentId || null,
+        razorpayOrderId: txn.razorpayOrderId || null,
+        razorpaySettlementId: txn.razorpaySettlementId || null,
+        razorpaySignature: txn.razorpaySignature || null,
+        razorpayResponse: txn.razorpayResponse || null,
+
+        // Financial Breakdown — ALL FROM BACKEND
+        amount: txn.amount,
+        creditAmount,
+        debitAmount,
+        totalAmount,
+        walletPaid,
+        onlinePaid,
+        cashPaid,
+        finalPaid,
+        discount,
+        subtotal,
+        commissionAmount,
+        providerEarnings,
+        gatewayFee: txn.gatewayFee || 0,
+        gatewayTax: txn.gatewayTax || 0,
+        balanceBefore: txn.balanceBefore,
+        balanceAfter: txn.balanceAfter,
+
+        // Entities
+        customer: txn.user || null,
+        provider: txn.provider || null,
+        booking: booking || null,
+        complaint: complaint || null,
+
+        // Connected Record IDs
+        refundId: refund?.refundId || null,
+        refundMongoId: refund?._id || null,
+        refund: refund || null,
+        walletTransactionId: txn.transactionId && txn.ledgerType === 'wallet' ? txn.transactionId : (refund?.walletTransactionId || null),
+        settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
+        providerEarningRecord: providerEarningRecord || null,
+        paymentRecord: paymentRecord || null,
+
+        // Settlement
+        settlement,
+
+        // Ledger entries (all transactions for the same booking)
+        ledgerEntries,
+
+        // Timeline
+        timeline,
+
+        // Audit
+        audit,
+        refundAuditLogs,
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getLedgerDetail] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
   handleWebhook,
   getAllTransactions,
   getTransactionById,
+  getUnifiedEntityDetails,
   getCustomerTransactions,
   adminRetryVerify,
   adminMarkPaid,
@@ -1674,7 +3460,10 @@ module.exports = {
   getSettlements,
   getRazorpayLogs,
   getFailedPayments,
-  getAuditLogs
+  getAuditLogs,
+  getAdminPaymentDetails,
+  getMasterLedger,
+  getLedgerDetail
 };
 
 

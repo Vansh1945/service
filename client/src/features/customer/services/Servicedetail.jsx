@@ -11,9 +11,9 @@ import {
   WrenchIcon, UserIcon, ClockIcon,
   ChatBubbleLeftEllipsisIcon, ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
+import LoadingSpinner from '../../../components/ui/Loader';
 import RelatedServicesComponent from './components/RelatedServices';
-import ErrorState from '../../../components/Error';
+import ErrorState from '../../../components/ui/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../../services/ServiceService';
 import { getMergedPrice as getMergedPriceUtil } from '../../../utils/surge';
 import useCategory from '../../../hooks/useCategory';
@@ -305,7 +305,7 @@ const ServiceDetailPage = () => {
             <div className="flex flex-col-reverse md:flex-row gap-4">
               {/* Thumbnails Column/Row */}
               {allImages.length > 1 && (
-                <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-y-auto pb-2 md:pb-0 scrollbar-none w-full md:w-20 max-h-[80px] md:max-h-[400px] flex-shrink-0">
+                <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-y-auto pb-2 md:pb-0 scrollbar-hide w-full md:w-20 max-h-[80px] md:max-h-[400px] flex-shrink-0">
                   {allImages.map((img, idx) => (
                     <button
                       key={idx}

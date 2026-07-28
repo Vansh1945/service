@@ -1021,15 +1021,9 @@ class PaymentService {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999); // Include the entire end date
 
-        const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-        if (diffDays < 7) {
-          return res.status(400).json({ success: false, error: "Minimum range is 7 days" });
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          filter.createdAt = { $gte: start, $lte: end };
         }
-        if (diffDays > 62) {
-          return res.status(400).json({ success: false, error: "Maximum range is 2 months" });
-        }
-
-        filter.createdAt = { $gte: start, $lte: end };
       }
 
       // Get total count for pagination
@@ -1371,15 +1365,9 @@ class PaymentService {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-        if (diffDays < 7) {
-          return res.status(400).json({ success: false, message: "Minimum range is 7 days" });
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          filter.createdAt = { $gte: start, $lte: end };
         }
-        if (diffDays > 62) {
-          return res.status(400).json({ success: false, message: "Maximum range is 2 months" });
-        }
-
-        filter.createdAt = { $gte: start, $lte: end };
       }
 
       const records = await PaymentRecord.find(filter)
@@ -1471,18 +1459,13 @@ class PaymentService {
       if (startDate && endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
-        const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-        if (diffDays < 7) {
-          return res.status(400).json({ success: false, error: "Minimum range is 7 days" });
-        }
-        if (diffDays > 62) {
-          return res.status(400).json({ success: false, error: "Maximum range is 2 months" });
-        }
         end.setHours(23, 59, 59, 999); // Include the entire end date
-        filter.createdAt = {
-          $gte: start,
-          $lte: end
-        };
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          filter.createdAt = {
+            $gte: start,
+            $lte: end
+          };
+        }
       }
 
       const skip = (page - 1) * limit;

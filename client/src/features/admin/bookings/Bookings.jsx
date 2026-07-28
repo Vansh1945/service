@@ -3,35 +3,12 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import { useSocket } from '../../../socket/SocketContext';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
+import SectionHeader from '../../../components/ui/SectionHeader';
 import useDebounce from '../../../hooks/useDebounce';
+import { getStatusColor } from '../../../utils/status';
+import axiosInstance from '../../../api/axiosInstance';
 import AdminSearchBar from '../../../components/AdminSearchBar';
-// Local status helper functions
-const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-        case 'pending':
-            return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-        case 'waiting admin assignment':
-            return 'bg-red-50 text-red-700 border-red-500 font-extrabold animate-pulse';
-        case 'accepted':
-        case 'new':
-            return 'bg-blue-50 text-blue-800 border-blue-200';
-        case 'in-progress':
-        case 'started':
-            return 'bg-indigo-50 text-indigo-800 border-indigo-200';
-        case 'completed':
-        case 'active':
-        case 'approved':
-        case 'replied':
-            return 'bg-green-50 text-green-800 border-green-200';
-        case 'cancelled':
-        case 'inactive':
-        case 'restricted':
-        case 'rejected':
-            return 'bg-red-50 text-red-800 border-red-200';
-        default:
-            return 'bg-gray-50 text-gray-800 border-gray-200';
-    }
-};
+
 
 const getStatusIcon = (status) => {
     const baseClass = "w-4 h-4";
@@ -88,12 +65,12 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 };
 import * as BookingService from '../../../services/BookingService';
 import * as AdminService from '../../../services/AdminService';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import AdminFilterBar, { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { formatDate, formatTime, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
 import {
@@ -685,7 +662,7 @@ const AdminBookingsView = () => {
 
             if (bookingId) {
                 try {
-                    const response = await API.get(`/api/complaint?booking=${bookingId}&limit=50`);
+                    const response = await axiosInstance.get(`/complaint?booking=${bookingId}&limit=50`);
                     if (response.data.success && Array.isArray(response.data.data)) {
                         response.data.data.forEach(c => {
                             if (c && c._id && !seenIds.has(c._id.toString())) {
@@ -701,7 +678,7 @@ const AdminBookingsView = () => {
 
             if (customerId) {
                 try {
-                    const response = await API.get(`/api/complaint?customerId=${customerId}&limit=50`);
+                    const response = await axiosInstance.get(`/complaint?customerId=${customerId}&limit=50`);
                     if (response.data.success && Array.isArray(response.data.data)) {
                         response.data.data.forEach(c => {
                             if (c && c._id && !seenIds.has(c._id.toString())) {
@@ -718,7 +695,7 @@ const AdminBookingsView = () => {
             // Fallback: fetch open complaints so admin can link any active complaint if desired
             if (list.length === 0) {
                 try {
-                    const openRes = await API.get('/api/complaint?limit=50');
+                    const openRes = await axiosInstance.get('/complaint?limit=50');
                     if (openRes.data.success && Array.isArray(openRes.data.data)) {
                         openRes.data.data.forEach(c => {
                             if (c && c._id && !seenIds.has(c._id.toString())) {
@@ -1254,35 +1231,35 @@ const AdminBookingsView = () => {
     return (
         <div className="min-h-screen p-4 md:p-6">
             {/* Header Section */}
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold text-secondary mb-2">Bookings Management</h1>
-                <p className="text-gray-600">Manage and monitor all bookings in the system</p>
-            </div>
+            <SectionHeader
+                title="Bookings Management"
+                subtitle="Manage and monitor all bookings in the system"
+            />
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <StatsCard
+                <StatCard
                     title="Total Bookings"
                     value={stats.total}
                     icon={BarChart2}
                     iconBg="bg-teal-50"
                     iconColor="text-primary"
                 />
-                <StatsCard
+                <StatCard
                     title="Pending"
                     value={<span className="text-yellow-600">{stats.pending}</span>}
                     icon={AlertCircle}
                     iconBg="bg-yellow-50"
                     iconColor="text-yellow-600"
                 />
-                <StatsCard
+                <StatCard
                     title="Completed"
                     value={<span className="text-green-600">{stats.completed}</span>}
                     icon={CheckCircle}
                     iconBg="bg-green-50"
                     iconColor="text-green-600"
                 />
-                <StatsCard
+                <StatCard
                     title="Revenue"
                     value={<span className="text-primary"><PriceDisplay amount={stats.revenue} type="text-only" /></span>}
                     icon={DollarSign}

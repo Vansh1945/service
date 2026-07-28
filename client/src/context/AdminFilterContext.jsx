@@ -252,6 +252,50 @@ export const AdminFilterProvider = ({ children }) => {
     return query;
   }, [getComputedDateRange, zoneIds, searchQuery, paymentMethod, bookingStatus, transactionType, refundStatus, gatewayStatus, settlementStatus]);
 
+  const getEntityRoute = useCallback((entityType, id) => {
+    if (!id) return '/admin/dashboard';
+    const cleanId = String(id).trim();
+    const type = (entityType || '').toLowerCase();
+
+    switch (type) {
+      case 'booking':
+        return `/admin/bookings?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'payment':
+      case 'razorpay_payment':
+      case 'gateway_payment':
+        return `/admin/payments?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'transaction':
+      case 'ledger':
+        return `/admin/transactions?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'refund':
+        return `/admin/refunds?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'complaint':
+        return `/admin/complaints?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'settlement':
+        return `/admin/settlements?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'withdrawal':
+      case 'payout':
+        return `/admin/payout?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'customer_wallet':
+        return `/admin/customer-wallets?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'provider_wallet':
+        return `/admin/provider-wallets?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'wallet':
+        return `/admin/customer-wallets?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'customer':
+        return `/admin/customers?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'provider':
+        return `/admin/approve-providers?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'audit':
+      case 'audit_log':
+        return `/admin/audit-logs?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'fraud':
+        return `/admin/fraud?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      default:
+        return `/admin/bookings?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+    }
+  }, []);
+
   return (
     <AdminFilterContext.Provider
       value={{
@@ -290,7 +334,8 @@ export const AdminFilterProvider = ({ children }) => {
         popDrawerHistory,
         getComputedDateRange,
         resetGlobalFilters,
-        getMergedQuery
+        getMergedQuery,
+        getEntityRoute
       }}
     >
       {children}

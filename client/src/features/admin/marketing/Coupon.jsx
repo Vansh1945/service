@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import {
   Plus,
   Edit,
@@ -29,7 +29,7 @@ import { formatCurrency, formatDate } from '../../../utils/format';
 import HierarchicalZoneSelector from '../../../components/HierarchicalZoneSelector';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import AdminFilterBar from '../../../components/AdminFilterBar';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 const AdminCoupons = () => {
   const { API, _token } = useAuth();
@@ -843,35 +843,35 @@ const AdminCoupons = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
-          <StatsCard
+          <StatCard
             title="Total Coupons"
             value={stats.total}
             icon={Gift}
             iconBg="bg-teal-100"
             iconColor="text-primary"
           />
-          <StatsCard
+          <StatCard
             title="Active Coupons"
             value={stats.active}
             icon={CheckCircle}
             iconBg="bg-green-100"
             iconColor="text-green-600"
           />
-          <StatsCard
+          <StatCard
             title="Expired Coupons"
             value={stats.expired}
             icon={XCircle}
             iconBg="bg-red-100"
             iconColor="text-red-650"
           />
-          <StatsCard
+          <StatCard
             title="Global Coupons"
             value={stats.global}
             icon={Globe}
             iconBg="bg-blue-100"
             iconColor="text-blue-600"
           />
-          <StatsCard
+          <StatCard
             title="First Booking"
             value={stats.firstBooking}
             icon={Users}

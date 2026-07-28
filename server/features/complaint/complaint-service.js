@@ -1148,6 +1148,8 @@ class ComplaintService {
               await RefundEngineService.processRefundRequest({
                 bookingId: booking._id,
                 refundSource: 'complaint_resolution',
+                refundDestination: req.body.refundDestination || req.body.customerChoice || null,
+                customerChoice: req.body.customerChoice || req.body.refundDestination || 'none',
                 refundAmount: refundAmount,
                 refundReason: resolutionNotes || 'Complaint resolution refund',
                 cancellationReason: resolutionNotes,

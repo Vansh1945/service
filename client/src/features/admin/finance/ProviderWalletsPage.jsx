@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { FiBriefcase, FiDollarSign, FiLock, FiAlertCircle, FiEye } from 'react-icons/fi';
+import { FiBriefcase, FiDollarSign, FiLock, FiAlertCircle, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import AdminFilterBar from '../../../components/AdminFilterBar';
+import { fmtDate } from '../../../utils/format';
+import usePagination from '../../../hooks/usePagination';
+import useDebounce from '../../../hooks/useDebounce';
 
 const ProviderWalletsPage = () => {
   const [data, setData] = useState({
@@ -14,20 +17,24 @@ const ProviderWalletsPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+
+  const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const debouncedSearch = useDebounce(searchQuery, 500);
 
   const fetchWallets = async () => {
     try {
       setLoading(true);
       setError(null);
-      const params = getMergedQuery({ page, limit: 10, search: searchQuery });
+      const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch });
       const res = await TransactionService.getProviderWallets(params);
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
-        setTotalPages(res.data.data.totalPages || 1);
+        setPaginationData({
+          total: res.data.data.total || res.data.data.providers?.length || 0,
+          pages: res.data.data.totalPages || 1
+        });
       }
     } catch (err) {
       console.error("Error loading provider wallets:", err);
@@ -39,115 +46,151 @@ const ProviderWalletsPage = () => {
 
   useEffect(() => {
     fetchWallets();
-  }, [page, searchQuery]);
+  }, [currentPage, limit, debouncedSearch]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openDetail') === 'true' && data.providers?.length > 0) {
+      const searchVal = params.get('search');
+      const target = data.providers.find(p =>
+        p._id === searchVal ||
+        p.providerId === searchVal ||
+        p.name === searchVal ||
+        p.phone === searchVal
+      ) || data.providers[0];
+      if (target) {
+        openInvestigationDrawer('provider_wallet', target._id, target);
+      }
+    }
+  }, [data.providers, openInvestigationDrawer]);
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+      {/* Header Banner */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center">
             <span className="p-2 bg-blue-50 text-blue-600 rounded-xl mr-3">
               <FiBriefcase className="w-6 h-6" />
             </span>
-            Provider Wallet & Escrow Management (Live Data)
+            Provider Wallet Management Console
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Monitor provider available balances, escrow reserves, pending payout liabilities, and penalty deductions.
+          <p className="text-sm text-slate-500 mt-1">
+            Lightweight provider wallet console displaying available balances, escrow reserves, pending payouts, penalties, and settlement activity.
           </p>
         </div>
+        <button
+          onClick={fetchWallets}
+          className="text-xs bg-blue-700 text-white px-4 py-2.5 rounded-xl hover:bg-blue-800 font-bold shadow-xs transition-all flex items-center gap-1.5 self-start md:self-auto"
+        >
+          <FiShield className="w-4 h-4" /> Refresh Ledger
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-
-
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-xs font-semibold uppercase text-gray-400 tracking-wider">Total Available Balance</p>
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Available Balance</p>
           <h3 className="text-2xl font-black text-blue-700 mt-1">
-            <PriceDisplay amount={data.summary.totalBalance} />
+            <PriceDisplay amount={data.summary?.totalBalance || 0} />
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-xs font-semibold uppercase text-gray-400 tracking-wider">Total Escrow Reserve</p>
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Escrow Reserve</p>
           <h3 className="text-2xl font-black text-amber-600 mt-1">
-            <PriceDisplay amount={data.summary.totalEscrow} />
+            <PriceDisplay amount={data.summary?.totalEscrow || 0} />
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-xs font-semibold uppercase text-gray-400 tracking-wider">Pending Payout Liability</p>
-          <h3 className="text-2xl font-black text-purple-600 mt-1">
-            <PriceDisplay amount={data.summary.totalPendingPayout} />
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Pending Payout Liability</p>
+          <h3 className="text-2xl font-black text-primary mt-1">
+            <PriceDisplay amount={data.summary?.totalPendingPayout || 0} />
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-xs font-semibold uppercase text-gray-400 tracking-wider">Penalties / Deductions</p>
-          <h3 className="text-2xl font-black text-red-600 mt-1">
-            <PriceDisplay amount={data.summary.totalPenalty} />
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Penalties / Deductions</p>
+          <h3 className="text-2xl font-black text-rose-600 mt-1">
+            <PriceDisplay amount={data.summary?.totalPenalty || 0} />
           </h3>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Exact 8-Column Provider Wallet Table */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-6"><TableSkeleton rows={5} columns={7} /></div>
+          <TableSkeleton rows={6} columns={8} standalone />
         ) : error ? (
-          <div className="p-6 text-center text-red-600 font-semibold text-sm">{error}</div>
+          <div className="p-6 text-center text-rose-600 font-semibold text-sm">{error}</div>
         ) : data.providers.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 text-sm">No provider wallet records found.</div>
+          <div className="p-12 text-center text-slate-500 text-sm">No provider wallet records found.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-600">
-              <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1000px]">
+              <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
                   <th className="p-3.5">Provider</th>
-                  <th className="p-3.5">Contact</th>
                   <th className="p-3.5">Available Balance</th>
-                  <th className="p-3.5">Escrow Reserve</th>
+                  <th className="p-3.5">Escrow Balance</th>
                   <th className="p-3.5">Pending Payout</th>
-                  <th className="p-3.5">Payout Status</th>
+                  <th className="p-3.5">Penalty Balance</th>
+                  <th className="p-3.5">Total Withdrawn</th>
+                  <th className="p-3.5">Last Settlement Date</th>
                   <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {data.providers.map((p) => (
-                  <tr key={p._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-3.5 font-semibold text-gray-900 text-xs">
+                  <tr key={p._id} className="hover:bg-blue-50/20 transition-colors">
+
+                    {/* 1. Provider Profile */}
+                    <td className="p-3.5 font-bold text-slate-900">
                       <button
                         onClick={() => openInvestigationDrawer('provider', p._id, p)}
-                        className="text-blue-700 font-bold hover:underline"
+                        className="text-blue-700 hover:underline flex flex-col text-left"
                       >
-                        {p.name || 'Provider'}
+                        <span className="font-extrabold">{p.name || 'Provider'}</span>
+                        <span className="text-[11px] font-normal text-slate-400">{p.email || p.phone || 'N/A'}</span>
                       </button>
                     </td>
-                    <td className="p-3.5 text-xs text-gray-500">
-                      <div>{p.email}</div>
-                      <div className="text-[11px] text-gray-400">{p.phone}</div>
+
+                    {/* 2. Available Balance */}
+                    <td className="p-3.5 font-black text-blue-700 text-sm">
+                      <PriceDisplay amount={p.availableBalance ?? p.wallet?.availableBalance ?? 0} />
                     </td>
-                    <td className="p-3.5 font-bold text-blue-700">
-                      <PriceDisplay amount={p.wallet?.availableBalance || 0} />
+
+                    {/* 3. Escrow Balance */}
+                    <td className="p-3.5 font-bold text-amber-600">
+                      <PriceDisplay amount={p.escrowBalance ?? p.wallet?.escrowBalance ?? 0} />
                     </td>
-                    <td className="p-3.5 font-semibold text-amber-600">
-                      <PriceDisplay amount={p.wallet?.escrowBalance || 0} />
+
+                    {/* 4. Pending Payout */}
+                    <td className="p-3.5 font-bold text-purple-600">
+                      <PriceDisplay amount={p.pendingPayout ?? p.wallet?.pendingPayout ?? 0} />
                     </td>
-                    <td className="p-3.5 font-semibold text-purple-700">
-                      <PriceDisplay amount={p.wallet?.pendingPayout || p.pendingPayout || 0} />
+
+                    {/* 5. Penalty Balance */}
+                    <td className="p-3.5 font-bold text-rose-600">
+                      <PriceDisplay amount={p.penaltyBalance ?? p.wallet?.totalPenalty ?? 0} />
                     </td>
-                    <td className="p-3.5">
-                      {p.payoutHold ? (
-                        <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-700 rounded-full text-xs font-bold">
-                          <FiLock className="mr-1" /> HOLD ACTIVE
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-bold">
-                          READY FOR PAYOUT
-                        </span>
-                      )}
+
+                    {/* 6. Total Withdrawn */}
+                    <td className="p-3.5 font-bold text-emerald-600">
+                      <PriceDisplay amount={p.totalWithdrawn ?? p.wallet?.totalWithdrawn ?? 0} />
                     </td>
-                    <td className="p-3.5 text-right">
+
+                    {/* 7. Last Settlement Date */}
+                    <td className="p-3.5 text-slate-400 whitespace-nowrap">
+                      {fmtDate(p.lastSettlementDate || p.wallet?.lastUpdated || p.createdAt)}
+                    </td>
+
+                    {/* 8. Actions */}
+                    <td className="p-3.5 text-right whitespace-nowrap">
                       <button
-                        onClick={() => openInvestigationDrawer('provider', p._id, p)}
-                        className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all"
+                        onClick={() => openInvestigationDrawer('provider_wallet', p._id, p)}
+                        className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
                       >
-                        <FiEye className="mr-1.5" /> Details
+                        <FiEye className="mr-1.5" /> View Details
                       </button>
                     </td>
                   </tr>
@@ -158,8 +201,14 @@ const ProviderWalletsPage = () => {
         )}
 
         {totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex justify-end">
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          <div className="border-t border-slate-100 flex justify-end">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              limit={limit}
+              onPageChange={onPageChange}
+            />
           </div>
         )}
       </div>

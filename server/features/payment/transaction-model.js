@@ -74,8 +74,8 @@ const transactionSchema = new Schema({
   type: {
     type: String,
     enum: [
-      'payment', 'refund', 'referralreward', 'penalty', 'commissiondeduction', 
-      'withdrawal', 'withdrawalrejection', 'refundrecovery', 'wallet_topup', 
+      'payment', 'refund', 'referralreward', 'penalty', 'commissiondeduction',
+      'withdrawal', 'withdrawalrejection', 'refundrecovery', 'wallet_topup',
       'settlement', 'cashback', 'adjustment', 'escrow_hold', 'escrow_release'
     ],
     default: 'payment',

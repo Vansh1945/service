@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
-import Loader from '../../../components/ui-skeletons/Loader';
-import StatsCard from '../../../components/ui/StatsCard';
+import Pagination from '../../../components/ui/Pagination';
+import Loader from '../../../components/ui/Loader';
+import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';
 import { useConfirm } from '../../../context/ConfirmContext';
 import * as QuestionService from '../../../services/QuestionService';
@@ -309,7 +309,7 @@ const AdminQuestions = () => {
       if (filters.subcategory) params.subcategory = filters.subcategory;
 
       const response = await QuestionService.downloadQuestionsPDF(params, { responseType: 'blob' });
-      
+
       const contentDisposition = response.headers['content-disposition'];
       const filename = contentDisposition
         ? contentDisposition.split('filename=')[1].replace(/"/g, '')
@@ -433,7 +433,7 @@ const AdminQuestions = () => {
         {showStats && (
           <div className="mb-6">
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <StatsCard
+              <StatCard
                 title="Total Questions"
                 value={statistics.total}
                 icon={BookOpen}
@@ -441,7 +441,7 @@ const AdminQuestions = () => {
                 iconColor="text-primary"
               />
 
-              <StatsCard
+              <StatCard
                 title="Active Questions"
                 value={statistics.active}
                 subtext={`${statistics.activePercentage}% of total`}
@@ -450,7 +450,7 @@ const AdminQuestions = () => {
                 iconColor="text-green-500"
               />
 
-              <StatsCard
+              <StatCard
                 title="Inactive Questions"
                 value={statistics.inactive}
                 subtext={`${100 - statistics.activePercentage}% of total`}
@@ -459,7 +459,7 @@ const AdminQuestions = () => {
                 iconColor="text-red-500"
               />
 
-              <StatsCard
+              <StatCard
                 title="Categories"
                 value={Object.keys(statistics.byCategory).length}
                 subtext="Different categories"
@@ -592,9 +592,8 @@ const AdminQuestions = () => {
                     ))}
                   </select>
                   {formData.category && (
-                    <p className={`text-xs mt-1 font-medium ${
-                      getCategoryQuestionCount(formData.category) >= 15 ? 'text-red-500' : 'text-gray-500'
-                    }`}>
+                    <p className={`text-xs mt-1 font-medium ${getCategoryQuestionCount(formData.category) >= 15 ? 'text-red-500' : 'text-gray-500'
+                      }`}>
                       {getCategoryQuestionCount(formData.category)}/15 questions in this category
                       {getCategoryQuestionCount(formData.category) >= 15 && ' (Limit reached!)'}
                     </p>
@@ -683,9 +682,8 @@ const AdminQuestions = () => {
                       ))}
                     </select>
                     {bulkCategory && (
-                      <p className={`text-xs mt-1 font-medium ${
-                        getCategoryQuestionCount(bulkCategory) >= 15 ? 'text-red-500' : 'text-gray-500'
-                      }`}>
+                      <p className={`text-xs mt-1 font-medium ${getCategoryQuestionCount(bulkCategory) >= 15 ? 'text-red-500' : 'text-gray-500'
+                        }`}>
                         {getCategoryQuestionCount(bulkCategory)}/15 questions in this category
                         {getCategoryQuestionCount(bulkCategory) >= 15
                           ? ' (Limit reached!)'

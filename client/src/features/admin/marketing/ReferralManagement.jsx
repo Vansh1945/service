@@ -12,8 +12,8 @@ import {
   getRewardLogs,
   releaseHeldReward
 } from '../../../services/referralApi';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
-import StatsCard from '../../../components/ui/StatsCard';
+import LoadingSpinner from '../../../components/ui/Loader';
+import StatCard from '../../../components/ui/StatCard';
 import Button from '../../../components/ui/Button';
 
 const ReferralManagement = () => {
@@ -56,14 +56,14 @@ const ReferralManagement = () => {
     rewardThresholdAmount: 1000,
     fixedRewardAmount: 50
   });
-  
+
   // Milestones
   const [milestones, setMilestones] = useState([]);
   const [newMilestone, setNewMilestone] = useState({ bookingsCount: '', rewardAmount: '', description: '' });
-  
+
   // Fraud
   const [fraudList, setFraudList] = useState([]);
-  
+
   // Logs
   const [logs, setLogs] = useState([]);
 
@@ -187,29 +187,29 @@ const ReferralManagement = () => {
           <h1 className="text-2xl font-bold text-secondary tracking-tight">Referral & Rewards</h1>
           <p className="text-xs text-gray-500 mt-1">Configure program rules, check budgets, audit fraud logs, and monitor ROI.</p>
         </div>
-        
+
         {/* Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0 bg-gray-100 p-1.5 rounded-xl">
-          <button 
-            onClick={() => setActiveTab('dashboard')} 
+          <button
+            onClick={() => setActiveTab('dashboard')}
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'dashboard' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
             <FiUsers /> Dashboard
           </button>
-          <button 
-            onClick={() => setActiveTab('milestones')} 
+          <button
+            onClick={() => setActiveTab('milestones')}
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'milestones' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
             <FiAward /> Milestones
           </button>
-          <button 
-            onClick={() => setActiveTab('fraud')} 
+          <button
+            onClick={() => setActiveTab('fraud')}
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'fraud' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
             <FiAlertTriangle /> Fraud Alerts
           </button>
-          <button 
-            onClick={() => setActiveTab('logs')} 
+          <button
+            onClick={() => setActiveTab('logs')}
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'logs' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
             <FiList /> Reward Logs
@@ -226,14 +226,14 @@ const ReferralManagement = () => {
             <div className="space-y-8 animate-fade-in">
               {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatsCard
+                <StatCard
                   title="Total Invites"
                   value={stats.stats.totalReferrals}
                   icon={FiUsers}
                   subtext={`${stats.stats.customerReferrals} Customers | ${stats.stats.providerReferrals} Partners`}
                 />
 
-                <StatsCard
+                <StatCard
                   title="Rewards Distributed"
                   value={`₹${stats.stats.totalPaidRewards}`}
                   icon={FiAward}
@@ -242,7 +242,7 @@ const ReferralManagement = () => {
                   subtext={`₹${stats.stats.customerRewardsSum} Customers | ₹${stats.stats.providerRewardsSum} Partners`}
                 />
 
-                <StatsCard
+                <StatCard
                   title="Referred Qualified Revenue"
                   value={`₹${stats.stats.referralRevenue}`}
                   icon={FiTrendingUp}
@@ -251,7 +251,7 @@ const ReferralManagement = () => {
                   subtext="Total completed orders from invites"
                 />
 
-                <StatsCard
+                <StatCard
                   title="Campaign ROI"
                   value={`${stats.stats.roiPercentage}%`}
                   icon={FiPercent}
@@ -318,9 +318,9 @@ const ReferralManagement = () => {
                 <form onSubmit={handleAddMilestone} className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-400 uppercase">Bookings Count Target</label>
-                    <input 
-                      type="number" 
-                      value={newMilestone.bookingsCount} 
+                    <input
+                      type="number"
+                      value={newMilestone.bookingsCount}
                       onChange={(e) => setNewMilestone({ ...newMilestone, bookingsCount: e.target.value })}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                       required
@@ -329,9 +329,9 @@ const ReferralManagement = () => {
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-400 uppercase">Reward Amount (₹)</label>
-                    <input 
-                      type="number" 
-                      value={newMilestone.rewardAmount} 
+                    <input
+                      type="number"
+                      value={newMilestone.rewardAmount}
                       onChange={(e) => setNewMilestone({ ...newMilestone, rewardAmount: e.target.value })}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                       required
@@ -340,9 +340,9 @@ const ReferralManagement = () => {
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-400 uppercase">Description</label>
-                    <input 
-                      type="text" 
-                      value={newMilestone.description} 
+                    <input
+                      type="text"
+                      value={newMilestone.description}
                       onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                       placeholder="e.g. 5 Bookings Milestone"
@@ -443,7 +443,7 @@ const ReferralManagement = () => {
                             <p className="text-[9px] truncate max-w-[120px]">{f.deviceInfo?.deviceId || 'N/A'}</p>
                           </td>
                           <td className="py-3 px-2">
-                            <Button 
+                            <Button
                               onClick={() => handleManualRelease(f._id)}
                               variant="success"
                               size="sm"

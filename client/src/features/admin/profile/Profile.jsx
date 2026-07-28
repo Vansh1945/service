@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fi';
 import * as AdminService from '../../../services/AdminService';
 import * as NotificationService from '../../../services/NotificationService';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import Processing from '../../../components/ui-skeletons/Processing';
 import { formatDate } from '../../../utils/format';
 

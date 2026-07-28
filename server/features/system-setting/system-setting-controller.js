@@ -43,6 +43,7 @@ const updateSystemSetting = async (req, res) => {
       'socialLinks',
       'bookingSettings',
       'walletSettings',
+      'refundSettings',
       'commissionSettings',
       'notificationSettings',
       'maintenanceMode',
@@ -197,46 +198,25 @@ const validateIfsc = async (req, res) => {
 
     let details = null;
 
-    // 1. Try local RBI dataset first
+    // 1. Try validation via npm 'ifsc' package
     try {
-      const localRbiDataset = require('../../shared/utils/localRbiDataset.json');
-      const matched = localRbiDataset.find(item => item.IFSC === cleanCode);
-      if (matched) {
-        details = {
-          BANK: matched.BANK,
-          BRANCH: matched.BRANCH,
-          DISTRICT: matched.DISTRICT,
-          STATE: matched.STATE,
-          CITY: matched.CITY,
-          ADDRESS: matched.ADDRESS,
-          MICR: matched.MICR
-        };
-      }
-    } catch (err) {
-      global.logger.warn("Error reading local server dataset: " + err.message);
-    }
-
-    // 2. Try validation via npm 'ifsc' package
-    if (!details) {
-      try {
-        const isValid = ifsc.validate(cleanCode);
-        if (isValid) {
-          const fetchedDetails = await ifsc.fetchDetails(cleanCode);
-          if (fetchedDetails) {
-            details = {
-              BANK: fetchedDetails.BANK || '',
-              BRANCH: fetchedDetails.BRANCH || '',
-              DISTRICT: fetchedDetails.DISTRICT || '',
-              STATE: fetchedDetails.STATE || '',
-              CITY: fetchedDetails.CITY || '',
-              ADDRESS: fetchedDetails.ADDRESS || '',
-              MICR: fetchedDetails.MICR || ''
-            };
-          }
+      const isValid = ifsc.validate(cleanCode);
+      if (isValid) {
+        const fetchedDetails = await ifsc.fetchDetails(cleanCode);
+        if (fetchedDetails) {
+          details = {
+            BANK: fetchedDetails.BANK || '',
+            BRANCH: fetchedDetails.BRANCH || '',
+            DISTRICT: fetchedDetails.DISTRICT || '',
+            STATE: fetchedDetails.STATE || '',
+            CITY: fetchedDetails.CITY || '',
+            ADDRESS: fetchedDetails.ADDRESS || '',
+            MICR: fetchedDetails.MICR || ''
+          };
         }
-      } catch (localError) {
-        global.logger.warn("Local ifsc package lookup failed: " + localError.message);
       }
+    } catch (localError) {
+      global.logger.warn("Local ifsc package lookup failed: " + localError.message);
     }
 
     if (!details) {

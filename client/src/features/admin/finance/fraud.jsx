@@ -8,8 +8,9 @@ import {
   FiAlertCircle, FiChevronRight, FiUser, FiCheckCircle,
   FiInfo, FiActivity, FiClock, FiFileText
 } from 'react-icons/fi';
-import Pagination from '../../../components/Pagination';
-import StatsCard from '../../../components/ui/StatsCard';
+import Pagination from '../../../components/ui/Pagination';
+import StatCard from '../../../components/ui/StatCard';
+import FraudRiskViewDetailModal from './components/FraudRiskViewDetailModal';
 // Risk Badge Component
 const RiskBadge = ({ risk }) => {
   const getStyles = (riskLevel) => {
@@ -153,9 +154,10 @@ const AdminFraud = () => {
       const deviceData = deviceRes.data?.data || [];
       const cancelData = cancelRes.data?.data || [];
 
-      // Calculate stats based on actual data
-      const suspiciousAccounts = ipData.reduce((acc, curr) => acc + (curr.users?.length || 0), 0) +
-        deviceData.reduce((acc, curr) => acc + (curr.users?.length || 0), 0);
+      // Calculate stats based on actual backend data items
+      let suspiciousAccounts = 0;
+      ipData.forEach(curr => { suspiciousAccounts += curr.users?.length || 0; });
+      deviceData.forEach(curr => { suspiciousAccounts += curr.users?.length || 0; });
 
       const totalAlerts = ipData.length + deviceData.length + cancelData.length;
       const highRiskCustomers = cancelData.filter(c => c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL').length;
@@ -292,7 +294,7 @@ const AdminFraud = () => {
 
         {/* Stats Section */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up">
-          <StatsCard
+          <StatCard
             title="Suspicious Linked Accounts"
             value={stats.suspiciousAccounts}
             icon={FiUserX}
@@ -301,7 +303,7 @@ const AdminFraud = () => {
             className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
           />
 
-          <StatsCard
+          <StatCard
             title="Total System Alerts"
             value={stats.totalAlerts}
             icon={FiAlertTriangle}
@@ -310,7 +312,7 @@ const AdminFraud = () => {
             className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
           />
 
-          <StatsCard
+          <StatCard
             title="High Risk Providers"
             value={stats.highRiskProviders}
             icon={FiAlertCircle}
@@ -319,7 +321,7 @@ const AdminFraud = () => {
             className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
           />
 
-          <StatsCard
+          <StatCard
             title="High Risk Customers"
             value={stats.highRiskCustomers}
             icon={FiUser}
@@ -337,7 +339,7 @@ const AdminFraud = () => {
             { id: 'cancellation', label: 'Cancellation Alerts', icon: FiXCircle, value: data.cancellation?.length || 0, subtext: 'High cancellation rates', color: 'text-rose-600', bg: 'bg-rose-50' },
             { id: 'sessions', label: 'Active Sessions', icon: FiShield, value: data.sessions?.length || 0, subtext: 'Concurrent active logins', color: 'text-emerald-600', bg: 'bg-emerald-50' }
           ].map(t => (
-            <StatsCard
+            <StatCard
               key={t.id}
               title={t.label}
               value={t.value}
@@ -346,11 +348,10 @@ const AdminFraud = () => {
               iconColor={t.color}
               subtext={t.subtext}
               onClick={() => { setActiveTab(t.id); setCurrentPage(1); }}
-              className={`cursor-pointer transition-all duration-300 transform hover:-translate-y-1 ${
-                activeTab === t.id
+              className={`cursor-pointer transition-all duration-300 transform hover:-translate-y-1 ${activeTab === t.id
                   ? 'ring-2 ring-indigo-600 bg-indigo-50/20 border-indigo-200 shadow-md scale-[1.02]'
                   : 'bg-white hover:shadow-md border-slate-100'
-              }`}
+                }`}
             />
           ))}
         </div>
@@ -467,8 +468,8 @@ const AdminFraud = () => {
                               <button
                                 onClick={() => handleMarkSafe(item._id, !item.isSafe)}
                                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${item.isSafe
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                   }`}
                               >
                                 {item.isSafe ? '✓ Marked Safe' : 'Mark Safe'}
@@ -582,8 +583,8 @@ const AdminFraud = () => {
                               <button
                                 onClick={() => handleMarkSafe(item._id, !item.isSafe)}
                                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${item.isSafe
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                   }`}
                               >
                                 {item.isSafe ? '✓ Marked Safe' : 'Mark Safe'}
@@ -880,8 +881,8 @@ const AdminFraud = () => {
                           }
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${u.isSuspended
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                          : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
                           }`}
                       >
                         {u.isSuspended ? '✓ Reactivate' : 'Suspend'}
@@ -913,8 +914,8 @@ const AdminFraud = () => {
                           }
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${selectedItem.user.isSuspended
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                          : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
                           }`}
                       >
                         {selectedItem.user.isSuspended ? '✓ Reactivate' : 'Suspend'}
@@ -924,117 +925,17 @@ const AdminFraud = () => {
                 </div>
               </div>
 
-              {/* Security & Verification Log Audits */}
-              {selectedItem.recentLogs && selectedItem.recentLogs.length > 0 && (
-                <div>
-                  <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                    <FiShield className="text-rose-500 animate-pulse" size={14} />
-                    Security & Verification Log Audits ({selectedItem.recentLogs.length})
-                  </h4>
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                    {selectedItem.recentLogs.map((log, idx) => (
-                      <div key={idx} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col gap-1.5 hover:bg-slate-100/50 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide bg-slate-200/60 px-2 py-0.5 rounded">
-                            {log.actionType}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {new Date(log.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        {log.flagReason && (
-                          <p className="text-xs font-medium text-rose-700 bg-rose-50/50 border border-rose-100 px-2.5 py-1 rounded-xl">
-                            {log.flagReason}
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold">
-                          <span>Risk: <span className={log.riskLevel === 'CRITICAL' || log.riskLevel === 'HIGH' ? 'text-red-600 font-bold' : 'text-slate-600'}>{log.riskLevel}</span></span>
-                          <span>Score: <span className="font-mono text-slate-800">{log.fraudScore}</span></span>
-                          {log.bookingId && (
-                            <span className="font-mono text-indigo-600">Booking: {log.bookingId}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Investigation Notes Timeline */}
-              <div>
-                <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                  <FiFileText className="text-indigo-500" size={14} />
-                  Case Investigation Notes
-                </h4>
-
-                {/* Notes History */}
-                <div className="space-y-2 max-h-[150px] overflow-y-auto mb-3 pr-1">
-                  {!selectedItem.notes || selectedItem.notes.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No notes recorded for this threat node yet. Add one below to initialize case history.</p>
-                  ) : (
-                    selectedItem.notes.map((n, i) => (
-                      <div key={i} className="bg-slate-50 p-3 border border-slate-100 rounded-xl">
-                        <p className="text-xs text-slate-600 font-medium">{n.note}</p>
-                        <p className="text-[9px] text-slate-400 mt-1 flex items-center justify-between font-mono">
-                          <span>By Admin: {n.admin || 'System Admin'}</span>
-                          <span>{new Date(n.createdAt).toLocaleString()}</span>
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Add new note input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Append internal audit or verification notes..."
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs bg-slate-50 focus:bg-white transition-all"
-                  />
-                  <button
-                    onClick={() => handleAddNote(selectedItem._id)}
-                    disabled={submittingNote || !newNote.trim()}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow hover:bg-indigo-700 disabled:opacity-40 transition-all flex items-center gap-1.5"
-                  >
-                    Add Note
-                  </button>
-                </div>
-              </div>
-
             </div>
-
-            {/* Modal Footer Controls */}
-            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2">
-                <FiCheckCircle size={15} className={selectedItem.isSafe ? "text-emerald-500 animate-pulse" : "text-slate-300"} />
-                <span className="text-xs text-slate-500 font-medium">
-                  {selectedItem.isSafe ? 'Verified and whitelisted safe' : 'Threat requires attention'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedItem(null)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-300 transition-all"
-                >
-                  Close Audit
-                </button>
-                <button
-                  onClick={() => handleMarkSafe(selectedItem._id, !selectedItem.isSafe)}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs transition-all border ${selectedItem.isSafe
-                      ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                      : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700 shadow'
-                    }`}
-                >
-                  {selectedItem.isSafe ? 'Revoke Safe Status' : 'Whitelist Safe'}
-                </button>
-              </div>
-            </div>
-
           </div>
         </div>
       )}
+
+      {/* Security & Verification Log Audits */}
+      <FraudRiskViewDetailModal
+        isOpen={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        entityData={selectedItem}
+      />
 
       {/* ⚠️ ACCONT SUSPENSION REASON MODAL */}
       {suspendingUser && (

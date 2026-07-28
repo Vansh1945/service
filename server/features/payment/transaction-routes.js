@@ -38,6 +38,8 @@ router.get('/customer/all', userAuthMiddleware, roleMiddleware(['customer']), pa
 
 router.get('/admin/all', adminAuthMiddleware, adminRoleCheck, paymentController.getAllTransactions);
 router.get('/admin/details/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getTransactionById);
+router.get('/admin/payment-details/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getAdminPaymentDetails);
+router.get('/admin/unified-details/:entityType/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getUnifiedEntityDetails);
 router.post('/admin/retry-verify/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminRetryVerify);
 router.post('/admin/mark-paid/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminMarkPaid);
 
@@ -50,5 +52,9 @@ router.get('/admin/settlements', adminAuthMiddleware, adminRoleCheck, paymentCon
 router.get('/admin/razorpay/logs', adminAuthMiddleware, adminRoleCheck, paymentController.getRazorpayLogs);
 router.get('/admin/failed-payments', adminAuthMiddleware, adminRoleCheck, paymentController.getFailedPayments);
 router.get('/admin/audit-logs', adminAuthMiddleware, adminRoleCheck, paymentController.getAuditLogs);
+
+// ── Master Financial Ledger Routes ────────────────────
+router.get('/admin/ledger', adminAuthMiddleware, adminRoleCheck, paymentController.getMasterLedger);
+router.get('/admin/ledger-detail/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getLedgerDetail);
 
 module.exports = router;

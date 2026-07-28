@@ -30,6 +30,17 @@ export const getTransactionById = (id) => {
     return axiosInstance.get(`/transaction/admin/details/${id}`);
 };
 
+// Dedicated enriched payment details for Payment Management modal
+// Returns: booking amount breakup, ledger, refund, complaint, settlement, audit
+// Does NOT fetch live Razorpay data — use getUnifiedEntityDetails for Gateway tab
+export const getAdminPaymentDetails = (id) => {
+    return axiosInstance.get(`/transaction/admin/payment-details/${id}`);
+};
+
+export const getUnifiedEntityDetails = (entityType, id) => {
+    return axiosInstance.get(`/transaction/admin/unified-details/${entityType}/${id}`);
+};
+
 export const adminRetryVerify = (id) => {
     return axiosInstance.post(`/transaction/admin/retry-verify/${id}`);
 };
@@ -70,3 +81,12 @@ export const getAuditLogs = (params) => {
     return axiosInstance.get("/transaction/admin/audit-logs", { params });
 };
 
+// ── Master Financial Ledger (new endpoints, additive only) ────────────────────
+
+export const getMasterLedger = (params) => {
+    return axiosInstance.get("/transaction/admin/ledger", { params });
+};
+
+export const getLedgerDetail = (id) => {
+    return axiosInstance.get(`/transaction/admin/ledger-detail/${id}`);
+};

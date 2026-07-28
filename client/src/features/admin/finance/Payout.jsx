@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import Processing from '../../../components/ui-skeletons/Processing';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';
 import * as PaymentService from '../../../services/PaymentService';
 import { ToastContainer, toast } from 'react-toastify';
@@ -18,9 +18,12 @@ import {
   User, CreditCard, FileText, Calendar, Filter, Send
 } from 'lucide-react';
 import { formatDate, formatDateTime, formatTime, formatCurrency } from '../../../utils/format';
+import { getWithdrawalStatusBadge } from '../../../utils/status';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import * as AdminService from '../../../services/AdminService';
+import PayoutViewDetailModal from './components/PayoutViewDetailModal';
+import PdfPreviewModal from '../../../components/modals/PdfPreviewModal';
 
 
 const PayoutModal = ({
@@ -160,7 +163,7 @@ const PayoutModal = ({
               {isDirectPayout ? "Admin Remark / Notes" : "Admin Remark"} <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <textarea rows={isDirectPayout ? 2 : 3} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm resize-none"
-              placeholder={isDirectPayout ? "Direct payout reason..." : "Add any notes…"} 
+              placeholder={isDirectPayout ? "Direct payout reason..." : "Add any notes…"}
               value={isDirectPayout ? formData.notes : formData.adminRemark}
               onChange={e => setFormData(p => ({ ...p, [isDirectPayout ? 'notes' : 'adminRemark']: e.target.value }))} />
           </div>
@@ -213,6 +216,21 @@ const AdminPayout = () => {
 
   useEffect(() => { fetchWithdrawals(); }, [page, filters, searchQuery]);
 
+  useEffect(() => {
+    if (searchParams.get('openDetail') === 'true' && withdrawals.length > 0) {
+      const searchVal = searchParams.get('search');
+      const target = withdrawals.find(w =>
+        w._id === searchVal ||
+        w.payoutId === searchVal ||
+        w.transactionReference === searchVal ||
+        w.provider?.name === searchVal
+      ) || withdrawals[0];
+      if (target) {
+        openInvestigationDrawer('payout', target._id, target);
+      }
+    }
+  }, [searchParams, withdrawals, openInvestigationDrawer]);
+
   const fetchWithdrawals = async () => {
     try {
       setLoading(true);
@@ -237,12 +255,18 @@ const AdminPayout = () => {
     }
   };
 
-  const handleFilterChange = (key, value) => { setFilters(p => ({ ...p, [key]: value })); setPage(1); };
+  const handleView = (w) => {
+    openInvestigationDrawer('payout', w._id, w);
+  };
+
+  const handleFilterChange = (newFilters) => { setFilters(newFilters); setPage(1); };
   const clearFilters = () => { setFilters({ status: '', startDate: '', endDate: '', providerSearch: '', sortBy: '' }); setPage(1); };
 
-  const handleApprove = (w) => { setSelectedWithdrawal(w); setApproveForm({ utrNo: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' }); setShowApproveModal(true); };
-  const handleReject = (w) => { setSelectedWithdrawal(w); setRejectReason(''); setShowRejectModal(true); };
-  const handleView = (w) => { setSelectedDetails(w); setShowDetailsModal(true); };
+  const maskAccNo = (acc) => {
+    if (!acc) return '••••••••';
+    const str = String(acc);
+    return str.length > 4 ? `•••• ${str.slice(-4)}` : str;
+  };
 
   const handleRejectSubmit = async (e) => {
     e.preventDefault();
@@ -263,7 +287,7 @@ const AdminPayout = () => {
     e.preventDefault();
     if (!approveForm.utrNo) { toast.error('Please enter UTR Number'); return; }
     setSubmitting(true);
-    
+
     try {
       await PaymentService.approveWithdrawalRequest(selectedWithdrawal._id, {
         transactionReference: approveForm.utrNo,
@@ -333,17 +357,10 @@ const AdminPayout = () => {
   };
 
   const getStatusBadge = (status) => {
-    const cfg = {
-      requested: 'text-yellow-700 bg-yellow-50 border-yellow-200',
-      under_review: 'text-purple-700 bg-purple-50 border-purple-200',
-      approved: 'text-teal-700 bg-teal-50 border-teal-200',
-      processing: 'text-blue-700 bg-blue-50 border-blue-200',
-      completed: 'text-green-700 bg-green-50 border-green-200',
-      rejected: 'text-red-600 bg-red-50 border-red-200',
-    };
+    const badge = getWithdrawalStatusBadge(status);
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border capitalize ${cfg[status] || 'text-gray-600 bg-gray-50 border-gray-200'}`}>
-        {status?.replace('_', ' ')}
+      <span className={badge.className}>
+        {badge.label}
       </span>
     );
   };
@@ -387,28 +404,28 @@ const AdminPayout = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-            <StatsCard
+            <StatCard
               title="Total Requests"
               value={total}
               icon={BarChart3}
               iconBg="bg-primary bg-opacity-10"
               iconColor="text-primary"
             />
-            <StatsCard
+            <StatCard
               title="Pending"
               value={withdrawals.filter(w => w.status === 'requested').length}
               icon={Clock}
               iconBg="bg-yellow-500 bg-opacity-10"
               iconColor="text-yellow-600"
             />
-            <StatsCard
+            <StatCard
               title="Completed"
               value={withdrawals.filter(w => w.status === 'completed').length}
               icon={CheckCircle}
               iconBg="bg-green-500 bg-opacity-10"
               iconColor="text-green-600"
             />
-            <StatsCard
+            <StatCard
               title="This Page"
               value={withdrawals.length}
               icon={FileText}
@@ -471,65 +488,137 @@ const AdminPayout = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-gray-50">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1500px]">
+              <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
-                  {['Provider', 'Amount', 'Status', 'Date', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-secondary uppercase tracking-wider">{h}</th>
-                  ))}
+                  <th className="p-3">Withdrawal ID</th>
+                  <th className="p-3">Provider</th>
+                  <th className="p-3">Provider Phone</th>
+                  <th className="p-3">Provider Email</th>
+                  <th className="p-3">Amount</th>
+                  <th className="p-3">Bank Name</th>
+                  <th className="p-3">Account Holder</th>
+                  <th className="p-3">Masked Account No.</th>
+                  <th className="p-3">IFSC</th>
+                  <th className="p-3">Withdrawal Status</th>
+                  <th className="p-3">Requested Date</th>
+                  <th className="p-3">Approved Date</th>
+                  <th className="p-3">Transferred Date</th>
+                  <th className="p-3">UTR Number</th>
+                  <th className="p-3">Payment Mode</th>
+                  <th className="p-3">Processed By</th>
+                  <th className="p-3">Last Updated</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-50">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {loading ? (
-                  <TableSkeleton rows={8} cols={5} />
+                  <TableSkeleton rows={8} cols={18} />
                 ) : withdrawals.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center">
-                      <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                      <p className="text-secondary font-medium">No withdrawal requests found</p>
-                      <p className="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
+                    <td colSpan="18" className="px-6 py-12 text-center">
+                      <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                      <p className="text-slate-800 font-medium">No withdrawal requests found</p>
+                      <p className="text-sm text-slate-400 mt-1">Try adjusting your search filters</p>
                     </td>
                   </tr>
-                ) : withdrawals.map(w => (
-                  <tr key={w._id} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-secondary">{w.provider?.name || 'N/A'}</p>
-                      {w.provider?.providerId && (
-                        <p className="text-xs text-gray-500">[{w.provider.providerId}]</p>
-                      )}
-                      <p className="text-xs text-gray-400">{w.provider?.email || 'N/A'}</p>
-                      <span className="inline-flex items-center gap-1 mt-1 text-xs text-primary font-medium bg-primary bg-opacity-10 px-2 py-0.5 rounded">
-                        {formatCurrency(w.provider?.wallet?.availableBalance || 0)} wallet
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-bold text-secondary">{formatCurrency(w.amount)}</p>
-                      <p className="text-xs text-gray-400 capitalize mt-0.5">{w.withdrawalType || 'Bank Transfer'}</p>
-                    </td>
-                    <td className="px-5 py-4">{getStatusBadge(w.status)}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{formatDate(w.createdAt)}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleView(w)}
-                          className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-                          <Eye size={13} /> View
+                ) : withdrawals.map(w => {
+                  const bank = w.paymentDetails || w.bankDetails || {};
+                  return (
+                    <tr key={w._id} className="hover:bg-slate-50 transition-colors">
+
+                      {/* 1. Withdrawal ID */}
+                      <td className="p-3 font-mono font-bold text-teal-700">
+                        {w.transactionReference || `#${w._id.slice(-6)}`}
+                      </td>
+
+                      {/* 2. Provider */}
+                      <td className="p-3 font-bold text-slate-900">
+                        <button
+                          onClick={() => openInvestigationDrawer('provider', w.provider?._id || w.provider, w.provider)}
+                          className="text-teal-700 hover:underline"
+                        >
+                          {w.provider?.name || 'Provider'}
                         </button>
-                        {['requested', 'processing', 'under_review'].includes(w.status) && (
-                          <>
-                            <button onClick={() => handleApprove(w)}
-                              className="flex items-center gap-1 text-xs text-white bg-primary px-2.5 py-1.5 rounded-lg hover:bg-teal-700 transition-colors">
-                              <Check size={13} /> Approve
-                            </button>
-                            <button onClick={() => handleReject(w)}
-                              className="flex items-center gap-1 text-xs text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
-                              <X size={13} /> Reject
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      {/* 3. Provider Phone */}
+                      <td className="p-3 text-slate-600">{w.provider?.phone || 'N/A'}</td>
+
+                      {/* 4. Provider Email */}
+                      <td className="p-3 text-slate-500">{w.provider?.email || 'N/A'}</td>
+
+                      {/* 5. Amount */}
+                      <td className="p-3 font-black text-slate-900 text-sm">
+                        {formatCurrency(w.amount || 0)}
+                      </td>
+
+                      {/* 6. Bank Name */}
+                      <td className="p-3 text-slate-700">{bank.bankName || 'Bank Transfer'}</td>
+
+                      {/* 7. Account Holder */}
+                      <td className="p-3 font-semibold text-slate-800">{bank.accountName || w.provider?.name || 'N/A'}</td>
+
+                      {/* 8. Masked Account Number */}
+                      <td className="p-3 font-mono text-slate-700">{maskAccNo(bank.accountNumber)}</td>
+
+                      {/* 9. IFSC */}
+                      <td className="p-3 font-mono text-slate-500">{bank.ifscCode || 'N/A'}</td>
+
+                      {/* 10. Withdrawal Status */}
+                      <td className="p-3">{getStatusBadge(w.status)}</td>
+
+                      {/* 11. Requested Date */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">{formatDate(w.createdAt)}</td>
+
+                      {/* 12. Approved Date */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">{w.approvedAt || w.processedAt ? formatDate(w.approvedAt || w.processedAt) : 'Pending'}</td>
+
+                      {/* 13. Transferred Date */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">{w.transferDate || w.completedAt ? formatDate(w.transferDate || w.completedAt) : 'Pending'}</td>
+
+                      {/* 14. UTR Number */}
+                      <td className="p-3 font-mono text-slate-600 font-bold">{w.utrNo || w.transactionReference || '—'}</td>
+
+                      {/* 15. Payment Mode */}
+                      <td className="p-3 font-mono uppercase text-slate-500">{w.paymentMethod || w.withdrawalType || 'BANKTRANSFER'}</td>
+
+                      {/* 16. Processed By */}
+                      <td className="p-3 text-slate-600">{w.admin?.name || 'Admin'}</td>
+
+                      {/* 17. Last Updated */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">{formatDate(w.updatedAt || w.createdAt)}</td>
+
+                      {/* 18. Actions */}
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleView(w)}
+                            className="inline-flex items-center px-2.5 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-700 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs"
+                          >
+                            <Eye size={13} className="mr-1" /> View Details
+                          </button>
+                          {['requested', 'processing', 'under_review'].includes(w.status) && (
+                            <>
+                              <button
+                                onClick={() => { setSelectedWithdrawal(w); setApproveForm({ utrNo: w.utrNo || w.transactionReference || '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' }); setShowApproveModal(true); }}
+                                className="inline-flex items-center px-2.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-all shadow-2xs"
+                              >
+                                <Check size={13} className="mr-1" /> Approve
+                              </button>
+                              <button
+                                onClick={() => { setSelectedWithdrawal(w); setRejectReason(''); setShowRejectModal(true); }}
+                                className="inline-flex items-center px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs"
+                              >
+                                <X size={13} className="mr-1" /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -611,111 +700,12 @@ const AdminPayout = () => {
       )}
 
       {/* ══ DETAILS MODAL ══ */}
-      {showDetailsModal && selectedDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-              <div>
-                <h2 className="text-lg font-semibold text-secondary">Withdrawal Details</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Full information about this request</p>
-              </div>
-              <button onClick={() => setShowDetailsModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
+      <PayoutViewDetailModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        entityData={selectedDetails}
+      />
 
-            <div className="p-6 space-y-5">
-              {/* Amount + Status */}
-              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <div>
-                  <p className="text-xs text-gray-400">Withdrawal Amount</p>
-                  <p className="text-2xl font-bold text-primary mt-0.5">{formatCurrency(selectedDetails.amount)}</p>
-                </div>
-                {getStatusBadge(selectedDetails.status)}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Provider */}
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <User size={12} className="text-primary" /> Provider
-                  </h3>
-                  {[
-                    ['Name', selectedDetails.provider?.name],
-                    ['Provider ID', selectedDetails.provider?.providerId],
-                    ['Email', selectedDetails.provider?.email],
-                    ['Phone', selectedDetails.provider?.phone],
-                    ['Wallet Balance', formatCurrency(selectedDetails.provider?.wallet?.availableBalance || 0)],
-                  ].map(([label, val]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-gray-100 last:border-0">
-                      <span className="text-xs text-gray-400">{label}</span>
-                      <span className={`text-xs font-medium ${label === 'Wallet Balance' ? 'text-primary' : 'text-secondary'} text-right max-w-[60%] truncate`}>{val || 'N/A'}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Bank Details */}
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <CreditCard size={12} className="text-primary" /> Bank Details
-                  </h3>
-                  {[
-                    ['Account Holder', selectedDetails.paymentDetails?.accountName],
-                    ['Bank Name', selectedDetails.provider?.bankDetails?.bankName],
-                    ['Account No', selectedDetails.provider?.bankDetails?.accountNo ? '••••' + selectedDetails.provider.bankDetails.accountNo.slice(-4) : null],
-                    ['IFSC Code', selectedDetails.provider?.bankDetails?.ifsc],
-                  ].map(([label, val]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-gray-100 last:border-0">
-                      <span className="text-xs text-gray-400">{label}</span>
-                      <span className="text-xs font-medium text-secondary font-mono">{val || 'N/A'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Transaction Info */}
-              {(selectedDetails.utrNo || selectedDetails.transferDate || selectedDetails.adminRemark || selectedDetails.rejectionReason) && (
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <FileText size={12} className="text-primary" /> Transaction Info
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedDetails.utrNo && (
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-400">UTR Number</span>
-                        <span className="text-xs font-mono font-medium text-secondary">{selectedDetails.utrNo}</span>
-                      </div>
-                    )}
-                    {selectedDetails.transferDate && selectedDetails.transferTime && (
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-400">Transfer Date & Time</span>
-                        <span className="text-xs font-medium text-secondary">{formatDate(selectedDetails.transferDate)} at {formatTime(selectedDetails.transferTime)}</span>
-                      </div>
-                    )}
-                    {selectedDetails.adminRemark && (
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">Admin Remark</p>
-                        <p className="text-xs text-secondary bg-white p-2 rounded border border-gray-100">{selectedDetails.adminRemark}</p>
-                      </div>
-                    )}
-                    {selectedDetails.rejectionReason && (
-                      <div>
-                        <p className="text-xs text-red-400 mb-1">Rejection Reason</p>
-                        <p className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100">{selectedDetails.rejectionReason}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
-                <span>Requested: {formatDateTime(selectedDetails.createdAt)}</span>
-                <span className="capitalize">{selectedDetails.withdrawalType || 'Bank Transfer'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {/* ══ DIRECT PAYOUT MODAL ══ */}
       <PayoutModal
         isOpen={showDirectPayoutModal}

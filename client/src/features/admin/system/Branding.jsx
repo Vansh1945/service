@@ -7,7 +7,7 @@ import {
 import { toast } from 'react-toastify';
 import * as SystemService from '../../../services/SystemService';
 import { useConfirm } from '../../../context/ConfirmContext';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 const AssetUploadCard = ({
   label,
@@ -428,7 +428,7 @@ const Branding = () => {
           };
           const c = colorMap[color];
           return (
-            <StatsCard
+            <StatCard
               key={role}
               title={label}
               value={`${count} devices`}

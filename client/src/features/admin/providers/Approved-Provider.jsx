@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Modal from '../../../components/ui/Modal';
 import {
@@ -29,7 +29,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
 import { formatDate } from '../../../utils/format';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
 // ─── Pure helpers at module scope ───────────────────────────────────────────
@@ -126,6 +126,23 @@ const AdminProviders = () => {
   useEffect(() => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
+
+  useEffect(() => {
+    if (searchParams.get('openDetail') === 'true' && providers.length > 0 && !showViewModal) {
+      const searchVal = searchParams.get('search');
+      const target = providers.find(p =>
+        p._id === searchVal ||
+        p.providerId === searchVal ||
+        p.name?.toLowerCase().includes((searchVal || '').toLowerCase()) ||
+        p.email === searchVal ||
+        p.phone === searchVal
+      ) || providers[0];
+      if (target) {
+        setSelectedProvider(target);
+        setShowViewModal(true);
+      }
+    }
+  }, [searchParams, providers, showViewModal]);
 
   const [statusFilter, setStatusFilter] = useState('approved');
   const [serviceFilter, setServiceFilter] = useState('all');
@@ -329,35 +346,35 @@ const AdminProviders = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
-          <StatsCard
+          <StatCard
             title="Total Providers"
             value={stats.total}
             icon={Users}
             iconBg="bg-primary/10"
             iconColor="text-primary"
           />
-          <StatsCard
+          <StatCard
             title="Approved"
             value={stats.approved}
             icon={UserCheck}
             iconBg="bg-green-100"
             iconColor="text-green-600"
           />
-          <StatsCard
+          <StatCard
             title="Pending"
             value={stats.pending}
             icon={Clock}
             iconBg="bg-yellow-100"
             iconColor="text-yellow-600"
           />
-          <StatsCard
+          <StatCard
             title="Rejected"
             value={stats.rejected}
             icon={UserX}
             iconBg="bg-red-100"
             iconColor="text-red-600"
           />
-          <StatsCard
+          <StatCard
             title="Active"
             value={stats.active}
             icon={TrendingUp}

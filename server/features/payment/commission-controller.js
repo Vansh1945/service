@@ -50,19 +50,31 @@ exports.listCommissionRules = async (req, res, next) => {
       }
     }
 
-    const [rules, count] = await Promise.all([
+    const [rules, count, activeCount, percentageStats] = await Promise.all([
       CommissionRule.find(query)
         .populate('createdBy updatedBy', 'name email')
         .populate('specificProvider', 'name email')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .skip((parseInt(page) - 1) * parseInt(limit)),
-      CommissionRule.countDocuments(query)
+      CommissionRule.countDocuments(query),
+      CommissionRule.countDocuments({ ...query, isActive: true }),
+      CommissionRule.aggregate([
+        { $match: { ...query, type: 'percentage' } },
+        { $group: { _id: null, avgRate: { $avg: '$value' } } }
+      ])
     ]);
+
+    const avgCommissionRate = percentageStats[0]?.avgRate ? percentageStats[0].avgRate.toFixed(1) : '0.0';
 
     res.status(200).json({
       success: true,
       data: rules,
+      stats: {
+        totalRules: count,
+        activeRules: activeCount,
+        avgCommissionRate
+      },
       pagination: {
         total: count,
         page: parseInt(page),

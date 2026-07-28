@@ -68,6 +68,30 @@ const refundSchema = new mongoose.Schema(
       enum: ['original_payment', 'wallet', 'hybrid'],
       default: 'wallet',
     },
+    customerChoice: {
+      type: String,
+      enum: ['original_payment', 'wallet', 'none'],
+      default: 'none',
+    },
+    actualRefundDestination: {
+      type: String,
+      enum: ['original_payment', 'wallet', 'hybrid'],
+      default: 'wallet',
+    },
+    refundMethod: {
+      type: String,
+      default: 'razorpay',
+    },
+    isFallbackUsed: {
+      type: Boolean,
+      default: false,
+    },
+    fallbackReason: {
+      type: String,
+    },
+    gatewayResponse: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     refundSource: {
       type: String,
       enum: [
@@ -78,6 +102,10 @@ const refundSchema = new mongoose.Schema(
         'complaint_resolution',
         'duplicate_payment',
         'failed_payment',
+        'gateway_failure',
+        'wallet_adjustment',
+        'admin_action',
+        'booking_cancellation',
         'manual_refund',
       ],
       required: true,
@@ -115,13 +143,13 @@ const refundSchema = new mongoose.Schema(
     },
     refundStatus: {
       type: String,
-      enum: ['pending', 'approved', 'rejected', 'processing', 'completed', 'failed'],
+      enum: ['draft', 'pending', 'approved', 'rejected', 'processing', 'completed', 'failed', 'cancelled'],
       default: 'pending',
       index: true,
     },
     refundType: {
       type: String,
-      enum: ['auto', 'manual'],
+      enum: ['auto', 'manual', 'cancellation', 'complaint', 'admin_adjustment', 'payment_failure', 'duplicate_payment', 'partial', 'full'],
       default: 'auto',
     },
     approvedBy: {

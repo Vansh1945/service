@@ -26,7 +26,7 @@ const TermsAndConditions = lazyWithRetry(() => import("./features/shared/static/
 const PrivacyPolicy = lazyWithRetry(() => import("./features/shared/static/PrivacyPolicy"));
 const NotFound = lazyWithRetry(() => import("./features/shared/static/NotFound"));
 
-import LoadingSpinner from "./components/ui-skeletons/Loader";
+import LoadingSpinner from "./components/ui/Loader";
 import RefundPolicy from "./features/shared/static/RefundPolicy";
 
 // Lazy-load wrapper: auto-reloads page once on chunk load failure (stale deployment)

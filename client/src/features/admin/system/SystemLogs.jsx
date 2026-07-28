@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
 import { FiTerminal, FiRefreshCw, FiCopy, FiDownload, FiSearch, FiActivity, FiAlertTriangle, FiClock } from 'react-icons/fi';
-import Pagination from '../../../components/Pagination';
-import StatsCard from '../../../components/ui/StatsCard';
+import Pagination from '../../../components/ui/Pagination';
+import StatCard from '../../../components/ui/StatCard';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import usePagination from '../../../hooks/usePagination';
 
@@ -354,7 +353,7 @@ const SystemLogs = () => {
 
         {/* Dynamic Summary SaaS Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up">
-          <StatsCard
+          <StatCard
             title="Total Requests"
             value={totalRequests}
             icon={FiActivity}
@@ -363,7 +362,7 @@ const SystemLogs = () => {
             className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
           />
 
-          <StatsCard
+          <StatCard
             title="Errors"
             value={errorCount}
             icon={FiAlertTriangle}
@@ -372,7 +371,7 @@ const SystemLogs = () => {
             className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
           />
 
-          <StatsCard
+          <StatCard
             title="Warnings"
             value={warningCount}
             icon={FiAlertTriangle}
@@ -381,7 +380,7 @@ const SystemLogs = () => {
             className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
           />
 
-          <StatsCard
+          <StatCard
             title="Avg Response Time"
             value={avgResponseTime}
             icon={FiClock}

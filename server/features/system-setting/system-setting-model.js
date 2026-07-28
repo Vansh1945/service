@@ -301,8 +301,25 @@ const systemConfigSchema = new mongoose.Schema(
       },
       defaultDestination: {
         type: String,
-        enum: ['original_payment', 'wallet', 'hybrid'],
-        default: 'wallet'
+        enum: ['original_payment', 'wallet', 'customer_choice', 'hybrid'],
+        default: 'customer_choice'
+      },
+      allowWalletRefund: {
+        type: Boolean,
+        default: true
+      },
+      allowOriginalPaymentRefund: {
+        type: Boolean,
+        default: true
+      },
+      allowedDestinations: {
+        type: String,
+        enum: ['both', 'wallet_only', 'gateway_only'],
+        default: 'both'
+      },
+      allowWalletFallback: {
+        type: Boolean,
+        default: true
       },
       allowHybridRefund: {
         type: Boolean,

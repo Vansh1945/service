@@ -126,6 +126,17 @@ const notificationSchema = new mongoose.Schema({
     isDeletedByAdmin: {
         type: Boolean,
         default: false
+    },
+    expiresAt: {
+        type: Date,
+        default: function () {
+            // Master broadcast records or pending scheduled notifications should not auto-expire
+            if (this.type === 'broadcast' || this.status === 'pending' || this.isScheduled) {
+                return null;
+            }
+            // Auto-expire individual user notifications after 5 days
+            return new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+        }
     }
 }, { timestamps: true });
 
@@ -133,6 +144,7 @@ notificationSchema.index({ userId: 1, isRead: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 }); // Fast query for broadcast history
 notificationSchema.index({ status: 1, scheduledFor: 1 }); // Fast query for CRON scheduler
+notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // MongoDB TTL index for automatic cleanup
 
 const notificationTemplateSchema = new mongoose.Schema({
     eventId: {

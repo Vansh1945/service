@@ -210,8 +210,8 @@ exports.saveTemplateVersion = async (req, res, next) => {
     }
 
     // Determine the next version number
-    const maxVersion = template.versions.length > 0 
-      ? Math.max(...template.versions.map(v => v.version)) 
+    const maxVersion = template.versions.length > 0
+      ? Math.max(...template.versions.map(v => v.version))
       : 0;
     const nextVersion = maxVersion + 1;
 
@@ -441,7 +441,7 @@ exports.previewTemplate = async (req, res, next) => {
     const pdfBuffer = await generateLetterheadDocument(MOCK_PROVIDER, 'PREVIEW', async (doc, y, currentConfig, sigBuf, stampBuf) => {
       const MARGIN_LEFT = 50;
       const CONTENT_WIDTH = 595.28 - 100;
-      
+
       // Render Title
       if (parsedTitle) {
         doc.save();

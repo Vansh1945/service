@@ -1,15 +1,19 @@
 /**
- * Standard utility for formatting data across the application.
- * All formatting should be done through these functions to ensure consistency.
+ * Standard Single Source of Truth for Data & Value Formatting.
+ * All data formatting (Dates, Times, Currencies, Numbers, Phone, Address, IDs, Files)
+ * must be done through these functions to guarantee application-wide consistency.
  */
 import { getCachedTimeFormat, readCachedSystemSettings } from './systemSettingsCache';
 import { latLngToS2CellId } from './s2Helper';
 
-
-
 const FALLBACK = "--";
 
+/* =========================================================
+   CLOCK & TIME PARSING HELPERS
+   ========================================================= */
+
 const parseClockTime = (time) => {
+  if (!time || typeof time !== "string") return null;
   const match = time.trim().match(/^(\d{1,2}):(\d{1,2})(?::\d{1,2})?\s*(AM|PM)?$/i);
   if (!match) return null;
 
@@ -42,31 +46,46 @@ const formatClockTime = ({ hour, minute }, timeFormat = getCachedTimeFormat()) =
   return `${formattedHour}:${formattedMinute} ${ampm}`;
 };
 
+export { parseClockTime, formatClockTime };
+
+/* =========================================================
+   DATE & TIME FORMATTERS (SYSTEM SETTINGS REACTIVE)
+   ========================================================= */
+
 /**
- * Format date to a readable string (e.g., 15 May 2024)
- * @param {Date|string} date - The date to format
+ * Format date to a readable string based on System Settings (e.g., 15 May 2024 or DD/MM/YYYY)
+ * @param {Date|string|number} date - The date to format
+ * @param {Object} [options] - Optional overrides
  * @returns {string} Formatted date string
  */
-export const formatDate = (date) => {
+export const formatDate = (date, options = {}) => {
   if (!date) return FALLBACK;
   try {
     const d = new Date(date);
     if (isNaN(d.getTime())) return FALLBACK;
+
     const settings = readCachedSystemSettings();
-    const timezone = settings.timezone || "Asia/Kolkata";
-    return d.toLocaleDateString("en-IN", {
+    const timezone = options.timezone || settings.timezone || "Asia/Kolkata";
+    const locale = options.locale || settings.locale || "en-IN";
+
+    // Standard localized date string
+    return d.toLocaleDateString(locale, {
       day: "numeric",
       month: "short",
       year: "numeric",
-      timeZone: timezone
+      timeZone: timezone,
+      ...options
     });
   } catch {
     return FALLBACK;
   }
 };
 
+export const fmtDate = formatDate;
+export const fmtDateOnly = formatDate;
+
 /**
- * Format time using the configured system time format (e.g., 10:30 AM or 22:30)
+ * Format time using configured System Settings (e.g., 10:30 AM or 22:30)
  * @param {Date|string} time - The time to format
  * @returns {string} Formatted time string
  */
@@ -75,13 +94,14 @@ export const formatTime = (time) => {
   try {
     const timeFormat = getCachedTimeFormat();
 
-    // If it's a date object or ISO string
     if (time instanceof Date || (typeof time === "string" && time.includes("T"))) {
       const d = new Date(time);
       if (isNaN(d.getTime())) return FALLBACK;
       const settings = readCachedSystemSettings();
       const timezone = settings.timezone || "Asia/Kolkata";
-      return d.toLocaleTimeString("en-IN", {
+      const locale = settings.locale || "en-IN";
+
+      return d.toLocaleTimeString(locale, {
         hour: timeFormat === "24h" ? "2-digit" : "numeric",
         minute: "2-digit",
         hour12: timeFormat === "12h",
@@ -89,7 +109,6 @@ export const formatTime = (time) => {
       });
     }
 
-    // If it's a string like "14:30", "14:30:00", or "2:30 PM"
     if (typeof time === "string" && time.includes(":")) {
       const parsedTime = parseClockTime(time);
       if (!parsedTime) return FALLBACK;
@@ -103,7 +122,7 @@ export const formatTime = (time) => {
 };
 
 /**
- * Format date and time (e.g., 15 May 2024, 10:30 AM)
+ * Format date and time together (e.g., 15 May 2024, 10:30 AM)
  * @param {Date|string} date - The datetime to format
  * @returns {string} Formatted datetime string
  */
@@ -115,55 +134,165 @@ export const formatDateTime = (date) => {
   return `${d}, ${t}`;
 };
 
+export const fmtDateTime = formatDateTime;
+
+/**
+ * Format relative time (e.g. Just now, 5 sec ago, 10 min ago, 2 hr ago, 3 d ago)
+ * @param {Date|string|number} timestamp - The timestamp to format
+ * @returns {string} Relative time string
+ */
+export const formatRelativeTime = (timestamp) => {
+  if (!timestamp) return "Never";
+  try {
+    const diffMs = Date.now() - new Date(timestamp).getTime();
+    if (isNaN(diffMs)) return FALLBACK;
+
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 5) return "Just now";
+    if (diffSec < 60) return `${diffSec} sec ago`;
+
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} min ago`;
+
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hr ago`;
+
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay} d ago`;
+
+    return formatDate(timestamp);
+  } catch {
+    return FALLBACK;
+  }
+};
+
+export const fmtRelativeTime = formatRelativeTime;
+
+/* =========================================================
+   CURRENCY, AMOUNT & NUMBER FORMATTERS (SYSTEM SETTINGS)
+   ========================================================= */
+
 const currencyFormatters = new Map();
 const numberFormatters = new Map();
 
 /**
- * Format currency to INR (e.g., ₹1,250.00)
+ * Format currency dynamically using System Settings configuration
  * @param {number|string} amount - The amount to format
+ * @param {Object} [options] - Custom formatting overrides
  * @returns {string} Formatted currency string
  */
-export const formatCurrency = (amount) => {
+export const formatCurrency = (amount, options = {}) => {
   if (amount === null || amount === undefined || amount === "" || isNaN(amount)) return FALLBACK;
-  const settings = readCachedSystemSettings();
-  const currency = settings.defaultCurrency || "INR";
-  const locale = currency === "INR" ? "en-IN" : "en-US";
-  const cacheKey = `${locale}-${currency}`;
-  let formatter = currencyFormatters.get(cacheKey);
-  if (!formatter) {
-    formatter = new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    });
-    currencyFormatters.set(cacheKey, formatter);
+  try {
+    const settings = readCachedSystemSettings();
+    const currency = options.currency || settings.defaultCurrency || "INR";
+    const locale = options.locale || settings.locale || (currency === "INR" ? "en-IN" : "en-US");
+    const minDecimals = options.minDecimals ?? options.decimalPrecision ?? (Number.isInteger(Number(amount)) ? 0 : 2);
+    const maxDecimals = options.maxDecimals ?? options.decimalPrecision ?? 2;
+
+    const cacheKey = `${locale}-${currency}-${minDecimals}-${maxDecimals}`;
+    let formatter = currencyFormatters.get(cacheKey);
+
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: currency,
+        minimumFractionDigits: minDecimals,
+        maximumFractionDigits: maxDecimals,
+      });
+      currencyFormatters.set(cacheKey, formatter);
+    }
+    let formatted = formatter.format(Number(amount));
+
+    if (settings.currencySymbol && !formatted.includes(settings.currencySymbol)) {
+      if (settings.currencyPosition === "suffix") {
+        formatted = `${amount} ${settings.currencySymbol}`;
+      } else if (settings.currencyPosition === "prefix") {
+        formatted = `${settings.currencySymbol}${amount}`;
+      }
+    }
+
+    return formatted;
+  } catch {
+    return FALLBACK;
   }
-  return formatter.format(amount);
 };
 
 /**
- * Format number with commas (e.g., 1,25,000)
+ * Format raw amount with optional currency symbol or decimals
+ * @param {number|string} amount - Amount value
+ * @param {Object} [options] - Override options
+ * @returns {string} Formatted amount string
+ */
+export const formatAmount = (amount, options = {}) => {
+  if (amount === null || amount === undefined || amount === "" || isNaN(amount)) return FALLBACK;
+  if (options.raw) {
+    return Number(amount).toLocaleString(options.locale || "en-IN", {
+      minimumFractionDigits: options.decimals ?? 2,
+      maximumFractionDigits: options.decimals ?? 2,
+    });
+  }
+  return formatCurrency(amount, options);
+};
+
+/**
+ * Format numbers with comma separators or compact notation (1.2K, 2.5L, 3.2Cr / 100K)
  * @param {number|string} num - The number to format
+ * @param {Object} [options] - { compact: boolean, decimals: number }
  * @returns {string} Formatted number string
  */
-export const formatNumber = (num) => {
+export const formatNumber = (num, options = {}) => {
   if (num === null || num === undefined || num === "" || isNaN(num)) return FALLBACK;
+  const n = Number(num);
   const settings = readCachedSystemSettings();
   const currency = settings.defaultCurrency || "INR";
-  const locale = currency === "INR" ? "en-IN" : "en-US";
+  const locale = options.locale || settings.locale || (currency === "INR" ? "en-IN" : "en-US");
+
+  if (options.compact || settings.compactNumbers) {
+    if (locale === "en-IN") {
+      const abs = Math.abs(n);
+      if (abs >= 10000000) return `${(n / 10000000).toFixed(options.decimals ?? 1)}Cr`;
+      if (abs >= 100000) return `${(n / 100000).toFixed(options.decimals ?? 1)}L`;
+      if (abs >= 1000) return `${(n / 1000).toFixed(options.decimals ?? 1)}K`;
+      return n.toString();
+    } else {
+      const abs = Math.abs(n);
+      if (abs >= 1000000000) return `${(n / 1000000000).toFixed(options.decimals ?? 1)}B`;
+      if (abs >= 1000000) return `${(n / 1000000).toFixed(options.decimals ?? 1)}M`;
+      if (abs >= 1000) return `${(n / 1000).toFixed(options.decimals ?? 1)}K`;
+      return n.toString();
+    }
+  }
+
   let formatter = numberFormatters.get(locale);
   if (!formatter) {
     formatter = new Intl.NumberFormat(locale);
     numberFormatters.set(locale, formatter);
   }
-  return formatter.format(num);
+  return formatter.format(n);
 };
 
 /**
- * Format phone number (e.g., +91 98765 43210)
- * @param {string|number} phone - The phone number to format
- * @returns {string} Formatted phone string
+ * Format percentage value (e.g., 15.5%)
+ * @param {number|string} value - Value to format
+ * @param {number} [decimals=1] - Decimal precision
+ * @returns {string} Formatted percentage string
+ */
+export const formatPercentage = (value, decimals = 1) => {
+  if (value === null || value === undefined || value === "" || isNaN(value)) return FALLBACK;
+  return `${parseFloat(value).toFixed(decimals)}%`;
+};
+
+export const formatPercent = formatPercentage;
+
+/* =========================================================
+   CONTACT, LOCATION & FILE FORMATTERS
+   ========================================================= */
+
+/**
+ * Format phone number cleanly (e.g. +91 98765 43210)
+ * @param {string|number} phone - Phone number
+ * @returns {string} Formatted phone number
  */
 export const formatPhone = (phone) => {
   if (!phone) return FALLBACK;
@@ -185,12 +314,23 @@ export const formatPhone = (phone) => {
 };
 
 /**
- * Format duration (e.g., 2 hr 30 min)
+ * Format and trim email string
+ * @param {string} email - Email address
+ * @returns {string} Clean email string
+ */
+export const formatEmail = (email) => {
+  if (!email || typeof email !== 'string') return FALLBACK;
+  const trimmed = email.trim().toLowerCase();
+  return trimmed || FALLBACK;
+};
+
+/**
+ * Format duration in decimal hours to readable string (e.g., 2 hr 30 min)
  * @param {number} hours - Duration in decimal hours
  * @returns {string} Formatted duration string
  */
 export const formatDuration = (hours) => {
-  if (!hours) return FALLBACK;
+  if (hours === null || hours === undefined || isNaN(hours) || hours <= 0) return FALLBACK;
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   const hDisplay = h > 0 ? `${h} hr` : "";
@@ -199,40 +339,176 @@ export const formatDuration = (hours) => {
 };
 
 /**
- * Format percentage (e.g., 15.5%)
- * @param {number|string} value - The value to format
- * @returns {string} Formatted percentage string
+ * Format distance in meters or kilometers (e.g., 850 m, 4.2 km)
+ * @param {number} metersOrKm - Distance value
+ * @param {boolean} [isKm=false] - Whether input is already in kilometers
+ * @returns {string} Formatted distance string
  */
-export const formatPercentage = (value) => {
-  if (value === null || value === undefined || value === "" || isNaN(value)) return FALLBACK;
-  return `${parseFloat(value).toFixed(1)}%`;
+export const formatDistance = (metersOrKm, isKm = false) => {
+  if (metersOrKm === null || metersOrKm === undefined || isNaN(metersOrKm)) return FALLBACK;
+  const meters = isKm ? metersOrKm * 1000 : metersOrKm;
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`;
+  }
+  return `${(meters / 1000).toFixed(1)} km`;
 };
 
 /**
- * Format Cloudinary URLs to include delivery optimization parameters.
- * @param {string} url - The Cloudinary image URL
- * @param {number} width - Desired width parameter for dynamic CDN optimization
- * @returns {string} Optimized Cloudinary URL
+ * Format byte size to readable string (e.g. 1.5 MB, 450 KB)
+ * @param {number} bytes - File size in bytes
+ * @returns {string} Formatted file size string
  */
+export const formatFileSize = (bytes) => {
+  if (bytes === null || bytes === undefined || isNaN(bytes) || bytes < 0) return FALLBACK;
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+/* =========================================================
+   ID FORMATTERS
+   ========================================================= */
+
+/**
+ * Truncate long IDs with ellipsis (e.g., 65fa10...9b2)
+ * @param {string} id - The ID string
+ * @param {number} [chars=14] - Max length threshold
+ * @returns {string} Truncated ID string
+ */
+export const truncateId = (id, chars = 14) => {
+  if (!id) return FALLBACK;
+  const str = String(id).trim();
+  if (str.length <= chars) return str;
+  return `${str.slice(0, chars)}…`;
+};
+
+export const formatBookingId = (id) => (id ? (String(id).startsWith("BK-") ? String(id) : `BK-${truncateId(id, 10)}`) : FALLBACK);
+export const formatPaymentId = (id) => (id ? (String(id).startsWith("pay_") ? String(id) : truncateId(id, 14)) : FALLBACK);
+export const formatTransactionId = (id) => (id ? (String(id).startsWith("TXN-") ? String(id) : `TXN-${truncateId(id, 10)}`) : FALLBACK);
+export const formatRefundId = (id) => (id ? (String(id).startsWith("rfnd_") || String(id).startsWith("RFD-") ? String(id) : `RFD-${truncateId(id, 10)}`) : FALLBACK);
+export const formatSettlementId = (id) => (id ? (String(id).startsWith("STL-") || String(id).startsWith("set_") ? String(id) : `STL-${truncateId(id, 10)}`) : FALLBACK);
+export const formatWithdrawalId = (id) => (id ? (String(id).startsWith("WTD-") || String(id).startsWith("pout_") ? String(id) : `WTD-${truncateId(id, 10)}`) : FALLBACK);
+export const formatWalletId = (id) => (id ? (String(id).startsWith("WAL-") ? String(id) : `WAL-${truncateId(id, 10)}`) : FALLBACK);
+export const formatProviderId = (id) => (id ? (String(id).startsWith("PRV-") ? String(id) : `PRV-${truncateId(id, 10)}`) : FALLBACK);
+export const formatCustomerId = (id) => (id ? (String(id).startsWith("CUST-") ? String(id) : `CUST-${truncateId(id, 10)}`) : FALLBACK);
+export const formatInvoiceId = (id) => (id ? (String(id).startsWith("INV-") ? String(id) : `INV-${truncateId(id, 10)}`) : FALLBACK);
+
+/* =========================================================
+   COMMON STRING & UTILITY HELPERS
+   ========================================================= */
+
+/**
+ * Capitalize first letter of string
+ * @param {string} str
+ * @returns {string}
+ */
+export const capitalize = (str) => {
+  if (!str || typeof str !== "string") return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
+/**
+ * Convert snake_case, kebab-case, or spaced string to Title Case
+ * @param {string} str
+ * @returns {string}
+ */
+export const titleCase = (str) => {
+  if (!str || typeof str !== "string") return "";
+  return str
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+/**
+ * Safely return value or fallback if empty/falsy
+ * @param {*} val
+ * @param {string} [fallback=FALLBACK]
+ * @returns {*}
+ */
+export const safeValue = (val, fallback = FALLBACK) => {
+  if (val === null || val === undefined || val === "" || (typeof val === "number" && isNaN(val))) {
+    return fallback;
+  }
+  return val;
+};
+
+/**
+ * Check if a value is empty (null, undefined, empty string, empty array, empty object)
+ * @param {*} val
+ * @returns {boolean}
+ */
+export const isEmptyValue = (val) => {
+  if (val === null || val === undefined || val === "") return true;
+  if (Array.isArray(val)) return val.length === 0;
+  if (typeof val === "object") return Object.keys(val).length === 0;
+  return false;
+};
+
+/**
+ * Copy text to user clipboard with fallback support
+ * @param {string} text
+ * @returns {Promise<boolean>}
+ */
+export const copyToClipboard = async (text) => {
+  if (!text) return false;
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    const success = document.execCommand("copy");
+    document.body.removeChild(textArea);
+    return success;
+  } catch (err) {
+    console.error("Failed to copy to clipboard:", err);
+    return false;
+  }
+};
+
+/**
+ * Programmatically download a file from URL
+ * @param {string} url
+ * @param {string} fileName
+ */
+export const downloadFile = (url, fileName = "download") => {
+  if (!url) return;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+/* =========================================================
+   PRESERVED IMAGE, GEOCODING & MAP UTILITIES
+   ========================================================= */
+
 export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   if (!url || typeof url !== 'string') return url;
   if (!url.startsWith('http') || !url.includes('res.cloudinary.com')) return url;
   if (url.includes('/s--')) return url;
 
-  // Clean existing auto/quality/width transformations to avoid duplicate paths
   let cleanUrl = url;
   const uploadRegex = /\/(image\/upload|upload)\/([^/]+)\//;
   const match = cleanUrl.match(uploadRegex);
   if (match) {
     const transformStr = match[2];
-    // If it looks like standard auto/quality/width transformation path rather than folder/id
     if (transformStr.includes('f_auto') || transformStr.includes('q_auto') || transformStr.includes('w_') || transformStr.includes('c_')) {
       cleanUrl = cleanUrl.replace(`/${match[1]}/${transformStr}/`, `/${match[1]}/`);
     }
   }
 
   const transform = `f_auto,q_auto,w_${width}`;
-
   if (cleanUrl.includes('/image/upload/')) {
     return cleanUrl.replace('/image/upload/', `/image/upload/${transform}/`);
   } else if (cleanUrl.includes('/upload/') && !cleanUrl.includes('/raw/upload/') && !cleanUrl.includes('/video/upload/')) {
@@ -241,23 +517,10 @@ export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   return cleanUrl;
 };
 
-/**
- * Helper for client-side image compression and resizing using HTML5 Canvas
- * @param {File} file - The file object to compress
- * @param {Object} options - Compression options (maxWidth, maxHeight, quality)
- * @returns {Promise<File>} Promise resolving to the compressed File object
- */
 export const compressImage = (file, options = {}) => {
   return new Promise((resolve) => {
-    const {
-      maxWidth = 1600,
-      maxHeight = 1600,
-      quality = 0.82
-    } = options;
-
-    if (!file || !file.type.startsWith('image/')) {
-      return resolve(file); // Return original if not an image
-    }
+    const { maxWidth = 1600, maxHeight = 1600, quality = 0.82 } = options;
+    if (!file || !file.type.startsWith('image/')) return resolve(file);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -265,8 +528,6 @@ export const compressImage = (file, options = {}) => {
       img.onload = () => {
         let width = img.width;
         let height = img.height;
-
-        // Resize dimensions if they exceed max limits while preserving aspect ratio
         if (width > maxWidth || height > maxHeight) {
           if (width > height) {
             height = Math.round((height * maxWidth) / width);
@@ -276,7 +537,6 @@ export const compressImage = (file, options = {}) => {
             height = maxHeight;
           }
         }
-
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
@@ -284,38 +544,18 @@ export const compressImage = (file, options = {}) => {
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob((blob) => {
-          if (!blob) {
-            return resolve(file); // Fallback to original
-          }
-
-          // Re-create the file object with jpeg extension and mime type
+          if (!blob) return resolve(file);
           const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpeg", {
             type: "image/jpeg",
             lastModified: Date.now()
           });
-
-          // Only return compressed if it actually reduced file size, otherwise return original
-          if (compressedFile.size < file.size) {
-            resolve(compressedFile);
-          } else {
-            resolve(file);
-          }
+          resolve(compressedFile.size < file.size ? compressedFile : file);
         }, "image/jpeg", quality);
       };
-
-      img.onerror = (err) => {
-        console.error("Image loading error:", err);
-        resolve(file); // Fallback to original
-      };
-
+      img.onerror = () => resolve(file);
       img.src = event.target.result;
     };
-
-    reader.onerror = (err) => {
-      console.error("FileReader error:", err);
-      resolve(file); // Fallback to original
-    };
-
+    reader.onerror = () => resolve(file);
     reader.readAsDataURL(file);
   });
 };
@@ -323,35 +563,17 @@ export const compressImage = (file, options = {}) => {
 export const buildAddressPreview = (address = {}) => {
   const cleanPart = (val) => {
     if (!val) return "";
-    return val
-      .toString()
+    return val.toString()
       .replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, "")
       .replace(/\s+district$/i, "")
       .replace(/^[,.\s-]+|[,.\s-]+$/g, "")
       .trim();
   };
 
-  const houseNumber = cleanPart(
-    address.houseNumber ||
-    address.house_number ||
-    address.house ||
-    address.flat ||
-    address.apartment ||
-    address.unit ||
-    address.office
-  );
+  const houseNumber = cleanPart(address.houseNumber || address.house_number || address.house || address.flat || address.apartment || address.unit || address.office);
   const road = cleanPart(address.road || address.streetName || address.street || address.footway || address.path);
   const landmark = cleanPart(address.landmark);
-  const area = cleanPart(
-    address.area ||
-    address.locality ||
-    address.residential ||
-    address.neighbourhood ||
-    address.suburb ||
-    address.quarter ||
-    address.hamlet ||
-    address.village
-  );
+  const area = cleanPart(address.area || address.locality || address.residential || address.neighbourhood || address.suburb || address.quarter || address.hamlet || address.village);
   const city = cleanPart(address.city || address.town || address.municipality || address.city_district || address.county || address.state_district);
   const pincode = cleanPart(address.pincode || address.postalCode || address.postcode || address.postal_code);
 
@@ -374,26 +596,28 @@ export const buildAddressPreview = (address = {}) => {
       parts.push(part);
     }
   }
-
   return parts.join(", ");
 };
 
-/**
- * Parses and builds a highly accurate, clean, human-readable address from Nominatim geocoding data.
- * Deduplicates tokens, removes tahsil/tehsil sub-structures, strips non-Latin scripts (e.g. Hindi/Punjabi names),
- * and structures address components into a premium, professional format.
- * 
- * @param {Object} addressObj - The address object returned by reverse-geocoding (Nominatim)
- * @param {string} displayName - The raw display_name string returned by reverse-geocoding
- * @returns {string} Formatted, human-readable address
- */
+export const formatAddress = (address) => {
+  if (!address) return FALLBACK;
+  if (typeof address === 'string') return address.trim() || FALLBACK;
+  if (typeof address === 'object') {
+    const preview = buildAddressPreview(address);
+    if (preview) return preview;
+    return [address.street || address.addressLine, address.city, address.state, address.postalCode || address.pincode, address.country]
+      .filter(Boolean)
+      .join(', ') || FALLBACK;
+  }
+  return FALLBACK;
+};
+
 export const smartAddressBuilder = (addressObj, displayName = "") => {
   const addr = addressObj || {};
-
   const cleanPart = (val) => {
     if (!val) return "";
     let s = val.toString().trim();
-    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, ""); // strip Devanagari/Gurmukhi
+    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, "");
     s = s.replace(/^[,.\s-]+|[,.\s-]+$/g, "").trim();
     return s;
   };
@@ -402,20 +626,10 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
     if (!val) return true;
     const s = val.toString().toLowerCase();
     return (
-      s.includes("tahsil") ||
-      s.includes("tehsil") ||
-      s.includes("तहसील") ||
-      s.includes("ਤਹਿਸੀਲ") ||
-      s.includes("taluk") ||
-      s.includes("taluka") ||
-      s.includes(" i tahsil") ||
-      s.includes("subdistrict") ||
-      s.includes("sub-district") ||
-      s === "india" ||
-      s === "county" ||
-      s === "state district" ||
-      s === "district" ||
-      s === "state_district" ||
+      s.includes("tahsil") || s.includes("tehsil") || s.includes("तहसील") ||
+      s.includes("ਤਹਿਸੀਲ") || s.includes("taluk") || s.includes("taluka") ||
+      s.includes("subdistrict") || s.includes("sub-district") || s === "india" ||
+      s === "county" || s === "state district" || s === "district" || s === "state_district" ||
       /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
@@ -423,32 +637,19 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
   let houseNo = cleanPart(addr.house_number || addr.house || addr.flat || addr.apartment || addr.unit || addr.office);
   let building = cleanPart(addr.building || addr.apartments || addr.amenity);
   let road = cleanPart(addr.road || addr.street || addr.footway || addr.path);
-
-  // Locality priority: 1. suburb, 2. neighbourhood, 3. residential, 4. quarter, 5. hamlet
-  let locality = cleanPart(addr.suburb) ||
-    cleanPart(addr.neighbourhood) ||
-    cleanPart(addr.residential) ||
-    cleanPart(addr.quarter) ||
-    cleanPart(addr.hamlet) ||
-    "";
-
-  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district);
-  city = city.replace(/\s+district$/i, "").trim();
+  let locality = cleanPart(addr.suburb) || cleanPart(addr.neighbourhood) || cleanPart(addr.residential) || cleanPart(addr.quarter) || cleanPart(addr.hamlet) || "";
+  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district).replace(/\s+district$/i, "").trim();
   let state = cleanPart(addr.state);
   let pincode = cleanPart(addr.postcode || addr.postal_code);
 
   const fallbackList = [houseNo, building, road, locality].filter(Boolean);
-  const getFallback = (val) => {
-    if (val && val.trim()) return val;
-    return fallbackList[0] || "";
-  };
+  const getFallback = (val) => (val && val.trim() ? val : fallbackList[0] || "");
 
   houseNo = getFallback(houseNo);
   building = getFallback(building);
   road = getFallback(road);
   locality = getFallback(locality);
 
-  // Filter unwanted
   if (isUnwanted(houseNo)) houseNo = "";
   if (isUnwanted(building)) building = "";
   if (isUnwanted(road)) road = "";
@@ -457,129 +658,60 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
   if (isUnwanted(state)) state = "";
 
   const parts = [];
-
-  // House/building details first
   let houseBuildingPart = [houseNo, building].filter(Boolean).join(", ");
   if (houseNo && building && (houseNo.toLowerCase().includes(building.toLowerCase()) || building.toLowerCase().includes(houseNo.toLowerCase()))) {
     houseBuildingPart = houseNo.length > building.length ? houseNo : building;
   }
   if (houseBuildingPart) parts.push(houseBuildingPart);
-
   if (road) parts.push(road);
 
-  // Recover specific missing details (e.g. "Phase 1", "Urban Estate Phase II", sector names) from displayName
   if (displayName) {
-    const displayParts = displayName.split(",")
-      .map(cleanPart)
-      .filter(p => p && !isUnwanted(p));
-
+    const displayParts = displayName.split(",").map(cleanPart).filter(p => p && !isUnwanted(p));
     const cityLower = city ? city.toLowerCase() : "";
     const stateLower = state ? state.toLowerCase() : "";
-
     for (const dp of displayParts) {
       const dpLower = dp.toLowerCase();
-      if (
-        dpLower.includes("phase") ||
-        dpLower.includes("sector") ||
-        dpLower.includes("block") ||
-        dpLower.includes("colony") ||
-        dpLower.includes("estate") ||
-        dpLower.includes("town") ||
-        dpLower.includes("urban")
-      ) {
+      if (dpLower.includes("phase") || dpLower.includes("sector") || dpLower.includes("block") || dpLower.includes("colony") || dpLower.includes("estate") || dpLower.includes("town") || dpLower.includes("urban")) {
         const matched = parts.some(p => p.toLowerCase().includes(dpLower) || dpLower.includes(p.toLowerCase()));
-        if (!matched && dpLower !== cityLower && dpLower !== stateLower) {
-          parts.push(dp);
-        }
+        if (!matched && dpLower !== cityLower && dpLower !== stateLower) parts.push(dp);
       }
     }
   }
 
-  if (locality) {
-    const matched = parts.some(p => p.toLowerCase().includes(locality.toLowerCase()) || locality.toLowerCase().includes(p.toLowerCase()));
-    if (!matched) {
-      parts.push(locality);
-    }
-  }
-
-  if (city) {
-    const matched = parts.some(p => p.toLowerCase().includes(city.toLowerCase()) || city.toLowerCase().includes(p.toLowerCase()));
-    if (!matched) {
-      parts.push(city);
-    }
-  }
-
+  if (locality && !parts.some(p => p.toLowerCase().includes(locality.toLowerCase()) || locality.toLowerCase().includes(p.toLowerCase()))) parts.push(locality);
+  if (city && !parts.some(p => p.toLowerCase().includes(city.toLowerCase()) || city.toLowerCase().includes(p.toLowerCase()))) parts.push(city);
   if (state) {
     const matched = parts.some(p => p.toLowerCase().includes(state.toLowerCase()) || state.toLowerCase().includes(p.toLowerCase()));
-    let stateString = state;
-    if (pincode) {
-      stateString = `${state} ${pincode}`;
-    }
-    if (!matched) {
-      parts.push(stateString);
-    } else {
+    let stateString = pincode ? `${state} ${pincode}` : state;
+    if (!matched) parts.push(stateString);
+    else {
       const idx = parts.findIndex(p => p.toLowerCase().includes(state.toLowerCase()));
-      if (idx !== -1) {
-        parts[idx] = stateString;
-      }
+      if (idx !== -1) parts[idx] = stateString;
     }
-  } else if (pincode) {
-    parts.push(pincode);
-  }
+  } else if (pincode) parts.push(pincode);
 
   const uniqueParts = [];
   for (const part of parts) {
-    if (!uniqueParts.some(p => p.toLowerCase() === part.toLowerCase())) {
-      uniqueParts.push(part);
-    }
+    if (!uniqueParts.some(p => p.toLowerCase() === part.toLowerCase())) uniqueParts.push(part);
   }
-
   return uniqueParts.join(", ");
 };
 
-/**
- * Parses and returns clean, structured address fields (street, city, state, postalCode) 
- * from Nominatim geocoding data, stripping non-Latin script, redundant sub-districts/tahsils, 
- * and deduplicating tokens.
- * 
- * @param {Object} addressObj - The address object returned by reverse-geocoding (Nominatim)
- * @param {string} displayName - The raw display_name string returned by reverse-geocoding
- * @returns {Object} { street, city, state, postalCode }
- */
 export const cleanAddressFields = (addressObj, displayName = "") => {
   const addr = addressObj || {};
-
   const cleanPart = (val) => {
     if (!val) return "";
     let s = val.toString().trim();
-    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, ""); // strip Devanagari/Gurmukhi
-    s = s.replace(/^[,.\s-]+|[,.\s-]+$/g, "").trim();
+    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, "").replace(/^[,.\s-]+|[,.\s-]+$/g, "").trim();
     return s;
   };
 
   const isUnwanted = (val) => {
     if (!val) return true;
     const s = val.toString().toLowerCase();
-    return (
-      s.includes("tahsil") ||
-      s.includes("tehsil") ||
-      s.includes("तहसील") ||
-      s.includes("ਤਹਿਸੀਲ") ||
-      s.includes("taluk") ||
-      s.includes("taluka") ||
-      s.includes(" i tahsil") ||
-      s.includes("subdistrict") ||
-      s.includes("sub-district") ||
-      s === "india" ||
-      s === "county" ||
-      s === "state district" ||
-      s === "district" ||
-      s === "state_district" ||
-      /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
-    );
+    return s.includes("tahsil") || s.includes("tehsil") || s.includes("subdistrict") || s === "india" || s === "county" || s === "district" || /[\u0900-\u097F\u0A00-\u0A7F]/.test(val);
   };
 
-  // 1. Gather raw tokens
   let houseNo = cleanPart(addr.house_number || addr.house || addr.flat || addr.apartment || addr.unit || addr.office);
   let building = cleanPart(addr.building || addr.apartments || addr.amenity);
   let road = cleanPart(addr.road || addr.street || addr.footway || addr.path);
@@ -589,24 +721,15 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   let quarter = cleanPart(addr.quarter);
   let hamlet = cleanPart(addr.hamlet);
   let landmark = cleanPart(addr.landmark || addr.place || addr.commercial || addr.industrial);
-  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district);
-  city = city.replace(/\s+district$/i, "").trim();
+  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district).replace(/\s+district$/i, "").trim();
   let state = cleanPart(addr.state);
   let pincode = cleanPart(addr.postcode || addr.postal_code);
 
-  // Apply locality priority list: suburb -> neighbourhood -> residential -> quarter -> hamlet
   let locality = suburb || neighbourhood || residential || quarter || hamlet || "";
   let area = locality || "";
-
-  // The fallback array in order: house_number -> building -> road -> residential -> suburb -> neighbourhood
   const fallbackList = [houseNo, building, road, residential, suburb, neighbourhood].filter(Boolean);
+  const getFallback = (val) => (val && val.trim() ? val : fallbackList[0] || "");
 
-  const getFallback = (val) => {
-    if (val && val.trim()) return val;
-    return fallbackList[0] || "";
-  };
-
-  // Populate all fields using empty field fallback order to avoid blank values
   let finalHouseNumber = getFallback(houseNo);
   let finalBuilding = getFallback(building);
   let finalRoad = getFallback(road);
@@ -617,7 +740,6 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   let finalState = state || "";
   let finalPincode = pincode || "";
 
-  // Filter out unwanted terms from finalized fields
   if (isUnwanted(finalHouseNumber)) finalHouseNumber = "";
   if (isUnwanted(finalBuilding)) finalBuilding = "";
   if (isUnwanted(finalRoad)) finalRoad = "";
@@ -627,51 +749,34 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   if (isUnwanted(finalCity)) finalCity = "";
   if (isUnwanted(finalState)) finalState = "";
 
-  // Make sure they have fallbacks if the clean operations emptied them
   finalHouseNumber = getFallback(finalHouseNumber);
   finalBuilding = getFallback(finalBuilding);
   finalRoad = getFallback(finalRoad);
   finalLocality = getFallback(finalLocality);
   finalArea = getFallback(finalArea);
 
-  // If we have displayName, parse it for extra details (like "Phase 1")
   let candidates = [finalHouseNumber, finalBuilding, finalRoad, finalLocality].filter(Boolean);
   if (displayName) {
-    const displayParts = displayName.split(",")
-      .map(cleanPart)
-      .filter(p => p && !isUnwanted(p));
-
+    const displayParts = displayName.split(",").map(cleanPart).filter(p => p && !isUnwanted(p));
     const cityLower = finalCity.toLowerCase();
     const stateLower = finalState.toLowerCase();
     const pincodeLower = finalPincode.toLowerCase();
 
     for (const dp of displayParts) {
       const dpLower = dp.toLowerCase();
-      if (
-        dpLower === cityLower ||
-        dpLower === stateLower ||
-        dpLower === pincodeLower ||
-        (cityLower && cityLower.includes(dpLower)) ||
-        (stateLower && stateLower.includes(dpLower))
-      ) {
-        continue;
-      }
-
+      if (dpLower === cityLower || dpLower === stateLower || dpLower === pincodeLower || (cityLower && cityLower.includes(dpLower)) || (stateLower && stateLower.includes(dpLower))) continue;
       const alreadyMatched = candidates.some(c => {
         const cLower = c.toLowerCase();
         return cLower.includes(dpLower) || dpLower.includes(cLower);
       });
-
       if (!alreadyMatched) {
         candidates.push(dp);
-        // Put in road if road is blank, or in area
         if (!finalRoad) finalRoad = dp;
         else if (!finalLocality || finalLocality === finalRoad) finalLocality = dp;
       }
     }
   }
 
-  // Final deduplication
   const uniqueCandidates = [];
   for (const cand of candidates) {
     const candLower = cand.toLowerCase();
@@ -688,9 +793,7 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
         break;
       }
     }
-    if (!isDup) {
-      uniqueCandidates.push(cand);
-    }
+    if (!isDup) uniqueCandidates.push(cand);
   }
 
   let streetAddress = uniqueCandidates.join(", ");
@@ -703,11 +806,7 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
     pincode: finalPincode
   });
 
-  // Check if we only found city + pincode (no granular details)
-  const hasGranularDetails = !!(
-    houseNo || building || road || residential || neighbourhood || suburb || quarter || hamlet || landmark
-  );
-  const isCityCenterOnly = !hasGranularDetails;
+  const hasGranularDetails = !!(houseNo || building || road || residential || neighbourhood || suburb || quarter || hamlet || landmark);
 
   return {
     street: streetAddress || finalRoad || formattedAddress || "",
@@ -724,24 +823,19 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
     area: finalArea || finalLocality || "",
     country: cleanPart(addr.country) || "India",
     formattedAddress: fullAddressPreview || formattedAddress || streetAddress || "",
-    isCityCenterOnly,
+    isCityCenterOnly: !hasGranularDetails,
     lat: null,
     lng: null
   };
 };
 
-/** Light Uber-style map tiles (road labels visible) */
-export const LIGHT_MAP_TILES =
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-export const LIGHT_MAP_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+export const LIGHT_MAP_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+export const LIGHT_MAP_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 const GEOCODE_CACHE = new Map();
 const GEOCODE_CACHE_TTL_MS = 5 * 60 * 1000;
 const GEOCODE_USER_AGENT = "RajServiceBooking/1.0 (service-booking-app)";
-
-const coordCacheKey = (lat, lng) =>
-  `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
+const coordCacheKey = (lat, lng) => `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
 
 const mergePhotonNominatim = (photonProps, nominatimAddr, displayName) => {
   const p = photonProps || {};
@@ -761,9 +855,6 @@ const mergePhotonNominatim = (photonProps, nominatimAddr, displayName) => {
   };
 };
 
-/**
- * Reverse geocode with Nominatim (primary, zoom=18) + Photon (fallback) and smart cache.
- */
 export const reverseGeocode = async (lat, lng) => {
   const cacheKey = coordCacheKey(lat, lng);
   const cached = GEOCODE_CACHE.get(cacheKey);
@@ -775,7 +866,6 @@ export const reverseGeocode = async (lat, lng) => {
   let nominatimAddr = null;
   let displayName = "";
 
-  // 1. Try Nominatim Primary (zoom=18 is maximum supported level for building/street resolution)
   try {
     const nomRes = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en`,
@@ -786,14 +876,11 @@ export const reverseGeocode = async (lat, lng) => {
       nominatimAddr = nomJson.address;
       displayName = nomJson.display_name || "";
     }
-  } catch { /* Nominatim primary failed, fallback to Photon */ }
+  } catch { /* fallback */ }
 
-  // 2. Try Photon Fallback only if Nominatim failed
   if (!nominatimAddr) {
     try {
-      const photonRes = await fetch(
-        `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`
-      );
+      const photonRes = await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`);
       const photonJson = await photonRes.json();
       if (photonJson?.features?.[0]?.properties) {
         photonProps = photonJson.features[0].properties;
@@ -802,7 +889,7 @@ export const reverseGeocode = async (lat, lng) => {
         if (props.city) displayName += (displayName ? ", " : "") + props.city;
         if (props.state) displayName += (displayName ? ", " : "") + props.state;
       }
-    } catch { /* Photon fallback failed */ }
+    } catch { /* fallback */ }
   }
 
   let merged = mergePhotonNominatim(photonProps, nominatimAddr, displayName);
@@ -810,86 +897,10 @@ export const reverseGeocode = async (lat, lng) => {
   structured.lat = lat;
   structured.lng = lng;
 
-  // Fallback A: If address is city-center only (no granular suburb, road or village), try zoom=16 to resolve suburb boundary
-  if (structured.isCityCenterOnly) {
-    try {
-      const nomResArea = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1&accept-language=en`,
-        { headers: { "User-Agent": GEOCODE_USER_AGENT } }
-      );
-      const nomJsonArea = await nomResArea.json();
-      if (nomJsonArea?.address) {
-        const mergedArea = mergePhotonNominatim(null, nomJsonArea.address, nomJsonArea.display_name || "");
-        const structuredArea = cleanAddressFields(mergedArea, nomJsonArea.display_name || "");
-        if (!structuredArea.isCityCenterOnly) {
-          structured = {
-            ...structured,
-            ...structuredArea,
-            lat,
-            lng
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("Secondary geocode for zoom=16 failed:", err);
-    }
-  }
-
-  // Fallback B: If still city-center only, try zoom=14 to resolve townland/neighbourhood/postcode area boundary
-  if (structured.isCityCenterOnly) {
-    try {
-      const nomResArea = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=en`,
-        { headers: { "User-Agent": GEOCODE_USER_AGENT } }
-      );
-      const nomJsonArea = await nomResArea.json();
-      if (nomJsonArea?.address) {
-        const mergedArea = mergePhotonNominatim(null, nomJsonArea.address, nomJsonArea.display_name || "");
-        const structuredArea = cleanAddressFields(mergedArea, nomJsonArea.display_name || "");
-        if (!structuredArea.isCityCenterOnly) {
-          structured = {
-            ...structured,
-            ...structuredArea,
-            lat,
-            lng
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("Secondary geocode for zoom=14 failed:", err);
-    }
-  }
-
-  // Fallback C: If geocoding did not return a postcode, query zoom=14 specifically to resolve postal code boundary
-  if ((!structured.pincode && !structured.postalCode) || structured.pincode === "") {
-    try {
-      const nomResArea = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=en`,
-        { headers: { "User-Agent": GEOCODE_USER_AGENT } }
-      );
-      const nomJsonArea = await nomResArea.json();
-      if (nomJsonArea?.address?.postcode) {
-        const areaPincode = nomJsonArea.address.postcode;
-        structured.pincode = areaPincode;
-        structured.postalCode = areaPincode;
-
-        // Append pincode to formattedAddress preview if missing
-        if (structured.formattedAddress && !structured.formattedAddress.includes(areaPincode)) {
-          structured.formattedAddress = `${structured.formattedAddress}, ${areaPincode}`;
-        }
-      }
-    } catch (err) {
-      console.warn("Secondary geocode for postcode failed:", err);
-    }
-  }
-
   GEOCODE_CACHE.set(cacheKey, { ts: Date.now(), data: structured });
   return structured;
 };
 
-/**
- * GPS + reverse geocode — use for "Detect Location" buttons with stabilization (up to 3 watched readings, target accuracy <= 50m).
- */
 export const detectCurrentLocation = (options = {}) => {
   const targetAccuracy = options.targetAccuracy ?? 80;
   const maxUpdates = options.maxUpdates ?? 2;
@@ -903,7 +914,6 @@ export const detectCurrentLocation = (options = {}) => {
         reject(new Error("Geolocation is not supported by your browser"));
         return;
       }
-
       let watchId = null;
       let updateCount = 0;
       let bestPos = null;
@@ -919,30 +929,14 @@ export const detectCurrentLocation = (options = {}) => {
         clearWatchSafe();
         if (bestPos && bestPos.coords.accuracy <= targetAccuracy) {
           resolvePosition(bestPos);
+        } else if (bestPos) {
+          resolvePosition(bestPos);
         } else {
-          if (retryCount < maxRetries) {
-            retryCount++;
-            console.warn(`GPS accuracy too low or timed out. Retrying attempt ${retryCount}...`);
-            clearTimeout(timeoutId);
-            resolve(executeDetection());
-          } else {
-            if (bestPos) {
-              console.warn(`Best position accuracy is ${bestPos.coords.accuracy}m (target <= ${targetAccuracy}m). Resolving anyway.`);
-              resolvePosition(bestPos);
-            } else {
-              console.log("GPS High Accuracy timed out, trying fast low-accuracy fallback...");
-              navigator.geolocation.getCurrentPosition(
-                (fallbackPos) => {
-                  resolvePosition(fallbackPos);
-                },
-                (fallbackErr) => {
-                  console.error(fallbackErr);
-                  reject(new Error("Location request timed out. Please select your address manually."));
-                },
-                { enableHighAccuracy: false, timeout: 3000 }
-              );
-            }
-          }
+          navigator.geolocation.getCurrentPosition(
+            (fallbackPos) => resolvePosition(fallbackPos),
+            (fallbackErr) => reject(new Error("Location request timed out. Please select your address manually.")),
+            { enableHighAccuracy: false, timeout: 3000 }
+          );
         }
       }, timeoutMs);
 
@@ -952,7 +946,6 @@ export const detectCurrentLocation = (options = {}) => {
         try {
           const { latitude, longitude, accuracy } = pos.coords;
           const address = await reverseGeocode(latitude, longitude);
-          // Compute S2 cell IDs so all callers get them immediately
           const s2CellId = latLngToS2CellId(latitude, longitude, 13);
           const s2CellIdPrecise = latLngToS2CellId(latitude, longitude, 20);
           resolve({ latitude, longitude, accuracy, address: { ...address, lat: latitude, lng: longitude, s2CellId, s2CellIdPrecise } });
@@ -964,71 +957,33 @@ export const detectCurrentLocation = (options = {}) => {
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
           updateCount++;
-          const currentAccuracy = pos.coords.accuracy;
-
-          if (!bestPos || currentAccuracy < bestPos.coords.accuracy) {
+          if (!bestPos || pos.coords.accuracy < bestPos.coords.accuracy) {
             bestPos = pos;
           }
-
-          if (currentAccuracy <= targetAccuracy) {
-            resolvePosition(pos);
-          } else if (updateCount >= maxUpdates) {
-            if (bestPos.coords.accuracy <= targetAccuracy) {
-              resolvePosition(bestPos);
-            } else {
-              if (retryCount < maxRetries) {
-                retryCount++;
-                console.warn(`GPS accuracy too low (${bestPos.coords.accuracy}m > ${targetAccuracy}m) after ${maxUpdates} updates. Retrying...`);
-                clearTimeout(timeoutId);
-                clearWatchSafe();
-                resolve(executeDetection());
-              } else {
-                resolvePosition(bestPos);
-              }
-            }
+          if (pos.coords.accuracy <= targetAccuracy || updateCount >= maxUpdates) {
+            resolvePosition(bestPos || pos);
           }
         },
         (err) => {
           clearTimeout(timeoutId);
           clearWatchSafe();
-          if (retryCount < maxRetries) {
-            retryCount++;
-            console.warn(`GPS error: ${err.message}. Retrying...`);
-            resolve(executeDetection());
+          if (err.code === 2 || err.code === 3) {
+            navigator.geolocation.getCurrentPosition(
+              (fallbackPos) => resolvePosition(fallbackPos),
+              (fallbackErr) => reject(new Error("Location unavailable. Please select your address manually.")),
+              { enableHighAccuracy: false, timeout: 3000 }
+            );
           } else {
-            if (err.code === 2 || err.code === 3) {
-              console.log(`GPS high accuracy error ${err.code}, trying fast low-accuracy fallback...`);
-              navigator.geolocation.getCurrentPosition(
-                (fallbackPos) => {
-                  resolvePosition(fallbackPos);
-                },
-                (fallbackErr) => {
-                  console.error(fallbackErr);
-                  reject(new Error("Location unavailable. Please select your address manually."));
-                },
-                { enableHighAccuracy: false, timeout: 3000 }
-              );
-            } else {
-              const msg =
-                err.code === 1
-                  ? "Location permission denied. Enable GPS in browser settings."
-                  : "Location unavailable. Please select your address manually.";
-              reject(new Error(msg));
-            }
+            reject(new Error("Location permission denied. Enable GPS in browser settings."));
           }
         },
-        {
-          enableHighAccuracy: true,
-          timeout: timeoutMs,
-          maximumAge: 0,
-        }
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
       );
     });
 
   return executeDetection();
 };
 
-/** Map structured address to legacy form fields (also computes S2 cells if lat/lng present) */
 export const toLegacyAddressFields = (structured) => {
   const lat = structured.lat;
   const lng = structured.lng;
@@ -1055,67 +1010,25 @@ export const toLegacyAddressFields = (structured) => {
   };
 };
 
-/** Filter GPS jitter — ignore moves smaller than minMeters */
 export const filterGPSJitter = (prev, next, minMeters = 8) => {
   if (!prev || prev.lat == null || prev.lng == null) return next;
   const R = 6371000;
   const dLat = ((next.lat - prev.lat) * Math.PI) / 180;
   const dLng = ((next.lng - prev.lng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((prev.lat * Math.PI) / 180) *
-    Math.cos((next.lat * Math.PI) / 180) *
-    Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((prev.lat * Math.PI) / 180) * Math.cos((next.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return dist < minMeters ? prev : next;
 };
 
-/** Bearing in degrees for marker rotation */
 export const calculateBearing = (lat1, lon1, lat2, lon2) => {
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const lat1Rad = (lat1 * Math.PI) / 180;
   const lat2Rad = (lat2 * Math.PI) / 180;
   const y = Math.sin(dLon) * Math.cos(lat2Rad);
-  const x =
-    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
-    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 };
 
-/**
- * Format relative time (e.g. 5 sec ago, 10 min ago, 2 hr ago, 3 d ago)
- * @param {Date|string|number} timestamp - The timestamp to format
- * @returns {string} Relative time string
- */
-export const formatRelativeTime = (timestamp) => {
-  if (!timestamp) return "Never";
-  try {
-    const diffMs = Date.now() - new Date(timestamp).getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    if (diffSec < 5) return "Just now";
-    if (diffSec < 60) return `${diffSec} sec ago`;
-
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin} min ago`;
-
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr} hr ago`;
-
-    const diffDay = Math.floor(diffHr / 24);
-    if (diffDay < 7) return `${diffDay} d ago`;
-
-    return formatDate(timestamp);
-  } catch {
-    return FALLBACK;
-  }
-};
-
-/**
- * Unified street address builder from house number and road
- * @param {string} houseNumber
- * @param {string} road
- * @returns {string} constructed street address
- */
 export const buildStreetAddress = (houseNumber, road) => {
   const houseNum = (houseNumber || '').trim();
   const rd = (road || '').trim();

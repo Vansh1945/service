@@ -3,7 +3,7 @@ import { FiCopy, FiShare2, FiUsers, FiAward, FiClock, FiAlertCircle, FiChevronDo
 import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../context/auth';
 import { getProviderReferralDetails } from '../../../services/referralApi';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
+import LoadingSpinner from '../../../components/ui/Loader';
 
 const ReferProviders = () => {
   const [details, setDetails] = useState(null);

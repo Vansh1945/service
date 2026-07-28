@@ -101,6 +101,18 @@ export const getRefundDetails = (refundId) => {
     return axiosInstance.get(`/admin/refunds/${refundId}`);
 };
 
+export const createManualRefund = (data) => {
+    return axiosInstance.post('/admin/refunds/manual', data);
+};
+
+export const approveRefundById = (refundId, data) => {
+    return axiosInstance.post(`/admin/refunds/${refundId}/approve`, data);
+};
+
+export const rejectRefundById = (refundId, data) => {
+    return axiosInstance.post(`/admin/refunds/${refundId}/reject`, data);
+};
+
 export const retryRefundLedger = (refundId) => {
     return axiosInstance.post(`/admin/refunds/${refundId}/retry`);
 };

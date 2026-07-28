@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as ContactService from '../../../services/ContactService';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import { formatDate, formatDateTime } from '../../../utils/format';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import {
   MessageSquare,
@@ -120,8 +120,8 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
                   </div>
                 </div>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${contact.status === 'REPLIED'
-                    ? 'bg-green-50 text-green-800 border-green-200'
-                    : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                  ? 'bg-green-50 text-green-800 border-green-200'
+                  : 'bg-yellow-50 text-yellow-800 border-yellow-200'
                   }`}>{contact.status}</span>
               </div>
             </div>
@@ -358,21 +358,21 @@ const UserContacts = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <StatsCard
+            <StatCard
               title="Total Contacts"
               value={pagination.total}
               icon={MessageSquare}
               trend="up"
               trendValue="12"
             />
-            <StatsCard
+            <StatCard
               title="New Messages"
               value={newCount}
               icon={AlertCircle}
               trend="down"
               trendValue="5"
             />
-            <StatsCard
+            <StatCard
               title="Replied"
               value={repliedCount}
               icon={CheckCircle}
@@ -501,8 +501,8 @@ const UserContacts = () => {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${contact.status === 'REPLIED'
-                            ? 'bg-green-50 text-green-800 border-green-200'
-                            : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                          ? 'bg-green-50 text-green-800 border-green-200'
+                          : 'bg-yellow-50 text-yellow-800 border-yellow-200'
                           }`}>{contact.status}</span>
                       </td>
                       <td className="px-6 py-4">

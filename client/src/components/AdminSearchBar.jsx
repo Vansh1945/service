@@ -80,73 +80,130 @@ const AdminSearchBar = ({
     const isBookingId = cleanQuery.startsWith('bk-') || /^[a-z]{2,3}-\d{4}-[a-z0-9]+$/i.test(cleanQuery);
     const isComplaintId = cleanQuery.startsWith('comp-') || cleanQuery.startsWith('cp-');
     const isProviderId = cleanQuery.startsWith('prov-');
-    const isTxnId = cleanQuery.startsWith('txn-') || cleanQuery.startsWith('pay_') || cleanQuery.startsWith('order_');
+    const isTxnId = cleanQuery.startsWith('txn-') || cleanQuery.startsWith('txn_');
+    const isPaymentId = cleanQuery.startsWith('pay_') || cleanQuery.startsWith('order_') || cleanQuery.startsWith('pay-');
+    const isRefundId = cleanQuery.startsWith('ref-') || cleanQuery.startsWith('refund_');
+    const isSettlementId = cleanQuery.startsWith('set-') || cleanQuery.startsWith('settlement_');
+    const isWithdrawalId = cleanQuery.startsWith('wd-') || cleanQuery.startsWith('payout-');
+    const isWalletId = cleanQuery.startsWith('wlt-') || cleanQuery.startsWith('wallet-');
 
     if (isBookingId) {
       suggestions.push({
-        name: `Search Booking ID: ${rawVal}`,
-        section: 'Quick Search',
-        route: `/admin/bookings?search=${encodeURIComponent(rawVal)}`,
-        icon: <Calendar className="w-4 h-4" />
+        name: `View Booking ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/bookings?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Calendar className="w-4 h-4 text-teal-600" />
       });
     }
-    if (isComplaintId) {
+    if (isPaymentId) {
       suggestions.push({
-        name: `Search Complaint ID: ${rawVal}`,
-        section: 'Quick Search',
-        route: `/admin/complaints?search=${encodeURIComponent(rawVal)}`,
-        icon: <AlertCircle className="w-4 h-4" />
-      });
-    }
-    if (isProviderId) {
-      suggestions.push({
-        name: `Search Provider ID (Pending): ${rawVal}`,
-        section: 'Quick Search',
-        route: `/admin/providers?search=${encodeURIComponent(rawVal)}`,
-        icon: <Users className="w-4 h-4" />
-      });
-      suggestions.push({
-        name: `Search Provider ID (Approved): ${rawVal}`,
-        section: 'Quick Search',
-        route: `/admin/approve-providers?search=${encodeURIComponent(rawVal)}`,
-        icon: <Users className="w-4 h-4" />
+        name: `View Payment / Order ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/payments?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Activity className="w-4 h-4 text-emerald-600" />
       });
     }
     if (isTxnId) {
       suggestions.push({
-        name: `Search Transaction/Payment ID: ${rawVal}`,
-        section: 'Quick Search',
-        route: `/admin/transactions?search=${encodeURIComponent(rawVal)}`,
-        icon: <Activity className="w-4 h-4" />
+        name: `View Transaction Ledger ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/transactions?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Activity className="w-4 h-4 text-indigo-600" />
       });
     }
-
-    // Generic fallback for any other long alphanumeric strings that might be raw IDs
-    const looksLikeId = cleanQuery.length >= 6 && /^[a-z0-9_-]+$/i.test(cleanQuery);
-    if (looksLikeId && !isBookingId && !isComplaintId && !isProviderId && !isTxnId) {
+    if (isRefundId) {
       suggestions.push({
-        name: `Search Bookings for "${rawVal}"`,
-        section: 'Quick ID Search',
-        route: `/admin/bookings?search=${encodeURIComponent(rawVal)}`,
-        icon: <Calendar className="w-4 h-4" />
+        name: `View Refund ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/refunds?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <AlertCircle className="w-4 h-4 text-rose-600" />
       });
+    }
+    if (isComplaintId) {
       suggestions.push({
-        name: `Search Complaints for "${rawVal}"`,
-        section: 'Quick ID Search',
-        route: `/admin/complaints?search=${encodeURIComponent(rawVal)}`,
-        icon: <AlertCircle className="w-4 h-4" />
+        name: `View Complaint ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/complaints?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <AlertCircle className="w-4 h-4 text-orange-600" />
       });
+    }
+    if (isSettlementId) {
       suggestions.push({
-        name: `Search Providers for "${rawVal}"`,
-        section: 'Quick ID Search',
-        route: `/admin/providers?search=${encodeURIComponent(rawVal)}`,
+        name: `View Settlement ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/settlements?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Activity className="w-4 h-4 text-blue-600" />
+      });
+    }
+    if (isWithdrawalId) {
+      suggestions.push({
+        name: `View Withdrawal / Payout ID: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/payout?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Activity className="w-4 h-4 text-amber-600" />
+      });
+    }
+    if (isWalletId) {
+      suggestions.push({
+        name: `View Wallet Record: ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/customer-wallets?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Users className="w-4 h-4 text-purple-600" />
+      });
+    }
+    if (isProviderId) {
+      suggestions.push({
+        name: `View Provider (Pending): ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/providers?search=${encodeURIComponent(rawVal)}&openDetail=true`,
         icon: <Users className="w-4 h-4" />
       });
       suggestions.push({
-        name: `Search Transactions for "${rawVal}"`,
+        name: `View Provider (Approved): ${rawVal}`,
+        section: 'Entity Navigation',
+        route: `/admin/approve-providers?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Users className="w-4 h-4" />
+      });
+    }
+
+    // Generic fallback for any other alphanumeric strings that might be raw MongoDB or custom IDs
+    const looksLikeId = cleanQuery.length >= 6 && /^[a-z0-9_-]+$/i.test(cleanQuery);
+    if (looksLikeId && !isBookingId && !isComplaintId && !isProviderId && !isTxnId && !isPaymentId && !isRefundId && !isSettlementId && !isWithdrawalId && !isWalletId) {
+      suggestions.push({
+        name: `Inspect Bookings for "${rawVal}"`,
         section: 'Quick ID Search',
-        route: `/admin/transactions?search=${encodeURIComponent(rawVal)}`,
+        route: `/admin/bookings?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Calendar className="w-4 h-4" />
+      });
+      suggestions.push({
+        name: `Inspect Payments for "${rawVal}"`,
+        section: 'Quick ID Search',
+        route: `/admin/payments?search=${encodeURIComponent(rawVal)}&openDetail=true`,
         icon: <Activity className="w-4 h-4" />
+      });
+      suggestions.push({
+        name: `Inspect Transactions for "${rawVal}"`,
+        section: 'Quick ID Search',
+        route: `/admin/transactions?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Activity className="w-4 h-4" />
+      });
+      suggestions.push({
+        name: `Inspect Refunds for "${rawVal}"`,
+        section: 'Quick ID Search',
+        route: `/admin/refunds?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <AlertCircle className="w-4 h-4" />
+      });
+      suggestions.push({
+        name: `Inspect Complaints for "${rawVal}"`,
+        section: 'Quick ID Search',
+        route: `/admin/complaints?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <AlertCircle className="w-4 h-4" />
+      });
+      suggestions.push({
+        name: `Inspect Customer for "${rawVal}"`,
+        section: 'Quick User Search',
+        route: `/admin/customers?search=${encodeURIComponent(rawVal)}&openDetail=true`,
+        icon: <Users className="w-4 h-4" />
       });
     }
 

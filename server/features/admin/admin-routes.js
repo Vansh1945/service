@@ -56,7 +56,10 @@ router.get('/dashboard/recent-activity', adminController.getDashboardRecentActiv
 router.get('/dashboard/analytics', adminController.getDashboardAnalytics);
 // Refund management
 router.get('/refunds', adminController.getAllRefunds);
+router.post('/refunds/manual', adminController.createManualRefund);
 router.get('/refunds/:id', adminController.getRefundById);
+router.post('/refunds/:id/approve', adminController.approveRefundById);
+router.post('/refunds/:id/reject', adminController.rejectRefundById);
 router.post('/refunds/:id/retry', adminController.retryRefund);
 router.post('/refund/:bookingId/process', validateBody(adminRefundSchema), adminController.processAdminRefund);
 router.post('/refund/:bookingId/reject', adminController.rejectAdminRefund);

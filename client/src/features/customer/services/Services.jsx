@@ -9,7 +9,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ServiceCardSkeleton from '../../../components/ui-skeletons/ServiceCardSkeleton';
 import HeroSection from '../../../components/HeroSection';
-import ErrorState from '../../../components/Error';
+import ErrorState from '../../../components/ui/Error';
 import { getPublicServices } from '../../../services/ServiceService';
 import useCategory from '../../../hooks/useCategory';
 import useSurchargeBooking from '../../../hooks/useSurchargeBooking';

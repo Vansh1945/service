@@ -13,7 +13,7 @@ import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaint
 import { formatDate, formatDateTime, compressImage } from '../../../utils/format';
 import CDNImage from '../../../components/CDNImage';
 import ChatModal from '../../../components/chat/ChatModal';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
+import LoadingSpinner from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
 
 import {

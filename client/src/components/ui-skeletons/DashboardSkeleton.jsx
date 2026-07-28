@@ -9,7 +9,7 @@ const DashboardSkeleton = ({
   showRecentBookings = false
 }) => {
   // Render stats cards skeletons
-  const statsCards = useMemo(() => {
+  const StatCards = useMemo(() => {
     return Array.from({ length: statsCount }).map((_, idx) => (
       <div
         key={idx}
@@ -76,7 +76,7 @@ const DashboardSkeleton = ({
   return (
     <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 font-inter animate-pulse">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Header Block */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="space-y-2 flex-1">
@@ -91,7 +91,7 @@ const DashboardSkeleton = ({
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          {statsCards}
+          {StatCards}
         </div>
 
         {/* Optional Provider Performance Block */}
@@ -116,7 +116,7 @@ const DashboardSkeleton = ({
         {/* Table & Bottom widgets section */}
         {(showTable || showActivity || showRecentBookings) && (
           <div className={`grid grid-cols-1 ${showActivity && showRecentBookings ? 'lg:grid-cols-3' : 'lg:grid-cols-1'} gap-6`}>
-            
+
             {/* Recent Bookings / List skeleton */}
             {showRecentBookings && (
               <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] p-5 space-y-4">
@@ -175,7 +175,7 @@ const DashboardSkeleton = ({
                 </div>
               </div>
             )}
-            
+
           </div>
         )}
       </div>

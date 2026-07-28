@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
 import * as SystemService from '../../../services/SystemService';
 import * as ZoneService from '../../../services/ZoneService';
+import FormSkeleton from '../../../components/ui-skeletons/FormSkeleton';
 import { writeSystemSettingsCache } from '../../../utils/systemSettingsCache';
 import {
   Settings, Calendar, Wallet, Percent, Bell, Shield, Flag, AlertTriangle, Save, Gift
@@ -65,6 +66,18 @@ const SystemSetting = () => {
       }
     },
     walletSettings: { minWithdrawal: 500, refundToWalletOnly: true },
+    refundSettings: {
+      autoRefundEnabled: true,
+      manualApprovalEnabled: true,
+      maxAutoRefundAmount: 5000,
+      defaultDestination: 'customer_choice',
+      allowWalletRefund: true,
+      allowOriginalPaymentRefund: true,
+      allowedDestinations: 'both',
+      allowWalletFallback: true,
+      allowHybridRefund: true,
+      refundSlaHours: 72
+    },
     commissionSettings: { defaultCommission: 10, payoutHoldHours: 48 },
     surgeSplitSettings: { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50, emergency: 85 },
     notificationSettings: { pushEnabled: true, emailEnabled: true, providerAlerts: true, customerAlerts: true },
@@ -249,6 +262,7 @@ const SystemSetting = () => {
       formData.append('socialLinks', JSON.stringify(systemSettings.socialLinks));
       formData.append('bookingSettings', JSON.stringify(systemSettings.bookingSettings));
       formData.append('walletSettings', JSON.stringify(systemSettings.walletSettings));
+      formData.append('refundSettings', JSON.stringify(systemSettings.refundSettings || {}));
       formData.append('commissionSettings', JSON.stringify(systemSettings.commissionSettings));
       formData.append('surgeSplitSettings', JSON.stringify(systemSettings.surgeSplitSettings));
       formData.append('notificationSettings', JSON.stringify(systemSettings.notificationSettings));
@@ -301,6 +315,14 @@ const SystemSetting = () => {
   ];
 
   const activeTabDetails = tabs.find(t => t.id === activeTab);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        <FormSkeleton fields={6} />
+      </div>
+    );
+  }
 
   return (
     <div className="font-roboto max-w-7xl mx-auto">

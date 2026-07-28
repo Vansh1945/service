@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import {
   Plus,
   Edit,
@@ -35,7 +35,7 @@ import { getAllZones } from '../../../services/ZoneService';
 import * as SystemService from '../../../services/SystemService';
 import { formatCurrency } from '../../../utils/format';
 import HierarchicalZoneSelector from '../../../components/HierarchicalZoneSelector';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 // Charge type config — maps UI labels to backend enum values
 const CHARGE_TYPES = [
@@ -506,28 +506,28 @@ const SurgeManagement = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-          <StatsCard
+          <StatCard
             title="Total Rules"
             value={stats.total}
             icon={TrendingUp}
             iconBg="bg-teal-50"
             iconColor="text-primary"
           />
-          <StatsCard
+          <StatCard
             title="Active Rules"
             value={stats.active}
             icon={CheckCircle}
             iconBg="bg-green-50"
             iconColor="text-green-600"
           />
-          <StatsCard
+          <StatCard
             title="Global Scopes"
             value={stats.global}
             icon={Globe}
             iconBg="bg-blue-50"
             iconColor="text-blue-600"
           />
-          <StatsCard
+          <StatCard
             title="Zone-Specific"
             value={stats.zoneSpecific}
             icon={MapPin}
@@ -576,7 +576,7 @@ const SurgeManagement = () => {
         <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
-              
+
             </div>
             <div className="flex items-center gap-3">
               <Filter className="text-gray-400 w-5 h-5 shrink-0" />

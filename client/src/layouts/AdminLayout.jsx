@@ -10,7 +10,6 @@ import {
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
 import AdminSearchBar from '../components/AdminSearchBar';
-import AdminFilterBar from '../components/AdminFilterBar';
 import FinanceInvestigationDrawer from '../components/FinanceInvestigationDrawer';
 
 
@@ -77,21 +76,21 @@ const AdminLayout = () => {
       id: 'financials',
       title: 'Financials & Operations',
       items: [
-        { name: 'Finance Dashboard', path: '/admin/finance-dashboard', icon: <FiHome className="w-5 h-5 text-blue-600" /> },
-        { name: 'Payment Management', path: '/admin/payments', icon: <FiCreditCard className="w-5 h-5 text-emerald-600" /> },
+        { name: 'Finance Dashboard', path: '/admin/finance-dashboard', icon: <FiHome className="w-5 h-5" /> },
+        { name: 'Payment Management', path: '/admin/payments', icon: <FiCreditCard className="w-5 h-5" /> },
         { name: 'Transactions Ledger', path: '/admin/transactions', icon: <FiActivity className="w-5 h-5" /> },
-        { name: 'Refund Management', path: '/admin/refunds', icon: <FiDollarSign className="w-5 h-5 text-purple-600" /> },
-        { name: 'Cash Payments', path: '/admin/cash-payments', icon: <FiDollarSign className="w-5 h-5 text-amber-600" /> },
-        { name: 'Customer Wallets', path: '/admin/customer-wallets', icon: <FiUser className="w-5 h-5 text-purple-600" /> },
-        { name: 'Provider Wallets', path: '/admin/provider-wallets', icon: <FiUsers className="w-5 h-5 text-indigo-600" /> },
-        { name: 'Provider Earnings', path: '/admin/provider-earnings', icon: <FiActivity className="w-5 h-5 text-blue-600" /> },
-        { name: 'Withdrawals / Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5 text-green-600" /> },
-        { name: 'Settlements', path: '/admin/settlements', icon: <FiLayers className="w-5 h-5 text-emerald-600" /> },
-        { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5 text-blue-600" /> },
-        { name: 'Razorpay Management', path: '/admin/razorpay', icon: <FiTerminal className="w-5 h-5 text-blue-600" /> },
-        { name: 'Failed Payments', path: '/admin/failed-payments', icon: <FiAlertCircle className="w-5 h-5 text-red-600" /> },
+        { name: 'Refund Management', path: '/admin/refunds', icon: <FiDollarSign className="w-5 h-5" /> },
+        { name: 'Cash Payments', path: '/admin/cash-payments', icon: <FiDollarSign className="w-5 h-5" /> },
+        { name: 'Customer Wallets', path: '/admin/customer-wallets', icon: <FiUser className="w-5 h-5" /> },
+        { name: 'Provider Wallets', path: '/admin/provider-wallets', icon: <FiUsers className="w-5 h-5" /> },
+        { name: 'Provider Earnings', path: '/admin/provider-earnings', icon: <FiActivity className="w-5 h-5" /> },
+        { name: 'Withdrawals / Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
+        { name: 'Settlements', path: '/admin/settlements', icon: <FiLayers className="w-5 h-5" /> },
+        { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
+        { name: 'Razorpay Management', path: '/admin/razorpay', icon: <FiTerminal className="w-5 h-5" /> },
+        { name: 'Failed Payments', path: '/admin/failed-payments', icon: <FiAlertCircle className="w-5 h-5" /> },
         { name: 'Financial Reports', path: '/admin/earning-reports', icon: <FiFileText className="w-5 h-5" /> },
-        { name: 'Audit Logs', path: '/admin/audit-logs', icon: <FiShield className="w-5 h-5 text-indigo-600" /> },
+        { name: 'Audit Logs', path: '/admin/audit-logs', icon: <FiShield className="w-5 h-5" /> },
         { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
         { name: 'Surge Surcharges', path: '/admin/surge', icon: <FiAlertCircle className="w-5 h-5" /> },
         { name: 'Referrals & Rewards', path: '/admin/referrals', icon: <FiAward className="w-5 h-5" /> },
@@ -424,7 +423,6 @@ const AdminLayout = () => {
             <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages..." />
           </div>
           <div className="p-4 lg:p-6 xl:p-8 space-y-4">
-            <AdminFilterBar />
             <Outlet />
           </div>
 

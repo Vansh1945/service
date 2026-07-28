@@ -2274,7 +2274,7 @@ class BookingService {
     try {
       const { id } = req.params;
       // Handle cases where req.body might be undefined or empty
-      const { reason } = req.body || {}; // Optional cancellation reason
+      const { reason, refundDestination, customerChoice } = req.body || {}; // Optional cancellation reason and refund destination choice
       const userId = req.user.id;
 
       const booking = await Booking.findOne({ _id: id, customer: userId }).session(session);
@@ -2463,6 +2463,8 @@ class BookingService {
             const refundResult = await RefundEngineService.processRefundRequest({
               bookingId: booking._id,
               refundSource: 'customer_cancellation',
+              refundDestination: refundDestination || customerChoice,
+              customerChoice: customerChoice || refundDestination || 'none',
               refundReason: reason || 'Customer cancelled booking',
               cancellationReason: reason,
               requestedBy: userId,

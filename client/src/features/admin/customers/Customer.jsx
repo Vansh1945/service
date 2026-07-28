@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
+import SectionHeader from '../../../components/ui/SectionHeader';
+import Avatar from '../../../components/ui/Avatar';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
-import { formatDate } from '../../../utils/format';
+import { formatDate, formatAddress } from '../../../utils/format';
 import Modal from '../../../components/ui/Modal';
 import {
     Users,
@@ -37,7 +39,7 @@ import {
     Unlock,
     MoreVertical
 } from 'lucide-react';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 
 const AdminCustomersDashboard = () => {
     const { token, API, showToast } = useAuth();
@@ -116,6 +118,23 @@ const AdminCustomersDashboard = () => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (searchParams.get('openDetail') === 'true' && customers.length > 0 && !showViewModal) {
+            const searchVal = searchParams.get('search');
+            const target = customers.find(c =>
+                c._id === searchVal ||
+                c.customerId === searchVal ||
+                c.name?.toLowerCase().includes((searchVal || '').toLowerCase()) ||
+                c.email === searchVal ||
+                c.phone === searchVal
+            ) || customers[0];
+            if (target) {
+                setSelectedCustomer(target);
+                setShowViewModal(true);
+            }
+        }
+    }, [searchParams, customers, showViewModal]);
 
     // Calculate stats
     const calculateStats = (customersData) => {
@@ -310,11 +329,7 @@ const AdminCustomersDashboard = () => {
     };
 
     // Format address
-    const formatAddress = (address) => {
-        if (!address) return 'N/A';
-        const { street, city, state, postalCode, country } = address;
-        return [street, city, state, postalCode, country].filter(Boolean).join(', ');
-    };
+
 
     // Get status badge
     const getStatusBadge = (customer) => {
@@ -377,51 +392,50 @@ const AdminCustomersDashboard = () => {
         <div className="min-h-screen p-4 md:p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-secondary">Customers Management</h1>
-                        <p className="text-gray-600 mt-1">Manage and monitor all customer accounts</p>
-                    </div>
-                </div>
+                <SectionHeader
+                    title="Customers Management"
+                    subtitle="Manage and monitor all customer accounts"
+                    className="mb-6 md:mb-8"
+                />
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6 mb-6 md:mb-8">
-                    <StatsCard
+                    <StatCard
                         title="Total Customers"
                         value={stats.total}
                         icon={Users}
                         iconBg="bg-teal-100"
                         iconColor="text-primary"
                     />
-                    <StatsCard
+                    <StatCard
                         title="Active"
                         value={stats.active}
                         icon={UserCheck}
                         iconBg="bg-green-100"
                         iconColor="text-green-600"
                     />
-                    <StatsCard
+                    <StatCard
                         title="Inactive"
                         value={stats.inactive}
                         icon={UserX}
                         iconBg="bg-gray-100"
                         iconColor="text-gray-600"
                     />
-                    <StatsCard
+                    <StatCard
                         title="New (30 days)"
                         value={stats.new}
                         icon={UserPlus}
                         iconBg="bg-blue-100"
                         iconColor="text-blue-600"
                     />
-                    <StatsCard
+                    <StatCard
                         title="With Bookings"
                         value={stats.withBookings}
                         icon={BookOpen}
                         iconBg="bg-orange-100"
                         iconColor="text-orange-600"
                     />
-                    <StatsCard
+                    <StatCard
                         title="With Discount"
                         value={stats.withDiscount}
                         icon={Award}
@@ -505,20 +519,11 @@ const AdminCustomersDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                             {currentCustomers.map((customer) => (
+                                            {currentCustomers.map((customer) => (
                                                 <tr key={customer._id} className="hover:bg-gray-50 transition-colors duration-200">
                                                     <td className="px-4 md:px-6 py-3">
                                                         <div className="flex items-center">
-                                                            <div className="flex-shrink-0 h-10 w-10">
-                                                                <img
-                                                                    className="h-10 w-10 rounded-full object-cover"
-                                                                    src={customer.profilePicUrl || '/default-avatar.png'}
-                                                                    alt={customer.name}
-                                                                    onError={(e) => {
-                                                                        e.target.src = '/default-avatar.png';
-                                                                    }}
-                                                                />
-                                                            </div>
+                                                            <Avatar src={customer.profilePicUrl} name={customer.name} size="md" />
                                                             <div className="ml-4">
                                                                 <div className="text-sm font-medium text-secondary">{customer.name}</div>
                                                                 <div className="text-sm text-gray-500">
@@ -1002,35 +1007,35 @@ const AdminCustomersDashboard = () => {
                     </Modal>
                 )}
 
-            {/* Confirmation Modal */}
-            {confirmModal.isOpen && (
-                <Modal
-                    isOpen={confirmModal.isOpen}
-                    onClose={() => setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' })}
-                    title={confirmModal.title}
-                    size="small"
-                >
-                    <div className="space-y-4">
-                        <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                            {confirmModal.message}
-                        </p>
-                        <div className="flex justify-end gap-3 pt-3 border-t border-gray-150">
-                            <button
-                                onClick={() => setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' })}
-                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-semibold transition-colors focus:outline-none"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleConfirmAction}
-                                className={`px-4 py-2 text-white rounded-lg text-xs font-bold transition-colors focus:outline-none ${confirmModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary/95'}`}
-                            >
-                                Confirm
-                            </button>
+                {/* Confirmation Modal */}
+                {confirmModal.isOpen && (
+                    <Modal
+                        isOpen={confirmModal.isOpen}
+                        onClose={() => setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' })}
+                        title={confirmModal.title}
+                        size="small"
+                    >
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600 font-medium leading-relaxed">
+                                {confirmModal.message}
+                            </p>
+                            <div className="flex justify-end gap-3 pt-3 border-t border-gray-150">
+                                <button
+                                    onClick={() => setConfirmModal({ isOpen: false, type: '', customer: null, message: '', title: '' })}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-semibold transition-colors focus:outline-none"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmAction}
+                                    className={`px-4 py-2 text-white rounded-lg text-xs font-bold transition-colors focus:outline-none ${confirmModal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary/95'}`}
+                                >
+                                    Confirm
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
 
             </div>
         </div>

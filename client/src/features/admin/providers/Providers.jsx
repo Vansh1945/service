@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
+import SectionHeader from '../../../components/ui/SectionHeader';
 import {
   Users,
   Eye,
@@ -21,16 +22,15 @@ import {
   UserCheck,
   UserPlus,
   Clock as ClockIcon,
-  Star,
   Camera
 } from 'lucide-react';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
+import LoadingSpinner from '../../../components/ui/Loader';
 import { formatDate } from '../../../utils/format';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar, { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
-import StatsCard from '../../../components/ui/StatsCard';
+import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
+import StatCard from '../../../components/ui/StatCard';
 
 const AdminProvidersPage = () => {
   const { token, API, showToast } = useAuth();
@@ -488,35 +488,36 @@ const AdminProvidersPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-secondary mb-2">Pending Providers</h1>
-          <p className="text-gray-600">Review and approve provider registrations</p>
-        </div>
+        <SectionHeader
+          title="Pending Providers"
+          subtitle="Review and approve provider registrations"
+          className="mb-8"
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard
+          <StatCard
             title="Total Providers"
             value={stats.totalProviders}
             icon={Users}
             iconBg="bg-primary/10"
             iconColor="text-primary"
           />
-          <StatsCard
+          <StatCard
             title="Pending Approval"
             value={stats.pendingApproval}
             icon={ClockIcon}
             iconBg="bg-yellow-50"
             iconColor="text-yellow-600"
           />
-          <StatsCard
+          <StatCard
             title="Today Registered"
             value={stats.todayRegistered}
             icon={UserPlus}
             iconBg="bg-blue-50"
             iconColor="text-blue-600"
           />
-          <StatsCard
+          <StatCard
             title="Today Approved"
             value={stats.todayApproved}
             icon={UserCheck}
@@ -527,23 +528,23 @@ const AdminProvidersPage = () => {
 
         {/* Additional Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          <StatsCard
+          <StatCard
             title="KYC Documents"
             value={<span className="text-primary">{stats.withResume}</span>}
           />
-          <StatsCard
+          <StatCard
             title="Bank Details"
             value={<span className="text-green-600">{stats.withBankDetails}</span>}
           />
-          <StatsCard
+          <StatCard
             title="Profile Complete"
             value={<span className="text-blue-600">{stats.profileComplete}</span>}
           />
-          <StatsCard
+          <StatCard
             title="Test Passed"
             value={<span className="text-indigo-600">{stats.testPassed}</span>}
           />
-          <StatsCard
+          <StatCard
             title="Avg Days Pending"
             value={<span className="text-purple-600">{stats.avgDaysPending}</span>}
           />
@@ -1238,65 +1239,65 @@ const ProviderDetailsModal = ({
             })()}
           </div>
 
-              {/* Agreement PDF and Approval Letter PDF */}
-              <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow col-span-1 md:col-span-3">
-                <div className="flex items-center mb-4">
-                  <FileText className="w-5 h-5 mr-2 text-primary" />
-                  <span className="font-semibold text-secondary">Legal Contracts & Signatures</span>
+          {/* Agreement PDF and Approval Letter PDF */}
+          <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow col-span-1 md:col-span-3">
+            <div className="flex items-center mb-4">
+              <FileText className="w-5 h-5 mr-2 text-primary" />
+              <span className="font-semibold text-secondary">Legal Contracts & Signatures</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-bold text-secondary text-sm mb-1">Provider Service Agreement</h4>
+                  <p className="text-xs text-gray-500 mb-3">Dynamically compiled legal contract containing self declaration and digital signature logs.</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
-                    <div>
-                      <h4 className="font-bold text-secondary text-sm mb-1">Provider Service Agreement</h4>
-                      <p className="text-xs text-gray-500 mb-3">Dynamically compiled legal contract containing self declaration and digital signature logs.</p>
-                    </div>
-                    {selectedProvider.legalAcceptance?.agreementAccepted ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadPDF(selectedProvider._id, 'agreement')}
-                        className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
-                      >
-                        Download/View Agreement PDF
-                      </button>
-                    ) : (
-                      <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
-                        Agreement Pending Acceptance
-                      </button>
-                    )}
-                  </div>
+                {selectedProvider.legalAcceptance?.agreementAccepted ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPDF(selectedProvider._id, 'agreement')}
+                    className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
+                  >
+                    Download/View Agreement PDF
+                  </button>
+                ) : (
+                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                    Agreement Pending Acceptance
+                  </button>
+                )}
+              </div>
 
-                  <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
-                    <div>
-                      <h4 className="font-bold text-secondary text-sm mb-1">Official Approval Letter</h4>
-                      <p className="text-xs text-gray-500 mb-3">System generated registration confirmation letter containing approved service details and admin comments.</p>
-                    </div>
-                    {selectedProvider.approved ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadPDF(selectedProvider._id, 'approval')}
-                        className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
-                      >
-                        Download/View Approval Letter
-                      </button>
-                    ) : (
-                      <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
-                        Approval Letter Pending Activation
-                      </button>
-                    )}
-                  </div>
+              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-bold text-secondary text-sm mb-1">Official Approval Letter</h4>
+                  <p className="text-xs text-gray-500 mb-3">System generated registration confirmation letter containing approved service details and admin comments.</p>
                 </div>
+                {selectedProvider.approved ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPDF(selectedProvider._id, 'approval')}
+                    className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
+                  >
+                    Download/View Approval Letter
+                  </button>
+                ) : (
+                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                    Approval Letter Pending Activation
+                  </button>
+                )}
+              </div>
+            </div>
 
-                {selectedProvider.legalAcceptance?.acceptedAt && (
-                  <div className="mt-4 pt-3 border-t border-teal-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-gray-500 font-medium">
-                    <div>Accepted At: {new Date(selectedProvider.legalAcceptance.acceptedAt).toLocaleString()}</div>
-                    <div>Signature Version: {selectedProvider.legalAcceptance.version}</div>
-                    <div>IP Address: {selectedProvider.legalAcceptance.ipAddress || 'N/A'}</div>
-                    {selectedProvider.digitalSignature?.signatureUrl && (
-                      <div className="flex items-center gap-2">
-                        <span>Signature:</span>
-                        <img src={selectedProvider.digitalSignature.signatureUrl} alt="Signature Log" className="h-6 object-contain bg-white border rounded" />
-                      </div>
-                    )}
+            {selectedProvider.legalAcceptance?.acceptedAt && (
+              <div className="mt-4 pt-3 border-t border-teal-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-gray-500 font-medium">
+                <div>Accepted At: {new Date(selectedProvider.legalAcceptance.acceptedAt).toLocaleString()}</div>
+                <div>Signature Version: {selectedProvider.legalAcceptance.version}</div>
+                <div>IP Address: {selectedProvider.legalAcceptance.ipAddress || 'N/A'}</div>
+                {selectedProvider.digitalSignature?.signatureUrl && (
+                  <div className="flex items-center gap-2">
+                    <span>Signature:</span>
+                    <img src={selectedProvider.digitalSignature.signatureUrl} alt="Signature Log" className="h-6 object-contain bg-white border rounded" />
+                  </div>
+                )}
               </div>
             )}
           </div>

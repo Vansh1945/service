@@ -157,6 +157,22 @@ const startCronJobs = () => {
                     await notif.save();
                 }
             }
+
+            // 4. Auto-cleanup notifications older than 5 days
+            try {
+                const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+                const cleanupResult = await Notification.deleteMany({
+                    type: { $ne: 'broadcast' },
+                    status: { $ne: 'pending' },
+                    isScheduled: { $ne: true },
+                    createdAt: { $lte: fiveDaysAgo }
+                });
+                if (cleanupResult.deletedCount > 0) {
+                    console.log(`[CronScheduler] Cleaned up ${cleanupResult.deletedCount} old notification(s) older than 5 days.`);
+                }
+            } catch (cleanupErr) {
+                console.error('[CronScheduler] Error cleaning up old notifications:', cleanupErr);
+            }
         } catch (error) {
             console.error('[CronScheduler] Error in cron job:', error);
         }

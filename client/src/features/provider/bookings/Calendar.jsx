@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { FiCalendar, FiChevronLeft, FiChevronRight, FiClock, FiUser, FiActivity, FiDollarSign, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi';
 import axiosInstance from '../../../api/axiosInstance';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
-import ErrorState from '../../../components/Error';
-import StatsCard from '../../../components/ui/StatsCard';
+import LoadingSpinner from '../../../components/ui/Loader';
+import ErrorState from '../../../components/ui/Error';
+import StatCard from '../../../components/ui/StatCard';
 
 const Calendar = () => {
   const [view, setView] = useState('month'); // 'month' | 'week' | 'day'
@@ -133,25 +133,23 @@ const Calendar = () => {
         <div
           key={`day-${day}`}
           onClick={() => setSelectedDate(thisDate)}
-          className={`h-10 sm:h-14 border border-neutral-100/50 p-1 flex flex-col justify-between transition-colors overflow-hidden cursor-pointer relative ${
-            isSelected 
-              ? '!bg-primary text-white' 
-              : hasBookings 
-              ? 'bg-neutral-50/50 hover:bg-neutral-100/40' 
-              : 'hover:bg-neutral-50/20'
-          }`}
+          className={`h-10 sm:h-14 border border-neutral-100/50 p-1 flex flex-col justify-between transition-colors overflow-hidden cursor-pointer relative ${isSelected
+              ? '!bg-primary text-white'
+              : hasBookings
+                ? 'bg-neutral-50/50 hover:bg-neutral-100/40'
+                : 'hover:bg-neutral-50/20'
+            }`}
         >
           <div className="flex justify-between items-center w-full">
             <span
-              className={`text-[10px] sm:text-xs font-bold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full ${
-                isSelected
+              className={`text-[10px] sm:text-xs font-bold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full ${isSelected
                   ? 'text-white'
                   : isToday
-                  ? 'bg-primary/10 text-primary border border-primary/20'
-                  : hasBookings
-                  ? 'text-neutral-800 font-black'
-                  : 'text-neutral-300 font-medium'
-              }`}
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : hasBookings
+                      ? 'text-neutral-800 font-black'
+                      : 'text-neutral-300 font-medium'
+                }`}
             >
               {day}
             </span>
@@ -159,13 +157,13 @@ const Calendar = () => {
               <span className="w-1 h-1 rounded-full bg-primary" />
             )}
           </div>
-          
+
           {hasBookings && (
             <div className="flex flex-wrap gap-0.5 justify-start mt-auto max-h-3 sm:max-h-5 overflow-hidden">
               {dayBookings.slice(0, 3).map(b => (
-                <span 
-                  key={b._id} 
-                  className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isSelected ? 'bg-white' : getIndicatorColor(b)}`} 
+                <span
+                  key={b._id}
+                  className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isSelected ? 'bg-white' : getIndicatorColor(b)}`}
                 />
               ))}
               {dayBookings.length > 3 && (
@@ -206,15 +204,15 @@ const Calendar = () => {
 
     return (
       <div className="bg-white rounded-xl border border-neutral-100 shadow-sm overflow-hidden animate-fade-in">
-        <div className="overflow-x-auto scrollbar-none">
+        <div className="overflow-x-auto scrollbar-hide">
           <div className="min-w-[600px] md:min-w-0">
             <div className="grid grid-cols-7 border-b border-neutral-100 text-center bg-neutral-50/50 py-2">
               {weekDays.map(date => {
                 const isToday = formatDateString(date) === formatDateString(new Date());
                 const isSelected = formatDateString(date) === formatDateString(selectedDate);
                 return (
-                  <div 
-                    key={date.toString()} 
+                  <div
+                    key={date.toString()}
                     onClick={() => setSelectedDate(date)}
                     className={`flex flex-col items-center py-1 cursor-pointer transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-neutral-50/30'}`}
                   >
@@ -222,9 +220,8 @@ const Calendar = () => {
                       {date.toLocaleDateString('default', { weekday: 'short' })}
                     </span>
                     <span
-                      className={`text-xs font-bold mt-1 h-5.5 w-5.5 flex items-center justify-center rounded-full ${
-                        isToday ? 'bg-primary text-white' : 'text-neutral-700'
-                      } ${isSelected && !isToday ? 'border border-primary text-primary' : ''}`}
+                      className={`text-xs font-bold mt-1 h-5.5 w-5.5 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-white' : 'text-neutral-700'
+                        } ${isSelected && !isToday ? 'border border-primary text-primary' : ''}`}
                     >
                       {date.getDate()}
                     </span>
@@ -295,11 +292,11 @@ const Calendar = () => {
 
   const renderJobCard = (b) => {
     const isCompleted = b.status?.toLowerCase() === 'completed';
-    const typeColor = b.bookingType === 'emergency' 
-      ? 'text-accent border-accent/20 bg-accent/5' 
-      : b.bookingType === 'instant' 
-      ? 'text-info border-info/20 bg-info/5' 
-      : 'text-success border-success/20 bg-success/5';
+    const typeColor = b.bookingType === 'emergency'
+      ? 'text-accent border-accent/20 bg-accent/5'
+      : b.bookingType === 'instant'
+        ? 'text-info border-info/20 bg-info/5'
+        : 'text-success border-success/20 bg-success/5';
 
     return (
       <div
@@ -316,7 +313,7 @@ const Calendar = () => {
               {b.bookingType}
             </span>
           </div>
-          
+
           <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold text-neutral-400">
             <span className="flex items-center gap-0.5">
               <FiClock className="w-3 h-3 text-neutral-300" />
@@ -331,9 +328,8 @@ const Calendar = () => {
           <span className="text-xs font-bold text-neutral-800">
             ₹{b.providerEarnings || b.netAmount || 0}
           </span>
-          <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.25 rounded-full ${
-            isCompleted ? 'bg-neutral-100 text-neutral-450' : 'bg-primary/10 text-primary'
-          }`}>
+          <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.25 rounded-full ${isCompleted ? 'bg-neutral-100 text-neutral-450' : 'bg-primary/10 text-primary'
+            }`}>
             {b.status}
           </span>
         </div>
@@ -361,7 +357,7 @@ const Calendar = () => {
       {/* Compact Operational Provider Summary Section */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Today's Jobs */}
-        <StatsCard
+        <StatCard
           title="Day's Jobs"
           value={todayJobsCount}
           icon={FiActivity}
@@ -371,7 +367,7 @@ const Calendar = () => {
         />
 
         {/* Today's Earnings */}
-        <StatsCard
+        <StatCard
           title="Day's Earnings"
           value={`₹${todayEarnings}`}
           icon={FiDollarSign}
@@ -381,7 +377,7 @@ const Calendar = () => {
         />
 
         {/* Emergency Jobs */}
-        <StatsCard
+        <StatCard
           title="Emergency Jobs"
           value={emergencyJobsCount}
           icon={FiAlertTriangle}
@@ -391,7 +387,7 @@ const Calendar = () => {
         />
 
         {/* Upcoming Jobs */}
-        <StatsCard
+        <StatCard
           title="Upcoming Jobs"
           value={upcomingJobsCount}
           icon={FiCheckCircle}
@@ -415,9 +411,8 @@ const Calendar = () => {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
-                  view === v ? 'bg-primary text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-                }`}
+                className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${view === v ? 'bg-primary text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                  }`}
               >
                 {v}
               </button>
@@ -451,7 +446,7 @@ const Calendar = () => {
 
       {/* Responsive layout: Grid where Calendar takes 60% and Job List takes 40% on Desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-5 items-start">
-        
+
         {/* Calendar Grid Container (Col span 6) */}
         <div className="lg:col-span-6 space-y-3.5">
           {view === 'month' && renderMonthView()}
@@ -517,16 +512,15 @@ const Calendar = () => {
       {selectedBooking && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/5 animate-fade-in">
           <div className="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-xl border border-neutral-100 animate-scale-up text-left">
-            
+
             {/* Header */}
             <div className="px-4 py-3.5 border-b border-neutral-100 flex items-center justify-between">
-              <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
-                selectedBooking.bookingType === 'emergency' ? 'bg-accent/10 text-accent' : 
-                (selectedBooking.bookingType === 'instant' ? 'bg-info/10 text-info' : 'bg-success/10 text-success')
-              }`}>
+              <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${selectedBooking.bookingType === 'emergency' ? 'bg-accent/10 text-accent' :
+                  (selectedBooking.bookingType === 'instant' ? 'bg-info/10 text-info' : 'bg-success/10 text-success')
+                }`}>
                 {selectedBooking.bookingType} booking
               </span>
-              <button 
+              <button
                 onClick={() => setSelectedBooking(null)}
                 className="text-neutral-400 hover:text-neutral-600 text-sm p-1 rounded-lg hover:bg-neutral-50 transition-colors"
               >

@@ -3,7 +3,7 @@ import { FiCopy, FiShare2, FiUsers, FiGift, FiClock, FiCreditCard, FiChevronDown
 import { FaWhatsapp } from 'react-icons/fa';
 import { getCustomerReferralDetails } from '../../../services/referralApi';
 import { getProfile as getCustomerProfile } from '../../../services/CustomerService';
-import LoadingSpinner from '../../../components/ui-skeletons/Loader';
+import LoadingSpinner from '../../../components/ui/Loader';
 import { useAuth } from '../../../context/auth';
 
 const ReferEarn = () => {

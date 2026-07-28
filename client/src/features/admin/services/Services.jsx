@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
+import SectionHeader from '../../../components/ui/SectionHeader';
 import {
   Plus,
   Edit,
@@ -38,7 +39,7 @@ import * as SystemService from '../../../services/SystemService';
 import useCategory from '../../../hooks/useCategory';
 import { formatCurrency, formatDuration } from '../../../utils/format';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
 
@@ -182,7 +183,7 @@ const AdminServices = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
-  
+
   const [searchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
   const [searchTerm, setSearchTerm] = useState(urlSearch);
@@ -693,7 +694,7 @@ const AdminServices = () => {
         const parsed = JSON.parse(field);
         return parseArrayField(parsed);
       } catch (e) {
-      console.error(e);
+        console.error(e);
         return field
           .replace(/[[\]"\\]/g, ' ')
           .trim()
@@ -715,45 +716,45 @@ const AdminServices = () => {
     <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-secondary">Services Management</h1>
-            <p className="text-gray-600 mt-1">Manage all your services and offerings</p>
-          </div>
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <button
-              onClick={() => setShowBulkImportModal(true)}
-              className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
-            >
-              <Upload className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              Bulk Import
-            </button>
-            <button
-              onClick={handleExportServices}
-              className="flex items-center bg-accent hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
-            >
-              <Download className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              Export
-            </button>
-            <button
-              onClick={() => setShowDisableDiscountsModal(true)}
-              className="flex items-center bg-red-600 hover:bg-red-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
-            >
-              <XCircle className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              Disable Discounts
-            </button>
-            <button
-              onClick={handleAddServiceClick}
-              className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
-            >
-              <Plus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              Add Service
-            </button>
-          </div>
-        </div>
+        <SectionHeader
+          title="Services Management"
+          subtitle="Manage all your services and offerings"
+          action={
+            <div className="flex flex-wrap gap-2 w-full md:w-auto">
+              <button
+                onClick={() => setShowBulkImportModal(true)}
+                className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+              >
+                <Upload className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+                Bulk Import
+              </button>
+              <button
+                onClick={handleExportServices}
+                className="flex items-center bg-accent hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+              >
+                <Download className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+                Export
+              </button>
+              <button
+                onClick={() => setShowDisableDiscountsModal(true)}
+                className="flex items-center bg-red-600 hover:bg-red-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+              >
+                <XCircle className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+                Disable Discounts
+              </button>
+              <button
+                onClick={handleAddServiceClick}
+                className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+              >
+                <Plus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+                Add Service
+              </button>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-          <StatsCard
+          <StatCard
             title="Total Services"
             value={stats.total}
             icon={Package}
@@ -761,7 +762,7 @@ const AdminServices = () => {
             iconColor="text-primary"
           />
 
-          <StatsCard
+          <StatCard
             title="Active Services"
             value={stats.active}
             icon={CheckCircle}
@@ -769,7 +770,7 @@ const AdminServices = () => {
             iconColor="text-green-600"
           />
 
-          <StatsCard
+          <StatCard
             title="Inactive Services"
             value={stats.inactive}
             icon={XCircle}
@@ -777,7 +778,7 @@ const AdminServices = () => {
             iconColor="text-red-600"
           />
 
-          <StatsCard
+          <StatCard
             title="Services with Ratings"
             value={stats.ratedServices}
             icon={Star}
@@ -890,7 +891,7 @@ const AdminServices = () => {
             title={isEditMode ? "Edit Service" : "Create New Service"}
             size="xlarge"
           >
-            <div className="flex border-b border-gray-200 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none">
+            <div className="flex border-b border-gray-200 mb-6 overflow-x-auto whitespace-nowrap scrollbar-hide">
               {[
                 { id: 'basic', label: 'Basic Info', icon: FileText },
                 { id: 'pricing', label: 'Pricing & Type', icon: DollarSign },
@@ -905,8 +906,8 @@ const AdminServices = () => {
                     type="button"
                     onClick={() => setFormActiveTab(tab.id)}
                     className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${isActive
-                        ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                   >
                     <TabIcon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
@@ -1612,7 +1613,7 @@ const AdminServices = () => {
               </div>
 
               {/* Tabs Section */}
-              <div className="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap scrollbar-none">
+              <div className="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap scrollbar-hide">
                 {[
                   { id: 'overview', label: 'Overview', icon: FileText },
                   { id: 'logistics', label: 'Logistics & Add-ons', icon: Settings },
@@ -1626,8 +1627,8 @@ const AdminServices = () => {
                       type="button"
                       onClick={() => setViewActiveTab(tab.id)}
                       className={`flex items-center space-x-2 px-4 py-2.5 border-b-2 font-medium text-sm transition-all duration-300 ${isActive
-                          ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-primary text-primary bg-teal-50 bg-opacity-40 rounded-t-lg font-semibold'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
                     >
                       <TabIcon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-gray-400'}`} />

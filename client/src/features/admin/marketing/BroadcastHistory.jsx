@@ -12,15 +12,9 @@ import { formatDate } from '../../../utils/format';
 import { toast } from 'react-toastify';
 
 import Modal from '../../../components/ui/Modal';
+import StatusBadge from '../../../components/ui/StatusBadge';
 import ConfirmDialog from '../../../components/ui/ConfirmDialog';
-import StatsCard from '../../../components/ui/StatsCard';
-
-const STATUS_COLORS = {
-    sent: 'bg-green-50 text-green-700 border-green-200',
-    pending: 'bg-blue-50 text-blue-700 border-blue-200',
-    failed: 'bg-red-50 text-red-700 border-red-200',
-    cancelled: 'bg-gray-50 text-gray-700 border-gray-200',
-};
+import StatCard from '../../../components/ui/StatCard';
 
 const BroadcastHistory = () => {
     useAuth();
@@ -101,7 +95,7 @@ const BroadcastHistory = () => {
                 fetchHistory();
             }
         } catch (error) {
-      console.error(error);
+            console.error(error);
             toast.error('Action execution failed');
         } finally {
             setConfirmModal({ open: false, type: '', id: null, title: '' });
@@ -150,7 +144,7 @@ const BroadcastHistory = () => {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');
         link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `broadcast_report_${new Date().toISOString().slice(0,10)}.csv`);
+        link.setAttribute('download', `broadcast_report_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -198,27 +192,27 @@ const BroadcastHistory = () => {
 
             {/* Analytics Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                <StatsCard
+                <StatCard
                     title="Total Notifications"
                     value={analytics.total}
                 />
-                <StatsCard
+                <StatCard
                     title="Delivered"
                     value={analytics.delivered}
                     iconColor="text-green-600"
                     iconBg="bg-green-50"
                 />
-                <StatsCard
+                <StatCard
                     title="Opened"
                     value={analytics.opened}
                     iconColor="text-blue-600"
                     iconBg="bg-blue-50"
                 />
-                <StatsCard
+                <StatCard
                     title="CTR (Click-Through)"
                     value={`${analytics.ctr}%`}
                 />
-                <StatsCard
+                <StatCard
                     title="Failed"
                     value={analytics.failed}
                     iconColor="text-red-650"
@@ -328,9 +322,7 @@ const BroadcastHistory = () => {
                                                 <span className="text-[10px] text-gray-450 ml-1.5">({ctrVal}%)</span>
                                             </td>
                                             <td className="px-5 py-4">
-                                                <span className={`px-2 py-0.5 rounded-full border text-[9px] uppercase font-bold ${STATUS_COLORS[item.status] || STATUS_COLORS.sent}`}>
-                                                    {item.status || 'sent'}
-                                                </span>
+                                                <StatusBadge status={item.status || 'sent'} />
                                             </td>
                                             <td className="px-5 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">

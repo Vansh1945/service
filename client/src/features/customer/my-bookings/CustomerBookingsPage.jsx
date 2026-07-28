@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings, getBooking } from '../../../services/BookingService';
 import { toggleFavoriteProvider } from '../../../services/CustomerService';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSkeleton';
 import { formatDate, formatTime, formatDateTime } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
@@ -20,6 +20,7 @@ import ChatModal from '../../../components/chat/ChatModal';
 import useDebounce from '../../../hooks/useDebounce';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
 import { useConfirm } from '../../../context/ConfirmContext';
+import CustomerCancelModal from './components/CustomerCancelModal';
 
 // ─── Pure helpers ─────────────────
 
@@ -371,7 +372,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
             </button>
           </div>
 
-          <div className="flex border-b border-gray-200 -mx-6 px-6 mt-3 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="flex border-b border-gray-200 -mx-6 px-6 mt-3 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -505,9 +506,8 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                     <p className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
                       <Wallet className="w-4 h-4 text-purple-600" /> Enterprise Refund Status & Tracking
                     </p>
-                    <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
-                      booking.paymentStatus === 'refunded' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'
-                    }`}>
+                    <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${booking.paymentStatus === 'refunded' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'
+                      }`}>
                       {booking.paymentStatus === 'refunded' ? 'Refund Completed' : 'Refund Pending'}
                     </span>
                   </div>
@@ -964,6 +964,39 @@ const CustomerBookingsPage = () => {
   const [pagination, setPagination] = useState({});
   const [chatBookingId, setChatBookingId] = useState(null);
   const [chatRoomType, setChatRoomType] = useState('provider_customer');
+  const [cancelModalState, setCancelModalState] = useState({ isOpen: false, booking: null, loading: false });
+
+  const handleConfirmCancel = async ({ reason, refundDestination, customerChoice }) => {
+    const b = cancelModalState.booking;
+    if (!b) return;
+    const actionKey = `${b._id}-cancel`;
+
+    const prevBookings = [...bookings];
+    const prevSelected = selectedBooking ? { ...selectedBooking } : null;
+
+    try {
+      setCancelModalState(prev => ({ ...prev, loading: true }));
+      setActionLoading(prev => ({ ...prev, [actionKey]: true }));
+
+      // Optimistic update
+      setBookings(prev => prev.map(item => item._id === b._id ? { ...item, status: 'cancelled', cancellationProgress: { ...item.cancellationProgress, status: 'cancelled', cancelledAt: new Date() } } : item));
+      if (selectedBooking && selectedBooking._id === b._id) {
+        setSelectedBooking(prev => ({ ...prev, status: 'cancelled', cancellationProgress: { ...prev.cancellationProgress, status: 'cancelled', cancelledAt: new Date() } }));
+      }
+
+      await cancelBooking(b._id, { reason, refundDestination, customerChoice });
+      showToast('Booking cancelled successfully', 'success');
+      setCancelModalState({ isOpen: false, booking: null, loading: false });
+      fetchBookings(true);
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+      setBookings(prevBookings);
+      if (prevSelected) setSelectedBooking(prevSelected);
+      setCancelModalState(prev => ({ ...prev, loading: false }));
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
+    }
+  };
 
   const deepLinkLoadedRef = useRef(false);
 
@@ -1264,47 +1297,8 @@ const CustomerBookingsPage = () => {
                   onPayNow={handlePayNow}
                   onReschedule={b => { setBookingToReschedule(b); setShowRescheduleModal(true); }}
                   actionLoading={actionLoading}
-                  onCancel={async (b) => {
-                    const actionKey = `${b._id}-cancel`;
-                    if (actionLoading[actionKey]) return;
-
-                    const isStarted = !!b?.serviceStartedAt;
-                    const hasPlatformFee = (b.platformFee || 0) > 0;
-                    const message = isStarted
-                      ? 'Service has already started. Cancellation requires admin review and may be treated as a dispute. Are you sure you want to cancel?'
-                      : hasPlatformFee
-                        ? `Any valid refund (excluding the non-refundable Platform Fee of ₹${b.platformFee}) will be added directly to your wallet. Are you sure you want to cancel?`
-                        : 'Any valid refund will be added directly to your wallet. Are you sure you want to cancel?';
-                    const isConfirmed = await confirm({
-                      title: 'Cancel Booking?',
-                      message,
-                      type: 'danger',
-                      confirmText: 'Yes, Cancel',
-                      cancelText: 'Keep Booking'
-                    });
-                    if (isConfirmed) {
-                      const prevBookings = [...bookings];
-                      const prevSelected = selectedBooking ? { ...selectedBooking } : null;
-                      try {
-                        setActionLoading(prev => ({ ...prev, [actionKey]: true }));
-
-                        // Optimistic update
-                        setBookings(prev => prev.map(item => item._id === b._id ? { ...item, status: 'cancelled', cancellationProgress: { ...item.cancellationProgress, status: 'cancelled', cancelledAt: new Date() } } : item));
-                        if (selectedBooking && selectedBooking._id === b._id) {
-                          setSelectedBooking(prev => ({ ...prev, status: 'cancelled', cancellationProgress: { ...prev.cancellationProgress, status: 'cancelled', cancelledAt: new Date() } }));
-                        }
-
-                        await cancelBooking(b._id, { reason: 'Cancelled by Customer' });
-                        showToast('Booking cancelled successfully', 'success');
-                        fetchBookings(true);
-                      } catch (err) {
-                        showToast(`Error: ${err.message}`, 'error');
-                        setBookings(prevBookings);
-                        if (prevSelected) setSelectedBooking(prevSelected);
-                      } finally {
-                        setActionLoading(prev => ({ ...prev, [actionKey]: false }));
-                      }
-                    }
+                  onCancel={(b) => {
+                    setCancelModalState({ isOpen: true, booking: b, loading: false });
                   }}
                   onCall={phone => { if (phone) window.location.href = `tel:${phone}`; else showToast('Phone not available', 'warning'); }}
                   onChat={(id, type) => { setChatBookingId(id); setChatRoomType(type || 'provider_customer'); }}
@@ -1354,6 +1348,14 @@ const CustomerBookingsPage = () => {
         userRole="customer"
         isOpen={!!chatBookingId}
         onClose={() => { setChatBookingId(null); setChatRoomType('provider_customer'); }}
+      />
+
+      <CustomerCancelModal
+        isOpen={cancelModalState.isOpen}
+        onClose={() => setCancelModalState({ isOpen: false, booking: null, loading: false })}
+        onConfirm={handleConfirmCancel}
+        booking={cancelModalState.booking}
+        loading={cancelModalState.loading}
       />
     </div>
   );

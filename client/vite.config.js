@@ -146,7 +146,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1000,
-      modulePreload: false,
+      modulePreload: {
+        polyfill: true
+      },
       rollupOptions: {
         output: {
           manualChunks(id) {

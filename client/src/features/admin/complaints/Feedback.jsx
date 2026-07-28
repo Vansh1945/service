@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import StatsCard from '../../../components/ui/StatsCard';
+import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';
 import * as FeedbackService from '../../../services/FeedbackService';
 import {
@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Calendar, BarChart3,
   CheckCircle, Slash, Filter
 } from 'lucide-react';
-import Pagination from '../../../components/Pagination';
+import Pagination from '../../../components/ui/Pagination';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import { formatDate } from '../../../utils/format';
 const AdminFeedback = () => {
@@ -158,28 +158,28 @@ const AdminFeedback = () => {
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-            <StatsCard
+            <StatCard
               title="Total Feedback"
               value={stats.total}
               icon={MessageSquare}
               iconBg="bg-primary bg-opacity-10"
               iconColor="text-primary"
             />
-            <StatsCard
+            <StatCard
               title="Avg Rating"
               value={`${stats.averageRating}/5`}
               icon={Star}
               iconBg="bg-yellow-500 bg-opacity-10"
               iconColor="text-yellow-600"
             />
-            <StatsCard
+            <StatCard
               title="Provider Reviews"
               value={stats.providerFeedback}
               icon={User}
               iconBg="bg-green-500 bg-opacity-10"
               iconColor="text-green-600"
             />
-            <StatsCard
+            <StatCard
               title="Service Reviews"
               value={stats.serviceFeedback}
               icon={BarChart3}
