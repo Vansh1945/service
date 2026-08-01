@@ -10,7 +10,7 @@ import { readCachedSystemSettings } from './systemSettingsCache';
  * or if there is an active complaint/dispute.
  */
 export const isChatVisible = (b) => {
-  const statusStr = (b.status || '').toLowerCase();
+  const statusStr = String(b.status || '').trim().toLowerCase().replace(/[^a-z]/g, '');
   if (b.disputeStatus === 'resolved' || statusStr === 'resolved') return false;
   if (b.hasComplaint || b.disputeRaised || statusStr === 'complaint') return true;
   if (['pending', 'cancelled', 'noshow', 'completed', 'rejected'].includes(statusStr)) return false;
@@ -45,7 +45,7 @@ export const calculateNetAmount = (booking) => {
   if (booking.pricingBreakdown && typeof booking.pricingBreakdown.providerEarnings === 'number' && booking.pricingBreakdown.providerEarnings > 0) {
     return booking.pricingBreakdown.providerEarnings.toFixed(2);
   }
-  const statusStr = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  const statusStr = String(booking.status || '').trim().toLowerCase().replace(/[^a-z]/g, '');
   if (statusStr === 'completed' && typeof booking.providerEarnings === 'number' && booking.providerEarnings > 0) {
     return booking.providerEarnings.toFixed(2);
   }

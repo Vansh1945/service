@@ -6,22 +6,23 @@ import { useAuth } from '../../../context/auth';
 import { useNotification } from '../../../context/NotificationContext';
 import {
   Calendar, Clock, MapPin, User, Phone, Eye, Check, X,
-  AlertCircle, Percent, ChevronDown, Filter,
+  AlertCircle, ChevronDown, Filter,
   ClipboardList, Timer, CheckCheck, HelpCircle, Zap, Wrench, Play,
   CreditCard, CheckSquare, AlertTriangle, Package, Search, Activity,
-  Banknote, Download, Loader, BarChart2, DownloadCloud, Navigation,
+  Banknote, Download, Loader, DownloadCloud, Navigation,
   Home, Info, Shield, FileDigit, Camera, MessageSquare, Lock
 } from 'lucide-react';
 import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSkeleton';
 import * as BookingService from '../../../services/BookingService';
 import Pagination from '../../../components/ui/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../../utils/format';
-import { getStatusColor } from '../../../utils/status';
+import { getStatusColor as getStatusColorUtil } from '../../../utils/status';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { isChatVisible, formatAddress, calculateNetAmount } from '../../../utils/providerHelpers';
 import * as ComplaintService from '../../../services/ComplaintService';
 import L from 'leaflet';
 import ChatModal from '../../../components/chat/ChatModal';
+import QrPreviewModal from '../../../components/modals/QrPreviewModal';
 
 
 
@@ -181,7 +182,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
   const isStart = action === 'start';
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto scroll-hidden">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Sticky Header */}
         <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-3 bg-white">
@@ -199,7 +200,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
         </div>
 
         {/* Scrollable Content Area */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1 bg-white">
+        <div className="p-4 sm:p-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden space-y-5 sm:space-y-6 flex-1 bg-white">
           {/* Verification PIN Input */}
           <div>
             <label className="block text-xs sm:text-sm font-bold text-secondary mb-2">
@@ -351,20 +352,305 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
   );
 };
 
+// ── Payment Verification Modal with Compact Tabs & Simple UI ──────────────────
+const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComplete }) => {
+  const { showToast } = useAuth();
+  const [activeTab, setActiveTab] = useState('cash');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [qrData, setQrData] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(600);
+  const [verificationStatus, setVerificationStatus] = useState('pending');
+  const [showQrPreviewModal, setShowQrPreviewModal] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && booking) {
+      setError(null);
+      if (booking.paymentVerification?.status === 'waiting_payment' && booking.paymentVerification?.qrImageUrl) {
+        setQrData({
+          imageUrl: booking.paymentVerification.qrImageUrl,
+          qrCodeId: booking.paymentVerification.qrCodeId,
+          expiresAt: booking.paymentVerification.qrExpiresAt
+        });
+        setActiveTab('qr');
+        setVerificationStatus('waiting');
+      } else {
+        setActiveTab('cash');
+        setVerificationStatus('pending');
+      }
+    }
+  }, [isOpen, booking]);
+
+  useEffect(() => {
+    let timer;
+    if (activeTab === 'qr' && qrData?.expiresAt) {
+      const calculateTimeLeft = () => {
+        const diff = Math.max(0, Math.floor((new Date(qrData.expiresAt).getTime() - Date.now()) / 1000));
+        setTimeLeft(diff);
+        if (diff <= 0) {
+          setVerificationStatus('expired');
+        }
+      };
+      calculateTimeLeft();
+      timer = setInterval(calculateTimeLeft, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [activeTab, qrData]);
+
+  useEffect(() => {
+    if (!isOpen || !booking?._id || activeTab !== 'qr') return;
+
+    let pollInterval;
+    const checkStatus = async () => {
+      try {
+        const res = await BookingService.getQRVerificationStatus(booking._id);
+        const data = res.data?.data;
+        if (data?.paymentVerification?.status === 'verified' || data?.bookingStatus === 'completed') {
+          setVerificationStatus('completed');
+          showToast('Payment verified successfully!', 'success');
+          setTimeout(() => {
+            onVerificationComplete();
+          }, 1200);
+        } else if (data?.paymentVerification?.status === 'expired') {
+          setVerificationStatus('expired');
+        }
+      } catch (err) {
+        console.warn('[PaymentVerificationModal] Status check warning:', err.message);
+      }
+    };
+
+    pollInterval = setInterval(checkStatus, 5000);
+    return () => clearInterval(pollInterval);
+  }, [isOpen, booking, activeTab, onVerificationComplete, showToast]);
+
+  if (!isOpen || !booking) return null;
+
+  const totalAmount = booking.totalAmount || 0;
+
+  const handleGenerateQR = async () => {
+    if (qrData?.imageUrl && verificationStatus !== 'expired') {
+      setActiveTab('qr');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await BookingService.generateCashBookingQR(booking._id);
+      if (res.data?.success) {
+        setQrData(res.data.data);
+        setActiveTab('qr');
+        setVerificationStatus('waiting');
+        showToast('Dynamic QR Code generated!', 'success');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to generate QR code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmCash = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await BookingService.verifyCashReceived(booking._id);
+      if (res.data?.success) {
+        setVerificationStatus('completed');
+        showToast('Cash payment verified!', 'success');
+        if (typeof onVerificationComplete === 'function') {
+          await onVerificationComplete();
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to verify cash payment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCountdown = (secs) => {
+    const mins = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${mins}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
+          {/* Header matching Start/Complete ProofModal */}
+          <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
+                <Banknote className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-secondary">
+                  Collect & Verify Payment
+                </h3>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">
+                  Booking #{booking.bookingId || booking._id?.slice(-6)} · Amount: ₹{totalAmount}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-4 sm:p-5 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden space-y-4 flex-1 bg-white">
+            {/* Top Compact Tab Switcher */}
+            <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+              <button
+                type="button"
+                onClick={() => { setActiveTab('cash'); setError(null); }}
+                className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === 'cash' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'
+                  }`}
+              >
+                <Banknote className="w-3.5 h-3.5" />
+                <span>Cash Payment</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('qr');
+                  setError(null);
+                  if (!qrData) handleGenerateQR();
+                }}
+                className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === 'qr' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'
+                  }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-primary" />
+                <span>Dynamic QR</span>
+              </button>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {activeTab === 'cash' && (
+              <div className="space-y-4">
+                <div className="bg-emerald-50/60 border border-emerald-150 p-4 rounded-xl text-center space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Total Amount to Collect</span>
+                  <span className="text-3xl font-black text-emerald-900">₹{totalAmount}</span>
+                  <p className="text-xs text-emerald-700 font-medium pt-1">
+                    Receive cash payment directly from the customer. Platform commission is auto-settled.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'qr' && (
+              <div className="space-y-4">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center space-y-3 py-4 text-center">
+                    <div className="w-56 h-56 rounded-2xl bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 animate-pulse border border-gray-200 flex flex-col items-center justify-center space-y-2.5 p-4 shadow-inner">
+                      <Loader className="w-8 h-8 text-emerald-600 animate-spin" />
+                      <span className="text-[11px] font-bold text-gray-500">Generating Dynamic QR Code...</span>
+                    </div>
+                    <div className="h-5 w-24 bg-gray-200 rounded-full animate-pulse"></div>
+                  </div>
+                ) : verificationStatus === 'expired' ? (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-2">
+                    <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+                    <h4 className="text-xs font-bold text-amber-900">Dynamic QR Expired</h4>
+                    <p className="text-[11px] text-amber-700">The payment QR code timed out. Please generate a new code.</p>
+                    <button
+                      type="button"
+                      onClick={handleGenerateQR}
+                      disabled={loading}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors"
+                    >
+                      Regenerate QR
+                    </button>
+                  </div>
+                ) : verificationStatus === 'completed' ? (
+                  <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-2">
+                    <CheckCheck className="w-10 h-10 text-emerald-600 mx-auto animate-bounce" />
+                    <h4 className="text-sm font-bold text-emerald-900">Payment Verified!</h4>
+                    <p className="text-xs text-emerald-700">₹{totalAmount} verified via UPI. Proceeding to completion...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center space-y-3 text-center">
+                    <div className="px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-xs font-bold text-blue-700 flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                      <span>Expires in: {formatCountdown(timeLeft)}</span>
+                    </div>
+
+                    {qrData?.imageUrl && (
+                      <div
+                        className="w-56 h-56 rounded-2xl overflow-hidden border-2 border-emerald-500/40 shadow-md relative flex items-center justify-center bg-white"
+                        title="Dynamic Payment QR Code"
+                      >
+                        <img
+                          src={qrData.imageUrl}
+                          alt="Dynamic Payment QR"
+                          className="w-[145%] h-[145%] max-w-none object-cover object-center transform scale-125"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <span className="text-xl font-black text-secondary">₹{totalAmount}</span>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Ask customer to scan with Google Pay, PhonePe, Paytm, or BHIM UPI.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sticky Footer */}
+          <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3">
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold text-secondary hover:bg-gray-100 transition-colors disabled:opacity-50 bg-white"
+            >
+              Cancel
+            </button>
+
+            {activeTab === 'cash' ? (
+              <button
+                disabled={loading}
+                onClick={handleConfirmCash}
+                className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
+                <span>{loading ? 'Verifying...' : 'Collect Payment'}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowQrPreviewModal(true)}
+                disabled={!qrData?.imageUrl}
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Show QR Code</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <QrPreviewModal
+        isOpen={showQrPreviewModal}
+        onClose={() => setShowQrPreviewModal(false)}
+        title={`Payment QR - Booking #${booking?.bookingId || booking?._id?.slice(-6)}`}
+        qrCodeUrl={qrData?.imageUrl}
+        value={`Amount: ₹${totalAmount} | ID: ${qrData?.qrCodeId || ''}`}
+      />
+    </>
+  );
+};
+
 // ── Stat card ────────────────────────────────────────────────────────────
-const StatCard = ({ label, value, icon: Icon, iconColor = 'text-primary', iconBg = 'bg-primary/10' }) => (
-  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
-        <p className="text-lg font-bold text-secondary">{value}</p>
-      </div>
-      <div className={`${iconBg} p-2.5 rounded-xl`}>
-        <Icon className={`w-5 h-5 ${iconColor}`} />
-      </div>
-    </div>
-  </div>
-);
 
 
 // EMERGENCY BOOKING ENGINE UPGRADE
@@ -407,6 +693,7 @@ const ProviderBooking = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', data: null });
   const [proofModal, setProofModal] = useState({ isOpen: false, action: null, bookingId: null });
+  const [paymentVerificationModal, setPaymentVerificationModal] = useState({ isOpen: false, booking: null });
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalBookings: 0, completedBookings: 0, pendingBookings: 0, totalCashCollected: 0, commissionPayable: 0, netEarnings: 0 });
   const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
@@ -452,9 +739,9 @@ const ProviderBooking = () => {
         if (b.paymentMethod === "cash") {
           return true;
         }
-        const activeStatuses = ['Assigned', 'Offered', 'Accepted', 'OnTheWay', 'Arrived', 'Started', 'InProgress', 'Reassigned'];
-        const normalizedStatus = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
-        const isActive = activeStatuses.some(s => s.toLowerCase() === normalizedStatus);
+        const activeStatuses = ['assigned', 'offered', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'workstarted', 'reassigned'];
+        const normalizedStatus = String(b.status || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+        const isActive = activeStatuses.includes(normalizedStatus);
         if (isActive) {
           return true;
         }
@@ -500,12 +787,12 @@ const ProviderBooking = () => {
       const rejectedList = rejectedBookings || [];
 
       combinedList.forEach(b => {
-        const s = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
+        const s = String(b.status || '').trim().toLowerCase().replace(/[^a-z]/g, '');
         if (['pending', 'searchingprovider', 'offered', 'assigned', 'reassigned'].includes(s)) {
           pendingList.push(b);
         } else if (['accepted', 'scheduled', 'confirmed'].includes(s)) {
           acceptedList.push(b);
-        } else if (['inprogress', 'started', 'ontheway', 'arrived'].includes(s)) {
+        } else if (['inprogress', 'started', 'ontheway', 'arrived', 'workstarted'].includes(s)) {
           inProgressList.push(b);
         } else if (['completed'].includes(s)) {
           completedList.push(b);
@@ -658,8 +945,31 @@ const ProviderBooking = () => {
   }, [showToast, refreshData, selectedImages]);
 
   const handleBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
-    if (action === 'start' || action === 'complete') {
+    if (action === 'start') {
       setProofModal({ isOpen: true, action, bookingId });
+      return;
+    }
+
+    if (action === 'complete') {
+      let booking = (selectedBooking && String(selectedBooking._id) === String(bookingId)) ? selectedBooking : null;
+
+      if (!booking) {
+        Object.values(bookings).forEach(list => {
+          if (Array.isArray(list)) {
+            const found = list.find(b => String(b._id) === String(bookingId));
+            if (found) booking = found;
+          }
+        });
+      }
+
+      const isCash = (booking?.paymentMethod || '').trim().toLowerCase() === 'cash';
+      const isVerified = (booking?.paymentStatus || '').trim().toLowerCase() === 'paid' || (booking?.paymentVerification?.status || '').trim().toLowerCase() === 'verified';
+
+      if (isCash && !isVerified) {
+        setPaymentVerificationModal({ isOpen: true, booking });
+      } else {
+        setProofModal({ isOpen: true, action, bookingId });
+      }
       return;
     }
 
@@ -709,10 +1019,6 @@ const ProviderBooking = () => {
     }
   }, [showToast]);
 
-  const openBookingModalAtTab = useCallback(async (bookingId, tabId) => {
-    await getBookingDetails(bookingId);
-    setModalActiveTab(tabId);
-  }, [getBookingDetails]);
 
   useEffect(() => {
     if (entityId) {
@@ -754,8 +1060,7 @@ const ProviderBooking = () => {
   // ── Formatters ───────────────────────────────────────────────────────────
 
 
-  const getStatusColorCallback = useCallback((status) => getStatusColor(status, 'booking'), []);
-  const getStatusColor = getStatusColorCallback;
+  const getStatusColor = useCallback((status) => getStatusColorUtil(status, 'booking'), []);
 
   const getStatusIcon = useCallback((status) => {
     const map = {
@@ -768,6 +1073,7 @@ const ProviderBooking = () => {
       arrived: <Activity className="w-3.5 h-3.5" />,
       started: <Activity className="w-3.5 h-3.5" />,
       inprogress: <Activity className="w-3.5 h-3.5" />,
+      workstarted: <Activity className="w-3.5 h-3.5" />,
       completed: <Check className="w-3.5 h-3.5" />,
       cancelled: <X className="w-3.5 h-3.5" />,
       rejected: <X className="w-3.5 h-3.5" />,
@@ -812,7 +1118,6 @@ const ProviderBooking = () => {
     else if (filter === 'emergency') filtered = filtered.filter(b => b.bookingType === 'emergency' || b.isEmergency);
     else if (filter === 'instant') filtered = filtered.filter(b => b.bookingType === 'instant' || b.isInstant);
     else if (filter === 'scheduled') filtered = filtered.filter(b => b.bookingType === 'scheduled' || (!b.isEmergency && !b.isInstant));
-    // EMERGENCY BOOKING ENGINE UPGRADE
     const typePriority = {
       'emergency': 1,
       'instant': 2,
@@ -838,34 +1143,29 @@ const ProviderBooking = () => {
       }
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
-    // END EMERGENCY BOOKING ENGINE UPGRADE
   }, [bookings, activeTab, searchQuery, filter]);
 
   const totalPages = Math.ceil(currentBookings.length / bookingsPerPage);
   const paginatedBookings = currentBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage);
   const paginate = (n) => setCurrentPage(n);
 
-  // ── Booking card ─────────────────────────────────────────────────────────
+  // ── Booking card ───────────────────────────
   const renderBookingCard = (booking) => {
-    const currentStatus = (booking.status || 'Pending').toLowerCase().replace(/[^a-z]/g, '');
+    const currentStatus = String(booking.status || 'pending').trim().toLowerCase().replace(/[^a-z]/g, '');
     const isRejected = (booking.rejectedBy?.toString() === user?._id?.toString()) || (booking.metadata?.ignoredProviders?.some(id => id?.toString() === user?._id?.toString()));
-    const isPending = !isRejected && (currentStatus === 'pending' || currentStatus === 'assigned' || currentStatus === 'searchingprovider' || currentStatus === 'offered' || currentStatus === 'reassigned');
+    const isPending = !isRejected && (['pending', 'assigned', 'searchingprovider', 'offered', 'reassigned'].includes(currentStatus));
     const isAccepted = currentStatus === 'accepted';
-    const isInProgress = currentStatus === 'inprogress' || currentStatus === 'started' || currentStatus === 'ontheway' || currentStatus === 'arrived';
+    const isInProgress = ['inprogress', 'started', 'ontheway', 'arrived', 'workstarted'].includes(currentStatus);
     const isCompleted = currentStatus === 'completed';
-    const isCancelled = currentStatus === 'cancelled' || currentStatus === 'rejected' || currentStatus === 'expired' || currentStatus === 'refunded';
+    const isCancelled = ['cancelled', 'rejected', 'expired', 'refunded'].includes(currentStatus);
 
     const isEmergency = booking.bookingType?.toLowerCase() === 'emergency' || booking.isEmergency;
     const isInstant = booking.bookingType?.toLowerCase() === 'instant' || booking.isInstant;
 
     const calculatedEarnings = calculateNetAmount(booking);
-    const distanceText = booking.liveDistance
-      ? `${booking.liveDistance} km${booking.liveDuration ? ` (${booking.liveDuration})` : ''}`
-      : (booking.distanceText || 'Nearby');
 
     const approxArea = booking.address?.area || booking.address?.suburb || booking.address?.locality || booking.address?.city || 'Nearby Area';
     const customerRating = booking.customer?.rating || booking.customer?.averageRating || booking.customer?.performanceScore?.rating || 4.8;
-    const durationText = booking.estimatedDuration ? `${booking.estimatedDuration} hrs` : (booking.services?.[0]?.service?.duration ? `${booking.services[0].service.duration} hrs` : '1 hr');
 
     let borderStyle = "border-neutral-200";
     let glowStyle = "shadow-sm";
@@ -929,7 +1229,7 @@ const ProviderBooking = () => {
               <span className="font-medium truncate">{booking.customer?.name || 'Guest Customer'}</span>
             </div>
           </div>
-          
+
           <div className="text-right shrink-0 flex flex-col items-end">
             <span className="text-sm font-bold text-secondary">₹{calculatedEarnings}</span>
             {booking.providerEmergencyShare > 0 && (
@@ -965,7 +1265,7 @@ const ProviderBooking = () => {
 
         {/* Footer: Call, Navigate, View Details, Primary Action */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-neutral-100">
-          
+
           {/* Secondary Actions Group */}
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
             {/* Details (always there) */}
@@ -1059,27 +1359,18 @@ const ProviderBooking = () => {
                     <span>Start</span>
                   </button>
                 ) : isInProgress ? (
-                  <div className="flex gap-1.5 w-full">
-                    <button
-                      onClick={() => setProofModal({ isOpen: true, action: 'start', bookingId: booking._id })}
-                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-warning hover:bg-warning/95 text-neutral-900 text-xs font-bold rounded-lg transition-all"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>Photo</span>
-                    </button>
-                    <button
-                      disabled={actionLoading.id !== null}
-                      onClick={() => handleBookingAction(booking._id, 'complete')}
-                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-success hover:bg-success/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300"
-                    >
-                      {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
-                        <Loader className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                      <span>Complete</span>
-                    </button>
-                  </div>
+                  <button
+                    disabled={actionLoading.id !== null}
+                    onClick={() => handleBookingAction(booking._id, 'complete')}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-success hover:bg-success/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300"
+                  >
+                    {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
+                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Complete</span>
+                  </button>
                 ) : null}
               </div>
             ) : null}
@@ -1141,7 +1432,7 @@ const ProviderBooking = () => {
             </div>
             <ChevronDown className={`w-4 h-4 text-neutral-450 transition-transform duration-200 ${showReports ? 'rotate-180' : ''}`} />
           </button>
-          
+
           {showReports && (
             <div className="px-4 pb-4 pt-2 border-t border-neutral-100 bg-neutral-50 rounded-b-xl animate-slide-up">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4">
@@ -1167,7 +1458,7 @@ const ProviderBooking = () => {
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => downloadReport('booking')}
@@ -1442,13 +1733,12 @@ const ProviderBooking = () => {
                       </div>
                       <div className="flex justify-between items-center">
                         <span>SLA Status</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
-                          selectedBooking.slaStatus === 'CRITICAL' ? 'bg-red-105 text-red-700 border-red-500 animate-pulse' :
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${selectedBooking.slaStatus === 'CRITICAL' ? 'bg-red-105 text-red-700 border-red-500 animate-pulse' :
                           selectedBooking.slaStatus === 'DELAYED' ? 'bg-orange-100 text-orange-700 border-orange-400' :
-                          selectedBooking.slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-750 border-yellow-400' :
-                          selectedBooking.slaStatus === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-400' :
-                          'bg-blue-105 text-blue-800 border-blue-200'
-                        }`}>
+                            selectedBooking.slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-750 border-yellow-400' :
+                              selectedBooking.slaStatus === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-400' :
+                                'bg-blue-105 text-blue-800 border-blue-200'
+                          }`}>
                           {selectedBooking.slaStatus || 'ON_TIME'}
                         </span>
                       </div>
@@ -1966,6 +2256,21 @@ const ProviderBooking = () => {
         </div>
       )}
 
+      {/* ── Payment Verification Modal ── */}
+      <PaymentVerificationModal
+        isOpen={paymentVerificationModal.isOpen}
+        onClose={() => setPaymentVerificationModal({ isOpen: false, booking: null })}
+        booking={paymentVerificationModal.booking}
+        onVerificationComplete={async () => {
+          const bookingId = paymentVerificationModal.booking?._id;
+          setPaymentVerificationModal({ isOpen: false, booking: null });
+          await refreshData();
+          if (bookingId) {
+            setProofModal({ isOpen: true, action: 'complete', bookingId });
+          }
+        }}
+      />
+
       {/* ── Proof Upload Modal ── */}
       <ProofModal
         isOpen={proofModal.isOpen}
@@ -1975,20 +2280,7 @@ const ProviderBooking = () => {
         progress={uploadProgress}
         minCompletedImages={systemSettings?.bookingSettings?.minCompletedImages || 1}
         onConfirm={(images, location, pin, notes) => {
-          const booking = selectedBooking || bookings['in-progress']?.find(b => b._id === proofModal.bookingId) || bookings.accepted?.find(b => b._id === proofModal.bookingId);
-          const isCash = booking?.paymentMethod === 'cash';
-          if (isCash) {
-            setConfirmDialog({
-              isOpen: true,
-              type: 'success',
-              data: { bookingId: proofModal.bookingId, action: proofModal.action, additionalData: { images, location, pin, completionNotes: notes } },
-              title: 'Confirm Cash Collection',
-              message: `This is a Pay After Service booking. Have you collected the total amount of ₹${(booking.totalAmount || 0)} from the customer? Please confirm that you have received the payment before closing the job.`
-            });
-            setProofModal({ isOpen: false, action: null, bookingId: null });
-          } else {
-            executeBookingAction(proofModal.bookingId, proofModal.action, { images, location, pin, completionNotes: notes });
-          }
+          executeBookingAction(proofModal.bookingId, proofModal.action, { images, location, pin, completionNotes: notes });
         }}
       />
 

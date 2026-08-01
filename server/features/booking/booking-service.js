@@ -2782,12 +2782,17 @@ class BookingService {
       // BOOKING STATUS STATE MACHINE UPGRADE
       const normalizeParam = (s) => {
         if (!s) return 'all';
-        return s.toLowerCase();
+        return s.toLowerCase().replace(/[^a-z0-9]/g, '');
       };
 
       const normalizedStatus = normalizeParam(status);
 
-      const validStatuses = ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'started', 'inprogress', 'completed', 'cancelled', 'rejected', 'expired', 'reassigned', 'refunded', 'all'];
+      const validStatuses = [
+        'pending', 'searchingprovider', 'offered', 'assigned', 'accepted',
+        'ontheway', 'arrived', 'started', 'inprogress', 'completed',
+        'cancelled', 'canceled', 'rejected', 'expired', 'reassigned', 'refunded', 'all'
+      ];
+
       if (!validStatuses.includes(normalizedStatus)) {
         return res.status(400).json({
           success: false,
@@ -2795,7 +2800,7 @@ class BookingService {
         });
       }
 
-      if (normalizedStatus === 'Cancelled') {
+      if (normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
         return res.status(200).json({
           success: true,
           count: 0,
@@ -2824,10 +2829,10 @@ class BookingService {
 
       const providerBookingsCount = await Booking.countDocuments({
         provider: providerId,
-        status: { $in: ['Accepted', 'InProgress', 'Started', 'Assigned', 'Offered', 'OnTheWay', 'Arrived'] }
+        status: { $in: ['accepted', 'inprogress', 'started', 'assigned', 'offered', 'ontheway', 'arrived'] }
       });
 
-      if (normalizedStatus === 'Pending' && providerBookingsCount >= maxBookings) {
+      if (normalizedStatus === 'pending' && providerBookingsCount >= maxBookings) {
         return res.status(200).json({
           success: true,
           count: 0,
@@ -2839,22 +2844,32 @@ class BookingService {
       }
 
       const servicesInCategory = await Service.find({
-        category: { $in: provider.services }
+        category: { $in: provider.services || [] }
       }).select('_id').lean();
 
       const serviceIds = servicesInCategory.map(s => s._id);
 
       let query;
-      if (normalizedStatus === 'pending' || normalizedStatus === 'Pending') {
-        query = {
+      if (normalizedStatus === 'pending') {
+        const unassignedQuery = serviceIds.length > 0 ? {
           'services.service': { $in: serviceIds },
           'metadata.ignoredProviders': { $ne: providerId },
-          $or: [
-            { status: { $in: ['pending', 'searchingprovider'] }, provider: { $in: [null, undefined] } },
-            { status: { $in: ['accepted', 'offered'] }, provider: providerId }
-          ]
+          status: { $in: ['pending', 'searchingprovider'] },
+          provider: { $in: [null, undefined] }
+        } : null;
+
+        const assignedToMeQuery = {
+          provider: providerId,
+          status: { $in: ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted'] }
         };
-      } else if (normalizedStatus === 'Completed') {
+
+        query = unassignedQuery ? { $or: [unassignedQuery, assignedToMeQuery] } : assignedToMeQuery;
+      } else if (normalizedStatus === 'offered' || normalizedStatus === 'assigned') {
+        query = {
+          provider: providerId,
+          status: { $in: ['offered', 'assigned', 'pending', 'searchingprovider'] }
+        };
+      } else if (normalizedStatus === 'completed') {
         const heldEarnings = await ProviderEarning.find({
           provider: providerId,
           $or: [
@@ -2868,42 +2883,44 @@ class BookingService {
         query = {
           $or: [
             { _id: { $in: heldBookingIds } },
-            { payoutHoldUntil: { $gt: new Date() } }
-          ],
-          status: 'Completed',
-          provider: providerId,
-          'services.service': { $in: serviceIds }
+            { payoutHoldUntil: { $gt: new Date() } },
+            { status: 'completed', provider: providerId }
+          ]
         };
-      } else if (normalizedStatus === 'Rejected') {
+      } else if (normalizedStatus === 'rejected') {
         query = {
           $or: [
             { rejectedBy: providerId },
             { 'metadata.ignoredProviders': providerId },
-            { status: 'Rejected', provider: providerId }
+            { status: 'rejected', provider: providerId }
           ]
         };
       } else if (normalizedStatus === 'all') {
         query = {
-          provider: providerId,
-          'services.service': { $in: serviceIds }
+          $or: [
+            { provider: providerId },
+            ...(serviceIds.length > 0 ? [{
+              'services.service': { $in: serviceIds },
+              'metadata.ignoredProviders': { $ne: providerId },
+              status: { $in: ['pending', 'searchingprovider'] },
+              provider: { $in: [null, undefined] }
+            }] : [])
+          ]
         };
-      } else if (normalizedStatus === 'Accepted') {
+      } else if (normalizedStatus === 'accepted') {
         query = {
-          status: { $in: ['Accepted', 'Assigned', 'Offered'] },
-          provider: providerId,
-          'services.service': { $in: serviceIds }
+          status: { $in: ['accepted', 'assigned', 'offered'] },
+          provider: providerId
         };
-      } else if (normalizedStatus === 'InProgress') {
+      } else if (normalizedStatus === 'inprogress') {
         query = {
-          status: { $in: ['InProgress', 'Started', 'OnTheWay', 'Arrived'] },
-          provider: providerId,
-          'services.service': { $in: serviceIds }
+          status: { $in: ['inprogress', 'started', 'ontheway', 'arrived'] },
+          provider: providerId
         };
       } else {
         query = {
-          status: normalizedStatus,
           provider: providerId,
-          'services.service': { $in: serviceIds }
+          status: normalizedStatus
         };
       }
       // END BOOKING STATUS STATE MACHINE UPGRADE
@@ -3186,15 +3203,13 @@ class BookingService {
             {
               _id: id,
               lockedBy: providerId,
-              status: { $in: ['pending', 'Pending', 'offered', 'Offered', 'SearchingProvider', 'searchingprovider', 'Assigned', 'assigned'] }
+              status: { $in: ['pending', 'offered', 'searchingprovider', 'assigned', 'accepted'] }
             },
             {
               $set: {
                 status: 'accepted',
                 provider: providerId,
-                // EMERGENCY BOOKING ENGINE UPGRADE
                 providerAcceptanceStatus: 'accepted',
-                // END EMERGENCY BOOKING ENGINE UPGRADE
                 acceptedAt: new Date(),
                 updatedAt: new Date(),
                 lockedBy: null,
@@ -3223,9 +3238,7 @@ class BookingService {
               $set: {
                 status: 'accepted',
                 provider: providerId,
-                // EMERGENCY BOOKING ENGINE UPGRADE
                 providerAcceptanceStatus: 'accepted',
-                // END EMERGENCY BOOKING ENGINE UPGRADE
                 acceptedAt: new Date(),
                 updatedAt: new Date(),
                 lockedBy: null,
@@ -3291,7 +3304,6 @@ class BookingService {
           paymentMethod: updatedBooking.paymentMethod
         };
       });
-      // BOOKING LOCK UPGRADE
 
       // Real-time notification for customer
       try {
@@ -3389,7 +3401,7 @@ class BookingService {
       const booking = await Booking.findOne({
         _id: id,
         provider: providerId,
-        status: { $in: ['accepted', 'assigned', 'Accepted', 'Assigned'] }
+        status: { $in: ['accepted', 'assigned'] }
       }).populate('customer', 'name email phone profilePicUrl')
         .populate('services.service', 'title description');
 
@@ -3785,19 +3797,29 @@ class BookingService {
       // Get commission rule for provider using booking zoneId and serviceId
       const firstService = booking.services && booking.services[0];
       const serviceId = firstService ? firstService.service : null;
-      const commissionRule = await CommissionRule.getCommissionForProvider(
+      let commissionRule = await CommissionRule.getCommissionForProvider(
         providerId,
         booking.zoneId,
         performanceTier,
         serviceId
       );
 
-      if (!commissionRule) {
-        throw new Error('No active commission rule found for this provider. Cannot complete booking.');
+      if (!commissionRule || commissionRule === 'none') {
+        const { SystemConfig } = require('../system-setting/system-setting-model');
+        const sysSettings = session ? await SystemConfig.findOne().session(session).lean() : await SystemConfig.findOne().lean();
+        const defaultRate = sysSettings?.commissionSettings?.defaultCommission ?? 10;
+        commissionRule = {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'System Default Commission',
+          type: 'percentage',
+          value: defaultRate,
+          applyTo: 'all',
+          isActive: true
+        };
       }
 
-      // Prevent duplicate commission
-      if (booking.commissionProcessed) {
+      // Prevent duplicate commission for online bookings
+      if (booking.commissionProcessed && booking.paymentMethod !== 'cash') {
         await safeCommit(session);
         safeEnd(session);
         return res.status(409).json({
@@ -3824,6 +3846,17 @@ class BookingService {
       }
 
       const { latitude, longitude, pin, completionNotes } = req.body;
+
+      // Check cash payment verification requirement
+      if (booking.paymentMethod === 'cash' && booking.paymentStatus !== 'paid' && booking.paymentVerification?.status !== 'verified') {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({
+          success: false,
+          requiresPaymentVerification: true,
+          message: 'Cash payment must be verified by provider before completing the booking.'
+        });
+      }
 
       // Check completionNotes presence
       if (!completionNotes || !completionNotes.trim()) {

@@ -38,7 +38,7 @@ exports.listCommissionRules = async (req, res, next) => {
 
     // Performance Score Filter
     if (performanceScore) {
-      query.performanceScore = performanceScore;
+      query.performanceScore = typeof performanceScore === 'string' ? performanceScore.toLowerCase() : performanceScore;
       query.applyTo = 'performanceScore';
     }
 
@@ -128,7 +128,7 @@ exports.createCommissionRule = async (req, res) => {
       type,
       value,
       applyTo,
-      performanceScore: applyTo === 'performanceScore' ? performanceScore : undefined,
+      performanceScore: applyTo === 'performanceScore' && typeof performanceScore === 'string' ? performanceScore.toLowerCase() : (applyTo === 'performanceScore' ? performanceScore : undefined),
       specificProvider: applyTo === 'specificProvider' ? targetProviderId : undefined,
       effectiveFrom,
       effectiveUntil,

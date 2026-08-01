@@ -542,14 +542,25 @@ const handleWebhook = async (req, res, next) => {
   try {
     // Handle different webhook events
     switch (event) {
-      case 'payment.captured':
-        await handleSuccessfulPayment(payment, session);
-        // Find the transaction to get booking ID
-        const txn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
-        if (txn) {
-          bookingToAssignId = txn.booking;
+      case 'qr_code.credited': {
+        const qrEntity = payload.payload?.qr_code?.entity || payload.payload?.payment?.entity;
+        await handleQRSuccessPayment(qrEntity || payment, session, qrEntity?.id);
+        break;
+      }
+      case 'payment.captured': {
+        const isQRPayment = payment.notes?.qrCodeId || payment.qr_code_id || payment.description?.includes('QR');
+        if (isQRPayment) {
+          await handleQRSuccessPayment(payment, session, payment.notes?.qrCodeId || payment.qr_code_id);
+        } else {
+          await handleSuccessfulPayment(payment, session);
+          // Find the transaction to get booking ID
+          const txn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
+          if (txn) {
+            bookingToAssignId = txn.booking;
+          }
         }
         break;
+      }
       case 'payment.failed':
         await handleFailedPayment(payment, session);
         break;
@@ -874,7 +885,7 @@ const getAdminPaymentDetails = async (req, res, next) => {
       .populate('provider', 'name email phone providerId wallet earnings')
       .populate({
         path: 'booking',
-        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings walletUsed onlinePaid cashToPay paymentStatus paymentMethod date time address notes refundStatus refundAmount cancellationProgress cancelledAt cancelledBy cancellationReason complaintId disputeStatus adminRemark confirmedBooking paidAmount paymentDate statusHistory',
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings walletUsed onlinePaid cashToPay paymentStatus paymentMethod date time address notes refundStatus refundAmount cancellationProgress cancelledAt cancelledBy cancellationReason complaintId disputeStatus adminRemark confirmedBooking paidAmount paymentDate statusHistory paymentVerification',
         populate: [
           { path: 'services.service', select: 'title price category' },
           { path: 'commissionRule', select: 'name rate type' },
@@ -967,7 +978,8 @@ const getAdminPaymentDetails = async (req, res, next) => {
       ...(txn.paymentStatus === 'success' || txn.paymentStatus === 'completed' ? [{ label: 'Payment Captured', timestamp: txn.updatedAt, status: 'done' }] : []),
       ...(txn.paymentStatus === 'failed' ? [{ label: 'Payment Failed', timestamp: txn.updatedAt, status: 'failed' }] : []),
       ...(refund ? [{ label: 'Refund Initiated', timestamp: refund.createdAt, status: 'done' }] : []),
-      ...(refund?.completedAt ? [{ label: 'Refund Completed', timestamp: refund.completedAt, status: 'done' }] : [])
+      ...(refund?.completedAt ? [{ label: 'Refund Completed', timestamp: refund.completedAt, status: 'done' }] : []),
+      ...(booking?.paymentVerification?.verifiedAt ? [{ label: 'Payment Verified', timestamp: booking.paymentVerification.verifiedAt, status: 'done' }] : [])
     ];
 
     res.status(200).json({
@@ -1009,6 +1021,7 @@ const getAdminPaymentDetails = async (req, res, next) => {
         customer: txn.user || null,
         provider: txn.provider || null,
         booking: booking || null,
+        paymentVerification: booking?.paymentVerification || null,
 
         // Financial ledger
         ledgerEntries,
@@ -3442,6 +3455,539 @@ const getLedgerDetail = async (req, res, next) => {
   }
 };
 
+const handleQRSuccessPayment = async (payment, session, qrCodeId) => {
+  const qrId = qrCodeId || payment.notes?.qrCodeId || payment.qr_code_id;
+  const bookingId = payment.notes?.bookingId;
+
+  let booking = null;
+  if (bookingId && mongoose.Types.ObjectId.isValid(bookingId)) {
+    booking = await Booking.findById(bookingId).session(session);
+  }
+  if (!booking && qrId) {
+    booking = await Booking.findOne({ 'paymentVerification.qrCodeId': qrId }).session(session);
+  }
+
+  if (!booking) {
+    global.logger.warn(`[handleQRSuccessPayment] No booking found for QR ${qrId} or booking ${bookingId}`);
+    return;
+  }
+
+  if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+    global.logger.info(`[handleQRSuccessPayment] Booking ${booking._id} already completed / payment verified.`);
+    return;
+  }
+
+  const providerId = booking.provider;
+  const CommissionRule = require('./commission-rule-model');
+  const ProviderEarning = require('../provider/provider-earning-model');
+
+  let commission = booking.commissionAmount || 0;
+  if (!commission && providerId) {
+    const rule = await CommissionRule.getCommissionForProvider(providerId, booking.zoneId, 'standard', booking.services?.[0]?.service);
+    if (rule) {
+      const baseAmount = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
+      const res = CommissionRule.calculateCommission(baseAmount, rule);
+      commission = res.commission;
+    }
+  }
+
+  const providerEarnings = parseFloat((booking.totalAmount - commission).toFixed(2));
+
+  booking.paymentVerification = {
+    method: 'qr_code',
+    status: 'verified',
+    qrCodeId: qrId,
+    verifiedAt: new Date()
+  };
+  booking.status = 'completed';
+  booking.paymentStatus = 'paid';
+  booking.completedAt = new Date();
+  booking.commissionProcessed = true;
+  booking.commissionAmount = commission;
+  booking.providerEarnings = providerEarnings;
+
+  booking.statusHistory.push({
+    status: 'completed',
+    timestamp: new Date(),
+    note: `Dynamic QR Payment verified via Razorpay webhook. Txn: ${payment.id || 'QR-PAY'}`,
+    updatedBy: 'system'
+  });
+
+  await booking.save({ session });
+
+  const transaction = new Transaction({
+    booking: booking._id,
+    bookingId: booking.bookingId || booking._id.toString(),
+    user: booking.customer,
+    provider: providerId,
+    amount: booking.totalAmount,
+    commission: commission,
+    providerEarning: providerEarnings,
+    paymentMethod: 'upi',
+    paymentStatus: 'completed',
+    type: 'payment',
+    ledgerType: 'payment',
+    razorpayPaymentId: payment.id,
+    razorpayOrderId: payment.order_id,
+    razorpayResponse: payment,
+    description: `QR Code UPI payment received for booking ${booking.bookingId || booking._id}`
+  });
+  await transaction.save({ session });
+
+  await ProviderEarning.findOneAndUpdate(
+    { booking: booking._id, provider: providerId },
+    {
+      $setOnInsert: {
+        grossAmount: booking.totalAmount,
+        commissionAmount: commission,
+        netAmount: providerEarnings,
+        status: 'held',
+        availableAfter: new Date(Date.now() + 48 * 60 * 60 * 1000)
+      }
+    },
+    { session, upsert: true }
+  );
+
+  try {
+    const { getIO } = require('../../shared/socket/socket-server');
+    const io = getIO();
+    if (io) {
+      io.to(`booking_${booking._id}`).emit('payment_verified', {
+        bookingId: booking._id,
+        status: 'completed',
+        paymentMethod: 'qr_code',
+        totalAmount: booking.totalAmount,
+        verifiedAt: new Date()
+      });
+      io.to(`booking_${booking._id}`).emit('booking_updated', {
+        bookingId: booking._id,
+        booking: booking
+      });
+    }
+  } catch (socketErr) {
+    console.error('[handleQRSuccessPayment] Socket error:', socketErr);
+  }
+
+  try {
+    const { sendNotification } = require('../notification/notification-helper');
+    if (booking.customer) {
+      sendNotification(booking.customer, 'customer', 'Payment Received', `Your payment of ₹${booking.totalAmount} for booking #${booking.bookingId} via QR code was successful.`, 'booking', booking._id);
+    }
+    if (providerId) {
+      sendNotification(providerId, 'provider', 'Payment Verified', `Customer paid ₹${booking.totalAmount} via QR Code for booking #${booking.bookingId}. Your earnings: ₹${providerEarnings}.`, 'booking', booking._id);
+    }
+  } catch (notifErr) {
+    console.error('[handleQRSuccessPayment] Notification error:', notifErr);
+  }
+};
+
+const generateBookingQR = async (req, res, next) => {
+  try {
+    const { bookingId } = req.body;
+    const providerId = req.provider?._id || req.user?._id;
+
+    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Booking is already completed and verified.' });
+    }
+
+    const { SystemConfig } = require('../system-setting/system-setting-model');
+    let settings = await SystemConfig.findOne().lean();
+    const qrExpiryMinutes = settings?.bookingSettings?.qrExpiryMinutes || 10;
+    const expiryTimestamp = Math.floor(Date.now() / 1000) + (qrExpiryMinutes * 60);
+
+    // Reuse existing active QR code if still valid
+    if (
+      booking.paymentVerification?.qrCodeId &&
+      booking.paymentVerification?.qrImageUrl &&
+      booking.paymentVerification?.status === 'waiting_payment' &&
+      booking.paymentVerification?.qrExpiresAt &&
+      new Date(booking.paymentVerification.qrExpiresAt) > new Date()
+    ) {
+      return res.status(200).json({
+        success: true,
+        message: 'Active QR code reused',
+        data: {
+          qrCodeId: booking.paymentVerification.qrCodeId,
+          imageUrl: booking.paymentVerification.qrImageUrl,
+          expiresAt: booking.paymentVerification.qrExpiresAt,
+          totalAmount: booking.totalAmount,
+          qrExpiryMinutes
+        }
+      });
+    }
+
+    if (booking.paymentVerification?.qrCodeId && booking.paymentVerification?.status === 'waiting_payment') {
+      try {
+        await razorpay.qrCode.close(booking.paymentVerification.qrCodeId);
+      } catch (err) {
+        console.warn(`Non-critical warning closing previous QR: ${err.message}`);
+      }
+    }
+
+    let qrCode;
+    try {
+      qrCode = await razorpay.qrCode.create({
+        type: 'upi_qr',
+        name: `Booking #${booking.bookingId || booking._id.toString().slice(-6)}`,
+        usage: 'single_use',
+        fixed_amount: true,
+        payment_amount: Math.round(booking.totalAmount * 100),
+        description: `Payment for booking ${booking.bookingId || booking._id}`,
+        close_by: expiryTimestamp,
+        notes: {
+          bookingId: booking._id.toString(),
+          providerId: providerId?.toString()
+        }
+      });
+    } catch (razorpayErr) {
+      console.error('Razorpay QR API failed:', razorpayErr.message);
+      return res.status(400).json({
+        success: false,
+        message: `Failed to generate Razorpay QR code: ${razorpayErr.message || 'Razorpay Gateway Error'}`
+      });
+    }
+
+    const qrExpiresAt = new Date(Date.now() + qrExpiryMinutes * 60 * 1000);
+    booking.paymentVerification = {
+      method: 'qr_code',
+      status: 'waiting_payment',
+      qrCodeId: qrCode.id,
+      qrImageUrl: qrCode.image_url,
+      qrExpiresAt: qrExpiresAt,
+      idempotencyKey: `QR-${Date.now()}`
+    };
+
+    booking.statusHistory.push({
+      status: booking.status,
+      timestamp: new Date(),
+      note: `Dynamic QR Code generated for ₹${booking.totalAmount} (Valid for ${qrExpiryMinutes} mins). QR ID: ${qrCode.id}`,
+      updatedBy: 'provider'
+    });
+
+    await booking.save();
+
+    const qrTx = new Transaction({
+      booking: booking._id,
+      bookingId: booking.bookingId || booking._id.toString(),
+      user: booking.customer,
+      provider: providerId,
+      amount: booking.totalAmount,
+      paymentMethod: 'upi',
+      paymentStatus: 'pending',
+      type: 'payment',
+      ledgerType: 'payment',
+      razorpayResponse: qrCode,
+      description: `QR Code generated for booking ${booking.bookingId || booking._id}`
+    });
+    await qrTx.save();
+
+    try {
+      const { getIO } = require('../../shared/socket/socket-server');
+      const io = getIO();
+      if (io) {
+        io.to(`booking_${booking._id}`).emit('payment_verification_updated', {
+          bookingId: booking._id,
+          paymentVerification: booking.paymentVerification
+        });
+      }
+    } catch (sErr) { }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Dynamic QR Code generated successfully',
+      data: {
+        qrCodeId: qrCode.id,
+        imageUrl: qrCode.image_url,
+        expiresAt: qrExpiresAt,
+        totalAmount: booking.totalAmount,
+        qrExpiryMinutes
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.generateBookingQR] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const verifyCashReceived = async (req, res, next) => {
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    session = null;
+  }
+
+  try {
+    const { bookingId } = req.body;
+    const providerId = req.provider?._id;
+
+    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+      if (session) await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
+    }
+
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) {
+      if (session) await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+      if (session) await session.abortTransaction();
+      return res.status(409).json({ success: false, message: 'Cash payment already verified for this booking.' });
+    }
+
+    const provider = await Provider.findById(providerId).session(session);
+    if (!provider) {
+      if (session) await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Provider not found' });
+    }
+
+    const CommissionRule = require('./commission-rule-model');
+    const firstService = booking.services && booking.services[0];
+    const serviceId = firstService ? firstService.service : null;
+    const rule = await CommissionRule.getCommissionForProvider(providerId, booking.zoneId, 'standard', serviceId);
+
+    if (!rule) {
+      if (session) await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'No active commission rule found for provider' });
+    }
+
+    const baseAmount = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
+    const { commission, netAmount } = CommissionRule.calculateCommission(baseAmount, rule);
+    const providerBalance = provider.wallet?.availableBalance || 0;
+
+    if (commission > 0 && providerBalance < commission) {
+      if (session) await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. Platform commission of ₹${commission} is required to verify cash payment. Your current wallet balance is ₹${providerBalance}. Please topup your wallet.`
+      });
+    }
+
+    const updatedProvider = await Provider.findOneAndUpdate(
+      { _id: providerId, 'wallet.availableBalance': { $gte: commission } },
+      {
+        $inc: { 'wallet.availableBalance': -commission, completedBookings: 1 },
+        $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+      },
+      { session, new: true }
+    );
+
+    if (!updatedProvider && commission > 0) {
+      if (session) await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'Wallet balance check failed during transaction.' });
+    }
+
+    const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
+    const balanceBefore = balanceAfter + commission;
+
+    const commissionTx = new Transaction({
+      booking: booking._id,
+      bookingId: booking.bookingId || booking._id.toString(),
+      user: booking.customer,
+      provider: providerId,
+      amount: commission,
+      paymentStatus: 'completed',
+      paymentMethod: 'wallet',
+      type: 'commissiondeduction',
+      ledgerType: 'commission',
+      balanceBefore,
+      balanceAfter,
+      deductionType: 'cash_booking_commission',
+      description: `Commission fee of ₹${commission} deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
+    });
+    await commissionTx.save({ session });
+
+    booking.paymentVerification = {
+      method: 'cash_received',
+      status: 'verified',
+      verifiedAt: new Date()
+    };
+    booking.paymentStatus = 'paid';
+    booking.commissionProcessed = true;
+    booking.commissionAmount = commission;
+    booking.providerEarnings = netAmount;
+
+    booking.statusHistory.push({
+      status: booking.status || 'workstarted',
+      timestamp: new Date(),
+      note: `Cash payment verified by provider. Platform commission of ₹${commission} deducted from wallet.`,
+      updatedBy: 'provider'
+    });
+
+    await booking.save({ session });
+
+    const ProviderEarning = require('../provider/provider-earning-model');
+    await ProviderEarning.findOneAndUpdate(
+      { booking: booking._id, provider: providerId },
+      {
+        $setOnInsert: {
+          grossAmount: booking.totalAmount,
+          commissionAmount: commission,
+          netAmount: netAmount,
+          status: 'paid',
+          availableAfter: new Date()
+        }
+      },
+      { session, upsert: true }
+    );
+
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+
+    try {
+      const { getIO } = require('../../shared/socket/socket-server');
+      const io = getIO();
+      if (io) {
+        io.to(`booking_${booking._id}`).emit('payment_verified', {
+          bookingId: booking._id,
+          status: 'completed',
+          paymentMethod: 'cash_received',
+          totalAmount: booking.totalAmount,
+          verifiedAt: new Date()
+        });
+        io.to(`booking_${booking._id}`).emit('booking_updated', {
+          bookingId: booking._id,
+          booking: booking
+        });
+      }
+    } catch (sErr) { }
+
+    try {
+      const { sendNotification } = require('../notification/notification-helper');
+      if (booking.customer) {
+        sendNotification(booking.customer, 'customer', 'Booking Completed', `Your cash payment for booking #${booking.bookingId} has been verified and completed.`, 'booking', booking._id);
+      }
+    } catch (nErr) { }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cash payment verified and booking completed successfully',
+      data: {
+        bookingId: booking._id,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        commissionDeducted: commission,
+        providerWalletBalance: updatedProvider?.wallet?.availableBalance || 0
+      }
+    });
+  } catch (error) {
+    if (session) await session.abortTransaction();
+    global.logger.error(`[TransactionController.verifyCashReceived] Error: ${error.message}`, error);
+    next(error);
+  } finally {
+    if (session) session.endSession();
+  }
+};
+
+const getQRVerificationStatus = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+
+    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
+    }
+
+    const booking = await Booking.findById(bookingId).select('status paymentStatus totalAmount subtotal totalDiscount commissionAmount providerEarnings paymentVerification');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    let verification = booking.paymentVerification ? booking.paymentVerification.toObject() : {};
+    if (verification.status === 'waiting_payment' && verification.qrExpiresAt && new Date(verification.qrExpiresAt) < new Date()) {
+      verification.status = 'expired';
+      booking.paymentVerification.status = 'expired';
+      await booking.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        bookingId: booking._id,
+        bookingStatus: booking.status,
+        paymentStatus: booking.paymentStatus,
+        totalAmount: booking.totalAmount,
+        paymentVerification: verification
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getQRVerificationStatus] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const adminOverrideCashVerification = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+    const { reason, remarks } = req.body;
+    const adminId = req.admin?._id || req.user?._id;
+
+    if (!reason || !remarks) {
+      return res.status(400).json({ success: false, message: 'Reason and remarks are mandatory for admin override.' });
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    booking.paymentVerification = {
+      method: 'cash_received',
+      status: 'verified',
+      verifiedAt: new Date()
+    };
+    booking.status = 'completed';
+    booking.paymentStatus = 'paid';
+    booking.completedAt = new Date();
+
+    booking.statusHistory.push({
+      status: 'completed',
+      timestamp: new Date(),
+      note: `[Admin Override] Payment verified manually by Admin ID: ${adminId}. Reason: ${reason}. Remarks: ${remarks}`,
+      updatedBy: 'admin'
+    });
+
+    await booking.save();
+
+    const auditTx = new Transaction({
+      booking: booking._id,
+      bookingId: booking.bookingId || booking._id.toString(),
+      user: booking.customer,
+      provider: booking.provider,
+      approvedBy: adminId,
+      amount: booking.totalAmount,
+      paymentMethod: 'system',
+      paymentStatus: 'completed',
+      type: 'adjustment',
+      ledgerType: 'payment',
+      description: `[Admin Override] Payment verified for booking #${booking.bookingId || booking._id}. Reason: ${reason} - ${remarks}`
+    });
+    await auditTx.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin override executed successfully. Booking marked completed.',
+      data: { bookingId: booking._id, status: booking.status }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.adminOverrideCashVerification] Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
@@ -3463,7 +4009,11 @@ module.exports = {
   getAuditLogs,
   getAdminPaymentDetails,
   getMasterLedger,
-  getLedgerDetail
+  getLedgerDetail,
+  generateBookingQR,
+  verifyCashReceived,
+  getQRVerificationStatus,
+  adminOverrideCashVerification
 };
 
 

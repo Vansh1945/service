@@ -67,7 +67,7 @@ const StatusBadge = ({ status }) => {
 const MethodBadge = ({ method }) => {
   const m = (method || '').toLowerCase();
   const map = {
-    upi: 'bg-indigo-100 text-indigo-800',
+    upi: 'bg-indigo-100 text-indigo-800 font-extrabold',
     card: 'bg-blue-100 text-blue-800',
     netbanking: 'bg-cyan-100 text-cyan-800',
     wallet: 'bg-amber-100 text-amber-800',
@@ -78,7 +78,7 @@ const MethodBadge = ({ method }) => {
   };
   return (
     <span className={`px-2 py-0.5 ${map[m] || 'bg-gray-100 text-gray-600'} rounded-md text-[10px] font-bold uppercase`}>
-      {m || 'N/A'}
+      {m === 'upi' ? 'UPI (Razorpay QR)' : m || 'N/A'}
     </span>
   );
 };

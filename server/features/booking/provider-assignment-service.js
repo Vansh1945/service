@@ -100,6 +100,14 @@ const getBookingAddressLocation = (booking) => {
 };
 
 class ProviderAssignmentService {
+  static checkProviderOverlap(newBooking, providerBookings, defaultBufferMinutes = 30) {
+    return checkProviderOverlap(newBooking, providerBookings, defaultBufferMinutes);
+  }
+
+  static calculateDistance(lat1, lon1, lat2, lon2) {
+    return calculateDistance(lat1, lon1, lat2, lon2);
+  }
+
   static async findEligibleProviders({ bookingType, serviceCategory, lat, lng, zoneId, trustedProviderOnly }) {
   try {
     const { SystemConfig } = require('../system-setting/system-setting-model');

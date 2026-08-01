@@ -52,6 +52,7 @@ const SystemSetting = () => {
       endTime: '21:00',
       enableProviderAcceptTimeout: true,
       providerAcceptTimeoutMinutes: 5,
+      qrExpiryMinutes: 10,
       bookingMode: 'hybrid',
       emergencyAssignment: true,
       instantBooking: true,

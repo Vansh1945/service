@@ -26,7 +26,22 @@ export const NotificationProvider = ({ children }) => {
     const savedTokenRef = useRef(null);
     const activeAudioRef = useRef(null);
     const pendingAudioRef = useRef(null);
+    const recentNotifKeysRef = useRef(new Set());
     const [isAlertRinging, setIsAlertRinging] = useState(false);
+
+    const isDuplicateNotification = (...keys) => {
+        const validKeys = keys.filter(Boolean).map(String);
+        if (validKeys.length === 0) return false;
+
+        const isDup = validKeys.some(k => recentNotifKeysRef.current.has(k));
+        validKeys.forEach(k => recentNotifKeysRef.current.add(k));
+
+        setTimeout(() => {
+            validKeys.forEach(k => recentNotifKeysRef.current.delete(k));
+        }, 8000);
+
+        return isDup;
+    };
 
     const playAudio = (audio) => {
         setIsAlertRinging(true);
@@ -62,6 +77,11 @@ export const NotificationProvider = ({ children }) => {
     };
 
     const startBookingAlert = (soundUrl, duration = 60, repeatAlert = true) => {
+        if (activeAudioRef.current && !activeAudioRef.current.paused) {
+            console.log('[NotificationContext] Booking alert already playing cleanly, skipping restart.');
+            return;
+        }
+
         stopBookingAlert();
 
         const url = soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
@@ -283,6 +303,9 @@ export const NotificationProvider = ({ children }) => {
             const payloadData = payload.data || {};
             const payloadNotif = payload.notification || {};
 
+            const notifKey = payload.messageId || payloadData.notificationId || payloadData.referenceId || payloadData.entityId || payloadData._id;
+            const isDup = isDuplicateNotification(notifKey);
+
             const title = payloadNotif.title || payloadData.title || 'New Notification';
             const body = payloadNotif.body || payloadData.body || '';
 
@@ -330,25 +353,34 @@ export const NotificationProvider = ({ children }) => {
                 return;
             }
 
-            // Handle dedicated provider booking alert sound/vibrate in foreground
-            const isBookingAlert = payloadData.isBookingAlert === 'true';
-            if (isBookingAlert) {
-                const soundUrl = payloadData.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
-                const bookingAlertTone = true;
-                const bookingVibration = true;
-                const bookingAlertDuration = Number(payloadData.bookingAlertDuration || 60);
-                const bookingRepeatAlert = true;
+            // If this is a duplicate FCM notification event, suppress repeating audio/vibrate
+            if (!isDup) {
+                // Handle dedicated provider booking alert sound/vibrate in foreground
+                const isBookingAlert = payloadData.isBookingAlert === 'true';
+                if (isBookingAlert) {
+                    const soundUrl = payloadData.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
+                    const bookingAlertTone = true;
+                    const bookingVibration = true;
+                    const bookingAlertDuration = Number(payloadData.bookingAlertDuration || 60);
+                    const bookingRepeatAlert = true;
 
-                if (bookingAlertTone && soundUrl) {
-                    startBookingAlert(soundUrl, bookingAlertDuration, bookingRepeatAlert);
-                }
+                    if (bookingAlertTone && soundUrl) {
+                        startBookingAlert(soundUrl, bookingAlertDuration, bookingRepeatAlert);
+                    }
 
-                if (bookingVibration && 'vibrate' in navigator) {
-                    navigator.vibrate([500, 200, 500, 200, 500]);
+                    if (bookingVibration && 'vibrate' in navigator) {
+                        try {
+                            navigator.vibrate([500, 200, 500, 200, 500]);
+                        } catch (vErr) {
+                            console.warn('[FCM Context] Vibrate blocked:', vErr.message);
+                        }
+                    }
+                } else {
+                    const soundUrl = payloadData.soundUrl || '/assets/sounds/notification.mp3';
+                    playNormalNotificationSound(soundUrl);
                 }
             } else {
-                const soundUrl = payloadData.soundUrl || '/assets/sounds/notification.mp3';
-                playNormalNotificationSound(soundUrl);
+                console.log('[FCM] Duplicate notification sound/alert suppressed for key:', notifKey);
             }
 
             if (Notification.permission === 'granted') {
@@ -393,6 +425,13 @@ export const NotificationProvider = ({ children }) => {
 
         const handleSocketNotification = (payload) => {
             console.log('[Socket] Notification received in context:', payload);
+
+            const notifKey = payload._id || payload.referenceId || payload.entityId || payload.notificationId;
+            if (isDuplicateNotification(notifKey, payload._id, payload.referenceId)) {
+                console.log('[Socket] Duplicate notification suppressed for key:', notifKey);
+                return;
+            }
+
             if (payload.isBookingAlert) {
                 const soundUrl = payload.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
                 const bookingAlertTone = true;
@@ -405,7 +444,11 @@ export const NotificationProvider = ({ children }) => {
                 }
 
                 if (bookingVibration && 'vibrate' in navigator) {
-                    navigator.vibrate([500, 200, 500, 200, 500]);
+                    try {
+                        navigator.vibrate([500, 200, 500, 200, 500]);
+                    } catch (vErr) {
+                        console.warn('[Socket Context] Vibrate blocked:', vErr.message);
+                    }
                 }
             } else {
                 const soundUrl = payload.soundUrl || '/assets/sounds/notification.mp3';

@@ -120,3 +120,20 @@ export const updateBookingDateTimeAdmin = (id, data) => {
 export const downloadBookingReport = (params, config) => {
     return axiosInstance.get("/booking/admin/booking-report", { params, ...config });
 };
+
+// Cash Booking Payment Verification Routes
+export const generateCashBookingQR = (bookingId) => {
+    return axiosInstance.post("/transaction/cash-verification/generate-qr", { bookingId });
+};
+
+export const verifyCashReceived = (bookingId) => {
+    return axiosInstance.post("/transaction/cash-verification/confirm-cash", { bookingId });
+};
+
+export const getQRVerificationStatus = (bookingId) => {
+    return axiosInstance.get(`/transaction/cash-verification/status/${bookingId}`);
+};
+
+export const adminOverrideCashVerification = (bookingId, data) => {
+    return axiosInstance.post(`/transaction/admin/cash-verification/override/${bookingId}`, data);
+};

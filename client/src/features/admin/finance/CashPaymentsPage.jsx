@@ -219,9 +219,15 @@ const CashPaymentsPage = () => {
                       {/* 10. Verification Status */}
                       <td className="p-3.5">
                         {isVerified ? (
-                          <span className="inline-flex items-center px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold border border-emerald-200">
-                            <FiCheckCircle className="mr-1" /> VERIFIED
-                          </span>
+                          (txn.paymentMethod === 'upi' || txn.description?.includes('QR')) ? (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-[10px] font-extrabold border border-indigo-200">
+                              <FiCheckCircle className="mr-1" /> QR VERIFIED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold border border-emerald-200">
+                              <FiCheckCircle className="mr-1" /> CASH VERIFIED
+                            </span>
+                          )
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-extrabold border border-amber-200">
                             <FiClock className="mr-1" /> PENDING VERIFY

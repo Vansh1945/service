@@ -278,7 +278,7 @@ module.exports = {
     try {
       const PricingService = require('./pricing-service');
       const { serviceId, quantity, couponCode, date, time, lat, lng, isEmergency, isInstant } = req.body;
-      
+
       if (!serviceId) {
         return res.status(400).json({ success: false, message: 'serviceId is required' });
       }

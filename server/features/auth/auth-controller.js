@@ -255,6 +255,9 @@ exports.Login = async (req, res, next) => {
       const { raw } = user.generateRefreshToken(deviceInfo);
       refreshTokenRaw = raw;
     }
+    if (user.performanceScore?.badge && typeof user.performanceScore.badge === 'string') {
+      user.performanceScore.badge = user.performanceScore.badge.toLowerCase().trim();
+    }
     await user.save();
 
     const { trackEvent } = require('../../shared/middlewares/fraud-middleware');
@@ -637,6 +640,9 @@ exports.firebaseLogin = async (req, res) => {
     user.metadata = { ip: deviceInfo.ip, device: deviceInfo.deviceId, userAgent: deviceInfo.userAgent, lastLogin: new Date() };
     recordLoginHistory(user, deviceInfo, authProvider, true);
     registerDevice(user, deviceInfo);
+    if (user.performanceScore?.badge && typeof user.performanceScore.badge === 'string') {
+      user.performanceScore.badge = user.performanceScore.badge.toLowerCase().trim();
+    }
     await user.save();
 
     // 7. Fraud track

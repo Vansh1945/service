@@ -36,6 +36,9 @@ const PaymentManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [activeSection, setActiveSection] = useState(searchParams.get('section') || 'all');
+  const [verificationFilter, setVerificationFilter] = useState('all');
+
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
   // Modal state — dedicated Payment Detail Modal (not the generic investigation drawer)
@@ -280,6 +283,40 @@ const PaymentManagementPage = () => {
         </div>
       </div>
 
+      {/* ── Section Navigation Tabs ──────────────────────────────────────── */}
+      <div className="flex border-b border-gray-200 bg-white rounded-xl p-1.5 border shadow-xs gap-2">
+        <button
+          onClick={() => setActiveSection('all')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSection === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <FiCreditCard className="w-4 h-4" />
+          All Payments Ledger
+        </button>
+
+        <button
+          onClick={() => setActiveSection('verification')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSection === 'verification'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <FiCheckCircle className="w-4 h-4" />
+          Payment Verification Console
+          <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] rounded-full font-black">
+            {payments.filter(p => {
+              const pv = p.paymentVerification || p.booking?.paymentVerification || {};
+              const st = (pv.status || p.paymentStatus || '').toLowerCase();
+              return ['pending', 'waiting_payment'].includes(st);
+            }).length} Pending
+          </span>
+        </button>
+      </div>
+
       {/* ── Pre-filtered Banner from Finance Dashboard ──────────────────── */}
       {(urlMethod || urlStatus || urlType) && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 flex items-center justify-between">
@@ -298,6 +335,94 @@ const PaymentManagementPage = () => {
           </button>
         </div>
       )}
+
+      {/* ── Verification Console Specific Header & KPI Cards ─────────────── */}
+      {activeSection === 'verification' && (() => {
+        const pendingCash = payments.filter(p => {
+          const m = (p.paymentMethod || '').toLowerCase();
+          const st = (p.paymentVerification?.status || p.paymentStatus || '').toLowerCase();
+          return (m === 'cash' || m === 'cod') && ['pending', 'processing'].includes(st);
+        });
+        const pendingQR = payments.filter(p => {
+          const pv = p.paymentVerification || p.booking?.paymentVerification || {};
+          const st = (pv.status || p.paymentStatus || '').toLowerCase();
+          return Boolean(pv.qrCodeId) || st === 'waiting_payment';
+        });
+        const verifiedCash = payments.filter(p => {
+          const m = (p.paymentMethod || '').toLowerCase();
+          const st = (p.paymentStatus || '').toLowerCase();
+          return (m === 'cash' || m === 'cod') && ['paid', 'success', 'completed'].includes(st);
+        });
+        const verifiedQR = payments.filter(p => {
+          const pv = p.paymentVerification || p.booking?.paymentVerification || {};
+          const st = (pv.status || p.paymentStatus || '').toLowerCase();
+          return (pv.method === 'qr_code' || Boolean(pv.qrCodeId)) && ['verified', 'paid', 'success'].includes(st);
+        });
+        const expiredQR = payments.filter(p => {
+          const pv = p.paymentVerification || p.booking?.paymentVerification || {};
+          return pv.status === 'expired' || (pv.qrExpiresAt && new Date(pv.qrExpiresAt) < new Date() && pv.status !== 'verified');
+        });
+        const failedQR = payments.filter(p => {
+          const st = (p.paymentStatus || p.paymentVerification?.status || '').toLowerCase();
+          return st === 'failed';
+        });
+
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/80">
+                <p className="text-[10px] font-bold text-amber-700 uppercase">Pending Cash</p>
+                <p className="text-xl font-black text-amber-900 mt-1">{pendingCash.length}</p>
+              </div>
+              <div className="p-3.5 bg-indigo-50 rounded-xl border border-indigo-200/80">
+                <p className="text-[10px] font-bold text-indigo-700 uppercase">Pending QR</p>
+                <p className="text-xl font-black text-indigo-900 mt-1">{pendingQR.length}</p>
+              </div>
+              <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200/80">
+                <p className="text-[10px] font-bold text-emerald-700 uppercase">Verified Cash</p>
+                <p className="text-xl font-black text-emerald-900 mt-1">{verifiedCash.length}</p>
+              </div>
+              <div className="p-3.5 bg-blue-50 rounded-xl border border-blue-200/80">
+                <p className="text-[10px] font-bold text-blue-700 uppercase">Verified QR</p>
+                <p className="text-xl font-black text-blue-900 mt-1">{verifiedQR.length}</p>
+              </div>
+              <div className="p-3.5 bg-rose-50 rounded-xl border border-rose-200/80">
+                <p className="text-[10px] font-bold text-rose-700 uppercase">Expired QR</p>
+                <p className="text-xl font-black text-rose-900 mt-1">{expiredQR.length}</p>
+              </div>
+              <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200">
+                <p className="text-[10px] font-bold text-slate-600 uppercase">Failed QR</p>
+                <p className="text-xl font-black text-slate-800 mt-1">{failedQR.length}</p>
+              </div>
+            </div>
+
+            {/* Verification Filter Pills */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide text-xs">
+              {[
+                { id: 'all', label: 'All Verification Records' },
+                { id: 'pending_cash', label: 'Pending Cash' },
+                { id: 'pending_qr', label: 'Pending QR' },
+                { id: 'verified_cash', label: 'Verified Cash' },
+                { id: 'verified_qr', label: 'Verified QR' },
+                { id: 'expired_qr', label: 'Expired QR' },
+                { id: 'failed_qr', label: 'Failed QR' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setVerificationFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-lg font-extrabold whitespace-nowrap transition-all border cursor-pointer ${
+                    verificationFilter === f.id
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Payment Records Table ───────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

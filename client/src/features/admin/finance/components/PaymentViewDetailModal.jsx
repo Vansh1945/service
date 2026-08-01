@@ -76,7 +76,7 @@ const TimelineItem = ({ label, timestamp, status = 'done', isLast = false }) => 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab definitions — conditional per payment type
 // ─────────────────────────────────────────────────────────────────────────────
-const buildTabs = (paymentType) => {
+const buildTabs = (paymentType, hasVerification) => {
   const base = [
     { id: 'overview', label: 'Overview', icon: FiDollarSign },
     { id: 'booking', label: 'Booking', icon: FiBriefcase },
@@ -87,10 +87,14 @@ const buildTabs = (paymentType) => {
   } else if (paymentType === 'wallet') {
     base.push({ id: 'wallet_ledger', label: 'Wallet Ledger', icon: FiLayers });
   } else if (paymentType === 'cash') {
-    base.push({ id: 'cash_verify', label: 'Cash Verification', icon: FiCheck });
+    base.push({ id: 'cash_verify', label: 'Payment Verification', icon: FiCheck });
   } else if (paymentType === 'mixed') {
     base.push({ id: 'gateway', label: 'Gateway', icon: FiZap });
     base.push({ id: 'wallet_ledger', label: 'Wallet Breakdown', icon: FiLayers });
+  }
+
+  if (hasVerification && paymentType !== 'cash') {
+    base.push({ id: 'cash_verify', label: 'Payment Verification', icon: FiCheck });
   }
 
   base.push(
@@ -122,7 +126,8 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
 
   const rawData = initialData || entityData;
   const paymentType = (details?.paymentType || (rawData?.paymentMethod || 'online')).toLowerCase();
-  const tabs = buildTabs(paymentType);
+  const hasVerification = Boolean(details?.paymentVerification || details?.booking?.paymentVerification);
+  const tabs = buildTabs(paymentType, hasVerification);
 
   // ── Load enriched payment details on modal open ───────────────────────────
   const loadDetails = useCallback(async (txnId) => {
@@ -545,31 +550,81 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                 </div>
               )}
 
-              {/* ══ TAB 3c: CASH VERIFICATION (Cash) ═════════════════════════ */}
-              {activeTab === 'cash_verify' && (
-                <div className="space-y-5">
-                  <SectionCard title="Cash Payment Details" icon={FiCheck} iconColor="text-emerald-600">
-                    <InfoRow label="Cash Amount" value={<AmtCell amount={d.cashPaid || d.totalAmount || 0} colorClass="text-emerald-700" />} />
-                    <InfoRow label="Payment Type" badge={<StatusChip label="Cash on Delivery" type="success" />} />
-                    <InfoRow label="Collection Status" badge={
-                      <StatusChip
-                        label={d.booking?.paymentStatus === 'paid' ? 'Collected' : 'Pending Collection'}
-                        type={d.booking?.paymentStatus === 'paid' ? 'success' : 'warning'}
-                      />
-                    } />
-                    <InfoRow label="Payment Date" value={fmtDate(d.booking?.paymentDate)} />
-                    <InfoRow label="Verified By Provider" value={d.booking?.confirmedBooking ? 'Yes' : 'Pending'} />
-                  </SectionCard>
+              {/* ══ TAB 3c: PAYMENT VERIFICATION (Cash & Dynamic Razorpay QR) ════ */}
+              {activeTab === 'cash_verify' && (() => {
+                const pv = d.paymentVerification || d.booking?.paymentVerification || {};
+                const method = pv.method || (d.paymentType === 'cash' ? 'cash_received' : 'qr_code');
+                const vStatus = pv.status || (d.booking?.paymentStatus === 'paid' ? 'verified' : 'pending');
+                const isQR = method === 'qr_code' || Boolean(pv.qrCodeId);
 
-                  <SectionCard title="Booking Completion" icon={FiCheckCircle} iconColor="text-emerald-600">
-                    <InfoRow label="Booking Status" badge={
-                      <StatusChip label={d.booking?.status || '—'} type={d.booking?.status === 'completed' ? 'success' : 'warning'} />
-                    } />
-                    <InfoRow label="Service Completed At" value={fmtDate(d.booking?.serviceCompletedAt || d.booking?.completedAt)} />
-                    <InfoRow label="Admin Remark" value={d.booking?.adminRemark || '—'} />
-                  </SectionCard>
-                </div>
-              )}
+                const getVBadgeType = (st) => {
+                  if (st === 'verified' || st === 'paid') return 'success';
+                  if (st === 'waiting_payment' || st === 'pending') return 'warning';
+                  if (st === 'expired' || st === 'failed') return 'danger';
+                  return 'default';
+                };
+
+                const isExpired = pv.qrExpiresAt && new Date(pv.qrExpiresAt) < new Date() && vStatus !== 'verified';
+
+                return (
+                  <div className="space-y-5">
+                    {/* Verification Status Overview */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <SectionCard title="Payment Verification Status" icon={FiCheck} iconColor="text-emerald-600">
+                        <InfoRow label="Verification Method" badge={
+                          <StatusChip label={method === 'cash_received' ? 'Cash Received' : 'Dynamic Razorpay QR'} type={method === 'cash_received' ? 'success' : 'purple'} />
+                        } />
+                        <InfoRow label="Verification Status" badge={
+                          <StatusChip label={vStatus?.toUpperCase() || 'PENDING'} type={getVBadgeType(vStatus)} />
+                        } />
+                        <InfoRow label="Verified Date & Time" value={fmtDate(pv.verifiedAt || d.booking?.paymentDate)} />
+                        <InfoRow label="Idempotency Protection" value={pv.idempotencyKey || 'Protected'} mono />
+                        <InfoRow label="Confirmed By Provider" value={d.booking?.confirmedBooking ? 'Verified' : 'Pending Provider Signoff'} />
+                      </SectionCard>
+
+                      <SectionCard title="Financial Audit & Earnings" icon={FiTrendingUp} iconColor="text-blue-600">
+                        <InfoRow label="Total Amount" value={<AmtCell amount={d.totalAmount || 0} />} />
+                        <InfoRow label="Wallet Used" value={<AmtCell amount={d.walletPaid || 0} colorClass="text-amber-700" />} />
+                        <InfoRow label="Cash / QR Collection" value={<AmtCell amount={d.cashPaid || d.onlinePaid || d.totalAmount || 0} colorClass="text-emerald-700" />} />
+                        <InfoRow label="Platform Commission" value={<AmtCell amount={d.commissionAmount || 0} colorClass="text-purple-700" />} />
+                        <InfoRow label="Provider Net Earnings" value={<AmtCell amount={d.providerEarnings || 0} colorClass="text-blue-700" />} />
+                      </SectionCard>
+                    </div>
+
+                    {/* Razorpay Dynamic QR Details (if QR code payment) */}
+                    {isQR && (
+                      <SectionCard title="Razorpay QR Code Management" icon={FiZap} iconColor="text-indigo-600">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          {pv.qrImageUrl && (
+                            <div className="flex flex-col items-center justify-center p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                              <img src={pv.qrImageUrl} alt="Razorpay QR" className="w-32 h-32 object-contain rounded-lg border border-slate-300 bg-white p-1" />
+                              <span className="text-[10px] font-bold text-slate-500 mt-2">Dynamic QR Payload</span>
+                            </div>
+                          )}
+                          <div className={`space-y-1 ${pv.qrImageUrl ? 'md:col-span-2' : 'md:col-span-3'}`}>
+                            <InfoRow label="Razorpay QR ID" value={pv.qrCodeId || '—'} mono />
+                            <InfoRow label="QR Status" badge={
+                              <StatusChip label={isExpired ? 'EXPIRED' : (vStatus === 'verified' ? 'PAID' : 'ACTIVE')} type={vStatus === 'verified' ? 'success' : isExpired ? 'danger' : 'warning'} />
+                            } />
+                            <InfoRow label="QR Expiry Date" value={pv.qrExpiresAt ? fmtDate(pv.qrExpiresAt) : '—'} />
+                            <InfoRow label="Webhook Verification" badge={
+                              <StatusChip label={d.razorpaySignature ? 'Verified via Webhook' : 'Direct Sync'} type={d.razorpaySignature ? 'success' : 'info'} />
+                            } />
+                          </div>
+                        </div>
+                      </SectionCard>
+                    )}
+
+                    <SectionCard title="Booking & Service Audit" icon={FiCheckCircle} iconColor="text-emerald-600">
+                      <InfoRow label="Booking Status" badge={
+                        <StatusChip label={d.booking?.status || '—'} type={d.booking?.status === 'completed' ? 'success' : 'warning'} />
+                      } />
+                      <InfoRow label="Service Completed At" value={fmtDate(d.booking?.serviceCompletedAt || d.booking?.completedAt)} />
+                      <InfoRow label="Admin Remark" value={d.booking?.adminRemark || 'None'} />
+                    </SectionCard>
+                  </div>
+                );
+              })()}
 
               {/* ══ TAB 4: TRANSACTION / LEDGER ══════════════════════════════ */}
               {activeTab === 'transaction' && (

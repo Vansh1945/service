@@ -345,10 +345,7 @@ const providerSchema = new mongoose.Schema({
             type: String,
             enum: ['bronze', 'silver', 'gold', 'platinum'],
             default: 'bronze',
-            set: function (v) {
-                if (!v) return v;
-                return v.toLowerCase().replace(/[^a-z0-9]/g, '');
-            }
+            trim: true
         },
         cancellationRatio: { type: Number, default: 0 },
         complaintRatio: { type: Number, default: 0 },
@@ -494,6 +491,8 @@ providerSchema.index({ currentZone: 1 });
 providerSchema.index({ createdAt: -1 });
 providerSchema.index({ isActive: 1, approved: 1, isDeleted: 1 });
 providerSchema.index({ role: 1, isActive: 1, approved: 1, isOnline: 1, kycStatus: 1 });
+
+
 
 providerSchema.pre('save', async function (next) {
     // Populate S2 cell fields on creation or coordinate modifications

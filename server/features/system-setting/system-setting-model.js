@@ -274,6 +274,11 @@ const systemConfigSchema = new mongoose.Schema(
       complaintWindowDays: {
         type: Number,
         default: 7
+      },
+      qrExpiryMinutes: {
+        type: Number,
+        enum: [5, 10, 15, 30],
+        default: 10
       }
     },
     walletSettings: {

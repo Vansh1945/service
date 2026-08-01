@@ -132,8 +132,6 @@ const bookingSchema = new Schema({
       const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
       const sMap = {
         'inprogress': 'workstarted',
-        'in_progress': 'workstarted',
-        'in-progress': 'workstarted',
         'started': 'workstarted',
         'assigned': 'accepted'
       };
@@ -209,24 +207,11 @@ const bookingSchema = new Schema({
     default: 'pending',
     set: function (v) {
       if (!v) return v;
-      const pMap = {
-        'pending': 'pending',
-        'paid': 'paid',
-        'escrow_hold': 'escrowhold',
-        'escrowhold': 'escrowhold',
-        'settlement_pending': 'settlementpending',
-        'settlementpending': 'settlementpending',
-        'settled': 'settled',
-        'refund_pending': 'refundpending',
-        'refundpending': 'refundpending',
-        'refund_approved': 'refundapproved',
-        'refundapproved': 'refundapproved',
-        'refunded': 'refunded',
-        'processing': 'escrowhold',
-        'failed': 'failed'
-      };
       const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return pMap[clean] || pMap[v.toLowerCase()] || clean;
+      const pMap = {
+        'processing': 'escrowhold'
+      };
+      return pMap[clean] || clean;
     }
   },
 
@@ -242,6 +227,40 @@ const bookingSchema = new Schema({
     default: false
   },
 
+  // Cash Booking Payment Verification Tracking
+  paymentVerification: {
+    method: {
+      type: String,
+      enum: ['cash_received', 'qr_code', null],
+      default: null
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'waiting_payment', 'verified', 'failed', 'expired', null],
+      default: null
+    },
+    qrCodeId: {
+      type: String,
+      default: null
+    },
+    qrImageUrl: {
+      type: String,
+      default: null
+    },
+    qrExpiresAt: {
+      type: Date,
+      default: null
+    },
+    verifiedAt: {
+      type: Date,
+      default: null
+    },
+    idempotencyKey: {
+      type: String,
+      default: null
+    }
+  },
+
   // Cancellation tracking  progress
   cancellationProgress: {
     status: {
@@ -250,17 +269,7 @@ const bookingSchema = new Schema({
       default: 'notcancelled',
       set: function (v) {
         if (!v) return v;
-        const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const cMap = {
-          'notcancelled': 'notcancelled',
-          'not_cancelled': 'notcancelled',
-          'cancelled': 'cancelled',
-          'processingrefund': 'processingrefund',
-          'processing_refund': 'processingrefund',
-          'refundcompleted': 'refundcompleted',
-          'refund_completed': 'refundcompleted'
-        };
-        return cMap[clean] || clean;
+        return v.toLowerCase().replace(/[^a-z0-9]/g, '');
       }
     },
     reason: {
@@ -519,15 +528,7 @@ const bookingSchema = new Schema({
     default: 'none',
     set: function (v) {
       if (!v) return v;
-      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const dMap = {
-        'under_review': 'underreview',
-        'provider_responded': 'providerresponded',
-        'customer_responded': 'customerresponded',
-        'refund_approved': 'refundapproved',
-        'refund_rejected': 'refundrejected'
-      };
-      return dMap[clean] || clean;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
     }
   },
   adminRefundDecision: {

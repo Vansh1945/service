@@ -86,7 +86,7 @@ const AdminRoutes = () => {
                             <Route path="compose-notification" element={<ComposeNotification />} />
                             <Route path="event-templates" element={<RuleBasedTemplates />} />
                             <Route path="broadcast-history" element={<BroadcastHistory />} />
-                            
+
                             <Route path="finance-dashboard" element={<FinanceDashboardPage />} />
                             <Route path="payments" element={<PaymentManagementPage />} />
                             <Route path="transactions" element={<AdminTransactions />} />

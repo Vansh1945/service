@@ -1,4 +1,3 @@
-/* BACKUP COMMENT: Created asynchronous Promise-based wrapper API around s2Worker.js thread pool. */
 // PRODUCTION FIX
 const Piscina = require('piscina');
 const path = require('path');
@@ -6,7 +5,7 @@ const os = require('os');
 
 // Initialize a fixed thread pool for S2 calculations
 const piscina = new Piscina({
-  filename: path.resolve(__dirname, 's2Worker.js'),
+  filename: path.resolve(__dirname, 's2-worker.js'),
   minThreads: 2,
   maxThreads: os.cpus().length || 4
 });

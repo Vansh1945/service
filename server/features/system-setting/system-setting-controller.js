@@ -5,10 +5,11 @@ const cache = require('../../shared/utils/cache');
 const getCachedConfig = async () => {
   let config = cache.get('system_config');
   if (!config) {
-    config = await SystemConfig.findOne();
+    config = await SystemConfig.findOne().lean();
     if (!config) {
-      config = new SystemConfig({ companyName: 'Default Company' });
-      await config.save();
+      const doc = new SystemConfig({ companyName: 'Default Company' });
+      await doc.save();
+      config = doc.toObject();
     }
     cache.set('system_config', config, 30); // 30 seconds cache TTL
   }

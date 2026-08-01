@@ -52,10 +52,7 @@ const commissionRuleSchema = new Schema({
       values: ['bronze', 'silver', 'gold', 'platinum'],
       message: 'Performance tier must be one of: bronze, silver, gold, platinum'
     },
-    set: function (v) {
-      if (!v) return v;
-      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
-    },
+    trim: true,
     required: function () {
       return this.applyTo === 'performanceScore';
     }
@@ -135,7 +132,8 @@ commissionRuleSchema.index({ performanceScore: 1 });
 commissionRuleSchema.index({ specificProvider: 1 });
 commissionRuleSchema.index({ effectiveFrom: 1 });
 commissionRuleSchema.index({ effectiveUntil: 1 });
-commissionRuleSchema.index({ zoneId: 1 });
+
+
 
 /**
  * 🔹 Static Methods
@@ -302,7 +300,31 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
         $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
       }).sort({ createdAt: -1 });
 
-      return globalDefaultRule || null;
+      if (globalDefaultRule) return globalDefaultRule;
+
+      // Fallback: Default system setting commission
+      try {
+        const { SystemConfig } = require('../system-setting/system-setting-model');
+        const sysSettings = await SystemConfig.findOne().lean();
+        const defaultRate = sysSettings?.commissionSettings?.defaultCommission ?? 10;
+        return {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'System Default Commission',
+          type: 'percentage',
+          value: defaultRate,
+          applyTo: 'all',
+          isActive: true
+        };
+      } catch (err) {
+        return {
+          _id: new mongoose.Types.ObjectId(),
+          name: 'System Default Commission',
+          type: 'percentage',
+          value: 10,
+          applyTo: 'all',
+          isActive: true
+        };
+      }
     })();
 
     cache.set(cacheKey, rule || 'none', 300);

@@ -17,7 +17,7 @@ export const BOOKING_STATUS_CONFIG = {
 
 export const getBookingStatusCfg = (status) => {
   if (!status) return BOOKING_STATUS_CONFIG.pending;
-  const key = String(status).toLowerCase();
+  const key = String(status).trim().toLowerCase().replace(/[^a-z]/g, '');
   return BOOKING_STATUS_CONFIG[key] || {
     color: 'bg-gray-100 text-gray-600 border-gray-200',
     bar: 'bg-gray-400',

@@ -2,7 +2,8 @@ const NodeCache = require('node-cache');
 
 const cache = new NodeCache({
   stdTTL: 300, // Default TTL is 5 minutes
-  checkperiod: 60
+  checkperiod: 60,
+  useClones: false
 });
 
 // Helper function to invalidate cache entries by prefix

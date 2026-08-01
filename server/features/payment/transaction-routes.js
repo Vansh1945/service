@@ -34,6 +34,14 @@ router.post('/webhook', express.raw({ type: 'application/json' }), paymentContro
 // @access  Private (user)
 router.get('/customer/all', userAuthMiddleware, roleMiddleware(['customer']), paymentController.getCustomerTransactions);
 
+const { providerAuthMiddleware } = require('../../shared/middlewares/provider-middleware');
+
+// Cash Booking Payment Verification Routes
+router.post('/cash-verification/generate-qr', providerAuthMiddleware, paymentLimiter, preventDuplicateSubmissions(5), paymentController.generateBookingQR);
+router.post('/cash-verification/confirm-cash', providerAuthMiddleware, paymentLimiter, preventDuplicateSubmissions(5), paymentController.verifyCashReceived);
+router.get('/cash-verification/status/:bookingId', providerAuthMiddleware, paymentController.getQRVerificationStatus);
+router.post('/admin/cash-verification/override/:bookingId', adminAuthMiddleware, adminRoleCheck, paymentController.adminOverrideCashVerification);
+
 // Admin Routes
 
 router.get('/admin/all', adminAuthMiddleware, adminRoleCheck, paymentController.getAllTransactions);

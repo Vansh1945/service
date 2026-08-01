@@ -50,12 +50,7 @@ const providerEarningSchema = new Schema({
     default: 'held',
     set: function (v) {
       if (!v) return v;
-      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const eMap = {
-        'under_review': 'underreview',
-        'pending_release': 'pendingrelease'
-      };
-      return eMap[clean] || clean;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
     }
   },
   availableAfter: {

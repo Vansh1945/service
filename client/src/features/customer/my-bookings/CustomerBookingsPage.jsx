@@ -5,10 +5,10 @@ import 'react-datepicker/dist/react-datepicker.css';
 import 'react-time-picker/dist/TimePicker.css';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Calendar, Clock, MapPin, User, Phone, CheckCircle,
-  XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
+  Calendar, Clock, MapPin, User, Phone,
+  XCircle, AlertCircle, Eye, CreditCard, Star, Package,
   ShoppingCart, Wrench, Activity, Edit3,
-  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
+  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings, getBooking } from '../../../services/BookingService';
 import { toggleFavoriteProvider } from '../../../services/CustomerService';
@@ -19,21 +19,10 @@ import PriceDisplay from '../../../components/PriceDisplay';
 import ChatModal from '../../../components/chat/ChatModal';
 import useDebounce from '../../../hooks/useDebounce';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
-import { useConfirm } from '../../../context/ConfirmContext';
 import CustomerCancelModal from './components/CustomerCancelModal';
 
-// ─── Pure helpers ─────────────────
 
-const isChatVisible = (b) => {
-  if (!b) return false;
-  if (!b.provider && !b.providerDetails) return false;
 
-  if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
-  if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
-  if (['pending', 'cancelled', 'no-show', 'completed'].includes(b.status)) return false;
-
-  return true;
-};
 
 const getBookingTypeBadge = (bookingType) => {
   const type = bookingType || 'scheduled';
@@ -72,12 +61,6 @@ const needsPayment = (b) => {
   if (isPaid || ['cancelled', 'workstarted', 'completed', 'rejected', 'noshow'].includes(b.status)) return false;
   return !isPaid;
 };
-const canCancel = (b) => {
-  const s = (b.status || '').toLowerCase();
-  if (['workstarted', 'completed', 'cancelled', 'rejected', 'noshow'].includes(s)) return false;
-  return ['pending', 'accepted', 'ontheway', 'arrived', 'searchingprovider', 'offered'].includes(s);
-};
-const canReschedule = (b) => b.status === 'pending';
 
 const getStartPin = (booking) => {
   if (booking.startPin) return booking.startPin;
@@ -92,6 +75,11 @@ const getStartPin = (booking) => {
 };
 
 const getCompletionPin = (booking) => {
+  if (!booking) return null;
+  if (booking.completionPin) return booking.completionPin;
+  if (booking.completionVerificationPin) return booking.completionVerificationPin;
+  if (booking.endPin) return booking.endPin;
+  if (booking.finishPin) return booking.finishPin;
   if (!booking.statusHistory) return null;
   for (const h of booking.statusHistory) {
     if (h.note) {
@@ -115,7 +103,6 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
   if (!provider) return null;
 
   const rating = provider.rating || provider.averageRating || 4.5;
-  const experience = provider.experience || provider.yearsOfExperience;
   const completedCount = (provider.completedBookings !== undefined ? provider.completedBookings : provider.completedJobs) || 0;
 
   return (
@@ -345,13 +332,6 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
     { id: 'proofs', label: 'Proofs' }
   ];
 
-  const getMaskedPhone = (phoneNum) => {
-    if (!phoneNum) return 'N/A';
-    if (!isContactable) {
-      return phoneNum.replace(/(\d{2})\d+(\d{3})/, '$1******$2');
-    }
-    return phoneNum;
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100] animate-fade-in" onClick={onClose}>
@@ -476,7 +456,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
 
           {activeTab === 'timeline' && (
             <div className="space-y-4 animate-fadeIn">
-              {['scheduled', 'accepted', 'inprogress', 'assigned', 'ontheway', 'arrived', 'started'].includes(currentStatus) && (
+              {['scheduled', 'accepted', 'inprogress', 'assigned', 'ontheway', 'arrived', 'started', 'workstarted'].includes(currentStatus) && (
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-3 shadow-sm flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-blue-200 text-blue-600 shadow-sm shrink-0">
@@ -484,15 +464,15 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                     </div>
                     <div>
                       <span className="text-[9px] font-black text-blue-600/60 uppercase tracking-wider block leading-none mb-0.5">
-                        {['inprogress', 'started'].includes(currentStatus) ? 'Completion PIN' : 'Start PIN'}
+                        {['inprogress', 'started', 'workstarted'].includes(currentStatus) ? 'Completion PIN' : 'Start PIN'}
                       </span>
                       <span className="text-lg font-black tracking-wider text-secondary font-mono leading-none">
-                        {['inprogress', 'started'].includes(currentStatus) ? (getCompletionPin(booking) || '••••') : (getStartPin(booking) || '••••')}
+                        {['inprogress', 'started', 'workstarted'].includes(currentStatus) ? (getCompletionPin(booking) || '••••') : (getStartPin(booking) || '••••')}
                       </span>
                     </div>
                   </div>
                   <p className="text-[10px] text-gray-500 font-medium leading-tight max-w-[160px] text-right shrink-0">
-                    {['inprogress', 'started'].includes(currentStatus)
+                    {['inprogress', 'started', 'workstarted'].includes(currentStatus)
                       ? 'Share to verify service completion.'
                       : 'Provide to partner to start service.'
                     }
@@ -578,7 +558,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                           const s = (h.status || '').toLowerCase().replace(/[^a-z]/g, '');
                           return step.statuses.includes(s);
                         });
-                        const isCompleted = !!match || step.statuses.includes((booking.status || '').toLowerCase().replace(/[^a-z]/g, ''));
+                        const isCompleted = !!match || step.statuses.includes(String(booking.status || 'pending').trim().toLowerCase().replace(/[^a-z]/g, ''));
                         const timestamp = match ? match.timestamp : null;
 
                         const lineClass = isCompleted ? (step.isRed ? 'bg-danger' : 'bg-emerald-500') : 'bg-gray-250';
@@ -922,7 +902,6 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
 const CustomerBookingsPage = () => {
   const { token, API, showToast, user, refreshUser } = useAuth();
   const { socket } = useSocket();
-  const confirm = useConfirm();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
