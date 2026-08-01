@@ -26,6 +26,13 @@ export const IfscBankDetails = ({
   const [ifscError, setIfscError] = useState('');
   const [ifscSuccess, setIfscSuccess] = useState(!!value.bankName);
 
+  const [fetchedInfo, setFetchedInfo] = useState({
+    bankName: value.bankName || '',
+    district: value.district || '',
+    city: value.city || '',
+    address: value.address || ''
+  });
+
   const debounceTimerRef = useRef(null);
 
   // Helper to validate IFSC format locally
@@ -58,6 +65,18 @@ export const IfscBankDetails = ({
       const response = await axios.get(`${API}/system-setting/validate-ifsc/${code}`);
       if (response.data?.success) {
         const details = response.data.data;
+        const bankFullName = details.bank ? `${details.bank}${details.branch ? ' - ' + details.branch : ''}` : '';
+        const dist = details.district || details.DISTRICT || '';
+        const cty = details.city || details.CITY || '';
+        const addr = details.address || details.ADDRESS || '';
+
+        setFetchedInfo({
+          bankName: bankFullName,
+          district: dist,
+          city: cty,
+          address: addr
+        });
+
         setIfscSuccess(true);
         setIfscError('');
 
@@ -65,10 +84,10 @@ export const IfscBankDetails = ({
         onChange({
           ...value,
           ifsc: code,
-          bankName: details.bank ? `${details.bank}${details.branch ? ' - ' + details.branch : ''}` : '',
-          district: details.district,
-          city: details.city,
-          address: details.address,
+          bankName: bankFullName,
+          district: dist,
+          city: cty,
+          address: addr,
         });
       } else {
         throw new Error(response.data?.message || 'Validation failed');
@@ -76,6 +95,13 @@ export const IfscBankDetails = ({
     } catch (err) {
       setIfscSuccess(false);
       setIfscError(err.response?.data?.message || err.message || 'Failed to fetch IFSC details');
+
+      setFetchedInfo({
+        bankName: '',
+        district: '',
+        city: '',
+        address: ''
+      });
 
       // Clear fields in parent on failure to avoid stale details
       onChange({
@@ -132,20 +158,28 @@ export const IfscBankDetails = ({
 
   // Handle local validation updates to the parent form (so they can enable/disable submit button)
   useEffect(() => {
-    const isIfscValid = ifscSuccess && !ifscError && !!value.bankName;
+    const isIfscValid = ifscSuccess && !ifscError && !!(value.bankName || fetchedInfo.bankName);
     const isAccValid = checkLocalAccountNoFormat(value.accountNo || '') && (value.accountNo === confirmAccountNo);
     const isAccHolderValid = !showAccountName || !!accountNameValue.trim();
 
     onValidityChange?.(isIfscValid && isAccValid && isAccHolderValid);
-  }, [ifscSuccess, ifscError, value.bankName, value.accountNo, confirmAccountNo, showAccountName, accountNameValue, onValidityChange]);
+  }, [ifscSuccess, ifscError, value.bankName, fetchedInfo.bankName, value.accountNo, confirmAccountNo, showAccountName, accountNameValue, onValidityChange]);
 
   const handleClear = () => {
     setIfscInput('');
+    setConfirmAccountNo('');
     setIfscSuccess(false);
     setIfscError('');
+    setFetchedInfo({
+      bankName: '',
+      district: '',
+      city: '',
+      address: ''
+    });
     onChange({
-      ...value,
       ifsc: '',
+      accountNo: '',
+      accountName: '',
       bankName: '',
       branch: '',
       district: '',
@@ -154,6 +188,11 @@ export const IfscBankDetails = ({
       address: '',
     });
   };
+
+  const displayBank = value.bankName || fetchedInfo.bankName;
+  const displayDistrict = value.district || fetchedInfo.district;
+  const displayCity = value.city || fetchedInfo.city;
+  const displayAddress = value.address || fetchedInfo.address;
 
   return (
     <div className="space-y-4">
@@ -219,37 +258,43 @@ export const IfscBankDetails = ({
         )}
 
         {/* Success verified badge */}
-        {ifscSuccess && value.bankName && (
+        {ifscSuccess && displayBank && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-lg border border-green-200/50 mt-1">
             <ShieldCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
             <span className="text-[10px] font-bold">
-              Verified: {value.bankName}
+              Verified: {displayBank}
             </span>
           </div>
         )}
       </div>
 
       {/* ─── Auto-populated Read-Only Branch Details ─── */}
-      {ifscSuccess && value.bankName && (
+      {ifscSuccess && displayBank && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-gray-50/50 rounded-xl border border-gray-150 animate-in fade-in duration-200">
           <div className="md:col-span-2">
             <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bank Name & Branch</label>
-            <div className={readOnlyCls}>{value.bankName}</div>
+            <div className={readOnlyCls}>{displayBank}</div>
           </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">District</label>
-            <div className={readOnlyCls}>{value.district || 'N/A'}</div>
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">City</label>
-            <div className={readOnlyCls}>
-              {value.city || 'N/A'}
+          {displayDistrict && displayDistrict !== 'N/A' && (
+            <div>
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">District</label>
+              <div className={readOnlyCls}>{displayDistrict}</div>
             </div>
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Branch Address</label>
-            <div className={`${readOnlyCls} whitespace-normal text-xs`}>{value.address || 'N/A'}</div>
-          </div>
+          )}
+          {displayCity && displayCity !== 'N/A' && (
+            <div>
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">City</label>
+              <div className={readOnlyCls}>
+                {displayCity}
+              </div>
+            </div>
+          )}
+          {displayAddress && displayAddress !== 'N/A' && (
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Branch Address</label>
+              <div className={`${readOnlyCls} whitespace-normal text-xs`}>{displayAddress}</div>
+            </div>
+          )}
         </div>
       )}
 

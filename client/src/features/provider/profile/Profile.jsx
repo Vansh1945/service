@@ -14,6 +14,7 @@ import { IfscBankDetails } from '../../../components/IfscBankDetails';
 import ProfileSkeleton from '../../../components/ui-skeletons/ProfileSkeleton';
 import { useNavigate } from 'react-router-dom';
 import Processing from '../../../components/ui-skeletons/Processing';
+import PayoutProfileTab from './components/PayoutProfileTab';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -27,6 +28,7 @@ const ProviderProfile = () => {
     { id: 'overview', label: 'Overview', icon: <Package className="w-4 h-4" /> },
     { id: 'documents', label: 'Documents', icon: <FileText className="w-4 h-4" /> },
     { id: 'profile', label: 'Personal Details', icon: <User className="w-4 h-4" /> },
+    { id: 'payout', label: 'Payout Settings', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'settings', label: 'Notification Settings', icon: <Bell className="w-4 h-4" /> }
   ];
 
@@ -34,6 +36,7 @@ const ProviderProfile = () => {
     { id: 'overview', label: 'Overview', icon: <Package className="w-5 h-5" />, color: 'bg-primary/10 text-primary' },
     { id: 'documents', label: 'Documents', icon: <FileText className="w-5 h-5" />, color: 'bg-rose-50 text-rose-500' },
     { id: 'profile', label: 'Profile Details', icon: <User className="w-5 h-5" />, color: 'bg-amber-50 text-amber-500' },
+    { id: 'payout', label: 'Payout Settings', icon: <CreditCard className="w-5 h-5" />, color: 'bg-emerald-50 text-emerald-600' },
     { id: 'settings', label: 'Settings', icon: <Bell className="w-5 h-5" />, color: 'bg-blue-50 text-blue-500' }
   ];
 
@@ -1476,6 +1479,11 @@ const ProviderProfile = () => {
                   </form>
                 </div>
               </div>
+            )}
+
+            {/* Payout Settings Tab */}
+            {activeTab === 'payout' && (
+              <PayoutProfileTab showToast={showToast} />
             )}
           </div>
         </div>

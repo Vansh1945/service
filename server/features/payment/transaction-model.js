@@ -128,6 +128,10 @@ const transactionSchema = new Schema({
   },
   razorpayOrderId: String,
   razorpayPaymentId: String,
+  razorpayPayoutId: {
+    type: String,
+    sparse: true
+  },
   razorpaySignature: String,
   razorpayResponse: Object,
   razorpaySettlementId: String,
@@ -267,6 +271,7 @@ transactionSchema.index({ paymentStatus: 1 });
 transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ razorpayPaymentId: 1 }, { unique: true, sparse: true });
 transactionSchema.index({ razorpayOrderId: 1 }, { unique: true, sparse: true });
+transactionSchema.index({ razorpayPayoutId: 1 }, { unique: true, sparse: true });
 transactionSchema.index({ booking: 1, type: 1 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

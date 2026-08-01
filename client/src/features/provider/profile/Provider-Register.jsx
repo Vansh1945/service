@@ -871,11 +871,6 @@ const ProviderRegistration = () => {
           }
         }
 
-        // Validate Bank details verification
-        if (!isBankValid) {
-          throw new Error('Please enter valid bank details and verify your IFSC code');
-        }
-
         // Validate Legal Acceptance & Signature fields
         if (!formData.selfDeclaration || !formData.agreementAccepted || !formData.termsAccepted || !formData.privacyAccepted || !formData.signedName || !formData.signatureImage) {
           throw new Error('You must accept all declarations/agreements and sign before submitting');
@@ -1746,58 +1741,6 @@ const ProviderRegistration = () => {
               </Section>
 
 
-
-              {/* Bank Details */}
-              <Section
-                title="Bank Details"
-                icon={CreditCard}
-                accent
-                tooltip="Your bank details are used for secure payment transfers after each completed job. All information is encrypted and never shared. Provide the account where you want to receive your earnings."
-              >
-                <div className="space-y-4">
-                  <IfscBankDetails
-                    value={{
-                      ifsc: formData.ifsc,
-                      accountNo: formData.accountNo,
-                      bankName: formData.bankName,
-                      branch: formData.branch,
-                      district: formData.district,
-                      state: formData.state,
-                      city: formData.city,
-                      address: formData.address,
-                    }}
-                    onChange={(updated) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        ifsc: updated.ifsc || '',
-                        accountNo: updated.accountNo || '',
-                        bankName: updated.bankName || '',
-                        branch: updated.branch || '',
-                        district: updated.district || '',
-                        state: updated.state || '',
-                        city: updated.city || '',
-                        address: updated.address || '',
-                      }));
-                    }}
-                    onValidityChange={setIsBankValid}
-                    showAccountName={true}
-                    accountNameValue={formData.accountName || ''}
-                    onAccountNameChange={(name) => setFormData((prev) => ({ ...prev, accountName: name }))}
-                  />
-
-                  <KycFileField
-                    label="Bank Passbook Image *"
-                    fieldName="passbookImage"
-                    accept="image/*"
-                    placeholder="Upload passbook image..."
-                    icon={Camera}
-                    value={formData.passbookImage}
-                    onChange={(e) => handleKycFileChange('passbookImage')(e.target.files[0])}
-                    onRemove={() => setFormData(prev => ({ ...prev, passbookImage: null }))}
-                    progress={uploadProgresses.passbookImage}
-                  />
-                </div>
-              </Section>
 
               {/* Documents */}
               <Section

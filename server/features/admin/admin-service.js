@@ -32,7 +32,6 @@ const deleteFile = async (publicId) => {
     }
 };
 
-
 class AdminService {
 
     static async cancelBookingByAdmin(req, res) {
@@ -776,7 +775,28 @@ class AdminService {
                     }
                 }
 
+                provider.bankDetails = provider.bankDetails || {};
                 provider.bankDetails.verified = true;
+                provider.bankDetails.bankVerificationStatus = 'verified';
+                provider.bankDetails.payoutEnabled = true;
+                provider.bankDetails.bankVerifiedAt = new Date();
+                provider.bankDetails.bankVerifiedBy = req.admin?._id || null;
+                provider.bankDetails.bankRejectReason = null;
+
+                const approvedHistory = Array.isArray(provider.bankDetails.verificationHistory)
+                    ? provider.bankDetails.verificationHistory
+                    : [];
+                provider.bankDetails.verificationHistory = [
+                    ...approvedHistory,
+                    {
+                        status: 'verified',
+                        timestamp: new Date(),
+                        updatedBy: 'admin',
+                        verifiedBy: req.admin?._id || null,
+                        reason: finalRemarks || 'Bank verified by Admin'
+                    }
+                ];
+
                 provider.rejectionReason = ''; // Clear backup/rejection details
                 await provider.save();
 
@@ -785,8 +805,8 @@ class AdminService {
                     sendNotification(
                         provider._id,
                         'provider',
-                        'Bank Details Approved',
-                        `Your bank details have been verified and approved. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
+                        'Bank Details Verified',
+                        `Your bank details have been verified and approved. Payouts are now enabled. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
                         'approved',
                         provider._id
                     );
@@ -841,9 +861,31 @@ class AdminService {
                     }
                     provider.bankDetails = {
                         ...parsedBankDetails,
-                        verified: true
+                        verified: true,
+                        bankVerificationStatus: 'verified',
+                        payoutEnabled: true
                     };
+                } else {
+                    provider.bankDetails = provider.bankDetails || {};
+                    provider.bankDetails.verified = false;
+                    provider.bankDetails.bankVerificationStatus = 'rejected';
+                    provider.bankDetails.payoutEnabled = false;
+                    provider.bankDetails.bankRejectReason = finalRemarks || 'Bank details rejected by Admin';
                 }
+
+                const rejectedHistory = Array.isArray(provider.bankDetails?.verificationHistory)
+                    ? provider.bankDetails.verificationHistory
+                    : [];
+                provider.bankDetails.verificationHistory = [
+                    ...rejectedHistory,
+                    {
+                        status: 'rejected',
+                        timestamp: new Date(),
+                        updatedBy: 'admin',
+                        verifiedBy: req.admin?._id || null,
+                        reason: finalRemarks || 'Bank details rejected by Admin'
+                    }
+                ];
 
                 // Clear backup
                 provider.rejectionReason = ''; // Clear it since the provider is still approved and active
@@ -2766,20 +2808,20 @@ class AdminService {
 
             const RefundEngineService = require('../payment/refund-engine-service');
             const refundResult = await RefundEngineService.processRefundRequest({
-              bookingId: booking._id,
-              refundSource: 'admin_cancellation',
-              refundAmount: refundAmount,
-              refundReason: reason || `Admin approved ${type} refund`,
-              cancellationReason: reason,
-              requestedBy: req.admin?._id,
-              approvedBy: req.admin?._id,
-              complaintId: booking.complaint?._id || booking.complaint || null,
+                bookingId: booking._id,
+                refundSource: 'admin_cancellation',
+                refundAmount: refundAmount,
+                refundReason: reason || `Admin approved ${type} refund`,
+                cancellationReason: reason,
+                requestedBy: req.admin?._id,
+                approvedBy: req.admin?._id,
+                complaintId: booking.complaint?._id || booking.complaint || null,
             });
 
             return res.status(200).json({
-              success: true,
-              message: `Refund of ₹${refundAmount} processed successfully. Ledger updated.`,
-              data: refundResult.refund,
+                success: true,
+                message: `Refund of ₹${refundAmount} processed successfully. Ledger updated.`,
+                data: refundResult.refund,
             });
 
         } catch (error) {
@@ -2793,345 +2835,345 @@ class AdminService {
     }
 
     static async getAllRefunds(req, res) {
-      try {
-        const { status, source, destination, refundType, paymentMethod, fromDate, toDate, search, page = 1, limit = 20 } = req.query;
-        const Refund = require('../payment/refund-model');
-        const User = require('../user/user-model');
+        try {
+            const { status, source, destination, refundType, paymentMethod, fromDate, toDate, search, page = 1, limit = 20 } = req.query;
+            const Refund = require('../payment/refund-model');
+            const User = require('../user/user-model');
 
-        const filter = {};
-        if (status && status !== 'all') filter.refundStatus = status;
-        if (source && source !== 'all') filter.refundSource = source;
-        if (destination && destination !== 'all') filter.refundDestination = destination;
-        if (refundType && refundType !== 'all') filter.refundType = refundType;
-        if (paymentMethod && paymentMethod !== 'all') filter.originalPaymentMethod = paymentMethod;
+            const filter = {};
+            if (status && status !== 'all') filter.refundStatus = status;
+            if (source && source !== 'all') filter.refundSource = source;
+            if (destination && destination !== 'all') filter.refundDestination = destination;
+            if (refundType && refundType !== 'all') filter.refundType = refundType;
+            if (paymentMethod && paymentMethod !== 'all') filter.originalPaymentMethod = paymentMethod;
 
-        if (fromDate || toDate) {
-          filter.createdAt = {};
-          if (fromDate) filter.createdAt.$gte = new Date(fromDate);
-          if (toDate) filter.createdAt.$lte = new Date(toDate);
-        }
-
-        if (search && search.trim()) {
-          const searchRegex = new RegExp(search.trim(), 'i');
-          const matchingUsers = await User.find({
-            $or: [{ name: searchRegex }, { email: searchRegex }, { phone: searchRegex }]
-          }).select('_id');
-          const userIds = matchingUsers.map(u => u._id);
-
-          filter.$or = [
-            { refundId: searchRegex },
-            { gatewayRefundId: searchRegex },
-            { walletTransactionId: searchRegex },
-            { refundReason: searchRegex },
-            { cancellationReason: searchRegex },
-            { customerId: { $in: userIds } },
-            { providerId: { $in: userIds } }
-          ];
-        }
-
-        const skip = (Number(page) - 1) * Number(limit);
-
-        const [refunds, total, kpiStats] = await Promise.all([
-          Refund.find(filter)
-            .populate('customerId', 'name email phone avatar')
-            .populate('providerId', 'name email phone avatar')
-            .populate({
-              path: 'bookingId',
-              select: 'bookingId status totalAmount paymentMethod walletUsed onlinePaid customer provider cancellationProgress'
-            })
-            .populate('approvedBy', 'name email')
-            .populate('requestedBy', 'name email')
-            .populate('processedBy', 'name email')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(Number(limit)),
-          Refund.countDocuments(filter),
-          Refund.aggregate([
-            {
-              $group: {
-                _id: null,
-                totalRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$refundAmount', 0] } },
-                pendingAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'pending'] }, '$refundAmount', 0] } },
-                gatewayRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$gatewayRefundAmount', 0] } },
-                walletRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$walletRefundAmount', 0] } },
-                pendingCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'pending'] }, 1, 0] } },
-                approvedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'approved'] }, 1, 0] } },
-                completedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, 1, 0] } },
-                failedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'failed'] }, 1, 0] } },
-                rejectedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'rejected'] }, 1, 0] } },
-                autoCount: { $sum: { $cond: [{ $eq: ['$refundType', 'auto'] }, 1, 0] } },
-                manualCount: { $sum: { $cond: [{ $eq: ['$refundType', 'manual'] }, 1, 0] } }
-              }
+            if (fromDate || toDate) {
+                filter.createdAt = {};
+                if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+                if (toDate) filter.createdAt.$lte = new Date(toDate);
             }
-          ])
-        ]);
 
-        const stats = kpiStats.length > 0 ? kpiStats[0] : {
-          totalRefundAmount: 0,
-          pendingAmount: 0,
-          gatewayRefundAmount: 0,
-          walletRefundAmount: 0,
-          pendingCount: 0,
-          approvedCount: 0,
-          completedCount: 0,
-          failedCount: 0,
-          rejectedCount: 0,
-          autoCount: 0,
-          manualCount: 0
-        };
+            if (search && search.trim()) {
+                const searchRegex = new RegExp(search.trim(), 'i');
+                const matchingUsers = await User.find({
+                    $or: [{ name: searchRegex }, { email: searchRegex }, { phone: searchRegex }]
+                }).select('_id');
+                const userIds = matchingUsers.map(u => u._id);
 
-        return res.status(200).json({
-          success: true,
-          data: refunds,
-          stats,
-          pagination: {
-            total,
-            page: Number(page),
-            limit: Number(limit),
-            pages: Math.ceil(total / Number(limit)),
-          },
-        });
-      } catch (error) {
-        console.error('[AdminService.getAllRefunds] Error:', error);
-        return res.status(500).json({ success: false, message: error.message });
-      }
+                filter.$or = [
+                    { refundId: searchRegex },
+                    { gatewayRefundId: searchRegex },
+                    { walletTransactionId: searchRegex },
+                    { refundReason: searchRegex },
+                    { cancellationReason: searchRegex },
+                    { customerId: { $in: userIds } },
+                    { providerId: { $in: userIds } }
+                ];
+            }
+
+            const skip = (Number(page) - 1) * Number(limit);
+
+            const [refunds, total, kpiStats] = await Promise.all([
+                Refund.find(filter)
+                    .populate('customerId', 'name email phone avatar')
+                    .populate('providerId', 'name email phone avatar')
+                    .populate({
+                        path: 'bookingId',
+                        select: 'bookingId status totalAmount paymentMethod walletUsed onlinePaid customer provider cancellationProgress'
+                    })
+                    .populate('approvedBy', 'name email')
+                    .populate('requestedBy', 'name email')
+                    .populate('processedBy', 'name email')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(Number(limit)),
+                Refund.countDocuments(filter),
+                Refund.aggregate([
+                    {
+                        $group: {
+                            _id: null,
+                            totalRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$refundAmount', 0] } },
+                            pendingAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'pending'] }, '$refundAmount', 0] } },
+                            gatewayRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$gatewayRefundAmount', 0] } },
+                            walletRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$walletRefundAmount', 0] } },
+                            pendingCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'pending'] }, 1, 0] } },
+                            approvedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'approved'] }, 1, 0] } },
+                            completedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, 1, 0] } },
+                            failedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'failed'] }, 1, 0] } },
+                            rejectedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'rejected'] }, 1, 0] } },
+                            autoCount: { $sum: { $cond: [{ $eq: ['$refundType', 'auto'] }, 1, 0] } },
+                            manualCount: { $sum: { $cond: [{ $eq: ['$refundType', 'manual'] }, 1, 0] } }
+                        }
+                    }
+                ])
+            ]);
+
+            const stats = kpiStats.length > 0 ? kpiStats[0] : {
+                totalRefundAmount: 0,
+                pendingAmount: 0,
+                gatewayRefundAmount: 0,
+                walletRefundAmount: 0,
+                pendingCount: 0,
+                approvedCount: 0,
+                completedCount: 0,
+                failedCount: 0,
+                rejectedCount: 0,
+                autoCount: 0,
+                manualCount: 0
+            };
+
+            return res.status(200).json({
+                success: true,
+                data: refunds,
+                stats,
+                pagination: {
+                    total,
+                    page: Number(page),
+                    limit: Number(limit),
+                    pages: Math.ceil(total / Number(limit)),
+                },
+            });
+        } catch (error) {
+            console.error('[AdminService.getAllRefunds] Error:', error);
+            return res.status(500).json({ success: false, message: error.message });
+        }
     }
 
     static async getRefundById(req, res) {
-      try {
-        const { id } = req.params;
-        const Refund = require('../payment/refund-model');
+        try {
+            const { id } = req.params;
+            const Refund = require('../payment/refund-model');
 
-        const refund = await Refund.findById(id)
-          .populate('customerId', 'name email phone avatar wallet')
-          .populate('providerId', 'name email phone avatar')
-          .populate('bookingId')
-          .populate('approvedBy', 'name email')
-          .populate('requestedBy', 'name email')
-          .populate('processedBy', 'name email')
-          .populate('transactionId')
-          .populate('complaintId')
-          .populate('paymentRecordId');
+            const refund = await Refund.findById(id)
+                .populate('customerId', 'name email phone avatar wallet')
+                .populate('providerId', 'name email phone avatar')
+                .populate('bookingId')
+                .populate('approvedBy', 'name email')
+                .populate('requestedBy', 'name email')
+                .populate('processedBy', 'name email')
+                .populate('transactionId')
+                .populate('complaintId')
+                .populate('paymentRecordId');
 
-        if (!refund) {
-          return res.status(404).json({ success: false, message: 'Refund record not found' });
+            if (!refund) {
+                return res.status(404).json({ success: false, message: 'Refund record not found' });
+            }
+
+            return res.status(200).json({ success: true, data: refund });
+        } catch (error) {
+            console.error('[AdminService.getRefundById] Error:', error);
+            return res.status(500).json({ success: false, message: error.message });
         }
-
-        return res.status(200).json({ success: true, data: refund });
-      } catch (error) {
-        console.error('[AdminService.getRefundById] Error:', error);
-        return res.status(500).json({ success: false, message: error.message });
-      }
     }
 
     static async createManualRefund(req, res) {
-      try {
-        const { bookingId, amount, reason, refundType = 'manual', refundSource = 'manual_refund', refundDestination = 'wallet', customerChoice, notes } = req.body;
-        const Booking = require('../booking/booking-model');
-        const RefundEngineService = require('../payment/refund-engine-service');
+        try {
+            const { bookingId, amount, reason, refundType = 'manual', refundSource = 'manual_refund', refundDestination = 'wallet', customerChoice, notes } = req.body;
+            const Booking = require('../booking/booking-model');
+            const RefundEngineService = require('../payment/refund-engine-service');
 
-        if (!bookingId) {
-          return res.status(400).json({ success: false, message: 'Booking ID is required for manual refund creation.' });
+            if (!bookingId) {
+                return res.status(400).json({ success: false, message: 'Booking ID is required for manual refund creation.' });
+            }
+
+            const booking = await Booking.findById(bookingId).populate('customer provider');
+            if (!booking) {
+                return res.status(404).json({ success: false, message: 'Booking not found' });
+            }
+
+            const adminId = req.user?._id || req.admin?._id;
+
+            const refundResult = await RefundEngineService.processRefundRequest({
+                bookingId: booking._id,
+                refundSource,
+                refundDestination,
+                customerChoice: customerChoice || (refundDestination === 'original_payment' ? 'original_payment' : 'wallet'),
+                refundAmount: amount ? Number(amount) : undefined,
+                cancellationReason: reason || notes || 'Manual Admin Refund Action',
+                refundReason: reason || notes || 'Manual Admin Refund Action',
+                requestedBy: adminId,
+                approvedBy: adminId,
+                isAutoTrigger: false,
+                ip: req.ip || '',
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: refundResult.message || 'Manual refund request created successfully.',
+                data: refundResult.refund,
+            });
+        } catch (error) {
+            console.error('[AdminService.createManualRefund] Error:', error);
+            return res.status(500).json({ success: false, message: error.message });
         }
-
-        const booking = await Booking.findById(bookingId).populate('customer provider');
-        if (!booking) {
-          return res.status(404).json({ success: false, message: 'Booking not found' });
-        }
-
-        const adminId = req.user?._id || req.admin?._id;
-
-        const refundResult = await RefundEngineService.processRefundRequest({
-          bookingId: booking._id,
-          refundSource,
-          refundDestination,
-          customerChoice: customerChoice || (refundDestination === 'original_payment' ? 'original_payment' : 'wallet'),
-          refundAmount: amount ? Number(amount) : undefined,
-          cancellationReason: reason || notes || 'Manual Admin Refund Action',
-          refundReason: reason || notes || 'Manual Admin Refund Action',
-          requestedBy: adminId,
-          approvedBy: adminId,
-          isAutoTrigger: false,
-          ip: req.ip || '',
-        });
-
-        return res.status(200).json({
-          success: true,
-          message: refundResult.message || 'Manual refund request created successfully.',
-          data: refundResult.refund,
-        });
-      } catch (error) {
-        console.error('[AdminService.createManualRefund] Error:', error);
-        return res.status(500).json({ success: false, message: error.message });
-      }
     }
 
     static async approveRefundById(req, res) {
-      try {
-        const { id } = req.params;
-        const Refund = require('../payment/refund-model');
-        const Booking = require('../booking/booking-model');
-        const RefundEngineService = require('../payment/refund-engine-service');
+        try {
+            const { id } = req.params;
+            const Refund = require('../payment/refund-model');
+            const Booking = require('../booking/booking-model');
+            const RefundEngineService = require('../payment/refund-engine-service');
 
-        const refund = await Refund.findById(id);
-        if (!refund) {
-          return res.status(404).json({ success: false, message: 'Refund record not found.' });
+            const refund = await Refund.findById(id);
+            if (!refund) {
+                return res.status(404).json({ success: false, message: 'Refund record not found.' });
+            }
+
+            if (refund.refundStatus === 'completed') {
+                return res.status(400).json({ success: false, message: 'Refund is already completed.' });
+            }
+
+            const booking = await Booking.findById(refund.bookingId);
+            if (!booking) {
+                return res.status(404).json({ success: false, message: 'Associated booking not found.' });
+            }
+
+            const adminId = req.user?._id || req.admin?._id;
+            refund.approvedBy = adminId;
+            refund.approvedAt = new Date();
+            refund.refundStatus = 'approved';
+            refund.addTimelineStep('approved', 'Admin', 'Refund manually approved by admin');
+            refund.addAuditLog('REFUND_APPROVED', adminId, 'admin', { refundId: refund.refundId }, req.ip || '');
+            await refund.save();
+
+            const settings = await RefundEngineService.getRefundSettings();
+            const result = await RefundEngineService.executeRefundPayout(refund, booking, settings, req.ip || '');
+
+            return res.status(200).json({
+                success: result.success,
+                message: result.message || (result.success ? 'Refund approved and executed successfully.' : 'Refund approved but payout execution failed.'),
+                data: result.refund,
+            });
+        } catch (error) {
+            console.error('[AdminService.approveRefundById] Error:', error);
+            return res.status(500).json({ success: false, message: error.message });
         }
-
-        if (refund.refundStatus === 'completed') {
-          return res.status(400).json({ success: false, message: 'Refund is already completed.' });
-        }
-
-        const booking = await Booking.findById(refund.bookingId);
-        if (!booking) {
-          return res.status(404).json({ success: false, message: 'Associated booking not found.' });
-        }
-
-        const adminId = req.user?._id || req.admin?._id;
-        refund.approvedBy = adminId;
-        refund.approvedAt = new Date();
-        refund.refundStatus = 'approved';
-        refund.addTimelineStep('approved', 'Admin', 'Refund manually approved by admin');
-        refund.addAuditLog('REFUND_APPROVED', adminId, 'admin', { refundId: refund.refundId }, req.ip || '');
-        await refund.save();
-
-        const settings = await RefundEngineService.getRefundSettings();
-        const result = await RefundEngineService.executeRefundPayout(refund, booking, settings, req.ip || '');
-
-        return res.status(200).json({
-          success: result.success,
-          message: result.message || (result.success ? 'Refund approved and executed successfully.' : 'Refund approved but payout execution failed.'),
-          data: result.refund,
-        });
-      } catch (error) {
-        console.error('[AdminService.approveRefundById] Error:', error);
-        return res.status(500).json({ success: false, message: error.message });
-      }
     }
 
     static async rejectRefundById(req, res) {
-      const session = await mongoose.startSession();
-      session.startTransaction();
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-      try {
-        const idParam = req.params.id || req.params.bookingId;
-        const { reason = 'Rejected by Admin' } = req.body;
-        const Refund = require('../payment/refund-model');
-        const Booking = require('../booking/booking-model');
-        const Complaint = require('../complaint/complaint-model');
-        const ProviderEarning = require('../provider/provider-earning-model');
+        try {
+            const idParam = req.params.id || req.params.bookingId;
+            const { reason = 'Rejected by Admin' } = req.body;
+            const Refund = require('../payment/refund-model');
+            const Booking = require('../booking/booking-model');
+            const Complaint = require('../complaint/complaint-model');
+            const ProviderEarning = require('../provider/provider-earning-model');
 
-        let refundDoc = await Refund.findById(idParam).session(session);
-        let bookingId = null;
+            let refundDoc = await Refund.findById(idParam).session(session);
+            let bookingId = null;
 
-        if (refundDoc) {
-          if (refundDoc.refundStatus === 'completed') {
-            await session.abortTransaction();
+            if (refundDoc) {
+                if (refundDoc.refundStatus === 'completed') {
+                    await session.abortTransaction();
+                    session.endSession();
+                    return res.status(400).json({ success: false, message: 'Completed refunds cannot be rejected.' });
+                }
+
+                const adminId = req.user?._id || req.admin?._id;
+                refundDoc.refundStatus = 'rejected';
+                refundDoc.failureReason = reason;
+                refundDoc.addTimelineStep('rejected', 'Admin', reason);
+                refundDoc.addAuditLog('REFUND_REJECTED', adminId, 'admin', { reason }, req.ip || '');
+                await refundDoc.save({ session });
+                bookingId = refundDoc.bookingId;
+            } else {
+                bookingId = idParam;
+                const pendingRefund = await Refund.findOne({ bookingId, refundStatus: { $in: ['pending', 'approved', 'draft'] } }).session(session);
+                if (pendingRefund) {
+                    const adminId = req.user?._id || req.admin?._id;
+                    pendingRefund.refundStatus = 'rejected';
+                    pendingRefund.failureReason = reason;
+                    pendingRefund.addTimelineStep('rejected', 'Admin', reason);
+                    pendingRefund.addAuditLog('REFUND_REJECTED', adminId, 'admin', { reason }, req.ip || '');
+                    await pendingRefund.save({ session });
+                    refundDoc = pendingRefund;
+                }
+            }
+
+            const booking = await Booking.findById(bookingId).session(session);
+            if (!booking) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({ success: false, message: 'Booking not found.' });
+            }
+
+            // ── 1. BOOKING UPDATE ──
+            booking.status = 'completed';
+            booking.disputeStatus = 'resolved';
+            booking.adminRefundDecision = 'rejected';
+            booking.adminRemark = reason || 'Admin resolved without refund';
+            if (booking.cancellationProgress) {
+                booking.cancellationProgress.refundStatus = 'rejected';
+            }
+
+            if (!booking.complaintProofs) booking.complaintProofs = [];
+            booking.complaintProofs.push({
+                uploadedBy: 'admin',
+                message: `Dispute resolved without refund. Admin Comment: ${reason}`,
+                createdAt: new Date()
+            });
+
+            if (!booking.statusHistory) booking.statusHistory = [];
+            booking.statusHistory.push({
+                status: 'completed',
+                note: `Dispute resolved without refund. Admin Comment: ${reason}`,
+                updatedBy: 'admin',
+                timestamp: new Date()
+            });
+
+            await booking.save({ session });
+
+            // ── 2. COMPLAINT UPDATE ──
+            let complaintObj = null;
+            if (booking.complaint) {
+                complaintObj = await Complaint.findById(booking.complaint._id || booking.complaint).session(session);
+            } else {
+                complaintObj = await Complaint.findOne({ booking: booking._id }).session(session);
+            }
+
+            if (complaintObj) {
+                complaintObj.status = 'resolved';
+                complaintObj.resolvedAt = new Date();
+                complaintObj.resolutionNotes = reason || 'Dispute resolved without refund';
+                complaintObj.resolvedBy = req.user?._id || req.admin?._id;
+                if (!complaintObj.statusHistory) complaintObj.statusHistory = [];
+                complaintObj.statusHistory.push({ status: 'resolved', updatedAt: new Date() });
+                await complaintObj.save({ session });
+            }
+
+            // ── 3. EARNINGS RELEASE ──
+            if (ProviderEarning) {
+                const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+                if (earning && (earning.status === 'held' || earning.status === 'under_review')) {
+                    earning.status = 'available';
+                    await earning.save({ session });
+                }
+            }
+
+            await session.commitTransaction();
             session.endSession();
-            return res.status(400).json({ success: false, message: 'Completed refunds cannot be rejected.' });
-          }
 
-          const adminId = req.user?._id || req.admin?._id;
-          refundDoc.refundStatus = 'rejected';
-          refundDoc.failureReason = reason;
-          refundDoc.addTimelineStep('rejected', 'Admin', reason);
-          refundDoc.addAuditLog('REFUND_REJECTED', adminId, 'admin', { reason }, req.ip || '');
-          await refundDoc.save({ session });
-          bookingId = refundDoc.bookingId;
-        } else {
-          bookingId = idParam;
-          const pendingRefund = await Refund.findOne({ bookingId, refundStatus: { $in: ['pending', 'approved', 'draft'] } }).session(session);
-          if (pendingRefund) {
-            const adminId = req.user?._id || req.admin?._id;
-            pendingRefund.refundStatus = 'rejected';
-            pendingRefund.failureReason = reason;
-            pendingRefund.addTimelineStep('rejected', 'Admin', reason);
-            pendingRefund.addAuditLog('REFUND_REJECTED', adminId, 'admin', { reason }, req.ip || '');
-            await pendingRefund.save({ session });
-            refundDoc = pendingRefund;
-          }
+            return res.status(200).json({
+                success: true,
+                message: 'Refund request rejected and dispute resolved without refund.',
+                data: refundDoc || { bookingId: booking._id },
+            });
+        } catch (error) {
+            if (session.inTransaction()) {
+                await session.abortTransaction();
+            }
+            session.endSession();
+            console.error('Reject refund error:', error);
+            return res.status(400).json({ success: false, message: error.message });
         }
-
-        const booking = await Booking.findById(bookingId).session(session);
-        if (!booking) {
-          await session.abortTransaction();
-          session.endSession();
-          return res.status(404).json({ success: false, message: 'Booking not found.' });
-        }
-
-        // ── 1. BOOKING UPDATE ──
-        booking.status = 'completed';
-        booking.disputeStatus = 'resolved';
-        booking.adminRefundDecision = 'rejected';
-        booking.adminRemark = reason || 'Admin resolved without refund';
-        if (booking.cancellationProgress) {
-          booking.cancellationProgress.refundStatus = 'rejected';
-        }
-
-        if (!booking.complaintProofs) booking.complaintProofs = [];
-        booking.complaintProofs.push({
-          uploadedBy: 'admin',
-          message: `Dispute resolved without refund. Admin Comment: ${reason}`,
-          createdAt: new Date()
-        });
-
-        if (!booking.statusHistory) booking.statusHistory = [];
-        booking.statusHistory.push({
-          status: 'completed',
-          note: `Dispute resolved without refund. Admin Comment: ${reason}`,
-          updatedBy: 'admin',
-          timestamp: new Date()
-        });
-
-        await booking.save({ session });
-
-        // ── 2. COMPLAINT UPDATE ──
-        let complaintObj = null;
-        if (booking.complaint) {
-          complaintObj = await Complaint.findById(booking.complaint._id || booking.complaint).session(session);
-        } else {
-          complaintObj = await Complaint.findOne({ booking: booking._id }).session(session);
-        }
-
-        if (complaintObj) {
-          complaintObj.status = 'resolved';
-          complaintObj.resolvedAt = new Date();
-          complaintObj.resolutionNotes = reason || 'Dispute resolved without refund';
-          complaintObj.resolvedBy = req.user?._id || req.admin?._id;
-          if (!complaintObj.statusHistory) complaintObj.statusHistory = [];
-          complaintObj.statusHistory.push({ status: 'resolved', updatedAt: new Date() });
-          await complaintObj.save({ session });
-        }
-
-        // ── 3. EARNINGS RELEASE ──
-        if (ProviderEarning) {
-          const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
-          if (earning && (earning.status === 'held' || earning.status === 'under_review')) {
-            earning.status = 'available';
-            await earning.save({ session });
-          }
-        }
-
-        await session.commitTransaction();
-        session.endSession();
-
-        return res.status(200).json({
-          success: true,
-          message: 'Refund request rejected and dispute resolved without refund.',
-          data: refundDoc || { bookingId: booking._id },
-        });
-      } catch (error) {
-        if (session.inTransaction()) {
-          await session.abortTransaction();
-        }
-        session.endSession();
-        console.error('Reject refund error:', error);
-        return res.status(400).json({ success: false, message: error.message });
-      }
     }
 
     static async rejectAdminRefund(req, res) {
-      return this.rejectRefundById(req, res);
+        return this.rejectRefundById(req, res);
     }
 
     static async togglePayoutHold(req, res) {

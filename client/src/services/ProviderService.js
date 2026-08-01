@@ -44,3 +44,29 @@ export const getDashboardData = (params) => {
 export const getAgreementPdf = () => {
     return axiosInstance.get("/provider/agreement-pdf");
 };
+
+// Payout Profile API methods
+export const getPayoutAccounts = () => {
+    return axiosInstance.get("/provider/payout-accounts");
+};
+
+export const addPayoutAccount = (data) => {
+    return axiosInstance.post("/provider/payout-accounts", data);
+};
+
+export const updatePayoutAccount = (accountId, data) => {
+    return axiosInstance.put(`/provider/payout-accounts/${accountId || 'primary'}`, data);
+};
+
+export const setDefaultPayoutAccount = (accountId, data = {}) => {
+    return axiosInstance.patch(`/provider/payout-accounts/${accountId || 'primary'}/default`, data);
+};
+
+export const deletePayoutAccount = (accountId, params = {}) => {
+    return axiosInstance.delete(`/provider/payout-accounts/${accountId || 'primary'}`, { params });
+};
+
+export const requestWithdrawal = (data) => {
+    return axiosInstance.post("/payment/withdraw", data);
+};
+

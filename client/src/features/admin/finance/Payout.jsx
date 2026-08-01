@@ -22,6 +22,7 @@ import { getWithdrawalStatusBadge } from '../../../utils/status';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import * as AdminService from '../../../services/AdminService';
+import * as SystemService from '../../../services/SystemService';
 import PayoutViewDetailModal from './components/PayoutViewDetailModal';
 import PdfPreviewModal from '../../../components/modals/PdfPreviewModal';
 
@@ -204,10 +205,26 @@ const AdminPayout = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [directPayoutForm, setDirectPayoutForm] = useState({ providerId: '', amount: '', paymentMethod: 'banktransfer', utrNo: '', notes: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5) });
   const [submitting, setSubmitting] = useState(false);
+  const [payoutMode, setPayoutMode] = useState('manual');
 
   const [searchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
   const [filters, setFilters] = useState({ status: '', startDate: '', endDate: '', providerSearch: urlSearch || searchQuery || '', sortBy: '' });
+
+  useEffect(() => {
+    fetchSystemSettings();
+  }, []);
+
+  const fetchSystemSettings = async () => {
+    try {
+      const response = await SystemService.getAdminSystemSetting();
+      if (response.data?.success && response.data.data?.payoutSettings?.mode) {
+        setPayoutMode(response.data.data.payoutSettings.mode);
+      }
+    } catch (err) {
+      console.warn('System settings load failed:', err.message);
+    }
+  };
 
   useEffect(() => {
     setFilters(prev => ({ ...prev, providerSearch: urlSearch || searchQuery || '' }));
@@ -488,7 +505,7 @@ const AdminPayout = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600 min-w-[1500px]">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1700px]">
               <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
                   <th className="p-3">Withdrawal ID</th>
@@ -500,12 +517,16 @@ const AdminPayout = () => {
                   <th className="p-3">Account Holder</th>
                   <th className="p-3">Masked Account No.</th>
                   <th className="p-3">IFSC</th>
-                  <th className="p-3">Withdrawal Status</th>
+                  <th className="p-3">Contact Status</th>
+                  <th className="p-3">Fund Account Status</th>
+                  <th className="p-3">Payout Mode</th>
+                  <th className="p-3">Payout Status</th>
+                  <th className="p-3">Last Payout</th>
+                  <th className="p-3">Retry Status</th>
                   <th className="p-3">Requested Date</th>
                   <th className="p-3">Approved Date</th>
                   <th className="p-3">Transferred Date</th>
                   <th className="p-3">UTR Number</th>
-                  <th className="p-3">Payment Mode</th>
                   <th className="p-3">Processed By</th>
                   <th className="p-3">Last Updated</th>
                   <th className="p-3 text-right">Actions</th>
@@ -513,10 +534,10 @@ const AdminPayout = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {loading ? (
-                  <TableSkeleton rows={8} cols={18} />
+                  <TableSkeleton rows={8} cols={22} />
                 ) : withdrawals.length === 0 ? (
                   <tr>
-                    <td colSpan="18" className="px-6 py-12 text-center">
+                    <td colSpan="22" className="px-6 py-12 text-center">
                       <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                       <p className="text-slate-800 font-medium">No withdrawal requests found</p>
                       <p className="text-sm text-slate-400 mt-1">Try adjusting your search filters</p>
@@ -527,16 +548,21 @@ const AdminPayout = () => {
                   return (
                     <tr key={w._id} className="hover:bg-slate-50 transition-colors">
 
-                      {/* 1. Withdrawal ID */}
+                      {/* 1. Withdrawal ID (Clickable Drawer) */}
                       <td className="p-3 font-mono font-bold text-teal-700">
-                        {w.transactionReference || `#${w._id.slice(-6)}`}
+                        <button
+                          onClick={() => handleView(w)}
+                          className="hover:underline text-left cursor-pointer"
+                        >
+                          {w.transactionReference || `#${w._id.slice(-6)}`}
+                        </button>
                       </td>
 
-                      {/* 2. Provider */}
+                      {/* 2. Provider (Clickable Drawer) */}
                       <td className="p-3 font-bold text-slate-900">
                         <button
                           onClick={() => openInvestigationDrawer('provider', w.provider?._id || w.provider, w.provider)}
-                          className="text-teal-700 hover:underline"
+                          className="text-teal-700 hover:underline cursor-pointer"
                         >
                           {w.provider?.name || 'Provider'}
                         </button>
@@ -565,36 +591,62 @@ const AdminPayout = () => {
                       {/* 9. IFSC */}
                       <td className="p-3 font-mono text-slate-500">{bank.ifscCode || 'N/A'}</td>
 
-                      {/* 10. Withdrawal Status */}
+                      {/* 10. Contact Status (Future Ready) */}
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                          {w.contactStatus || (payoutMode === 'razorpayx' ? 'Active' : 'Manual')}
+                        </span>
+                      </td>
+
+                      {/* 11. Fund Account Status (Future Ready) */}
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                          {w.fundAccountStatus || (payoutMode === 'razorpayx' ? 'Verified' : 'Manual')}
+                        </span>
+                      </td>
+
+                      {/* 12. Payout Mode (Future Ready) */}
+                      <td className="p-3 font-mono text-[11px] font-extrabold uppercase text-slate-700">
+                        {w.withdrawalType || w.paymentMethod || (payoutMode === 'razorpayx' ? 'RAZORPAYX' : 'MANUAL')}
+                      </td>
+
+                      {/* 13. Payout Status (Badge from utils/status.jsx) */}
                       <td className="p-3">{getStatusBadge(w.status)}</td>
 
-                      {/* 11. Requested Date */}
+                      {/* 14. Last Payout */}
+                      <td className="p-3 text-slate-500 whitespace-nowrap">
+                        {w.completedAt ? formatDate(w.completedAt) : (w.updatedAt ? formatDate(w.updatedAt) : '—')}
+                      </td>
+
+                      {/* 15. Retry Status */}
+                      <td className="p-3 text-slate-600 font-medium">
+                        {w.retryCount !== undefined ? `${w.retryCount} Retries` : (payoutMode === 'razorpayx' ? '0 Retries' : 'N/A')}
+                      </td>
+
+                      {/* 16. Requested Date */}
                       <td className="p-3 text-slate-400 whitespace-nowrap">{formatDate(w.createdAt)}</td>
 
-                      {/* 12. Approved Date */}
+                      {/* 17. Approved Date */}
                       <td className="p-3 text-slate-400 whitespace-nowrap">{w.approvedAt || w.processedAt ? formatDate(w.approvedAt || w.processedAt) : 'Pending'}</td>
 
-                      {/* 13. Transferred Date */}
+                      {/* 18. Transferred Date */}
                       <td className="p-3 text-slate-400 whitespace-nowrap">{w.transferDate || w.completedAt ? formatDate(w.transferDate || w.completedAt) : 'Pending'}</td>
 
-                      {/* 14. UTR Number */}
+                      {/* 19. UTR Number */}
                       <td className="p-3 font-mono text-slate-600 font-bold">{w.utrNo || w.transactionReference || '—'}</td>
 
-                      {/* 15. Payment Mode */}
-                      <td className="p-3 font-mono uppercase text-slate-500">{w.paymentMethod || w.withdrawalType || 'BANKTRANSFER'}</td>
-
-                      {/* 16. Processed By */}
+                      {/* 20. Processed By */}
                       <td className="p-3 text-slate-600">{w.admin?.name || 'Admin'}</td>
 
-                      {/* 17. Last Updated */}
+                      {/* 21. Last Updated */}
                       <td className="p-3 text-slate-400 whitespace-nowrap">{formatDate(w.updatedAt || w.createdAt)}</td>
 
-                      {/* 18. Actions */}
+                      {/* 22. Actions */}
                       <td className="p-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleView(w)}
-                            className="inline-flex items-center px-2.5 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-700 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs"
+                            className="inline-flex items-center px-2.5 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-700 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                           >
                             <Eye size={13} className="mr-1" /> View Details
                           </button>
@@ -602,13 +654,13 @@ const AdminPayout = () => {
                             <>
                               <button
                                 onClick={() => { setSelectedWithdrawal(w); setApproveForm({ utrNo: w.utrNo || w.transactionReference || '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' }); setShowApproveModal(true); }}
-                                className="inline-flex items-center px-2.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-all shadow-2xs"
+                                className="inline-flex items-center px-2.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                               >
                                 <Check size={13} className="mr-1" /> Approve
                               </button>
                               <button
                                 onClick={() => { setSelectedWithdrawal(w); setRejectReason(''); setShowRejectModal(true); }}
-                                className="inline-flex items-center px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs"
+                                className="inline-flex items-center px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                               >
                                 <X size={13} className="mr-1" /> Reject
                               </button>
@@ -704,6 +756,8 @@ const AdminPayout = () => {
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
         entityData={selectedDetails}
+        payoutMode={payoutMode}
+        openInvestigationDrawer={openInvestigationDrawer}
       />
 
       {/* ══ DIRECT PAYOUT MODAL ══ */}

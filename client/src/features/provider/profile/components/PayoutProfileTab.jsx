@@ -1,0 +1,970 @@
+import { useState, useEffect } from 'react';
+import { 
+  CreditCard, QrCode, CheckCircle2, AlertTriangle, Edit3, Trash2, 
+  ShieldCheck, Loader2, PlusCircle, Check, DollarSign, Clock, 
+  Send, Eye, Bell, XCircle, ArrowUpRight, Lock, Activity
+} from 'lucide-react';
+import * as ProviderService from '../../../../services/ProviderService';
+import * as SystemService from '../../../../services/SystemService';
+import { formatCurrency, formatDate } from '../../../../utils/format';
+import { getWithdrawalStatusBadge } from '../../../../utils/status';
+import { IfscBankDetails } from '../../../../components/IfscBankDetails';
+
+const PayoutProfileTab = ({ showToast }) => {
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [withdrawing, setWithdrawing] = useState(false);
+    
+    const [payoutMode, setPayoutMode] = useState('manual');
+    const [payoutSettings, setPayoutSettings] = useState({});
+    
+    const [walletData, setWalletData] = useState({
+        availableBalance: 0,
+        totalWithdrawn: 0,
+        pendingWithdrawals: 0,
+        lastSettlementAmount: 0,
+        lastSettlementDate: null
+    });
+    
+    const [recentWithdrawals, setRecentWithdrawals] = useState([]);
+    const [notifications, setNotifications] = useState([]);
+    
+    const [bankDetails, setBankDetails] = useState({
+        accountNo: '',
+        ifsc: '',
+        bankName: '',
+        accountName: '',
+        upiId: '',
+        verified: false,
+        bankVerificationStatus: 'pending',
+        bankRejectReason: '',
+        payoutEnabled: true,
+        defaultMethod: 'bank_account'
+    });
+
+    const [modal, setModal] = useState({
+        isOpen: false,
+        type: 'bank_account',
+    });
+
+    const [selectedWithdrawalDetail, setSelectedWithdrawalDetail] = useState(null);
+
+    const [formData, setFormData] = useState({
+        accountNo: '',
+        ifsc: '',
+        bankName: '',
+        accountName: '',
+        upiId: '',
+        district: '',
+        city: '',
+        address: ''
+    });
+
+    // Withdrawal Form State
+    const [withdrawForm, setWithdrawForm] = useState({
+        amount: '',
+        method: 'bank_account'
+    });
+
+    const fetchPayoutDetails = async () => {
+        try {
+            setLoading(true);
+            const [profileRes, dashboardRes, systemRes] = await Promise.all([
+                ProviderService.getProfile().catch(() => ({ data: {} })),
+                ProviderService.getDashboardData().catch(() => ({ data: {} })),
+                SystemService.getSystemSetting().catch(() => ({ data: {} }))
+            ]);
+
+            const details = profileRes.data?.data?.bankDetails || profileRes.data?.bankDetails || {};
+            const providerName = profileRes.data?.data?.name || profileRes.data?.name || '';
+            const status = details.bankVerificationStatus || (details.verified ? 'verified' : 'pending');
+
+            const preferred = details.preferredMethod || details.defaultMethod || 'bank_account';
+
+            setBankDetails({
+                accountNo: details.accountNo || '',
+                ifsc: details.ifsc || '',
+                bankName: details.bankName || '',
+                accountName: details.accountName || providerName || '',
+                upiId: details.upiId || '',
+                verified: !!details.verified,
+                bankVerificationStatus: status,
+                bankRejectReason: details.bankRejectReason || '',
+                payoutEnabled: details.payoutEnabled !== false,
+                defaultMethod: preferred
+            });
+
+            setWithdrawForm(prev => ({ ...prev, method: preferred }));
+
+            if (dashboardRes.data?.data) {
+                const dash = dashboardRes.data.data;
+                const wallet = dash.wallet || dash.profile?.wallet || {};
+                const list = dash.recentWithdrawals || dash.withdrawals || [];
+                const completedList = list.filter(w => w.status === 'completed' || w.status === 'paid');
+                const lastCompleted = completedList[0] || null;
+
+                setWalletData({
+                    availableBalance: wallet.availableBalance || wallet.currentBalance || 0,
+                    totalWithdrawn: wallet.totalWithdrawn || wallet.releasedPayouts || 0,
+                    pendingWithdrawals: wallet.pendingWithdrawals || 0,
+                    lastSettlementAmount: lastCompleted?.amount || 0,
+                    lastSettlementDate: lastCompleted?.completedAt || lastCompleted?.updatedAt || null
+                });
+                
+                setRecentWithdrawals(list);
+                
+                // Extract payout notifications if available
+                const allNotifs = dash.notifications || [];
+                const payoutNotifs = allNotifs.filter(n => 
+                    (n.title && n.title.toLowerCase().includes('bank')) ||
+                    (n.title && n.title.toLowerCase().includes('payout')) ||
+                    (n.title && n.title.toLowerCase().includes('withdrawal')) ||
+                    (n.message && n.message.toLowerCase().includes('bank')) ||
+                    (n.message && n.message.toLowerCase().includes('payout'))
+                );
+                setNotifications(payoutNotifs.slice(0, 5));
+            }
+
+            if (systemRes.data?.data?.payoutSettings) {
+                const pSet = systemRes.data.data.payoutSettings;
+                setPayoutSettings(pSet);
+                setPayoutMode(pSet.mode || 'manual');
+            }
+        } catch (error) {
+            console.error('Fetch payout profile error:', error);
+            if (showToast) showToast('Failed to load payout profile details', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPayoutDetails();
+    }, []);
+
+    const handleOpenModal = (type) => {
+        setModal({ isOpen: true, type });
+        if (type === 'bank_account') {
+            setFormData({
+                accountNo: bankDetails.accountNo || '',
+                ifsc: bankDetails.ifsc || '',
+                bankName: bankDetails.bankName || '',
+                accountName: bankDetails.accountName || '',
+                upiId: bankDetails.upiId || ''
+            });
+        } else {
+            setFormData({
+                accountNo: bankDetails.accountNo || '',
+                ifsc: bankDetails.ifsc || '',
+                bankName: bankDetails.bankName || '',
+                accountName: bankDetails.accountName || '',
+                upiId: bankDetails.upiId || ''
+            });
+        }
+    };
+
+    const handleCloseModal = () => {
+        setModal({ isOpen: false, type: 'bank_account' });
+    };
+
+    const handleSave = async (e) => {
+        e.preventDefault();
+        try {
+            setSaving(true);
+            const payload = {
+                accountName: formData.accountName.trim()
+            };
+
+            if (modal.type === 'bank_account') {
+                if (!formData.accountNo || !/^[0-9]{9,18}$/.test(formData.accountNo.trim())) {
+                    if (showToast) showToast('Please enter a valid 9-18 digit account number', 'error');
+                    setSaving(false);
+                    return;
+                }
+                if (!formData.ifsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifsc.trim().toUpperCase())) {
+                    if (showToast) showToast('Please enter a valid 11-character IFSC code', 'error');
+                    setSaving(false);
+                    return;
+                }
+                payload.accountNo = formData.accountNo.trim();
+                payload.ifsc = formData.ifsc.trim().toUpperCase();
+                payload.bankName = formData.bankName.trim();
+            } else {
+                if (!formData.upiId || !/^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/.test(formData.upiId.trim())) {
+                    if (showToast) showToast('Please enter a valid UPI ID (e.g. name@bank)', 'error');
+                    setSaving(false);
+                    return;
+                }
+                payload.upiId = formData.upiId.trim();
+            }
+
+            const res = await ProviderService.updateProfile(payload);
+
+            if (res.data?.success) {
+                if (showToast) showToast(res.data.message || 'Payout profile updated. Re-submitted for Admin verification.', 'success');
+                handleCloseModal();
+                fetchPayoutDetails();
+            }
+        } catch (error) {
+            console.error('Save payout error:', error);
+            const msg = error.response?.data?.message || 'Failed to save payout details';
+            if (showToast) showToast(msg, 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async (type) => {
+        if (!window.confirm(`Are you sure you want to remove your ${type === 'bank_account' ? 'Bank Account' : 'UPI ID'}?`)) return;
+        try {
+            setSaving(true);
+            const payload = type === 'bank_account' ? { accountNo: '', ifsc: '', bankName: '' } : { upiId: '' };
+            const res = await ProviderService.updateProfile(payload);
+            if (res.data?.success) {
+                if (showToast) showToast('Payment destination removed', 'success');
+                fetchPayoutDetails();
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            if (showToast) showToast('Failed to remove payout destination', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleSetDefault = async (method) => {
+        try {
+            setSaving(true);
+            const res = await ProviderService.updateProfile({ preferredMethod: method });
+            if (res.data?.success) {
+                if (showToast) showToast('Preferred payout method updated', 'success');
+                fetchPayoutDetails();
+            }
+        } catch (error) {
+            console.error('Set default error:', error);
+            const msg = error.response?.data?.message || 'Failed to change preferred payout method';
+            if (showToast) showToast(msg, 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleWithdrawSubmit = async (e) => {
+        e.preventDefault();
+        const amt = Number(withdrawForm.amount);
+        const minLimit = payoutSettings.minWithdrawalAmount || 500;
+        const maxLimit = payoutSettings.maxWithdrawalAmount || 100000;
+
+        if (!amt || amt <= 0) {
+            if (showToast) showToast('Please enter a valid withdrawal amount', 'error');
+            return;
+        }
+        if (amt < minLimit) {
+            if (showToast) showToast(`Minimum withdrawal amount is ${formatCurrency(minLimit)}`, 'error');
+            return;
+        }
+        if (amt > maxLimit) {
+            if (showToast) showToast(`Maximum single withdrawal limit is ${formatCurrency(maxLimit)}`, 'error');
+            return;
+        }
+        if (amt > walletData.availableBalance) {
+            if (showToast) showToast('Insufficient wallet balance', 'error');
+            return;
+        }
+        if (!isBankVerified) {
+            if (showToast) showToast('Bank account verification is required before withdrawing', 'error');
+            return;
+        }
+
+        try {
+            setWithdrawing(true);
+            const res = await ProviderService.requestWithdrawal({
+                amount: amt,
+                withdrawalMethod: withdrawForm.method
+            });
+            if (res.data?.success) {
+                if (showToast) showToast(res.data.message || 'Withdrawal request submitted successfully', 'success');
+                setWithdrawForm(prev => ({ ...prev, amount: '' }));
+                fetchPayoutDetails();
+            }
+        } catch (err) {
+            console.error('Withdraw request error:', err);
+            const msg = err.response?.data?.error || err.response?.data?.message || 'Failed to submit withdrawal request';
+            if (showToast) showToast(msg, 'error');
+        } finally {
+            setWithdrawing(false);
+        }
+    };
+
+    const maskAccount = (num) => {
+        if (!num || num.length < 4) return '••••';
+        return `•••• •••• ${num.slice(-4)}`;
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+        );
+    }
+
+    const hasBank = !!bankDetails.accountNo;
+    const hasUpi = !!bankDetails.upiId;
+    const minLimit = payoutSettings.minWithdrawalAmount || 500;
+    const maxLimit = payoutSettings.maxWithdrawalAmount || 100000;
+    const isBankVerified = Boolean(
+        (bankDetails.verified || bankDetails.bankVerificationStatus === 'verified') &&
+        bankDetails.payoutEnabled !== false
+    );
+    const isWithdrawalActive = isBankVerified;
+
+    return (
+        <div className="space-y-6 font-inter">
+            
+            {/* 1. SECTION 1: PAYOUT STATUS */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2 font-poppins">
+                            <CreditCard className="w-6 h-6 text-primary" />
+                            Payout Profile & Withdrawal Center
+                        </h2>
+                        <p className="text-xs text-slate-500 mt-1 font-inter">
+                            Enterprise Payout Readiness & Settlement Dashboard (Blinkit, Zepto & Urban Company Standard)
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 text-xs font-extrabold rounded-full border ${
+                            payoutMode === 'razorpayx' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                            {payoutMode === 'razorpayx' ? 'Direct Gateway Transfer' : 'Standard Manual Mode'}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-inter">
+                    {/* Payout Mode */}
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Payout Mode</span>
+                        <span className="font-extrabold text-slate-900 text-sm mt-1 block uppercase">
+                            {payoutMode === 'razorpayx' ? 'RazorpayX Direct' : 'Manual Approval'}
+                        </span>
+                    </div>
+
+                    {/* Verification Status */}
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Verification Status</span>
+                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1.5 ${
+                            bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified
+                                ? 'text-emerald-600'
+                                : bankDetails.bankVerificationStatus === 'rejected'
+                                    ? 'text-rose-600'
+                                    : 'text-amber-600'
+                        }`}>
+                            {bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified ? (
+                                <><ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified ✓</>
+                            ) : bankDetails.bankVerificationStatus === 'rejected' ? (
+                                <><XCircle className="w-4 h-4 text-rose-600" /> Verification Rejected</>
+                            ) : (
+                                <><AlertTriangle className="w-4 h-4 text-amber-600" /> Pending Admin Review</>
+                            )}
+                        </span>
+                    </div>
+
+                    {/* Withdrawal Status */}
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Withdrawal Status</span>
+                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1 ${
+                            isWithdrawalActive ? 'text-emerald-600' : 'text-amber-600'
+                        }`}>
+                            {isWithdrawalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Lock className="w-4 h-4 text-amber-600" />}
+                            {isWithdrawalActive ? 'Active / Ready' : 'Locked (Pending Verification)'}
+                        </span>
+                    </div>
+
+                    {/* Preferred Method */}
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Preferred Method</span>
+                        <span className="font-extrabold text-slate-900 text-sm mt-1 block uppercase">
+                            {bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi' ? 'UPI VPA' : 'Bank Account'}
+                        </span>
+                    </div>
+                </div>
+
+                {bankDetails.bankVerificationStatus === 'rejected' && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2">
+                        <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <div>
+                            <strong>Verification Rejection Reason:</strong> {bankDetails.bankRejectReason || 'Submitted details do not match bank record. Please update and re-submit.'}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* 2. SECTION 2: WALLET SUMMARY */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Available Balance</span>
+                    <span className="text-2xl font-black text-slate-900 mt-1 block font-mono">
+                        {formatCurrency(walletData.availableBalance)}
+                    </span>
+                </div>
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Pending Withdrawal</span>
+                    <span className="text-2xl font-black text-amber-600 mt-1 block font-mono">
+                        {formatCurrency(walletData.pendingWithdrawals)}
+                    </span>
+                </div>
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Total Withdrawn</span>
+                    <span className="text-2xl font-black text-emerald-600 mt-1 block font-mono">
+                        {formatCurrency(walletData.totalWithdrawn)}
+                    </span>
+                </div>
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Last Settlement</span>
+                    <span className="text-lg font-black text-slate-800 mt-1 block font-mono">
+                        {walletData.lastSettlementAmount ? formatCurrency(walletData.lastSettlementAmount) : '—'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
+                        {walletData.lastSettlementDate ? formatDate(walletData.lastSettlementDate) : 'No settlement yet'}
+                    </span>
+                </div>
+            </div>
+
+            {/* 3. SECTION 3: PAYMENT DESTINATION (BANK & UPI CARDS) */}
+            <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-primary" /> Payment Destinations
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Bank Account Card */}
+                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${
+                        bankDetails.defaultMethod === 'bank_account' && hasBank 
+                            ? 'border-primary shadow-md ring-2 ring-primary/10' 
+                            : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
+                    }`}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                    <CreditCard className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-900 text-sm">Bank Account</h4>
+                                    <span className="text-[11px] text-slate-500">Direct Transfer (IMPS / NEFT)</span>
+                                </div>
+                            </div>
+
+                            {bankDetails.defaultMethod === 'bank_account' && hasBank && (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                                    <Check className="w-3 h-3" /> Preferred
+                                </span>
+                            )}
+                        </div>
+
+                        {hasBank ? (
+                            <div className="space-y-3 bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Account Holder</span>
+                                    <span className="font-bold text-slate-900">{bankDetails.accountName || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Account Number</span>
+                                    <span className="font-mono font-bold text-slate-900 tracking-wider">
+                                        {maskAccount(bankDetails.accountNo)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">IFSC Code</span>
+                                    <span className="font-mono font-bold text-slate-900">{bankDetails.ifsc || 'N/A'}</span>
+                                </div>
+                                {bankDetails.bankName && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Bank Name</span>
+                                        <span className="font-bold text-slate-900 truncate max-w-[180px]">{bankDetails.bankName}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between border-t border-slate-200/60 pt-2">
+                                    <span className="text-slate-500">Verification Status</span>
+                                    <span className={`font-bold ${isBankVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                        {isBankVerified ? 'Verified ✓' : 'Pending Admin Verification'}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                                <p className="text-xs text-slate-500 mb-3">No Bank Account linked yet.</p>
+                                <button
+                                    onClick={() => handleOpenModal('bank_account')}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all shadow-sm cursor-pointer"
+                                >
+                                    <PlusCircle className="w-4 h-4" /> Add Bank Account
+                                </button>
+                            </div>
+                        )}
+
+                        {hasBank && (
+                            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => handleOpenModal('bank_account')}
+                                        className="p-2 text-slate-600 hover:text-primary hover:bg-slate-100 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <Edit3 className="w-4 h-4" /> Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete('bank_account')}
+                                        className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <Trash2 className="w-4 h-4" /> Delete
+                                    </button>
+                                </div>
+                                {bankDetails.defaultMethod !== 'bank_account' && (
+                                    <button
+                                        onClick={() => handleSetDefault('bank_account')}
+                                        disabled={saving}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 hover:border-primary text-slate-700 hover:text-primary transition-colors cursor-pointer"
+                                    >
+                                        Make Preferred
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* UPI VPA Card */}
+                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${
+                        (bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi') && hasUpi 
+                            ? 'border-primary shadow-md ring-2 ring-primary/10' 
+                            : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
+                    }`}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                                    <QrCode className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-900 text-sm">UPI Payout (VPA)</h4>
+                                    <span className="text-[11px] text-slate-500">Instant UPI Transfer</span>
+                                </div>
+                            </div>
+
+                            {(bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi') && hasUpi && (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                    <Check className="w-3 h-3" /> Preferred
+                                </span>
+                            )}
+                        </div>
+
+                        {hasUpi ? (
+                            <div className="space-y-3 bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Account Holder</span>
+                                    <span className="font-bold text-slate-900">{bankDetails.accountName || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">UPI ID / VPA</span>
+                                    <span className="font-mono font-bold text-slate-900 tracking-wide">
+                                        {bankDetails.upiId}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between border-t border-slate-200/60 pt-2">
+                                    <span className="text-slate-500">Verification Status</span>
+                                    <span className={`font-bold ${isBankVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                        {isBankVerified ? 'Active for UPI Payout' : 'Pending Verification'}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                                <p className="text-xs text-slate-500 mb-3">No UPI ID linked yet.</p>
+                                <button
+                                    onClick={() => handleOpenModal('vpa')}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer"
+                                >
+                                    <PlusCircle className="w-4 h-4" /> Add UPI ID
+                                </button>
+                            </div>
+                        )}
+
+                        {hasUpi && (
+                            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => handleOpenModal('vpa')}
+                                        className="p-2 text-slate-600 hover:text-primary hover:bg-slate-100 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <Edit3 className="w-4 h-4" /> Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete('vpa')}
+                                        className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <Trash2 className="w-4 h-4" /> Delete
+                                    </button>
+                                </div>
+                                {bankDetails.defaultMethod !== 'vpa' && bankDetails.defaultMethod !== 'upi' && (
+                                    <button
+                                        onClick={() => handleSetDefault('vpa')}
+                                        disabled={saving}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 hover:border-emerald-600 text-slate-700 hover:text-emerald-700 transition-colors cursor-pointer"
+                                    >
+                                        Make Preferred
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* 4. SECTION 4: WITHDRAWAL REQUEST FORM */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 font-poppins">
+                        <Send className="w-4.5 h-4.5 text-primary" /> Initiate Withdrawal Request
+                    </h3>
+                    <span className="text-xs text-slate-400 font-medium">
+                        Processing Mode: <strong className="uppercase text-slate-700">{payoutMode}</strong>
+                    </span>
+                </div>
+
+                <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available Balance</span>
+                            <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">{formatCurrency(walletData.availableBalance)}</span>
+                        </div>
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Min Withdrawal Limit</span>
+                            <span className="text-lg font-black text-slate-800 font-mono mt-0.5 block">{formatCurrency(minLimit)}</span>
+                        </div>
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Max Single Request Limit</span>
+                            <span className="text-lg font-black text-slate-800 font-mono mt-0.5 block">{formatCurrency(maxLimit)}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">Withdrawal Amount (₹) *</label>
+                            <input
+                                type="number"
+                                required
+                                min={minLimit}
+                                max={maxLimit}
+                                value={withdrawForm.amount}
+                                onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value })}
+                                placeholder={`Enter amount between ${minLimit} and ${maxLimit}`}
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">Preferred Destination Method *</label>
+                            <select
+                                value={withdrawForm.method}
+                                onChange={(e) => setWithdrawForm({ ...withdrawForm, method: e.target.value })}
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                            >
+                                <option value="bank_account">Bank Account ({hasBank ? maskAccount(bankDetails.accountNo) : 'Not set'})</option>
+                                <option value="upi">UPI ID ({hasUpi ? bankDetails.upiId : 'Not set'})</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-100">
+                        <p className="text-xs text-slate-500">
+                            {!isBankVerified ? (
+                                <span className="text-amber-600 font-bold">⚠️ Bank details must be verified by Admin before withdrawing.</span>
+                            ) : walletData.availableBalance < minLimit ? (
+                                <span className="text-amber-600 font-bold">⚠️ Minimum wallet balance of {formatCurrency(minLimit)} required.</span>
+                            ) : (
+                                <span>Requests are processed based on system settings ({payoutMode.toUpperCase()}).</span>
+                            )}
+                        </p>
+
+                        <button
+                            type="submit"
+                            disabled={withdrawing || !isBankVerified || walletData.availableBalance < minLimit}
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
+                        >
+                            {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            Submit Withdrawal Request
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {/* 5. SECTION 5: WITHDRAWAL HISTORY */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 font-poppins">
+                        <DollarSign className="w-4 h-4 text-primary" /> Withdrawal History
+                    </h3>
+                    <span className="text-xs text-slate-400 font-medium">{recentWithdrawals.length} transactions</span>
+                </div>
+
+                {recentWithdrawals.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs font-inter">
+                        No withdrawal transactions recorded yet.
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-600 font-inter">
+                            <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold">
+                                <tr>
+                                    <th className="p-3">Withdrawal ID</th>
+                                    <th className="p-3">Amount</th>
+                                    <th className="p-3">Method</th>
+                                    <th className="p-3">Status</th>
+                                    <th className="p-3">Transaction ID / UTR</th>
+                                    <th className="p-3">Requested On</th>
+                                    <th className="p-3">Completed On</th>
+                                    <th className="p-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                                {recentWithdrawals.map((w, idx) => {
+                                    const badge = getWithdrawalStatusBadge(w.status);
+                                    return (
+                                        <tr key={w._id || idx} className="hover:bg-slate-50/60">
+                                            <td className="p-3 font-mono text-teal-700 font-bold">{w.transactionReference || `#${(w._id || '').slice(-6)}`}</td>
+                                            <td className="p-3 font-bold text-slate-900 font-mono">{formatCurrency(w.amount || 0)}</td>
+                                            <td className="p-3 uppercase text-[11px] font-bold text-slate-700">{w.withdrawalMethod || w.paymentMethod || 'Bank'}</td>
+                                            <td className="p-3">
+                                                <span className={badge.className}>{badge.label}</span>
+                                            </td>
+                                            <td className="p-3 font-mono text-slate-600">{w.utrNo || w.notes || '—'}</td>
+                                            <td className="p-3 text-slate-500 whitespace-nowrap">{formatDate(w.createdAt)}</td>
+                                            <td className="p-3 text-slate-500 whitespace-nowrap">{w.completedAt ? formatDate(w.completedAt) : '—'}</td>
+                                            <td className="p-3 text-right">
+                                                <button
+                                                    onClick={() => setSelectedWithdrawalDetail(w)}
+                                                    className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
+                                                    title="View Details"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* 6. SECTION 6: VERIFICATION TIMELINE */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-3 border-slate-100 flex items-center gap-2 font-poppins">
+                    <Activity className="w-4 h-4 text-primary" /> Payout Readiness Lifecycle
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs font-inter">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold bg-emerald-500 text-white shrink-0">1</div>
+                        <div>
+                            <span className="font-bold text-slate-800 block">Profile Approved</span>
+                            <span className="text-[10px] text-emerald-600 font-bold">Complete ✓</span>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${hasBank || hasUpi ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>2</div>
+                        <div>
+                            <span className="font-bold text-slate-800 block">Bank Added</span>
+                            <span className="text-[10px] text-slate-400">{hasBank || hasUpi ? 'Complete ✓' : 'Pending'}</span>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>3</div>
+                        <div>
+                            <span className="font-bold text-slate-800 block">Admin Verification</span>
+                            <span className="text-[10px] text-slate-400">{bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified ? 'Complete ✓' : 'In Review'}</span>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${isBankVerified ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>4</div>
+                        <div>
+                            <span className="font-bold text-slate-800 block">Verified</span>
+                            <span className="text-[10px] text-slate-400">{isBankVerified ? 'Verified ✓' : 'Pending'}</span>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${isWithdrawalActive ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>5</div>
+                        <div>
+                            <span className="font-bold text-slate-800 block">Withdrawal Enabled</span>
+                            <span className="text-[10px] text-slate-400">{isWithdrawalActive ? 'Enabled ✓' : 'Locked'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 7. SECTION 7: RECENT NOTIFICATIONS */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 font-inter">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-2 border-slate-100 flex items-center gap-2 font-poppins">
+                    <Bell className="w-4 h-4 text-primary" /> Recent Payout Notifications
+                </h3>
+
+                {notifications.length === 0 ? (
+                    <div className="py-4 text-center text-slate-400 text-xs font-inter">
+                        No recent payout notifications recorded.
+                    </div>
+                ) : (
+                    <div className="space-y-2 text-xs font-inter">
+                        {notifications.map((n, idx) => (
+                            <div key={n._id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
+                                <Bell className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <span className="font-bold text-slate-900 block">{n.title || 'Payout Notification'}</span>
+                                    <span className="text-slate-600 text-xs mt-0.5 block">{n.message}</span>
+                                    <span className="text-[10px] text-slate-400 block mt-1">{formatDate(n.createdAt)}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* WITHDRAWAL DETAIL MODAL */}
+            {selectedWithdrawalDetail && (
+                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 font-inter">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 font-poppins">
+                                <DollarSign className="w-5 h-5 text-primary" /> Withdrawal Details
+                            </h3>
+                            <button onClick={() => setSelectedWithdrawalDetail(null)} className="text-slate-400 hover:text-slate-600 text-sm font-semibold cursor-pointer">✕</button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div className="flex justify-between py-1 border-b border-slate-100">
+                                <span className="text-slate-500">Transaction Reference</span>
+                                <span className="font-mono font-bold text-slate-900">{selectedWithdrawalDetail.transactionReference || `#${(selectedWithdrawalDetail._id || '').slice(-6)}`}</span>
+                            </div>
+                            <div className="flex justify-between py-1 border-b border-slate-100">
+                                <span className="text-slate-500">Amount</span>
+                                <span className="font-mono font-bold text-slate-900 text-sm">{formatCurrency(selectedWithdrawalDetail.amount || 0)}</span>
+                            </div>
+                            <div className="flex justify-between py-1 border-b border-slate-100">
+                                <span className="text-slate-500">Method</span>
+                                <span className="font-bold text-slate-800 uppercase">{selectedWithdrawalDetail.withdrawalMethod || 'Bank'}</span>
+                            </div>
+                            <div className="flex justify-between py-1 border-b border-slate-100">
+                                <span className="text-slate-500">Status</span>
+                                <span className={getWithdrawalStatusBadge(selectedWithdrawalDetail.status).className}>
+                                    {getWithdrawalStatusBadge(selectedWithdrawalDetail.status).label}
+                                </span>
+                            </div>
+                            <div className="flex justify-between py-1 border-b border-slate-100">
+                                <span className="text-slate-500">UTR / Reference No</span>
+                                <span className="font-mono text-slate-900">{selectedWithdrawalDetail.utrNo || selectedWithdrawalDetail.notes || '—'}</span>
+                            </div>
+                            <div className="flex justify-between py-1 border-b border-slate-100">
+                                <span className="text-slate-500">Requested On</span>
+                                <span className="text-slate-800">{formatDate(selectedWithdrawalDetail.createdAt)}</span>
+                            </div>
+                            {selectedWithdrawalDetail.completedAt && (
+                                <div className="flex justify-between py-1 border-b border-slate-100">
+                                    <span className="text-slate-500">Completed On</span>
+                                    <span className="text-slate-800">{formatDate(selectedWithdrawalDetail.completedAt)}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <button
+                                onClick={() => setSelectedWithdrawalDetail(null)}
+                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-colors cursor-pointer"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL FOR ADD / EDIT ACCOUNT */}
+            {modal.isOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 animate-in fade-in zoom-in duration-150 font-inter">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 font-poppins">
+                                {modal.type === 'bank_account' ? <CreditCard className="w-5 h-5 text-primary" /> : <QrCode className="w-5 h-5 text-emerald-600" />}
+                                {modal.type === 'bank_account' ? 'Bank Account Details' : 'UPI ID Details'}
+                            </h3>
+                            <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 text-sm font-semibold cursor-pointer">✕</button>
+                        </div>
+
+                        <form onSubmit={handleSave} className="space-y-4">
+                            {modal.type === 'bank_account' ? (
+                                <IfscBankDetails
+                                    value={{
+                                        ifsc: formData.ifsc,
+                                        accountNo: formData.accountNo,
+                                        bankName: formData.bankName
+                                    }}
+                                    onChange={(updated) => setFormData(prev => ({ ...prev, ...updated }))}
+                                    showAccountName={true}
+                                    accountNameValue={formData.accountName}
+                                    onAccountNameChange={(val) => setFormData(prev => ({ ...prev, accountName: val }))}
+                                />
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Account Holder Full Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.accountName}
+                                            onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
+                                            placeholder="Enter full name as per bank"
+                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-700 mb-1">UPI ID / VPA</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.upiId}
+                                            onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
+                                            placeholder="e.g. name@okaxis or 9876543210@paytm"
+                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseModal}
+                                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all shadow-sm cursor-pointer"
+                                >
+                                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                    Save Payout Details
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default PayoutProfileTab;

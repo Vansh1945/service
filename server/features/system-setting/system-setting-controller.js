@@ -44,6 +44,7 @@ const updateSystemSetting = async (req, res) => {
       'socialLinks',
       'bookingSettings',
       'walletSettings',
+      'payoutSettings',
       'refundSettings',
       'commissionSettings',
       'notificationSettings',

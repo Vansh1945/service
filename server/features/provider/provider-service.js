@@ -1208,6 +1208,10 @@ class ProviderService {
                         });
                     }
 
+                    const currentHistory = Array.isArray(currentProvider.bankDetails?.verificationHistory)
+                        ? currentProvider.bankDetails.verificationHistory
+                        : [];
+
                     updates.bankDetails = {
                         ...currentProvider.bankDetails,
                         ...(accountNo && { accountNo }),
@@ -1220,8 +1224,33 @@ class ProviderService {
                         }),
                         ...(bankName && !cleanIfsc && { bankName }),
                         ...(accountName && { accountName }),
-                        verified: false // Reset verification when details change
+                        verified: false,
+                        bankVerificationStatus: 'pending',
+                        payoutEnabled: false,
+                        verificationHistory: [
+                            ...currentHistory,
+                            {
+                                status: 'pending',
+                                timestamp: new Date(),
+                                updatedBy: 'provider',
+                                reason: 'Bank details updated by provider'
+                            }
+                        ]
                     };
+
+                    try {
+                        const { sendNotification } = require('../notification/notification-helper');
+                        sendNotification(
+                            currentProvider._id,
+                            'provider',
+                            'Bank Verification Submitted',
+                            'Your bank details have been submitted for verification. Payouts will be enabled once Admin approves.',
+                            'info',
+                            currentProvider._id
+                        );
+                    } catch (notifErr) {
+                        console.error('Failed to send bank submission notification:', notifErr);
+                    }
                 }
             }
 

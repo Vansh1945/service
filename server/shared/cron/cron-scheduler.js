@@ -173,6 +173,16 @@ const startCronJobs = () => {
             } catch (cleanupErr) {
                 console.error('[CronScheduler] Error cleaning up old notifications:', cleanupErr);
             }
+
+            // 5. Enterprise Auto Withdrawal Scheduler Architecture
+            try {
+                const PaymentService = require('../../features/payment/payment-service');
+                if (PaymentService && typeof PaymentService.processAutoWithdrawalScheduler === 'function') {
+                    await PaymentService.processAutoWithdrawalScheduler();
+                }
+            } catch (autoWdlErr) {
+                console.error('[CronScheduler] Error running Auto Withdrawal Scheduler:', autoWdlErr);
+            }
         } catch (error) {
             console.error('[CronScheduler] Error in cron job:', error);
         }

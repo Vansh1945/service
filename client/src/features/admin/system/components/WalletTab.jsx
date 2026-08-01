@@ -1,6 +1,7 @@
 import React from 'react';
-import { Wallet, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Wallet, ShieldCheck, RefreshCw, Clock } from 'lucide-react';
 import { ToggleSwitch, SettingInput } from './SharedComponents';
+import { formatTime } from '../../../../utils/format';
 
 const WalletTab = ({ systemSettings, handleNestedChange }) => {
   const refundSettings = systemSettings?.refundSettings || {
@@ -38,6 +39,116 @@ const WalletTab = ({ systemSettings, handleNestedChange }) => {
           checked={systemSettings.walletSettings?.refundToWalletOnly ?? false}
           onChange={(val) => handleNestedChange('walletSettings', 'refundToWalletOnly', val)}
         />
+      </div>
+
+      {/* Payout Engine Configuration Section */}
+      <div className="pt-4 border-t border-gray-100 space-y-4">
+        <div>
+          <h4 className="text-sm font-bold text-secondary font-poppins flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-primary" /> Future Payout Engine & Rules Configuration
+          </h4>
+          <p className="text-xs text-gray-500 mt-0.5 font-inter">Configure payout processing modes, automated frequency, withdrawal limits, approval thresholds, operating days, and retry rules.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Payout Mode */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-gray-700 block">Payout Operation Mode</label>
+            <select
+              value={systemSettings.payoutSettings?.mode || 'manual'}
+              onChange={(e) => handleNestedChange('payoutSettings', 'mode', e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="manual">Manual Mode (Default - Admin Approval & Bulk Export)</option>
+              <option value="razorpayx">RazorpayX Mode (Direct Automated Transfers)</option>
+            </select>
+            <p className="text-[11px] text-gray-500">Operation mode for handling provider withdrawal payouts.</p>
+          </div>
+
+          {/* Auto Withdrawal Frequency */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-gray-700 block">Automated Withdrawal Frequency</label>
+            <select
+              value={systemSettings.payoutSettings?.autoWithdrawalFrequency || 'daily'}
+              onChange={(e) => handleNestedChange('payoutSettings', 'autoWithdrawalFrequency', e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="realtime">Realtime (Instant Execution)</option>
+              <option value="daily">Daily (Batched Once Per Day)</option>
+              <option value="weekly">Weekly (Batched Once Per Week)</option>
+              <option value="monthly">Monthly (Batched End of Month)</option>
+            </select>
+            <p className="text-[11px] text-gray-500">Schedule frequency when automated payouts run.</p>
+          </div>
+
+          <ToggleSwitch
+            label="Enable Auto Withdrawal Processing"
+            description="Automatically queue and process approved payouts according to the configured frequency."
+            checked={systemSettings.payoutSettings?.autoWithdrawalEnabled ?? false}
+            onChange={(val) => handleNestedChange('payoutSettings', 'autoWithdrawalEnabled', val)}
+          />
+
+          <SettingInput
+            label="Instant Withdrawal Limit (₹)"
+            value={systemSettings.payoutSettings?.instantWithdrawalLimit ?? 5000}
+            onChange={(e) => handleNestedChange('payoutSettings', 'instantWithdrawalLimit', Number(e.target.value))}
+            type="number"
+            min="0"
+            description="Maximum threshold allowed for instant automated processing without delays."
+          />
+
+          <SettingInput
+            label="Approval Required Above Amount (₹)"
+            value={systemSettings.payoutSettings?.approvalRequiredAboveAmount ?? 10000}
+            onChange={(e) => handleNestedChange('payoutSettings', 'approvalRequiredAboveAmount', Number(e.target.value))}
+            type="number"
+            min="0"
+            description="Withdrawal requests exceeding this amount will always require explicit Admin review."
+          />
+
+          <SettingInput
+            label="Minimum Withdrawal Limit (₹)"
+            value={systemSettings.payoutSettings?.minWithdrawalAmount ?? 500}
+            onChange={(e) => handleNestedChange('payoutSettings', 'minWithdrawalAmount', Number(e.target.value))}
+            type="number"
+            min="1"
+            description="Minimum amount required for a provider to initiate a withdrawal request."
+          />
+
+          <SettingInput
+            label="Maximum Withdrawal Limit (₹)"
+            value={systemSettings.payoutSettings?.maxWithdrawalAmount ?? 100000}
+            onChange={(e) => handleNestedChange('payoutSettings', 'maxWithdrawalAmount', Number(e.target.value))}
+            type="number"
+            min="1"
+            description="Maximum single transaction withdrawal limit permitted per request."
+          />
+
+          <SettingInput
+            label={`Settlement Cut-off Time (${systemSettings.timeFormat || '12h'} format)`}
+            value={systemSettings.payoutSettings?.settlementTime || '17:00'}
+            onChange={(e) => handleNestedChange('payoutSettings', 'settlementTime', e.target.value)}
+            type="text"
+            description={`Daily operating cut-off time for payout batch settlement. Preview: ${formatTime(systemSettings.payoutSettings?.settlementTime || '17:00')} (Formatted per ${systemSettings.timeFormat || '12h'} System Setting).`}
+          />
+
+          <ToggleSwitch
+            label="Auto Retry Failed Payouts"
+            description="Automatically retry failed transfer attempts according to system retry policies."
+            checked={systemSettings.payoutSettings?.retryFailedPayout ?? true}
+            onChange={(val) => handleNestedChange('payoutSettings', 'retryFailedPayout', val)}
+          />
+
+          <SettingInput
+            label="Retry Attempts Count"
+            value={systemSettings.payoutSettings?.retryCount ?? 3}
+            onChange={(e) => handleNestedChange('payoutSettings', 'retryCount', Number(e.target.value))}
+            type="number"
+            min="0"
+            max="10"
+            description="Maximum number of automated retry attempts before marking payout as permanently failed."
+          />
+        </div>
       </div>
 
       {/* Centralized Refund Engine Rules */}

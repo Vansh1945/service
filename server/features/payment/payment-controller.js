@@ -207,6 +207,42 @@ const adminDirectPayout = async (req, res, next) => {
   }
 };
 
+const retryFailedPayout = async (req, res, next) => {
+  try {
+    await PaymentService.retryFailedPayout(req, res, next);
+  } catch (error) {
+    global.logger.error(`[paymentController.retryFailedPayout] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const holdPayout = async (req, res, next) => {
+  try {
+    await PaymentService.holdPayout(req, res, next);
+  } catch (error) {
+    global.logger.error(`[paymentController.holdPayout] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const releasePayout = async (req, res, next) => {
+  try {
+    await PaymentService.releasePayout(req, res, next);
+  } catch (error) {
+    global.logger.error(`[paymentController.releasePayout] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const reconcileStuckPayouts = async (req, res, next) => {
+  try {
+    await PaymentService.reconcileStuckPayouts(req, res, next);
+  } catch (error) {
+    global.logger.error(`[paymentController.reconcileStuckPayouts] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 
 module.exports = {
   handleWebhook,
@@ -230,5 +266,9 @@ module.exports = {
   releaseHeldEarnings,
   generateComplaintReport,
   generateRefundReport,
-  adminDirectPayout
+  adminDirectPayout,
+  retryFailedPayout,
+  holdPayout,
+  releasePayout,
+  reconcileStuckPayouts
 };

@@ -258,7 +258,15 @@ const AdminProvidersPage = () => {
           filtered = filtered.filter(p => p.profileComplete === (value === 'true'));
           break;
         case 'bankVerified':
-          filtered = filtered.filter(p => p.bankDetails?.verified === (value === 'true'));
+          filtered = filtered.filter(p => (p.bankDetails?.bankVerificationStatus === 'verified' || p.bankDetails?.verified) === (value === 'true'));
+          break;
+        case 'bankVerificationStatus':
+          if (value === 'verified') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'verified' || p.bankDetails?.verified);
+          else if (value === 'pending') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'pending' || (!p.bankDetails?.verified && p.bankDetails?.accountNo));
+          else if (value === 'rejected') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'rejected');
+          break;
+        case 'preferredMethod':
+          filtered = filtered.filter(p => (p.bankDetails?.preferredMethod || 'bank_account') === value);
           break;
         case 'hasResume':
           filtered = filtered.filter(p => !!(p.aadhaarFront && p.aadhaarBack && p.panCard && p.liveSelfie) === (value === 'true'));

@@ -27,6 +27,10 @@ router.post("/admin/payout/direct", adminAuthMiddleware, paymentController.admin
 router.get("/admin/withdrawal-requests", adminAuthMiddleware, paymentController.getAllWithdrawalRequests);
 router.put("/admin/withdrawal-request/:id/approve", adminAuthMiddleware, paymentController.approveWithdrawalRequest);
 router.put("/admin/withdrawal-request/:id/reject", adminAuthMiddleware, paymentController.rejectWithdrawalRequest);
+router.post("/admin/withdrawal-request/:id/retry", adminAuthMiddleware, paymentController.retryFailedPayout);
+router.put("/admin/withdrawal-request/:id/hold", adminAuthMiddleware, paymentController.holdPayout);
+router.put("/admin/withdrawal-request/:id/release", adminAuthMiddleware, paymentController.releasePayout);
+router.post("/admin/payouts/reconcile", adminAuthMiddleware, paymentController.reconcileStuckPayouts);
 router.get("/admin/withdrawal-report", adminAuthMiddleware, paymentController.generateWithdrawalReport);
 router.get('/admin/provider-earnings-report', adminAuthMiddleware, paymentController.generateProviderEarningsReport);
 router.get('/admin/commission-report', adminAuthMiddleware, paymentController.getCommissionReport);

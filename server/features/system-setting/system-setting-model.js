@@ -291,6 +291,59 @@ const systemConfigSchema = new mongoose.Schema(
         default: true
       }
     },
+    payoutSettings: {
+      mode: {
+        type: String,
+        enum: ['manual', 'razorpayx', 'hybrid'],
+        default: 'manual'
+      },
+      autoWithdrawalEnabled: {
+        type: Boolean,
+        default: false
+      },
+      autoWithdrawalFrequency: {
+        type: String,
+        enum: ['realtime', 'daily', 'weekly', 'biweekly', 'monthly'],
+        default: 'daily'
+      },
+      instantWithdrawalLimit: {
+        type: Number,
+        default: 5000
+      },
+      approvalRequiredAboveAmount: {
+        type: Number,
+        default: 10000
+      },
+      minWithdrawalAmount: {
+        type: Number,
+        default: 500
+      },
+      maxWithdrawalAmount: {
+        type: Number,
+        default: 100000
+      },
+      workingDays: {
+        type: [{ type: String, enum: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] }],
+        default: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+      },
+      settlementTime: {
+        type: String,
+        default: '17:00'
+      },
+      retryFailedPayout: {
+        type: Boolean,
+        default: true
+      },
+      retryCount: {
+        type: Number,
+        default: 3
+      },
+      defaultPayoutMode: {
+        type: String,
+        enum: ['IMPS', 'NEFT', 'RTGS', 'UPI'],
+        default: 'IMPS'
+      }
+    },
     refundSettings: {
       autoRefundEnabled: {
         type: Boolean,

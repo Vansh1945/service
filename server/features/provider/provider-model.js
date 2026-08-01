@@ -246,6 +246,12 @@ const providerSchema = new mongoose.Schema({
         default: null
     },
 
+    // RazorpayX Payout Contact
+    razorpayContactId: {
+        type: String,
+        default: null
+    },
+
     // Bank Details
     bankDetails: {
         accountNo: {
@@ -276,6 +282,52 @@ const providerSchema = new mongoose.Schema({
         verified: {
             type: Boolean,
             default: false
+        },
+        bankVerificationStatus: {
+            type: String,
+            enum: ['pending', 'verified', 'rejected'],
+            default: 'pending'
+        },
+        bankVerifiedAt: {
+            type: Date,
+            default: null
+        },
+        bankVerifiedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Admin',
+            default: null
+        },
+        bankRejectReason: {
+            type: String,
+            default: null
+        },
+        payoutEnabled: {
+            type: Boolean,
+            default: false
+        },
+        preferredMethod: {
+            type: String,
+            enum: ['bank_account', 'upi'],
+            default: 'bank_account'
+        },
+        verificationHistory: [{
+            status: { type: String, enum: ['pending', 'verified', 'rejected'] },
+            timestamp: { type: Date, default: Date.now },
+            updatedBy: { type: String, default: 'provider' },
+            verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+            reason: { type: String, default: null }
+        }],
+        razorpayFundAccountId: {
+            type: String,
+            default: null
+        },
+        upiId: {
+            type: String,
+            default: null
+        },
+        razorpayVpaFundAccountId: {
+            type: String,
+            default: null
         }
     },
 

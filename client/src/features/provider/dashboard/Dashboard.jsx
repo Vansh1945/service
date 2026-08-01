@@ -365,6 +365,66 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* Phase 8: Payout Readiness Status Card */}
+        {profile && (
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shrink-0 ${
+                profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified
+                  ? 'bg-emerald-600'
+                  : profile.bankDetails?.bankVerificationStatus === 'rejected'
+                    ? 'bg-rose-600'
+                    : 'bg-amber-500'
+              }`}>
+                <FiCreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Payout Readiness Status</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : profile.bankDetails?.bankVerificationStatus === 'rejected'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified
+                      ? 'Bank Verified ✓'
+                      : profile.bankDetails?.bankVerificationStatus === 'rejected'
+                        ? 'Bank Rejected ✕'
+                        : 'Pending Verification'}
+                  </span>
+                </div>
+                <p className="text-neutral-600 text-xs mt-0.5">
+                  Preferred Method: <strong className="uppercase text-neutral-800">{profile.bankDetails?.preferredMethod || 'Bank Account'}</strong>
+                  {profile.bankDetails?.bankVerificationStatus === 'rejected' && (
+                    <span className="text-rose-600 font-medium ml-2">Reason: {profile.bankDetails?.bankRejectReason || 'Verification rejected'}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-neutral-100">
+              <div className="text-left md:text-right">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Withdrawal Ready</span>
+                <span className={`text-xs font-extrabold ${
+                  (profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified) && profile.payoutEnabled !== false
+                    ? 'text-emerald-600'
+                    : 'text-amber-600'
+                }`}>
+                  {(profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified) && profile.payoutEnabled !== false ? 'Yes (Active)' : 'No (Pending Admin Verification)'}
+                </span>
+              </div>
+              <Link
+                to="/provider/profile"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-neutral-900 text-white hover:bg-neutral-800 transition-all shadow-xs"
+              >
+                Manage Payout Profile
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           <StatCard

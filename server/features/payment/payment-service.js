@@ -1,15 +1,29 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const axios = require('axios');
 const ProviderEarning = require('../provider/provider-earning-model');
 const PaymentRecord = require('./payment-record-model');
 const Provider = require('../provider/provider-model');
 const Booking = require('../booking/booking-model');
 const Transaction = require('./transaction-model');
 const Complaint = require('../complaint/complaint-model');
+const { SystemConfig } = require('../system-setting/system-setting-model');
+const cache = require('../../shared/utils/cache');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../notification/notification-helper');
 const { sendMail } = require('../../shared/utils/sendmail');
 const bcrypt = require('bcryptjs');
+
+const getCachedSystemConfig = async () => {
+  let config = cache.get('system_config');
+  if (!config) {
+    config = await SystemConfig.findOne().lean();
+    if (config) {
+      cache.set('system_config', config, 30); // 30 seconds cache TTL
+    }
+  }
+  return config;
+};
 
 
 const withdrawalLocks = new Set();
@@ -281,6 +295,208 @@ const executePaymentFailedOperations = async (payment, session) => {
   }
 };
 
+/* ==========================================
+   RazorpayX Hybrid Payout Helper Functions
+========================================== */
+const getRazorpayXAuth = () => {
+  const keyId = process.env.RAZORPAYX_KEY_ID;
+  const keySecret = process.env.RAZORPAYX_KEY_SECRET;
+  if (!keyId || !keySecret) return null;
+  return Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+};
+
+const ensureRazorpayContact = async (provider) => {
+  if (provider.razorpayContactId) return provider.razorpayContactId;
+  const auth = getRazorpayXAuth();
+  if (!auth) throw new Error("RazorpayX API keys missing in environment variables (.env).");
+
+  try {
+    const res = await axios.post('https://api.razorpay.com/v1/contacts', {
+      name: provider.name,
+      email: provider.email,
+      contact: provider.phone || "9999999999",
+      type: "vendor",
+      reference_id: provider._id.toString()
+    }, {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    provider.razorpayContactId = res.data.id;
+    await provider.save();
+    return res.data.id;
+  } catch (err) {
+    const msg = err.response?.data?.error?.description || err.message;
+    throw new Error(`RazorpayX Contact creation failed: ${msg}`);
+  }
+};
+
+const ensureRazorpayFundAccount = async (provider) => {
+  if (provider.bankDetails?.razorpayFundAccountId) {
+    return provider.bankDetails.razorpayFundAccountId;
+  }
+  const contactId = await ensureRazorpayContact(provider);
+  const auth = getRazorpayXAuth();
+  if (!auth) throw new Error("RazorpayX API keys missing in environment variables (.env).");
+
+  try {
+    const res = await axios.post('https://api.razorpay.com/v1/fund_accounts', {
+      contact_id: contactId,
+      account_type: "bank_account",
+      bank_account: {
+        name: provider.bankDetails.accountName || provider.name,
+        ifsc: provider.bankDetails.ifsc,
+        account_number: provider.bankDetails.accountNo
+      }
+    }, {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    provider.bankDetails.razorpayFundAccountId = res.data.id;
+    provider.bankDetails.verified = true;
+    await provider.save();
+    return res.data.id;
+  } catch (err) {
+    const msg = err.response?.data?.error?.description || err.message;
+    throw new Error(`RazorpayX Fund Account creation failed: ${msg}`);
+  }
+};
+
+const executeRazorpayXPayout = async (paymentRecord, provider, accountNumber) => {
+  const auth = getRazorpayXAuth();
+  if (!auth) throw new Error("RAZORPAYX_KEY_ID or RAZORPAYX_KEY_SECRET missing in .env");
+
+  const fundAccountId = await ensureRazorpayFundAccount(provider);
+  const payoutAccNo = accountNumber || process.env.RAZORPAYX_ACCOUNT_NUMBER;
+  if (!payoutAccNo) throw new Error("RAZORPAYX_ACCOUNT_NUMBER missing in System Settings / .env");
+
+  const res = await axios.post('https://api.razorpay.com/v1/payouts', {
+    account_number: payoutAccNo,
+    fund_account_id: fundAccountId,
+    amount: Math.round(paymentRecord.amount * 100),
+    currency: "INR",
+    mode: "IMPS",
+    purpose: "payout",
+    queue_if_low_balance: true,
+    reference_id: paymentRecord._id.toString(),
+    narration: `Payout ${provider.name}`.substring(0, 30)
+  }, {
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  const payoutData = res.data;
+  paymentRecord.withdrawalType = 'razorpayx';
+  paymentRecord.status = payoutData.status === 'processed' ? 'completed' : 'processing';
+  paymentRecord.utrNo = payoutData.utr || payoutData.id;
+  paymentRecord.transactionReference = payoutData.id;
+  paymentRecord.processedAt = new Date();
+  if (payoutData.status === 'processed') {
+    paymentRecord.completedAt = new Date();
+    provider.wallet = provider.wallet || { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+    provider.wallet.totalWithdrawn += paymentRecord.amount;
+    provider.wallet.lastUpdated = new Date();
+    await provider.save();
+  }
+  await paymentRecord.save();
+  return payoutData;
+};
+
+const handlePayoutWebhook = async (event, payoutEntity) => {
+  if (!payoutEntity) return;
+  const payoutId = payoutEntity.id;
+  const referenceId = payoutEntity.reference_id;
+  const utr = payoutEntity.utr || payoutId;
+
+  let paymentRecord = null;
+  if (referenceId && mongoose.Types.ObjectId.isValid(referenceId)) {
+    paymentRecord = await PaymentRecord.findById(referenceId).populate('provider');
+  }
+  if (!paymentRecord && payoutId) {
+    paymentRecord = await PaymentRecord.findOne({
+      $or: [{ transactionReference: payoutId }, { utrNo: payoutId }]
+    }).populate('provider');
+  }
+
+  if (!paymentRecord) {
+    console.warn(`[Payout Webhook] PaymentRecord not found for payout ${payoutId}`);
+    return;
+  }
+
+  const provider = paymentRecord.provider;
+
+  if (event === 'payout.processed' || (event === 'payout.updated' && payoutEntity.status === 'processed')) {
+    if (paymentRecord.status !== 'completed' && paymentRecord.status !== 'transferred') {
+      paymentRecord.status = 'completed';
+      paymentRecord.utrNo = utr;
+      paymentRecord.completedAt = new Date();
+      await paymentRecord.save();
+
+      if (provider) {
+        provider.wallet = provider.wallet || { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+        provider.wallet.totalWithdrawn += paymentRecord.amount;
+        provider.wallet.lastUpdated = new Date();
+        await provider.save();
+
+        sendNotification(
+          provider._id,
+          'provider',
+          'Payout Transferred',
+          `Your payout of ₹${paymentRecord.amount} has been successfully transferred. UTR: ${utr}`,
+          'payout',
+          paymentRecord._id
+        );
+      }
+    }
+  } else if (['payout.reversed', 'payout.failed', 'payout.rejected'].includes(event) || (event === 'payout.updated' && ['reversed', 'failed', 'rejected'].includes(payoutEntity.status))) {
+    if (paymentRecord.status !== 'failed' && paymentRecord.status !== 'rejected') {
+      paymentRecord.status = 'failed';
+      paymentRecord.lastError = payoutEntity.failure_reason || `Payout ${payoutEntity.status}`;
+      paymentRecord.completedAt = new Date();
+      await paymentRecord.save();
+
+      // Refund amount back to provider's wallet balance
+      if (provider) {
+        const balanceBefore = provider.wallet?.availableBalance || 0;
+        provider.wallet.availableBalance += paymentRecord.amount;
+        const balanceAfter = provider.wallet.availableBalance;
+        provider.wallet.lastUpdated = new Date();
+        await provider.save();
+
+        await Transaction.create({
+          booking: paymentRecord._id,
+          bookingId: paymentRecord.transactionReference || `WDL-REV-${Date.now()}`,
+          user: provider._id,
+          provider: provider._id,
+          amount: paymentRecord.amount,
+          paymentStatus: 'completed',
+          paymentMethod: 'wallet',
+          type: 'withdrawal_rejection',
+          balanceBefore: balanceBefore,
+          balanceAfter: balanceAfter,
+          description: `RazorpayX Payout reversed/failed (${payoutId}). ₹${paymentRecord.amount} refunded to wallet.`
+        });
+
+        sendNotification(
+          provider._id,
+          'provider',
+          'Payout Failed / Reversed',
+          `Your payout of ₹${paymentRecord.amount} failed and has been refunded to your wallet.`,
+          'payout',
+          paymentRecord._id
+        );
+      }
+    }
+  }
+};
+
 
 class PaymentService {
 
@@ -294,9 +510,10 @@ class PaymentService {
         return res.status(400).json({ error: 'Missing signature header' });
       }
 
-      // Verify signature
+      // Verify signature (check RAZORPAYX_WEBHOOK_SECRET first, then fallback to RAZORPAY_WEBHOOK_SECRET)
+      const rzpSecret = process.env.RAZORPAYX_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
       const expectedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+        .createHmac('sha256', rzpSecret)
         .update(bodyData)
         .digest('hex');
 
@@ -308,14 +525,17 @@ class PaymentService {
       const payload = JSON.parse(bodyData.toString());
       const event = payload.event;
       const payment = payload.payload?.payment?.entity;
+      const payoutEntity = payload.payload?.payout?.entity;
 
-      if (!payment) {
-        console.error('Webhook Error: Missing payment entity');
+      if (!payment && !payoutEntity) {
+        console.error('Webhook Error: Missing payment/payout entity');
         return res.status(400).json({ error: 'Invalid payload structure' });
       }
 
-      // Enforce Webhook Idempotency (Phase A)
-      const eventId = payload.id || `${event}:${payment.id}`;
+      const entityId = payment?.id || payoutEntity?.id;
+
+      // Enforce Webhook Idempotency
+      const eventId = payload.id || `${event}:${entityId}`;
       try {
         const WebhookIdempotency = mongoose.models.WebhookIdempotency || mongoose.model('WebhookIdempotency', new mongoose.Schema({
           eventId: { type: String, required: true, unique: true },
@@ -330,17 +550,21 @@ class PaymentService {
         throw idempErr;
       }
 
-      console.log(`Webhook received: ${event}, Payment ID: ${payment.id}`);
+      console.log(`Webhook received: ${event}, Entity ID: ${entityId}`);
 
-      switch (event) {
-        case 'payment.captured':
-          await handlePaymentCaptured(payment);
-          break;
-        case 'payment.failed':
-          await handlePaymentFailed(payment);
-          break;
-        default:
-          console.log(`Unhandled webhook event: ${event}`);
+      if (event.startsWith('payout.')) {
+        await handlePayoutWebhook(event, payoutEntity);
+      } else {
+        switch (event) {
+          case 'payment.captured':
+            await handlePaymentCaptured(payment);
+            break;
+          case 'payment.failed':
+            await handlePaymentFailed(payment);
+            break;
+          default:
+            console.log(`Unhandled webhook event: ${event}`);
+        }
       }
 
       // Always return 200 to acknowledge receipt
@@ -623,11 +847,15 @@ class PaymentService {
         settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
         await settings.save();
       }
-      const minWithdrawalLimit = settings?.walletSettings?.minWithdrawal ?? 500;
+      const minWithdrawalLimit = settings?.payoutSettings?.minWithdrawalAmount ?? settings?.walletSettings?.minWithdrawal ?? 500;
+      const maxWithdrawalLimit = settings?.payoutSettings?.maxWithdrawalAmount ?? 100000;
 
       // STEP 1: Basic Validations
       if (!amount || isNaN(amount) || amount < minWithdrawalLimit) {
-        return res.status(400).json({ success: false, error: `Minimum withdrawal ₹${minWithdrawalLimit}` });
+        return res.status(400).json({ success: false, error: `Minimum withdrawal limit is ₹${minWithdrawalLimit}` });
+      }
+      if (amount > maxWithdrawalLimit) {
+        return res.status(400).json({ success: false, error: `Maximum withdrawal limit is ₹${maxWithdrawalLimit}` });
       }
 
       const provider = await Provider.findById(providerId)
@@ -652,8 +880,16 @@ class PaymentService {
         return res.status(403).json({ success: false, error: "Your account/KYC must be approved before withdrawal." });
       }
 
-      if (!provider.bankDetails?.accountNo || !provider.bankDetails?.verified) {
-        return res.status(400).json({ success: false, error: "Verified bank details are required." });
+      const isBankVerified = Boolean(
+        (provider.bankDetails?.verified || provider.bankDetails?.bankVerificationStatus === 'verified') &&
+        provider.payoutEnabled !== false
+      );
+
+      if (!provider.bankDetails?.accountNo || !isBankVerified) {
+        return res.status(400).json({
+          success: false,
+          error: "Verified bank details are required. Bank verification is pending or rejected."
+        });
       }
 
       // Check for active disputes or hold
@@ -1627,25 +1863,6 @@ class PaymentService {
       const { id } = req.params;
       const { transactionReference, notes, utrNo, transferDate, transferTime } = req.body;
 
-      // Validate required fields for approval
-      if (!transactionReference) {
-        await safeAbort(session);
-        safeEnd(session);
-        return res.status(400).json({ success: false, message: "Transaction reference is required" });
-      }
-
-      if (!utrNo) {
-        await safeAbort(session);
-        safeEnd(session);
-        return res.status(400).json({ success: false, message: "UTR number is required" });
-      }
-
-      if (!transferDate || !transferTime) {
-        await safeAbort(session);
-        safeEnd(session);
-        return res.status(400).json({ success: false, message: "Transfer date and time are required" });
-      }
-
       // 1️⃣ Find PaymentRecord with provider populated
       let paymentRecordQuery = PaymentRecord.findById(id).populate("provider");
       let paymentRecord = session ? await paymentRecordQuery.session(session) : await paymentRecordQuery;
@@ -1654,6 +1871,12 @@ class PaymentService {
         await safeAbort(session);
         safeEnd(session);
         return res.status(404).json({ success: false, message: "Withdrawal request not found" });
+      }
+
+      if (paymentRecord.isHeld) {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({ success: false, message: `Withdrawal request is on hold: ${paymentRecord.holdReason || 'Administrative hold'}` });
       }
 
       // Add Safety Checks to prevent duplicate processing
@@ -1669,8 +1892,54 @@ class PaymentService {
         return res.status(400).json({ success: false, message: `Cannot approve request with status: ${paymentRecord.status}` });
       }
 
-      // 2️⃣ Update payment record with new fields (requested -> under_review -> approved -> transferred -> completed)
+      const settings = await SystemConfig.findOne().lean();
+      const isRazorpayXEnabled = Boolean(settings?.payoutSettings?.razorpayxEnabled && process.env.RAZORPAYX_KEY_ID);
+
+      if (isRazorpayXEnabled) {
+        // --- Automatic RazorpayX Payout Flow ---
+        await safeCommit(session);
+        safeEnd(session);
+
+        try {
+          const payoutRes = await executeRazorpayXPayout(paymentRecord, paymentRecord.provider, settings?.payoutSettings?.razorpayxAccountNumber);
+          return res.status(200).json({
+            success: true,
+            message: "RazorpayX payout initiated successfully",
+            data: payoutRes
+          });
+        } catch (payoutErr) {
+          console.error("RazorpayX Payout execution error:", payoutErr);
+          paymentRecord.lastError = payoutErr.message;
+          paymentRecord.status = 'failed';
+          await paymentRecord.save();
+          return res.status(500).json({
+            success: false,
+            message: `RazorpayX payout failed: ${payoutErr.message}`
+          });
+        }
+      }
+
+      // --- Manual Offline Transfer Flow (Default) ---
+      if (!transactionReference) {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({ success: false, message: "Transaction reference is required for manual approval" });
+      }
+
+      if (!utrNo) {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({ success: false, message: "UTR number is required for manual approval" });
+      }
+
+      if (!transferDate || !transferTime) {
+        await safeAbort(session);
+        safeEnd(session);
+        return res.status(400).json({ success: false, message: "Transfer date and time are required for manual approval" });
+      }
+
       paymentRecord.status = "transferred";
+      paymentRecord.withdrawalType = "manual_bulk";
       paymentRecord.transactionReference = transactionReference;
       paymentRecord.utrNo = utrNo;
       paymentRecord.transferDate = new Date(transferDate);
@@ -1684,7 +1953,6 @@ class PaymentService {
         await paymentRecord.save();
       }
 
-      // 2.5️⃣ Increment provider's totalWithdrawn (balance was already locked/deducted at OTP verification time)
       const providerDoc = paymentRecord.provider;
       if (!providerDoc.wallet) {
         providerDoc.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
@@ -1698,11 +1966,9 @@ class PaymentService {
         await providerDoc.save();
       }
 
-      // 3️⃣ Commit transaction
       await safeCommit(session);
       safeEnd(session);
 
-      // Notify provider about approval
       try {
         sendNotification(
           paymentRecord.provider._id,
@@ -1726,7 +1992,7 @@ class PaymentService {
 
       return res.status(200).json({
         success: true,
-        message: "Withdrawal request approved successfully",
+        message: "Withdrawal request approved successfully via manual transfer",
         data: paymentRecord
       });
 
@@ -1739,6 +2005,133 @@ class PaymentService {
         message: "Server error",
         error: error.message
       });
+    }
+  }
+
+  // Enterprise Feature: Retry Failed RazorpayX Payout
+  static async retryFailedPayout(req, res) {
+    try {
+      const { id } = req.params;
+      const paymentRecord = await PaymentRecord.findById(id).populate('provider');
+      if (!paymentRecord) return res.status(404).json({ success: false, message: 'Withdrawal record not found' });
+      if (paymentRecord.status !== 'failed') {
+        return res.status(400).json({ success: false, message: `Only failed payouts can be retried. Current status: ${paymentRecord.status}` });
+      }
+
+      const settings = await SystemConfig.findOne().lean();
+      const maxAttempts = settings?.payoutSettings?.retryMaxAttempts || 3;
+      if (paymentRecord.retryCount >= maxAttempts) {
+        return res.status(400).json({ success: false, message: `Maximum retry attempts (${maxAttempts}) reached for this payout.` });
+      }
+
+      paymentRecord.retryCount += 1;
+      paymentRecord.status = 'processing';
+      paymentRecord.lastError = null;
+      await paymentRecord.save();
+
+      try {
+        const payoutRes = await executeRazorpayXPayout(paymentRecord, paymentRecord.provider, settings?.payoutSettings?.razorpayxAccountNumber);
+        return res.status(200).json({
+          success: true,
+          message: "Payout retried successfully",
+          data: payoutRes
+        });
+      } catch (err) {
+        paymentRecord.status = 'failed';
+        paymentRecord.lastError = err.message;
+        await paymentRecord.save();
+        return res.status(500).json({
+          success: false,
+          message: `Payout retry failed: ${err.message}`
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Enterprise Feature: Administrative Hold
+  static async holdPayout(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      const paymentRecord = await PaymentRecord.findById(id);
+      if (!paymentRecord) return res.status(404).json({ success: false, message: 'Withdrawal record not found' });
+
+      paymentRecord.isHeld = true;
+      paymentRecord.holdReason = reason || 'Administrative hold';
+      await paymentRecord.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payout request placed on hold',
+        data: paymentRecord
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Enterprise Feature: Release Administrative Hold
+  static async releasePayout(req, res) {
+    try {
+      const { id } = req.params;
+      const paymentRecord = await PaymentRecord.findById(id);
+      if (!paymentRecord) return res.status(404).json({ success: false, message: 'Withdrawal record not found' });
+
+      paymentRecord.isHeld = false;
+      paymentRecord.holdReason = null;
+      await paymentRecord.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payout request hold released',
+        data: paymentRecord
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Enterprise Feature: Auto-Scheduler & Cron Poller for Stuck Payouts
+  static async reconcileStuckPayouts(req, res) {
+    try {
+      const auth = getRazorpayXAuth();
+      if (!auth) {
+        const msg = "RazorpayX API keys not configured in environment variables.";
+        if (res) return res.status(400).json({ success: false, message: msg });
+        return { success: false, message: msg };
+      }
+
+      // Find processing payouts older than 30 minutes
+      const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+      const stuckPayouts = await PaymentRecord.find({
+        withdrawalType: 'razorpayx',
+        status: 'processing',
+        updatedAt: { $lt: thirtyMinsAgo }
+      }).populate('provider');
+
+      let reconciledCount = 0;
+      for (const payoutRecord of stuckPayouts) {
+        if (!payoutRecord.transactionReference) continue;
+        try {
+          const apiRes = await axios.get(`https://api.razorpay.com/v1/payouts/${payoutRecord.transactionReference}`, {
+            headers: { 'Authorization': `Basic ${auth}` }
+          });
+          const payoutEntity = apiRes.data;
+          await handlePayoutWebhook(payoutEntity.status === 'processed' ? 'payout.processed' : `payout.${payoutEntity.status}`, payoutEntity);
+          reconciledCount++;
+        } catch (err) {
+          console.warn(`[Reconciler] Error checking payout ${payoutRecord.transactionReference}:`, err.message);
+        }
+      }
+
+      const result = { success: true, reconciledCount, totalChecked: stuckPayouts.length };
+      if (res) return res.status(200).json(result);
+      return result;
+    } catch (error) {
+      if (res) return res.status(500).json({ success: false, message: error.message });
+      return { success: false, error: error.message };
     }
   }
 
@@ -3339,6 +3732,326 @@ class PaymentService {
         message: "Server error during direct payout",
         error: error.message
       });
+    }
+  }
+
+  /* ==========================================================================
+     HYBRID WITHDRAWAL ENGINE: DECISION ROUTING & EXTENSION STUBS
+     ========================================================================== */
+
+  /**
+   * Evaluates payout routing strategy based on System Settings and request amount.
+   * @param {number} amount
+   * @param {object} settings
+   * @returns {{ route: string, requiresApproval: boolean, reason: string }}
+   */
+  static determinePayoutRouting(amount, settings) {
+    const payoutSettings = settings?.payoutSettings || {};
+    const mode = payoutSettings.mode || 'manual';
+
+    if (mode === 'manual') {
+      return {
+        route: 'manual',
+        requiresApproval: true,
+        reason: 'System configured in Manual Operation Mode. All payouts require manual processing/approval.'
+      };
+    }
+
+    if (mode === 'razorpayx') {
+      const autoEnabled = Boolean(payoutSettings.autoWithdrawalEnabled);
+      const instantLimit = payoutSettings.instantWithdrawalLimit ?? 5000;
+      const approvalThreshold = payoutSettings.approvalRequiredAboveAmount ?? 10000;
+
+      if (autoEnabled && amount <= instantLimit && amount < approvalThreshold) {
+        return {
+          route: 'razorpayx',
+          requiresApproval: false,
+          reason: 'Eligible for automated RazorpayX instant processing.'
+        };
+      }
+
+      return {
+        route: 'razorpayx',
+        requiresApproval: true,
+        reason: 'Amount exceeds instant threshold or requires explicit Admin approval before RazorpayX payout.'
+      };
+    }
+
+    return {
+      route: 'manual',
+      requiresApproval: true,
+      reason: 'Default fallback mode (Manual).'
+    };
+  }
+
+  /* ==========================================================================
+     SINGLE SOURCE OF TRUTH: RAZORPAYX PAYOUT SERVICE LAYER ARCHITECTURE
+     All Razorpay Gateway (Customer Payments) and RazorpayX (Provider Payouts)
+     operations are orchestrated strictly from PaymentService.
+     ========================================================================== */
+
+  // --------------------------------------------------------------------------
+  // SECTION 1: CONTACTS (Created once upon bank verification, never recreated per payout)
+  // --------------------------------------------------------------------------
+
+  static async createRazorpayXContact(provider) {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', message: 'System operating in Manual mode. Contact creation bypassed.' };
+    }
+    return ensureRazorpayContact(provider);
+  }
+
+  // --------------------------------------------------------------------------
+  // SECTION 2: FUND ACCOUNTS (Created once upon bank verification, persisted on provider)
+  // --------------------------------------------------------------------------
+
+  static async createRazorpayXFundAccount(provider) {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', message: 'System operating in Manual mode. Fund Account creation bypassed.' };
+    }
+    return ensureRazorpayFundAccount(provider);
+  }
+
+  // --------------------------------------------------------------------------
+  // SECTION 3: PAYOUTS (Instant / Batch execution, strictly guarded by System Mode)
+  // --------------------------------------------------------------------------
+
+  static async createRazorpayXPayout(paymentRecord, provider, accountNumber) {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', message: 'System operating in Manual mode. RazorpayX Payout execution bypassed.' };
+    }
+    return executeRazorpayXPayout(paymentRecord, provider, accountNumber);
+  }
+
+  static async executeRazorpayXPayout(paymentRecord, provider, accountNumber) {
+    return this.createRazorpayXPayout(paymentRecord, provider, accountNumber);
+  }
+
+  static async fetchRazorpayXPayout(payoutId) {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', message: 'System operating in Manual mode. Payout fetch bypassed.' };
+    }
+    const auth = getRazorpayXAuth();
+    if (!auth) throw new Error("RAZORPAYX_KEY_ID or RAZORPAYX_KEY_SECRET missing in .env");
+
+    const res = await axios.get(`https://api.razorpay.com/v1/payouts/${payoutId}`, {
+      headers: { 'Authorization': `Basic ${auth}` }
+    });
+    return { success: true, data: res.data };
+  }
+
+  static async fetchRazorpayXPayoutStatus(payoutId) {
+    return this.fetchRazorpayXPayout(payoutId);
+  }
+
+  static async listRazorpayXPayouts(filters = {}) {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', data: [], message: 'System operating in Manual mode. List Payouts bypassed.' };
+    }
+    const auth = getRazorpayXAuth();
+    if (!auth) throw new Error("RAZORPAYX_KEY_ID or RAZORPAYX_KEY_SECRET missing in .env");
+
+    const res = await axios.get('https://api.razorpay.com/v1/payouts', {
+      headers: { 'Authorization': `Basic ${auth}` },
+      params: filters
+    });
+    return { success: true, data: res.data };
+  }
+
+  // --------------------------------------------------------------------------
+  // SECTION 4: BALANCE (5-Minute Memory Cached Check)
+  // --------------------------------------------------------------------------
+
+  static async getRazorpayXBalance() {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', balance: 0, message: 'System operating in Manual mode. Balance check bypassed.' };
+    }
+
+    let cachedBalance = cache.get('razorpayx_balance');
+    if (cachedBalance !== undefined && cachedBalance !== null) {
+      return { success: true, balance: cachedBalance, cached: true };
+    }
+
+    const auth = getRazorpayXAuth();
+    if (!auth) throw new Error("RAZORPAYX_KEY_ID or RAZORPAYX_KEY_SECRET missing in .env");
+
+    const payoutAccNo = process.env.RAZORPAYX_ACCOUNT_NUMBER;
+    if (!payoutAccNo) throw new Error("RAZORPAYX_ACCOUNT_NUMBER missing in environment variables.");
+
+    try {
+      const res = await axios.get(`https://api.razorpay.com/v1/banking/accounts/${payoutAccNo}/balance`, {
+        headers: { 'Authorization': `Basic ${auth}` }
+      });
+
+      const balanceAmount = (res.data.balance || 0) / 100;
+      cache.set('razorpayx_balance', balanceAmount, 300); // 5 minutes cache TTL
+      return { success: true, balance: balanceAmount, cached: false };
+    } catch (err) {
+      console.error('[RazorpayX Balance Error]:', err.response?.data || err.message);
+      return { success: false, balance: 0, error: err.message };
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // SECTION 5: TRANSACTIONS & RETRY GUARDS
+  // --------------------------------------------------------------------------
+
+  static async getRazorpayXTransactions(filters = {}) {
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      return { success: false, mode: 'manual', data: [], message: 'System operating in Manual mode. Transactions listing bypassed.' };
+    }
+    const auth = getRazorpayXAuth();
+    if (!auth) throw new Error("RAZORPAYX_KEY_ID or RAZORPAYX_KEY_SECRET missing in .env");
+
+    const res = await axios.get('https://api.razorpay.com/v1/transactions', {
+      headers: { 'Authorization': `Basic ${auth}` },
+      params: filters
+    });
+    return { success: true, data: res.data };
+  }
+
+  static async retryRazorpayXPayout(paymentRecordId) {
+    const paymentRecord = await PaymentRecord.findById(paymentRecordId).populate('provider');
+    if (!paymentRecord) throw new Error("Payment record not found.");
+
+    if (!['failed', 'rejected'].includes(paymentRecord.status)) {
+      throw new Error(`Cannot retry payout with status '${paymentRecord.status}'. Retries permitted only for FAILED or REJECTED payouts.`);
+    }
+
+    const settings = await getCachedSystemConfig();
+    if (settings?.payoutSettings?.mode !== 'razorpayx') {
+      throw new Error("Cannot retry RazorpayX payout while system is operating in Manual mode.");
+    }
+
+    paymentRecord.retryCount = (paymentRecord.retryCount || 0) + 1;
+    paymentRecord.status = 'processing';
+    paymentRecord.lastError = null;
+    await paymentRecord.save();
+
+    const payoutData = await executeRazorpayXPayout(paymentRecord, paymentRecord.provider, process.env.RAZORPAYX_ACCOUNT_NUMBER);
+    return payoutData;
+  }
+
+  // --------------------------------------------------------------------------
+  // SECTION 6: WEBHOOKS & AUDIT LOGGING
+  // --------------------------------------------------------------------------
+
+  static async handleRazorpayXWebhook(payload, signature) {
+    return handlePayoutWebhook(payload?.event, payload?.payload?.payout?.entity);
+  }
+
+  /**
+   * Enterprise Auto Withdrawal Scheduler Architecture.
+   * Evaluates eligibility and creates queued withdrawal records without calling third-party APIs directly.
+   */
+  static async processAutoWithdrawalScheduler() {
+    try {
+      const { SystemConfig } = require('../system-setting/system-setting-model');
+      const settings = await SystemConfig.findOne().lean();
+      if (!settings || !settings.payoutSettings) {
+        return { success: false, executed: 0, reason: 'System settings missing' };
+      }
+
+      const pSettings = settings.payoutSettings;
+      const isRazorpayXMode = pSettings.mode === 'razorpayx';
+      const isAutoEnabled = Boolean(pSettings.autoWithdrawalEnabled);
+
+      if (!isRazorpayXMode || !isAutoEnabled) {
+        return {
+          success: true,
+          executed: 0,
+          reason: 'Auto Withdrawal skipped: Operating in Manual mode or Auto Withdrawal is disabled.'
+        };
+      }
+
+      // Check Working Days
+      const daysMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const todayDayStr = daysMap[new Date().getDay()];
+      const workingDays = pSettings.workingDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+      if (!workingDays.includes(todayDayStr)) {
+        return { success: true, executed: 0, reason: `Today (${todayDayStr}) is not a configured working day.` };
+      }
+
+      const minLimit = pSettings.minWithdrawalAmount ?? 500;
+      const maxLimit = pSettings.maxWithdrawalAmount ?? 100000;
+
+      // Find eligible providers
+      const eligibleProviders = await Provider.find({
+        approved: true,
+        kycStatus: 'approved',
+        isSuspended: { $ne: true },
+        'wallet.availableBalance': { $gte: minLimit },
+        'bankDetails.accountNo': { $exists: true, $ne: '' }
+      }).select('_id bankDetails wallet name email');
+
+      let queuedCount = 0;
+
+      for (const provider of eligibleProviders) {
+        // Check for active pending withdrawal
+        const activePending = await PaymentRecord.findOne({
+          provider: provider._id,
+          status: { $in: ['requested', 'processing', 'under_review', 'approved'] }
+        }).lean();
+
+        if (activePending) continue;
+
+        const available = provider.wallet?.availableBalance || 0;
+        const autoAmount = Math.min(available, maxLimit);
+
+        if (autoAmount < minLimit) continue;
+
+        // Evaluate routing
+        const routing = PaymentService.determinePayoutRouting(autoAmount, settings);
+
+        // Deduct balance and create queued PaymentRecord
+        const session = await safeStartSession();
+        try {
+          provider.wallet.availableBalance -= autoAmount;
+          provider.wallet.lastUpdated = new Date();
+          await provider.save();
+
+          const paymentRecord = new PaymentRecord({
+            provider: provider._id,
+            amount: autoAmount,
+            netAmount: autoAmount,
+            paymentMethod: "bank_transfer",
+            paymentDetails: {
+              accountNumber: provider.bankDetails.accountNo,
+              accountName: provider.bankDetails.accountName || provider.name,
+              ifscCode: provider.bankDetails.ifsc,
+              bankName: provider.bankDetails.bankName,
+            },
+            status: routing.requiresApproval ? 'under_review' : 'requested',
+            withdrawalType: 'auto_scheduled',
+            notes: `Auto Scheduled Withdrawal (${pSettings.autoWithdrawalFrequency || 'daily'}) - Routing: ${routing.route}`,
+            transactionReference: `AUTO-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`
+          });
+
+          await paymentRecord.save();
+          queuedCount++;
+        } catch (err) {
+          console.error(`[AutoWithdrawalScheduler] Failed to queue provider ${provider._id}:`, err);
+        } finally {
+          safeEnd(session);
+        }
+      }
+
+      return {
+        success: true,
+        executed: queuedCount,
+        reason: `Successfully queued ${queuedCount} auto withdrawal request(s).`
+      };
+
+    } catch (error) {
+      console.error('[AutoWithdrawalScheduler] Error processing scheduler:', error);
+      return { success: false, error: error.message };
     }
   }
 

@@ -67,6 +67,20 @@ const SystemSetting = () => {
       }
     },
     walletSettings: { minWithdrawal: 500, refundToWalletOnly: true },
+    payoutSettings: {
+      mode: 'manual',
+      autoWithdrawalEnabled: false,
+      autoWithdrawalFrequency: 'daily',
+      instantWithdrawalLimit: 5000,
+      approvalRequiredAboveAmount: 10000,
+      minWithdrawalAmount: 500,
+      maxWithdrawalAmount: 100000,
+      workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      settlementTime: '17:00',
+      retryFailedPayout: true,
+      retryCount: 3,
+      defaultPayoutMode: 'IMPS'
+    },
     refundSettings: {
       autoRefundEnabled: true,
       manualApprovalEnabled: true,
@@ -263,6 +277,7 @@ const SystemSetting = () => {
       formData.append('socialLinks', JSON.stringify(systemSettings.socialLinks));
       formData.append('bookingSettings', JSON.stringify(systemSettings.bookingSettings));
       formData.append('walletSettings', JSON.stringify(systemSettings.walletSettings));
+      formData.append('payoutSettings', JSON.stringify(systemSettings.payoutSettings || {}));
       formData.append('refundSettings', JSON.stringify(systemSettings.refundSettings || {}));
       formData.append('commissionSettings', JSON.stringify(systemSettings.commissionSettings));
       formData.append('surgeSplitSettings', JSON.stringify(systemSettings.surgeSplitSettings));

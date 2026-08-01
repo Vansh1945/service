@@ -65,10 +65,10 @@ const paymentRecordSchema = new Schema({
   },
   withdrawalType: {
     type: String,
-    enum: ['manualbulk'],
+    enum: ['manualbulk', 'manual_bulk', 'razorpayx'],
     set: function (v) {
       if (!v) return v;
-      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return v.toLowerCase().replace(/[^a-z0-9_]/g, '');
     }
   },
 
@@ -99,7 +99,45 @@ const paymentRecordSchema = new Schema({
     sparse: true
   },
 
+  // Future RazorpayX Integration Fields
+  razorpayPayoutId: {
+    type: String,
+    sparse: true,
+    index: true
+  },
+  razorpayStatus: {
+    type: String,
+    default: null
+  },
+  razorpayResponse: {
+    type: Schema.Types.Mixed,
+    default: null
+  },
+  payoutMode: {
+    type: String,
+    enum: ['IMPS', 'NEFT', 'RTGS', 'UPI', 'CARD', ''],
+    default: ''
+  },
+
   notes: String,
+
+  // Enterprise operational fields
+  retryCount: {
+    type: Number,
+    default: 0
+  },
+  lastError: {
+    type: String,
+    default: null
+  },
+  isHeld: {
+    type: Boolean,
+    default: false
+  },
+  holdReason: {
+    type: String,
+    default: null
+  },
 
   emailSent: {
     type: Boolean,
