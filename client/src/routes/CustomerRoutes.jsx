@@ -6,7 +6,7 @@ import LoadingSpinner from "../components/ui/Loader";
 const CustomerLayout = lazy(() => import("../layouts/CustomerLayout"));
 const ServiceListingPage = lazy(() => import("../features/customer/services/Services"));
 const ServiceListingNew = lazy(() => import("../features/customer/services/ServiceListing"));
-const ServiceDetailPage = lazy(() => import("../features/customer/services/Servicedetail"));
+const ServiceDetailPage = lazy(() => import("../features/customer/services/ServiceDetail"));
 const BookService = lazy(() => import("../features/customer/booking-flow/Book-Service"));
 const UserProfile = lazy(() => import("../features/customer/profile/Profile"));
 const CustomerBookingsPage = lazy(() => import("../features/customer/my-bookings/CustomerBookingsPage"));

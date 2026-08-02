@@ -258,11 +258,11 @@ const AdminProvidersPage = () => {
           filtered = filtered.filter(p => p.profileComplete === (value === 'true'));
           break;
         case 'bankVerified':
-          filtered = filtered.filter(p => (p.bankDetails?.bankVerificationStatus === 'verified' || p.bankDetails?.verified) === (value === 'true'));
+          filtered = filtered.filter(p => (p.bankDetails?.bankVerificationStatus === 'verified') === (value === 'true'));
           break;
         case 'bankVerificationStatus':
-          if (value === 'verified') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'verified' || p.bankDetails?.verified);
-          else if (value === 'pending') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'pending' || (!p.bankDetails?.verified && p.bankDetails?.accountNo));
+          if (value === 'verified') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'verified');
+          else if (value === 'pending') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'pending');
           else if (value === 'rejected') filtered = filtered.filter(p => p.bankDetails?.bankVerificationStatus === 'rejected');
           break;
         case 'preferredMethod':

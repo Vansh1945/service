@@ -881,8 +881,9 @@ class PaymentService {
       }
 
       const isBankVerified = Boolean(
-        (provider.bankDetails?.verified || provider.bankDetails?.bankVerificationStatus === 'verified') &&
-        provider.payoutEnabled !== false
+        provider.bankDetails?.bankVerificationStatus === 'verified' &&
+        provider.bankDetails?.verified === true &&
+        provider.bankDetails?.payoutEnabled === true
       );
 
       if (!provider.bankDetails?.accountNo || !isBankVerified) {

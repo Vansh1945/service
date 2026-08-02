@@ -1148,6 +1148,7 @@ bookingSchema.index({ location: '2dsphere' });
 // Indexes for query optimization
 bookingSchema.index({ customer: 1 });
 bookingSchema.index({ customer: 1, status: 1 });
+bookingSchema.index({ customer: 1, status: 1, createdAt: -1 });
 bookingSchema.index({ provider: 1 });
 bookingSchema.index({ provider: 1, status: 1 });
 bookingSchema.index({ status: 1 });

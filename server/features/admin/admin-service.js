@@ -32,6 +32,29 @@ const deleteFile = async (publicId) => {
     }
 };
 
+const emitProviderStatusChange = (provider, status) => {
+    try {
+        const { getIO } = require('../../shared/socket/socket-server');
+        const io = getIO();
+        if (io) {
+            const providerIdStr = (provider && provider._id) ? provider._id.toString() : String(provider);
+            io.emit('provider:status_change', {
+                providerId: providerIdStr,
+                status,
+                timestamp: new Date()
+            });
+            io.to(`provider:${providerIdStr}`).emit('provider:status_updated', {
+                status,
+                approved: provider?.approved,
+                kycStatus: provider?.kycStatus,
+                bankDetails: provider?.bankDetails
+            });
+        }
+    } catch (err) {
+        console.error('Failed to emit provider status change socket event:', err.message);
+    }
+};
+
 class AdminService {
 
     static async cancelBookingByAdmin(req, res) {

@@ -1025,13 +1025,13 @@ const ProviderEarningsDashboard = () => {
                   </div>
 
                   <div className="pt-1.5 border-t border-neutral-200">
-                    {providerBankDetails.verified ? (
+                    {providerBankDetails.bankVerificationStatus === 'verified' && providerBankDetails.payoutEnabled === true && providerBankDetails.verified === true ? (
                       <span className="text-[10px] text-success font-semibold flex items-center gap-1">
                         <CheckCircle className="w-3.5 h-3.5" /> Active & Verified
                       </span>
                     ) : (
                       <span className="text-[10px] text-warning font-semibold flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> Pending Verification
+                        <Clock className="w-3.5 h-3.5" /> {providerBankDetails.bankVerificationStatus === 'rejected' ? 'Verification Rejected' : 'Pending Verification'}
                       </span>
                     )}
                   </div>
@@ -1040,7 +1040,14 @@ const ProviderEarningsDashboard = () => {
 
               <button
                 onClick={handleWithdrawalRequest}
-                disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < summary.minWithdrawalLimit || !providerBankDetails?.verified}
+                disabled={
+                  processingWithdrawal ||
+                  !withdrawalForm.amount ||
+                  withdrawalForm.amount < summary.minWithdrawalLimit ||
+                  providerBankDetails?.bankVerificationStatus !== 'verified' ||
+                  providerBankDetails?.payoutEnabled !== true ||
+                  providerBankDetails?.verified !== true
+                }
                 className="w-full py-2.5 bg-accent text-white rounded-lg text-sm font-bold hover:bg-accent/95 transition-all disabled:opacity-50"
               >
                 {processingWithdrawal ? 'Requesting...' : 'Request Payout'}

@@ -643,6 +643,19 @@ providerSchema.methods.generateRefreshToken = function (deviceInfo = {}) {
     return { raw, expiresAt };
 };
 
+// Standardize Bank Details Verification Synchronization
+providerSchema.pre('save', function (next) {
+    if (this.bankDetails) {
+        if (this.bankDetails.bankVerificationStatus === 'verified') {
+            this.bankDetails.verified = true;
+        } else {
+            this.bankDetails.verified = false;
+            this.bankDetails.payoutEnabled = false;
+        }
+    }
+    next();
+});
+
 // KYC methods
 providerSchema.methods.rejectKYC = function (reason) {
     this.kycStatus = 'rejected';

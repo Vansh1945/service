@@ -77,7 +77,7 @@ const PayoutProfileTab = ({ showToast }) => {
 
             const details = profileRes.data?.data?.bankDetails || profileRes.data?.bankDetails || {};
             const providerName = profileRes.data?.data?.name || profileRes.data?.name || '';
-            const status = details.bankVerificationStatus || (details.verified ? 'verified' : 'pending');
+            const status = details.bankVerificationStatus || 'pending';
 
             const preferred = details.preferredMethod || details.defaultMethod || 'bank_account';
 
@@ -87,10 +87,10 @@ const PayoutProfileTab = ({ showToast }) => {
                 bankName: details.bankName || '',
                 accountName: details.accountName || providerName || '',
                 upiId: details.upiId || '',
-                verified: !!details.verified,
+                verified: status === 'verified',
                 bankVerificationStatus: status,
                 bankRejectReason: details.bankRejectReason || '',
-                payoutEnabled: details.payoutEnabled !== false,
+                payoutEnabled: details.payoutEnabled === true,
                 defaultMethod: preferred
             });
 
@@ -314,8 +314,9 @@ const PayoutProfileTab = ({ showToast }) => {
     const minLimit = payoutSettings.minWithdrawalAmount || 500;
     const maxLimit = payoutSettings.maxWithdrawalAmount || 100000;
     const isBankVerified = Boolean(
-        (bankDetails.verified || bankDetails.bankVerificationStatus === 'verified') &&
-        bankDetails.payoutEnabled !== false
+        bankDetails.bankVerificationStatus === 'verified' &&
+        bankDetails.verified === true &&
+        bankDetails.payoutEnabled === true
     );
     const isWithdrawalActive = isBankVerified;
 
@@ -356,13 +357,13 @@ const PayoutProfileTab = ({ showToast }) => {
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                         <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Verification Status</span>
                         <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1.5 ${
-                            bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified
+                            bankDetails.bankVerificationStatus === 'verified'
                                 ? 'text-emerald-600'
                                 : bankDetails.bankVerificationStatus === 'rejected'
                                     ? 'text-rose-600'
                                     : 'text-amber-600'
                         }`}>
-                            {bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified ? (
+                            {bankDetails.bankVerificationStatus === 'verified' ? (
                                 <><ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified ✓</>
                             ) : bankDetails.bankVerificationStatus === 'rejected' ? (
                                 <><XCircle className="w-4 h-4 text-rose-600" /> Verification Rejected</>
@@ -781,10 +782,10 @@ const PayoutProfileTab = ({ showToast }) => {
                     </div>
 
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>3</div>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${bankDetails.bankVerificationStatus === 'verified' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>3</div>
                         <div>
                             <span className="font-bold text-slate-800 block">Admin Verification</span>
-                            <span className="text-[10px] text-slate-400">{bankDetails.bankVerificationStatus === 'verified' || bankDetails.verified ? 'Complete ✓' : 'In Review'}</span>
+                            <span className="text-[10px] text-slate-400">{bankDetails.bankVerificationStatus === 'verified' ? 'Complete ✓' : 'In Review'}</span>
                         </div>
                     </div>
 

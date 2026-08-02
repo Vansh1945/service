@@ -370,7 +370,7 @@ const Dashboard = () => {
           <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shrink-0 ${
-                profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified
+                profile.bankDetails?.bankVerificationStatus === 'verified'
                   ? 'bg-emerald-600'
                   : profile.bankDetails?.bankVerificationStatus === 'rejected'
                     ? 'bg-rose-600'
@@ -382,13 +382,13 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Payout Readiness Status</span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified
+                    profile.bankDetails?.bankVerificationStatus === 'verified'
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : profile.bankDetails?.bankVerificationStatus === 'rejected'
                         ? 'bg-rose-50 text-rose-700 border-rose-200'
                         : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
-                    {profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified
+                    {profile.bankDetails?.bankVerificationStatus === 'verified'
                       ? 'Bank Verified ✓'
                       : profile.bankDetails?.bankVerificationStatus === 'rejected'
                         ? 'Bank Rejected ✕'
@@ -408,11 +408,11 @@ const Dashboard = () => {
               <div className="text-left md:text-right">
                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Withdrawal Ready</span>
                 <span className={`text-xs font-extrabold ${
-                  (profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified) && profile.payoutEnabled !== false
+                  profile.bankDetails?.bankVerificationStatus === 'verified' && profile.bankDetails?.payoutEnabled === true
                     ? 'text-emerald-600'
                     : 'text-amber-600'
                 }`}>
-                  {(profile.bankDetails?.bankVerificationStatus === 'verified' || profile.bankDetails?.verified) && profile.payoutEnabled !== false ? 'Yes (Active)' : 'No (Pending Admin Verification)'}
+                  {profile.bankDetails?.bankVerificationStatus === 'verified' && profile.bankDetails?.payoutEnabled === true ? 'Yes (Active)' : 'No (Pending Admin Verification)'}
                 </span>
               </div>
               <Link
