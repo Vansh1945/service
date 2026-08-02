@@ -286,10 +286,6 @@ app.use(async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Test & Health routes
-app.get('/api/test-route', (req, res) => {
-  res.send('Raj Electrical Service API is running!');
-});
-
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
