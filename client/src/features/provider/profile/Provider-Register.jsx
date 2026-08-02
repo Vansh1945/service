@@ -615,6 +615,13 @@ const ProviderRegistration = () => {
   const [referralFeedback, setReferralFeedback] = useState('');
   const [isReferralValid, setIsReferralValid] = useState(null);
 
+  // If user is already an authenticated provider with completed profile, redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated && role === 'provider' && user?.profileComplete !== false) {
+      navigate('/provider/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, role, user, navigate]);
+
   // Prefill referral code from URL query parameter or session storage
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -780,7 +787,8 @@ const ProviderRegistration = () => {
           return 'OTP sent successfully! Check your email.';
         }
       } catch (err) {
-        throw err.response?.data?.message || err.message;
+        const msg = err.response?.data?.message || err.response?.data?.error || (typeof err === 'string' ? err : err.message) || 'Failed to send OTP';
+        throw msg;
       } finally {
         setIsSubmitting(false);
       }
@@ -814,7 +822,8 @@ const ProviderRegistration = () => {
         setStep(3);
         return 'Registration successful! Please login to complete your profile.';
       } catch (err) {
-        throw err.response?.data?.message || err.message;
+        const msg = err.response?.data?.message || err.response?.data?.error || (typeof err === 'string' ? err : err.message) || 'Registration failed';
+        throw msg;
       } finally {
         setIsSubmitting(false);
       }
@@ -1783,14 +1792,6 @@ const ProviderRegistration = () => {
                     }
                     if (!formData.serviceArea) {
                       toast.error('Please enter your service area');
-                      return;
-                    }
-                    if (!formData.accountNo || !formData.ifsc) {
-                      toast.error('Bank account number and IFSC code are required');
-                      return;
-                    }
-                    if (!formData.passbookImage) {
-                      toast.error('Bank passbook image is required');
                       return;
                     }
                     if (!formData.profilePic) {

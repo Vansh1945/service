@@ -157,9 +157,11 @@ const register = async (req, res, next) => {
     const validationErrors = validateRegistrationData({ name, email, phone, password, address });
 
     if (validationErrors) {
+      const firstErrorMsg = Object.values(validationErrors).flat()[0] || "Validation failed";
       return res.status(400).json({
         success: false,
-        message: "Validation failed",
+        message: firstErrorMsg,
+        error: firstErrorMsg,
         errors: validationErrors
       });
     }
@@ -335,9 +337,11 @@ const register = async (req, res, next) => {
         errors[key] = error.errors[key].message;
       });
 
+      const firstMsg = Object.values(errors)[0] || "Validation failed";
       return res.status(400).json({
         success: false,
-        message: "Validation failed",
+        message: firstMsg,
+        error: firstMsg,
         errors
       });
     }

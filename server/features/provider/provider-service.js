@@ -444,10 +444,10 @@ class ProviderService {
             }
 
             // Validate required fields
-            if (!services || !experience || !serviceArea || !accountNo || !ifsc || !currentAddress || (!addressSame && !permanentAddress)) {
+            if (!services || !experience || !serviceArea || !currentAddress || (!addressSame && !permanentAddress)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'All professional, bank details, and current/permanent address details are required'
+                    message: 'All professional and current/permanent address details are required'
                 });
             }
 
@@ -460,42 +460,48 @@ class ProviderService {
             const landmark = currentAddress.landmark;
             const pincode = currentAddress.pincode;
 
-            // Validate IFSC using ifsc package
-            const cleanIfsc = ifsc.trim().toUpperCase();
-            const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-            if (!ifscRegex.test(cleanIfsc)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid IFSC format. Expected format: ABCD0123456'
-                });
-            }
+            let ifscDetails = {};
+            let cleanIfsc = null;
 
-            const isIfscValid = require('ifsc').validate(cleanIfsc);
-            if (!isIfscValid) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid IFSC code. Validation failed.'
-                });
-            }
+            if (ifsc || accountNo) {
+                if (ifsc) {
+                    cleanIfsc = ifsc.trim().toUpperCase();
+                    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+                    if (!ifscRegex.test(cleanIfsc)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Invalid IFSC format. Expected format: ABCD0123456'
+                        });
+                    }
 
-            let ifscDetails;
-            try {
-                ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
-                if (!ifscDetails) throw new Error('Details not found');
-            } catch (err) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Failed to fetch details for the provided IFSC code'
-                });
-            }
+                    const isIfscValid = require('ifsc').validate(cleanIfsc);
+                    if (!isIfscValid) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Invalid IFSC code. Validation failed.'
+                        });
+                    }
 
-            // Validate account number
-            const accountNoRegex = /^[0-9]{9,18}$/;
-            if (!accountNoRegex.test(accountNo)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Please enter a valid account number (9-18 digits)'
-                });
+                    try {
+                        ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
+                        if (!ifscDetails) throw new Error('Details not found');
+                    } catch (err) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Failed to fetch details for the provided IFSC code'
+                        });
+                    }
+                }
+
+                if (accountNo) {
+                    const accountNoRegex = /^[0-9]{9,18}$/;
+                    if (!accountNoRegex.test(accountNo)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Please enter a valid account number (9-18 digits)'
+                        });
+                    }
+                }
             }
 
             // Get provider
@@ -639,19 +645,22 @@ class ProviderService {
                 provider.zoneUpdatedAt = new Date();
             }
 
-            // Update bank details
-            provider.bankDetails = {
-                accountNo,
-                ifsc: cleanIfsc,
-                bankName: ifscDetails.BANK ? `${ifscDetails.BANK}${ifscDetails.BRANCH ? ' - ' + ifscDetails.BRANCH : ''}` : (bankName || ''),
-                district: ifscDetails.DISTRICT || '',
-                city: ifscDetails.CITY || '',
-                address: ifscDetails.ADDRESS || '',
-                accountName: accountName || '',
-                passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
-                passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : undefined,
-                verified: false
-            };
+            // Update bank details if provided
+            if (accountNo || cleanIfsc) {
+                provider.bankDetails = {
+                    accountNo: accountNo || provider.bankDetails?.accountNo || '',
+                    ifsc: cleanIfsc || provider.bankDetails?.ifsc || '',
+                    bankName: ifscDetails?.BANK ? `${ifscDetails.BANK}${ifscDetails.BRANCH ? ' - ' + ifscDetails.BRANCH : ''}` : (bankName || provider.bankDetails?.bankName || ''),
+                    district: ifscDetails?.DISTRICT || provider.bankDetails?.district || '',
+                    city: ifscDetails?.CITY || provider.bankDetails?.city || '',
+                    address: ifscDetails?.ADDRESS || provider.bankDetails?.address || '',
+                    accountName: accountName || provider.bankDetails?.accountName || '',
+                    passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : provider.bankDetails?.passbookImage,
+                    passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : provider.bankDetails?.passbookImagePublicId,
+                    verified: false,
+                    bankVerificationStatus: 'pending'
+                };
+            }
 
             // Save profile picture if uploaded
             if (req.files && req.files['profilePic']) {

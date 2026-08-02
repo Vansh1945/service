@@ -17,6 +17,7 @@ const validate = (location, schema) => {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const formattedErrors = {};
+        const messages = [];
         const errorsList = error.errors || error.issues || [];
         errorsList.forEach((err) => {
           const path = err.path ? err.path.join('.') : 'field';
@@ -24,11 +25,16 @@ const validate = (location, schema) => {
             formattedErrors[path] = [];
           }
           formattedErrors[path].push(err.message || 'Validation error');
+          if (err.message && !messages.includes(err.message)) {
+            messages.push(err.message);
+          }
         });
+        const errorMessage = messages.length > 0 ? messages.join('. ') : "Validation failed";
         console.log("❌ Zod Validation Failed:", JSON.stringify(formattedErrors, null, 2));
         return res.status(400).json({
           success: false,
-          message: "Validation failed",
+          message: errorMessage,
+          error: errorMessage,
           errors: formattedErrors
         });
       }

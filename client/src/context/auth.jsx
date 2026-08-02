@@ -37,7 +37,7 @@ const getCookie = (name) => {
             try {
                 return decodeURIComponent(c.substring(nameEQ.length, c.length));
             } catch (e) {
-      console.error(e);
+                console.error(e);
                 return c.substring(nameEQ.length, c.length);
             }
         }
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
             const userData = getCookie("user");
             return userData ? JSON.parse(userData) : null;
         } catch (error) {
-      console.error(error);
+            console.error(error);
             return null;
         }
     });
@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }) => {
             }
             return null;
         } catch (error) {
-      console.error(error);
+            console.error(error);
             return null;
         }
     });
@@ -128,7 +128,6 @@ export const AuthProvider = ({ children }) => {
                 const brandingData = { ...brandingRes.data.data, role: roleToFetch };
                 localStorage.setItem(`branding_${roleToFetch}`, JSON.stringify(brandingData));
                 setActiveBranding(brandingData);
-                window.dispatchEvent(new CustomEvent("brandingUpdated", { detail: { role: roleToFetch, data: brandingData } }));
             }
         } catch (error) {
             console.error("Failed to fetch system/branding settings:", error);
@@ -137,17 +136,15 @@ export const AuthProvider = ({ children }) => {
 
     // Fetch system and branding data on mount and on branding role changes
     useEffect(() => {
-        // Load from cache first
         const cached = localStorage.getItem(`branding_${currentBrandingRole}`);
         if (cached) {
             try {
                 const parsed = JSON.parse(cached);
                 setActiveBranding(parsed.role ? parsed : { ...parsed, role: currentBrandingRole });
             } catch (e) {
-      console.error(e); }
+                console.error(e);
+            }
         }
-
-        // Background update fetch
         fetchSystemAndBranding(currentBrandingRole);
     }, [currentBrandingRole, fetchSystemAndBranding]);
 
@@ -183,7 +180,7 @@ export const AuthProvider = ({ children }) => {
             const decoded = jwtDecode(token);
             return decoded.exp * 1000 < Date.now();
         } catch (error) {
-      console.error(error);
+            console.error(error);
             return true;
         }
     };
@@ -195,7 +192,7 @@ export const AuthProvider = ({ children }) => {
             const decoded = jwtDecode(token);
             return decoded.role === 'admin' || decoded.isAdmin === true;
         } catch (error) {
-      console.error(error);
+            console.error(error);
             return false;
         }
     }, [token]);
@@ -231,7 +228,7 @@ export const AuthProvider = ({ children }) => {
                 isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
             };
 
-            // Save to cookies securely (Fix 5)
+            // Save to cookies securely
             setCookie("token", newToken, 7);
             if (newRefreshToken) setCookie("refreshToken", newRefreshToken, 7);
             setCookie("role", finalRole, 7);
@@ -260,18 +257,13 @@ export const AuthProvider = ({ children }) => {
                 } else if (finalRole === 'provider') {
                     if (userObj.profileComplete === false) {
                         navigate('/register-provider', { replace: true });
-                    } else if (!userObj.approved) {
-                        // Unapproved provider should not access provider routes
-                        showToast('Your account is pending approval. Please contact support for assistance.', 'info');
-                        logoutUser();
-                        return;
                     } else if (!userObj.testPassed) {
-                        navigate('/provider/test');
+                        navigate('/provider/test', { replace: true });
                     } else {
-                        navigate('/provider/dashboard');
+                        navigate('/provider/dashboard', { replace: true });
                     }
                 } else {
-                    navigate('/customer/services');
+                    navigate('/customer/services', { replace: true });
                 }
             }
 
@@ -287,7 +279,7 @@ export const AuthProvider = ({ children }) => {
         const currentRefreshToken = getCookie("refreshToken");
         const currentFcmToken = localStorage.getItem("fcmToken");
 
-        // Erase auth cookies securely (Fix 5)
+        // Erase auth cookies securely
         eraseCookie("token");
         eraseCookie("refreshToken");
         eraseCookie("role");
@@ -418,3 +410,5 @@ export const useAuth = () => {
     }
     return context;
 };
+
+export default AuthContext;

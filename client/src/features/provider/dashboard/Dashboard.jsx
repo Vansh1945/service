@@ -365,6 +365,18 @@ const Dashboard = () => {
           </div>
         )}
 
+        {profile && !profile.approved && (
+          <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-start gap-3 shadow-sm border-l-4 border-l-amber-500">
+            <FiClock className="w-7 h-7 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-800 text-sm">Account Verification Pending</p>
+              <p className="text-amber-700 text-xs mt-1 leading-relaxed">
+                Your provider profile and documents are submitted and under review by Admin. You can view your dashboard, profile, and payout settings. Customer bookings will be enabled once Admin approves your account.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Phase 8: Payout Readiness Status Card */}
         {profile && (
           <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center justify-between gap-4">
