@@ -1223,7 +1223,7 @@ class ComplaintService {
                           amount: recoveredAmount,
                           paymentStatus: 'completed',
                           paymentMethod: 'wallet',
-                          type: 'refund_recovery',
+                          type: 'refundrecovery',
                           balanceBefore: balanceBefore,
                           balanceAfter: balanceAfter,
                           complaint: complaint._id,

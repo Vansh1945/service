@@ -69,7 +69,6 @@ import * as AdminService from '../../../services/AdminService';
 import Pagination from '../../../components/ui/Pagination';
 import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
-import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import StatCard from '../../../components/ui/StatCard';
 import { formatDate, formatTime, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../../utils/format';

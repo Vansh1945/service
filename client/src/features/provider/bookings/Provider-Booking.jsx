@@ -944,29 +944,48 @@ const ProviderBooking = () => {
     }
   }, [showToast, refreshData, selectedImages]);
 
-  const handleBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
+  const handleBookingAction = useCallback(async (bookingOrId, action, additionalData = {}) => {
+    const bookingId = typeof bookingOrId === 'object' && bookingOrId !== null ? bookingOrId._id : bookingOrId;
+    let booking = typeof bookingOrId === 'object' && bookingOrId !== null ? bookingOrId : null;
+
     if (action === 'start') {
       setProofModal({ isOpen: true, action, bookingId });
       return;
     }
 
     if (action === 'complete') {
-      let booking = (selectedBooking && String(selectedBooking._id) === String(bookingId)) ? selectedBooking : null;
+      let activeBooking = booking;
 
-      if (!booking) {
+      if (!activeBooking) {
+        activeBooking = (selectedBooking && String(selectedBooking._id) === String(bookingId)) ? selectedBooking : null;
+      }
+
+      if (!activeBooking) {
         Object.values(bookings).forEach(list => {
           if (Array.isArray(list)) {
             const found = list.find(b => String(b._id) === String(bookingId));
-            if (found) booking = found;
+            if (found) activeBooking = found;
           }
         });
       }
 
-      const isCash = (booking?.paymentMethod || '').trim().toLowerCase() === 'cash';
-      const isVerified = (booking?.paymentStatus || '').trim().toLowerCase() === 'paid' || (booking?.paymentVerification?.status || '').trim().toLowerCase() === 'verified';
+      // Fetch latest booking from server if missing details (or if activeBooking is not found)
+      if (!activeBooking || !activeBooking.paymentMethod) {
+        try {
+          const res = await BookingService.getProviderBookingById(bookingId);
+          if (res.data?.data) {
+            activeBooking = res.data.data;
+          }
+        } catch (err) {
+          console.error("Failed to fetch booking for verification check:", err);
+        }
+      }
+
+      const isCash = (activeBooking?.paymentMethod || '').trim().toLowerCase() === 'cash';
+      const isVerified = (activeBooking?.paymentStatus || '').trim().toLowerCase() === 'paid' || (activeBooking?.paymentVerification?.status || '').trim().toLowerCase() === 'verified';
 
       if (isCash && !isVerified) {
-        setPaymentVerificationModal({ isOpen: true, booking });
+        setPaymentVerificationModal({ isOpen: true, booking: activeBooking });
       } else {
         setProofModal({ isOpen: true, action, bookingId });
       }
@@ -996,7 +1015,7 @@ const ProviderBooking = () => {
       });
     }
     await executeBookingAction(bookingId, action, additionalData);
-  }, [executeBookingAction, user, selectedImages, showToast]);
+  }, [executeBookingAction, user, selectedBooking, bookings, showToast]);
 
   const handleConfirmAction = useCallback(() => {
     const { data } = confirmDialog;
@@ -1319,7 +1338,7 @@ const ProviderBooking = () => {
                 <div className="flex gap-1.5 w-full">
                   <button
                     disabled={actionLoading.id !== null}
-                    onClick={() => handleBookingAction(booking._id, 'accept')}
+                    onClick={() => handleBookingAction(booking, 'accept')}
                     className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all"
                   >
                     {actionLoading.id === booking._id && actionLoading.type === 'accept' ? (
@@ -1331,7 +1350,7 @@ const ProviderBooking = () => {
                   </button>
                   <button
                     disabled={actionLoading.id !== null}
-                    onClick={() => handleBookingAction(booking._id, 'reject')}
+                    onClick={() => handleBookingAction(booking, 'reject')}
                     className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-danger hover:bg-danger/95 text-white text-xs font-bold rounded-lg transition-all"
                   >
                     {actionLoading.id === booking._id && actionLoading.type === 'reject' ? (
@@ -1348,7 +1367,7 @@ const ProviderBooking = () => {
                 {isAccepted ? (
                   <button
                     disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
-                    onClick={() => handleBookingAction(booking._id, 'start')}
+                    onClick={() => handleBookingAction(booking, 'start')}
                     className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300 disabled:cursor-not-allowed"
                   >
                     {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
@@ -1361,7 +1380,7 @@ const ProviderBooking = () => {
                 ) : isInProgress ? (
                   <button
                     disabled={actionLoading.id !== null}
-                    onClick={() => handleBookingAction(booking._id, 'complete')}
+                    onClick={() => handleBookingAction(booking, 'complete')}
                     className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-success hover:bg-success/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300"
                   >
                     {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
@@ -1381,8 +1400,10 @@ const ProviderBooking = () => {
   };
 
   // PROVIDER UX UPGRADE
-  const isSelectedPending = ['pending', 'assigned', 'searchingprovider', 'offered', 'reassigned'].includes((selectedBooking?.status || '').toLowerCase().replace(/[^a-z]/g, ''));
-  const isSelectedCompleted = (selectedBooking?.status || '').toLowerCase().replace(/[^a-z]/g, '') === 'completed';
+  const selectedStatusNormalized = (selectedBooking?.status || '').toLowerCase().replace(/[^a-z]/g, '');
+  const isSelectedInProgress = ['inprogress', 'in-progress', 'started', 'workstarted', 'ontheway', 'arrived'].includes(selectedStatusNormalized);
+  const isSelectedPending = ['pending', 'assigned', 'searchingprovider', 'offered', 'reassigned'].includes(selectedStatusNormalized);
+  const isSelectedCompleted = selectedStatusNormalized === 'completed';
   const selectedBookingTabs = selectedBooking ? [
     { id: 'booking', label: 'Booking Summary' },
     ...(!isSelectedPending ? [
@@ -1832,7 +1853,7 @@ const ProviderBooking = () => {
                         <div className="p-1.5 bg-primary/10 rounded-lg"><MapPin className="w-4 h-4 text-primary" /></div>
                         <h3 className="font-black text-secondary text-sm uppercase tracking-wide">Exact Address</h3>
                       </div>
-                      {['accepted', 'in-progress', 'assigned'].includes(selectedBooking.status) && (
+                      {(['accepted', 'assigned'].includes(selectedBooking.status) || isSelectedInProgress) && (
                         <button
                           onClick={() => {
                             setShowModal(false);
@@ -2033,7 +2054,7 @@ const ProviderBooking = () => {
                     </div>
 
                     {/* Photo Upload triggers only when accepted / in progress */}
-                    {['accepted', 'inprogress', 'in-progress', 'started', 'ontheway', 'arrived'].includes((selectedBooking.status || '').toLowerCase().replace(/[^a-z]/g, '')) && (
+                    {(selectedBooking.status === 'accepted' || isSelectedInProgress) && (
                       <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
                         <DownloadCloud className="w-3.5 h-3.5" />
                         {selectedBooking.providerWorkProof?.beforeImages?.length > 0 ? 'Upload Completion Photo' : 'Upload Before Photo'}
@@ -2083,7 +2104,7 @@ const ProviderBooking = () => {
                   )}
 
                   {/* Progress Specific disclosure logic: only show after start-job (in-progress or completed) */}
-                  {(['inprogress', 'in-progress', 'started', 'ontheway', 'arrived', 'completed', 'cancelled', 'rejected', 'expired', 'refunded'].includes((selectedBooking.status || '').toLowerCase().replace(/[^a-z]/g, ''))) ? (
+                  {(isSelectedInProgress || isSelectedCompleted || ['cancelled', 'rejected', 'expired', 'refunded'].includes(selectedStatusNormalized)) ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Before work proof */}
                       <div className="bg-white p-4 rounded-xl border border-gray-150 shadow-sm space-y-3">
@@ -2139,11 +2160,11 @@ const ProviderBooking = () => {
                             ))
                           ) : (
                             <div className="col-span-3 py-6 text-center text-gray-400 text-xs font-semibold">
-                              {selectedBooking.status === 'in-progress' ? (
+                              {isSelectedInProgress ? (
                                 <button
                                   onClick={() => {
                                     setShowModal(false);
-                                    handleBookingAction(selectedBooking._id, 'complete');
+                                    handleBookingAction(selectedBooking, 'complete');
                                   }}
                                   className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1 shadow-sm"
                                 >
@@ -2208,7 +2229,7 @@ const ProviderBooking = () => {
               {selectedBooking.status === 'pending' && (
                 <button
                   disabled={actionLoading.id !== null || isLimitReached}
-                  onClick={() => handleBookingAction(selectedBooking._id, 'accept')}
+                  onClick={() => handleBookingAction(selectedBooking, 'accept')}
                   className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5"
                 >
                   {actionLoading.id === selectedBooking._id && actionLoading.type === 'accept' ? (
@@ -2222,7 +2243,7 @@ const ProviderBooking = () => {
               {(selectedBooking.status === 'accepted' || selectedBooking.status === 'assigned') && (
                 <button
                   disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}
-                  onClick={() => handleBookingAction(selectedBooking._id, 'start')}
+                  onClick={() => handleBookingAction(selectedBooking, 'start')}
                   className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {actionLoading.id === selectedBooking._id && actionLoading.type === 'start' ? (
@@ -2233,10 +2254,10 @@ const ProviderBooking = () => {
                   <span>Start Service</span>
                 </button>
               )}
-              {selectedBooking.status === 'in-progress' && (
+              {isSelectedInProgress && (
                 <button
                   disabled={actionLoading.id !== null}
-                  onClick={() => handleBookingAction(selectedBooking._id, 'complete')}
+                  onClick={() => handleBookingAction(selectedBooking, 'complete')}
                   className="px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5"
                 >
                   {actionLoading.id === selectedBooking._id && actionLoading.type === 'complete' ? (

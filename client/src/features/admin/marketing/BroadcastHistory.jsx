@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useSocket } from '../../../socket/SocketContext';
 import { useNavigate } from 'react-router-dom';
 import * as NotificationService from '../../../services/NotificationService';
 import {
-    FiClock, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
+    FiClock,
     FiLoader, FiMessageSquare, FiRefreshCw, FiEye, FiDownload,
-    FiCopy, FiTrash2, FiXCircle, FiFilter
+    FiCopy, FiTrash2, FiFilter
 } from 'react-icons/fi';
 import { formatDate } from '../../../utils/format';
 import { toast } from 'react-toastify';
@@ -15,6 +15,7 @@ import Modal from '../../../components/ui/Modal';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import ConfirmDialog from '../../../components/ui/ConfirmDialog';
 import StatCard from '../../../components/ui/StatCard';
+import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
 const BroadcastHistory = () => {
     useAuth();
@@ -221,57 +222,78 @@ const BroadcastHistory = () => {
                 />
             </div>
 
-            {/* Filter Toolbar */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-6 flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600"><FiFilter /> Filters:</div>
-                    <select
-                        value={filterAudience}
-                        onChange={(e) => setFilterAudience(e.target.value)}
-                        className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium"
-                    >
-                        <option value="all">All Audiences</option>
-                        <option value="customer">Customers</option>
-                        <option value="provider">Providers</option>
-                    </select>
-                    <select
-                        value={filters.status}
-                        onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium"
-                    >
-                        <option value="">All Statuses</option>
-                        <option value="sent">Sent</option>
-                        <option value="pending">Pending</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                    <select
-                        value={filters.type}
-                        onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium"
-                    >
-                        <option value="">All Types</option>
-                        <option value="broadcast">Broadcast</option>
-                        <option value="system">System</option>
-                        <option value="booking">Booking</option>
-                        <option value="payment">Payment</option>
-                    </select>
-                </div>
-                <div className="flex items-center gap-2">
-                    <input
-                        type="date"
-                        value={filters.startDate}
-                        onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-2 py-1 text-xs"
-                    />
-                    <span className="text-xs text-gray-400">to</span>
-                    <input
-                        type="date"
-                        value={filters.endDate}
-                        onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-2 py-1 text-xs"
-                    />
-                </div>
-            </div>
+            <AdminLocalFilterBar
+                filters={{
+                    audience: filterAudience,
+                    status: filters.status,
+                    type: filters.type,
+                    startDate: filters.startDate,
+                    endDate: filters.endDate
+                }}
+                onChange={(key, value) => {
+                    if (key === 'audience') {
+                        setFilterAudience(value);
+                    } else {
+                        setFilters(prev => ({ ...prev, [key]: value }));
+                    }
+                }}
+                onClear={() => {
+                    setFilterAudience('all');
+                    setFilters({
+                        status: '',
+                        type: '',
+                        startDate: '',
+                        endDate: '',
+                        page: 1,
+                        limit: 20
+                    });
+                }}
+                fields={[
+                    {
+                        key: 'audience',
+                        label: 'Audience',
+                        type: 'select',
+                        options: [
+                            { value: 'all', label: 'All Audiences' },
+                            { value: 'customer', label: 'Customers' },
+                            { value: 'provider', label: 'Providers' }
+                        ]
+                    },
+                    {
+                        key: 'status',
+                        label: 'Status',
+                        type: 'select',
+                        options: [
+                            { value: '', label: 'All Statuses' },
+                            { value: 'sent', label: 'Sent' },
+                            { value: 'pending', label: 'Pending' },
+                            { value: 'cancelled', label: 'Cancelled' }
+                        ]
+                    },
+                    {
+                        key: 'type',
+                        label: 'Type',
+                        type: 'select',
+                        options: [
+                            { value: '', label: 'All Types' },
+                            { value: 'broadcast', label: 'Broadcast' },
+                            { value: 'system', label: 'System' },
+                            { value: 'booking', label: 'Booking' },
+                            { value: 'payment', label: 'Payment' }
+                        ]
+                    },
+                    {
+                        key: 'startDate',
+                        label: 'Start Date',
+                        type: 'date'
+                    },
+                    {
+                        key: 'endDate',
+                        label: 'End Date',
+                        type: 'date'
+                    }
+                ]}
+            />
 
             {/* Grid/Table history list */}
             {loadingHistory ? (

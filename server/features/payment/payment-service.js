@@ -84,7 +84,7 @@ const syncEarningsStatus = async (providerId) => {
         {
           $match: {
             provider: providerId,
-            type: { $in: ['penalty', 'refund_recovery', 'commission_deduction'] },
+            type: { $in: ['penalty', 'refundrecovery', 'commissiondeduction'] },
             paymentStatus: 'completed'
           }
         },

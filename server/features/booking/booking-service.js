@@ -4222,7 +4222,7 @@ class BookingService {
             amount: commission,
             paymentStatus: 'completed',
             paymentMethod: 'wallet',
-            type: 'commission_deduction',
+            type: 'commissiondeduction',
             balanceBefore: balanceBefore,
             balanceAfter: balanceAfter,
             deductionType: 'cash_booking_commission',
