@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FiUserCheck, FiDollarSign, FiRefreshCw, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Pagination from '../../../components/ui/Pagination';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
@@ -20,7 +19,7 @@ const CustomerWalletsPage = () => {
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, openInvestigationDrawer, getMergedQuery, refresh } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const fetchWallets = async () => {
@@ -48,9 +47,11 @@ const CustomerWalletsPage = () => {
     fetchWallets();
   }, [currentPage, limit, debouncedSearch]);
 
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('openDetail') === 'true' && data.users?.length > 0) {
+    if (params.get('openDetail') === 'true' && data.users?.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = params.get('search');
       const target = data.users.find(u =>
         u._id === searchVal ||
@@ -81,7 +82,7 @@ const CustomerWalletsPage = () => {
           </p>
         </div>
         <button
-          onClick={fetchWallets}
+          onClick={() => refresh(fetchWallets, setLoading)}
           className="text-xs bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-primary/90 font-bold shadow-xs transition-all flex items-center gap-1.5 self-start md:self-auto"
         >
           <FiShield className="w-4 h-4" /> Refresh Ledger

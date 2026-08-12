@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { 
-  CreditCard, QrCode, CheckCircle2, AlertTriangle, Edit3, Trash2, 
-  ShieldCheck, Loader2, PlusCircle, Check, DollarSign, Clock, 
-  Send, Eye, Bell, XCircle, ArrowUpRight, Lock, Activity
+import {
+    CreditCard, QrCode, CheckCircle2, AlertTriangle, Edit3, Trash2,
+    ShieldCheck, Loader2, PlusCircle, Check, DollarSign, Clock,
+    Send, Eye, Bell, XCircle, ArrowUpRight, Lock, Activity
 } from 'lucide-react';
 import * as ProviderService from '../../../../services/ProviderService';
 import * as SystemService from '../../../../services/SystemService';
@@ -10,14 +10,16 @@ import { formatCurrency, formatDate } from '../../../../utils/format';
 import { getWithdrawalStatusBadge } from '../../../../utils/status';
 import { IfscBankDetails } from '../../../../components/IfscBankDetails';
 
+import { getProviderPayoutState } from '../../../../utils/payoutState';
+
 const PayoutProfileTab = ({ showToast }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [withdrawing, setWithdrawing] = useState(false);
-    
+
     const [payoutMode, setPayoutMode] = useState('manual');
     const [payoutSettings, setPayoutSettings] = useState({});
-    
+
     const [walletData, setWalletData] = useState({
         availableBalance: 0,
         totalWithdrawn: 0,
@@ -25,10 +27,10 @@ const PayoutProfileTab = ({ showToast }) => {
         lastSettlementAmount: 0,
         lastSettlementDate: null
     });
-    
+
     const [recentWithdrawals, setRecentWithdrawals] = useState([]);
     const [notifications, setNotifications] = useState([]);
-    
+
     const [bankDetails, setBankDetails] = useState({
         accountNo: '',
         ifsc: '',
@@ -39,8 +41,14 @@ const PayoutProfileTab = ({ showToast }) => {
         bankVerificationStatus: 'pending',
         bankRejectReason: '',
         payoutEnabled: true,
-        defaultMethod: 'bank_account'
+        defaultMethod: 'bank_account',
+        passbookImage: '',
+        passbookImagePublicId: '',
+        uploadedAt: null
     });
+
+    const [passbookFile, setPassbookFile] = useState(null);
+    const [passbookPreview, setPassbookPreview] = useState('');
 
     const [modal, setModal] = useState({
         isOpen: false,
@@ -75,26 +83,27 @@ const PayoutProfileTab = ({ showToast }) => {
                 SystemService.getSystemSetting().catch(() => ({ data: {} }))
             ]);
 
-            const details = profileRes.data?.data?.bankDetails || profileRes.data?.bankDetails || {};
-            const providerName = profileRes.data?.data?.name || profileRes.data?.name || '';
-            const status = details.bankVerificationStatus || 'pending';
-
-            const preferred = details.preferredMethod || details.defaultMethod || 'bank_account';
+            const details = profileRes.data?.data?.bankDetails || profileRes.data?.bankDetails || profileRes.data?.provider?.bankDetails || {};
+            const providerName = profileRes.data?.data?.name || profileRes.data?.name || profileRes.data?.provider?.name || '';
+            const payoutState = getProviderPayoutState(details);
 
             setBankDetails({
-                accountNo: details.accountNo || '',
-                ifsc: details.ifsc || '',
-                bankName: details.bankName || '',
+                accountNo: payoutState.accountNo,
+                ifsc: payoutState.ifsc,
+                bankName: payoutState.bankName,
                 accountName: details.accountName || providerName || '',
-                upiId: details.upiId || '',
-                verified: status === 'verified',
-                bankVerificationStatus: status,
-                bankRejectReason: details.bankRejectReason || '',
-                payoutEnabled: details.payoutEnabled === true,
-                defaultMethod: preferred
+                upiId: payoutState.upiId,
+                verified: payoutState.verified,
+                bankVerificationStatus: payoutState.bankVerificationStatus,
+                bankRejectReason: payoutState.bankRejectReason,
+                payoutEnabled: payoutState.payoutEnabled,
+                defaultMethod: payoutState.preferredMethod,
+                passbookImage: details.passbookImage || '',
+                passbookImagePublicId: details.passbookImagePublicId || '',
+                uploadedAt: details.uploadedAt || null
             });
 
-            setWithdrawForm(prev => ({ ...prev, method: preferred }));
+            setWithdrawForm(prev => ({ ...prev, method: payoutState.preferredMethod }));
 
             if (dashboardRes.data?.data) {
                 const dash = dashboardRes.data.data;
@@ -110,12 +119,12 @@ const PayoutProfileTab = ({ showToast }) => {
                     lastSettlementAmount: lastCompleted?.amount || 0,
                     lastSettlementDate: lastCompleted?.completedAt || lastCompleted?.updatedAt || null
                 });
-                
+
                 setRecentWithdrawals(list);
-                
+
                 // Extract payout notifications if available
                 const allNotifs = dash.notifications || [];
-                const payoutNotifs = allNotifs.filter(n => 
+                const payoutNotifs = allNotifs.filter(n =>
                     (n.title && n.title.toLowerCase().includes('bank')) ||
                     (n.title && n.title.toLowerCase().includes('payout')) ||
                     (n.title && n.title.toLowerCase().includes('withdrawal')) ||
@@ -165,15 +174,43 @@ const PayoutProfileTab = ({ showToast }) => {
 
     const handleCloseModal = () => {
         setModal({ isOpen: false, type: 'bank_account' });
+        setPassbookFile(null);
+        setPassbookPreview('');
+    };
+
+    const handlePassbookFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            if (showToast) showToast('Invalid format. Accepted formats: JPG, PNG, PDF', 'error');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            if (showToast) showToast('File size must not exceed 5MB', 'error');
+            return;
+        }
+
+        setPassbookFile(file);
+        
+        if (file.type === 'application/pdf') {
+            setPassbookPreview(URL.createObjectURL(file));
+        } else {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPassbookPreview(reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const handleSave = async (e) => {
         e.preventDefault();
         try {
             setSaving(true);
-            const payload = {
-                accountName: formData.accountName.trim()
-            };
 
             if (modal.type === 'bank_account') {
                 if (!formData.accountNo || !/^[0-9]{9,18}$/.test(formData.accountNo.trim())) {
@@ -186,24 +223,66 @@ const PayoutProfileTab = ({ showToast }) => {
                     setSaving(false);
                     return;
                 }
-                payload.accountNo = formData.accountNo.trim();
-                payload.ifsc = formData.ifsc.trim().toUpperCase();
-                payload.bankName = formData.bankName.trim();
+
+                const hasExistingBank = !!bankDetails.accountNo;
+                const detailsChanged = 
+                    formData.accountNo.trim() !== (bankDetails.accountNo || '') ||
+                    formData.ifsc.trim().toUpperCase() !== (bankDetails.ifsc || '') ||
+                    formData.accountName.trim() !== (bankDetails.accountName || '');
+
+                if (!hasExistingBank || detailsChanged) {
+                    if (!passbookFile) {
+                        if (showToast) showToast('Bank Passbook or Cancelled Cheque is required.', 'error');
+                        setSaving(false);
+                        return;
+                    }
+                }
+
+                const fd = new FormData();
+                fd.append('updateType', 'bank');
+                fd.append('accountName', formData.accountName.trim());
+                fd.append('accountNo', formData.accountNo.trim());
+                fd.append('ifsc', formData.ifsc.trim().toUpperCase());
+                fd.append('bankName', formData.bankName.trim());
+                if (passbookFile) {
+                    fd.append('passbookImage', passbookFile);
+                }
+
+                const res = await ProviderService.updateProfile(fd);
+
+                if (res.data?.isSameData) {
+                    if (showToast) showToast(res.data.message || 'No changes detected.', 'info');
+                    return;
+                }
+
+                if (res.data?.success) {
+                    if (showToast) showToast(res.data.message || 'Bank details submitted successfully and are awaiting Admin verification.', 'success');
+                    handleCloseModal();
+                    fetchPayoutDetails();
+                }
             } else {
                 if (!formData.upiId || !/^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/.test(formData.upiId.trim())) {
                     if (showToast) showToast('Please enter a valid UPI ID (e.g. name@bank)', 'error');
                     setSaving(false);
                     return;
                 }
-                payload.upiId = formData.upiId.trim();
-            }
 
-            const res = await ProviderService.updateProfile(payload);
+                const fd = new FormData();
+                fd.append('accountName', formData.accountName.trim());
+                fd.append('upiId', formData.upiId.trim());
 
-            if (res.data?.success) {
-                if (showToast) showToast(res.data.message || 'Payout profile updated. Re-submitted for Admin verification.', 'success');
-                handleCloseModal();
-                fetchPayoutDetails();
+                const res = await ProviderService.updateProfile(fd);
+
+                if (res.data?.isSameData) {
+                    if (showToast) showToast(res.data.message || 'No changes detected.', 'info');
+                    return;
+                }
+
+                if (res.data?.success) {
+                    if (showToast) showToast(res.data.message || 'Payout profile updated.', 'success');
+                    handleCloseModal();
+                    fetchPayoutDetails();
+                }
             }
         } catch (error) {
             console.error('Save payout error:', error);
@@ -322,7 +401,7 @@ const PayoutProfileTab = ({ showToast }) => {
 
     return (
         <div className="space-y-6 font-inter">
-            
+
             {/* 1. SECTION 1: PAYOUT STATUS */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -336,9 +415,8 @@ const PayoutProfileTab = ({ showToast }) => {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 text-xs font-extrabold rounded-full border ${
-                            payoutMode === 'razorpayx' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}>
+                        <span className={`px-3 py-1 text-xs font-extrabold rounded-full border ${payoutMode === 'razorpayx' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}>
                             {payoutMode === 'razorpayx' ? 'Direct Gateway Transfer' : 'Standard Manual Mode'}
                         </span>
                     </div>
@@ -356,13 +434,12 @@ const PayoutProfileTab = ({ showToast }) => {
                     {/* Verification Status */}
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                         <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Verification Status</span>
-                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1.5 ${
-                            bankDetails.bankVerificationStatus === 'verified'
-                                ? 'text-emerald-600'
-                                : bankDetails.bankVerificationStatus === 'rejected'
-                                    ? 'text-rose-600'
-                                    : 'text-amber-600'
-                        }`}>
+                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1.5 ${bankDetails.bankVerificationStatus === 'verified'
+                            ? 'text-emerald-600'
+                            : bankDetails.bankVerificationStatus === 'rejected'
+                                ? 'text-rose-600'
+                                : 'text-amber-600'
+                            }`}>
                             {bankDetails.bankVerificationStatus === 'verified' ? (
                                 <><ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified ✓</>
                             ) : bankDetails.bankVerificationStatus === 'rejected' ? (
@@ -376,9 +453,8 @@ const PayoutProfileTab = ({ showToast }) => {
                     {/* Withdrawal Status */}
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                         <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Withdrawal Status</span>
-                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1 ${
-                            isWithdrawalActive ? 'text-emerald-600' : 'text-amber-600'
-                        }`}>
+                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1 ${isWithdrawalActive ? 'text-emerald-600' : 'text-amber-600'
+                            }`}>
                             {isWithdrawalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Lock className="w-4 h-4 text-amber-600" />}
                             {isWithdrawalActive ? 'Active / Ready' : 'Locked (Pending Verification)'}
                         </span>
@@ -439,14 +515,13 @@ const PayoutProfileTab = ({ showToast }) => {
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-primary" /> Payment Destinations
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Bank Account Card */}
-                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${
-                        bankDetails.defaultMethod === 'bank_account' && hasBank 
-                            ? 'border-primary shadow-md ring-2 ring-primary/10' 
-                            : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
-                    }`}>
+                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${bankDetails.defaultMethod === 'bank_account' && hasBank
+                        ? 'border-primary shadow-md ring-2 ring-primary/10'
+                        : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
+                        }`}>
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -536,11 +611,10 @@ const PayoutProfileTab = ({ showToast }) => {
                     </div>
 
                     {/* UPI VPA Card */}
-                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${
-                        (bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi') && hasUpi 
-                            ? 'border-primary shadow-md ring-2 ring-primary/10' 
-                            : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
-                    }`}>
+                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${(bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi') && hasUpi
+                        ? 'border-primary shadow-md ring-2 ring-primary/10'
+                        : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
+                        }`}>
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
@@ -905,17 +979,99 @@ const PayoutProfileTab = ({ showToast }) => {
 
                         <form onSubmit={handleSave} className="space-y-4">
                             {modal.type === 'bank_account' ? (
-                                <IfscBankDetails
-                                    value={{
-                                        ifsc: formData.ifsc,
-                                        accountNo: formData.accountNo,
-                                        bankName: formData.bankName
-                                    }}
-                                    onChange={(updated) => setFormData(prev => ({ ...prev, ...updated }))}
-                                    showAccountName={true}
-                                    accountNameValue={formData.accountName}
-                                    onAccountNameChange={(val) => setFormData(prev => ({ ...prev, accountName: val }))}
-                                />
+                                <>
+                                    <IfscBankDetails
+                                        value={{
+                                            ifsc: formData.ifsc,
+                                            accountNo: formData.accountNo,
+                                            bankName: formData.bankName
+                                        }}
+                                        onChange={(updated) => setFormData(prev => ({ ...prev, ...updated }))}
+                                        showAccountName={true}
+                                        accountNameValue={formData.accountName}
+                                        onAccountNameChange={(val) => setFormData(prev => ({ ...prev, accountName: val }))}
+                                    />
+                                    
+                                    <div className="mt-4 space-y-2">
+                                        <label className="block text-xs font-semibold text-slate-700">
+                                            Bank Passbook / Cancelled Cheque *
+                                        </label>
+                                        
+                                        {(passbookPreview || bankDetails.passbookImage) ? (
+                                            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-white border flex items-center justify-center relative flex-shrink-0">
+                                                        {(passbookPreview ? passbookFile?.type === 'application/pdf' : bankDetails.passbookImage?.toLowerCase().endsWith('.pdf')) ? (
+                                                            <div className="flex flex-col items-center justify-center text-center">
+                                                                <span className="text-[10px] font-black text-rose-500">PDF</span>
+                                                            </div>
+                                                        ) : (
+                                                            <img 
+                                                                src={passbookPreview || bankDetails.passbookImage} 
+                                                                alt="Passbook Thumbnail" 
+                                                                className="w-full h-full object-cover" 
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="text-xs font-bold text-slate-700 block truncate max-w-[150px]">
+                                                            {passbookFile ? passbookFile.name : 'Passbook Uploaded'}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 font-bold block uppercase mt-0.5">
+                                                            {bankDetails.uploadedAt ? `Uploaded: ${new Date(bankDetails.uploadedAt).toLocaleDateString()}` : 'Document Uploaded'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex gap-1 flex-shrink-0">
+                                                    <label htmlFor="passbook-modal-upload" className="px-2 py-1 text-slate-600 hover:text-primary hover:bg-slate-100 rounded-lg text-[10px] font-bold cursor-pointer transition-colors">
+                                                        Replace
+                                                    </label>
+                                                    
+                                                    {(passbookPreview || bankDetails.passbookImage) && (
+                                                        <a 
+                                                            href={passbookPreview || bankDetails.passbookImage} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="px-2 py-1 text-primary hover:bg-primary/10 rounded-lg text-[10px] font-bold text-center block transition-colors"
+                                                        >
+                                                            Preview
+                                                        </a>
+                                                    )}
+
+                                                    {bankDetails.passbookImage && (
+                                                        <a 
+                                                            href={bankDetails.passbookImage} 
+                                                            download={`passbook_${bankDetails.accountName || 'provider'}.jpg`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded-lg text-[10px] font-bold text-center block transition-colors"
+                                                        >
+                                                            Download
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 bg-slate-50/50 text-center hover:bg-slate-50 transition-colors relative">
+                                                <label htmlFor="passbook-modal-upload" className="cursor-pointer block">
+                                                    <div className="space-y-1">
+                                                        <span className="text-xs text-primary font-bold block">Click to upload Passbook / Cheque</span>
+                                                        <span className="text-[10px] text-slate-400 block font-medium">Accepted Formats: JPG, PNG, PDF (Max 5 MB)</span>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        )}
+                                        
+                                        <input 
+                                            id="passbook-modal-upload" 
+                                            type="file" 
+                                            onChange={handlePassbookFileChange} 
+                                            accept="image/jpeg,image/png,image/jpg,application/pdf" 
+                                            className="hidden" 
+                                        />
+                                    </div>
+                                </>
                             ) : (
                                 <>
                                     <div>

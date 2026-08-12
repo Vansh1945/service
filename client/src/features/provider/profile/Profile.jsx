@@ -243,11 +243,11 @@ const ProviderProfile = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const kycFields = ['aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie'];
+    const kycFields = ['aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie', 'passbookImage'];
     if (kycFields.includes(field)) {
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
       if (!allowedTypes.includes(file.type)) {
-        showToast('Only JPG, JPEG, PNG, and WEBP images are allowed', 'error');
+        showToast('Only JPG, JPEG, PNG, WEBP, and PDF files are allowed', 'error');
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
@@ -927,96 +927,60 @@ const ProviderProfile = () => {
                   )}
                 </div>
 
-                {/* Bank Account Details Card */}
+                {/* Bank Account Details Card (Read-Only Display - PART 2 Architecture) */}
                 <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 text-left">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Bank Account Details</h3>
-                    <button onClick={() => setEditMode({ ...editMode, bank: !editMode.bank })}
-                      className={`text-[10px] font-bold text-primary hover:underline`}>
-                      {editMode.bank ? 'Cancel' : 'Edit Bank'}
+                    <button
+                      onClick={() => setActiveTab('payout')}
+                      className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1"
+                    >
+                      Manage in Payout Profile →
                     </button>
                   </div>
 
-                  {editMode.bank ? (
-                    <form onSubmit={(e) => { e.preventDefault(); if (isBankValid) { updateProfile('bank'); } }} className="space-y-4 text-left">
-                      <IfscBankDetails
-                        value={{
-                          ifsc: profileData.bankDetails.ifsc,
-                          accountNo: profileData.bankDetails.accountNo,
-                          bankName: profileData.bankDetails.bankName,
-                          branch: profileData.bankDetails.branch,
-                          district: profileData.bankDetails.district,
-                          state: profileData.bankDetails.state,
-                          city: profileData.bankDetails.city,
-                          address: profileData.bankDetails.address,
-                        }}
-                        onChange={(updated) => {
-                          setProfileData((prev) => ({
-                            ...prev,
-                            bankDetails: {
-                              ...prev.bankDetails,
-                              ifsc: updated.ifsc || '',
-                              accountNo: updated.accountNo || '',
-                              bankName: updated.bankName || '',
-                              branch: updated.branch || '',
-                              district: updated.district || '',
-                              state: updated.state || '',
-                              city: updated.city || '',
-                              address: updated.address || '',
-                            }
-                          }));
-                        }}
-                        onValidityChange={setIsBankValid}
-                        showAccountName={true}
-                        accountNameValue={profileData.bankDetails.accountName || ''}
-                        onAccountNameChange={(name) => {
-                          setProfileData((prev) => ({
-                            ...prev,
-                            bankDetails: {
-                              ...prev.bankDetails,
-                              accountName: name,
-                            }
-                          }));
-                        }}
-                      />
-                      <Processing
-                        type="submit"
-                        loading={isSaving}
-                        disabled={!isBankValid || isSaving}
-                        loadingText="Saving..."
-                        className="w-full py-2 bg-primary text-white rounded-xl text-xs font-bold disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        Save Bank Details
-                      </Processing>
-                    </form>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-4 text-xs font-bold text-secondary">
-                        <div>
-                          <span className="text-neutral-400 block text-[10px]">Holder Name</span>
-                          <span>{profileData.bankDetails.accountName || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-400 block text-[10px]">Bank Name</span>
-                          <span>{profileData.bankDetails.bankName || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-400 block text-[10px]">Account Number</span>
-                          <span>{profileData.bankDetails.accountNo || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-neutral-400 block text-[10px]">IFSC Code</span>
-                          <span>{profileData.bankDetails.ifsc || '—'}</span>
-                        </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4 text-xs font-bold text-secondary">
+                      <div>
+                        <span className="text-neutral-400 block text-[10px]">Holder Name</span>
+                        <span>{profileData.bankDetails?.accountName || '—'}</span>
                       </div>
-                      <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
-                        <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Verification Status</span>
-                        <span className={`inline-flex items-center text-[9px] font-black uppercase px-2 py-0.5 rounded select-none ${profileData.bankDetails.verified ? 'bg-success/15 text-emerald-700' : 'bg-amber-50 text-amber-600'}`}>
-                          {profileData.bankDetails.verified ? 'Verified' : 'Pending'}
-                        </span>
+                      <div>
+                        <span className="text-neutral-400 block text-[10px]">Bank Name</span>
+                        <span>{profileData.bankDetails?.bankName || '—'}</span>
                       </div>
+                      <div>
+                        <span className="text-neutral-400 block text-[10px]">Account Number</span>
+                        <span>{profileData.bankDetails?.accountNo ? `•••• ${profileData.bankDetails.accountNo.slice(-4)}` : '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-400 block text-[10px]">IFSC Code</span>
+                        <span>{profileData.bankDetails?.ifsc || '—'}</span>
+                      </div>
+                      {profileData.bankDetails?.upiId && (
+                        <div>
+                          <span className="text-neutral-400 block text-[10px]">UPI ID</span>
+                          <span>{profileData.bankDetails.upiId}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                    <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
+                      <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Verification Status</span>
+                      <span className={`inline-flex items-center text-[9px] font-black uppercase px-2 py-0.5 rounded select-none ${
+                        profileData.bankDetails?.bankVerificationStatus === 'verified'
+                          ? 'bg-success/15 text-emerald-700'
+                          : profileData.bankDetails?.bankVerificationStatus === 'rejected'
+                            ? 'bg-rose-50 text-rose-600'
+                            : 'bg-amber-50 text-amber-600'
+                      }`}>
+                        {profileData.bankDetails?.bankVerificationStatus === 'verified'
+                          ? 'Verified'
+                          : profileData.bankDetails?.bankVerificationStatus === 'rejected'
+                            ? 'Rejected'
+                            : 'Pending Review'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Delete Account Card */}
@@ -1333,7 +1297,7 @@ const ProviderProfile = () => {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <input id="passbookUpload" type="file" onChange={(e) => handleFileChange(e, 'passbookImage')} accept="image/*" className="hidden" />
+                          <input id="passbookUpload" type="file" onChange={(e) => handleFileChange(e, 'passbookImage')} accept="image/jpeg,image/png,image/jpg,application/pdf" className="hidden" />
                           <label htmlFor="passbookUpload" className="px-3 py-1.5 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-xl text-[10px] font-black text-secondary cursor-pointer select-none">
                             <Upload className="w-3.5 h-3.5 inline mr-1" /> Change
                           </label>

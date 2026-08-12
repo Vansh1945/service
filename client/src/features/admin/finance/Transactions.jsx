@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import * as TransactionService from '../../../services/TransactionService';
@@ -130,7 +130,7 @@ const AdminTransactions = () => {
     financialYear,
     month,
     quarter,
-    zoneIds,
+    zoneIds
   } = useAdminFilter();
 
   const [transactions, setTransactions] = useState([]);
@@ -182,9 +182,11 @@ const AdminTransactions = () => {
   }, [fetchLedger, filterType, year, financialYear, month, quarter, zoneIds, searchQuery]);
 
   // Auto-open TransactionLedgerDetailModal if openDetail query param is present
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('openDetail') === 'true' && transactions.length > 0 && !modalOpen) {
+    if (params.get('openDetail') === 'true' && transactions.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = params.get('search');
       const target = transactions.find(t =>
         t.transactionId === searchVal ||
@@ -198,7 +200,7 @@ const AdminTransactions = () => {
         setModalOpen(true);
       }
     }
-  }, [transactions, modalOpen]);
+  }, [transactions]);
 
   // Reset to page 1 when ledger tab changes
   const handleTabChange = (tabId) => {
@@ -620,7 +622,16 @@ const AdminTransactions = () => {
       {/* ── Transaction Ledger Detail Modal ───────────────────────────────── */}
       <TransactionLedgerDetailModal
         isOpen={modalOpen}
-        onClose={() => { setModalOpen(false); setSelectedTxn(null); }}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedTxn(null);
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('openDetail') === 'true') {
+            params.delete('openDetail');
+            const searchStr = params.toString();
+            navigate(searchStr ? `?${searchStr}` : window.location.pathname, { replace: true });
+          }
+        }}
         initialData={selectedTxn}
       />
     </div>

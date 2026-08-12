@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FiCheckCircle, FiDollarSign, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Pagination from '../../../components/ui/Pagination';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
@@ -48,9 +47,11 @@ const SettlementsPage = () => {
     fetchSettlements();
   }, [currentPage, limit, debouncedSearch]);
 
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('openDetail') === 'true' && data.settlements?.length > 0) {
+    if (params.get('openDetail') === 'true' && data.settlements?.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = params.get('search');
       const target = data.settlements.find(s =>
         s.settlementId === searchVal ||

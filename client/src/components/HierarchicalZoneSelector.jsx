@@ -167,17 +167,17 @@ const HierarchicalZoneSelector = ({
 
   return (
     <div className="relative w-full" ref={dropdownRef}>
-      <label className="block text-sm font-medium text-secondary mb-1.5">
+      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
         {label}
       </label>
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm shadow-sm hover:border-gray-400 transition-all font-semibold"
+        className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary cursor-pointer flex justify-between items-center transition-all hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
       >
-        <span className="text-gray-700 truncate font-semibold">
-          {(selectedZoneIds || []).length === 0 ? 'Select Zones (Leave empty for Global)' : `${(selectedZoneIds || []).length} Zones Selected`}
+        <span className="text-secondary truncate font-semibold">
+          {(selectedZoneIds || []).length === 0 ? 'Select Zones (Global)' : `${(selectedZoneIds || []).length} Selected`}
         </span>
-        {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+        {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
       </div>
 
       {isOpen && (

@@ -85,7 +85,8 @@ const AdminProvidersPage = () => {
     month,
     quarter,
     zoneIds,
-    getMergedQuery
+    getMergedQuery,
+    reset
   } = useAdminFilter();
 
   // Advanced Filters
@@ -321,21 +322,23 @@ const AdminProvidersPage = () => {
   }, [filters, sortBy, sortOrder, pendingProviders, getDaysPending]);
 
   const clearFilters = () => {
-    setFilters({
-      services: '',
-      city: '',
-      state: '',
-      experience: '',
-      age: '',
-      testPassed: '',
-      profileComplete: '',
-      bankVerified: '',
-      minDaysPending: '',
-      maxDaysPending: '',
-      hasResume: '',
-      hasPassbook: ''
-    });
-    setSearchTerm('');
+    reset(() => {
+      setFilters({
+        services: '',
+        city: '',
+        state: '',
+        experience: '',
+        age: '',
+        testPassed: '',
+        profileComplete: '',
+        bankVerified: '',
+        minDaysPending: '',
+        maxDaysPending: '',
+        hasResume: '',
+        hasPassbook: ''
+      });
+      setSearchTerm('');
+    }, () => fetchProviders(false));
   };
 
   const fetchProviderDetails = useCallback(async (providerId) => {
@@ -589,11 +592,16 @@ const AdminProvidersPage = () => {
         </div>
 
         {/* Filters and Sorting */}
-
         <AdminLocalFilterBar
+          searchValue={searchTerm}
+          onSearchChange={(e) => setSearchTerm(e.target.value)}
+          onSearchClear={() => setSearchTerm('')}
+          searchPlaceholder="Search provider by name, email, phone, ID, city, state..."
           filters={filters}
           onChange={(key, val) => setFilters({ ...filters, [key]: val })}
           onClear={clearFilters}
+          showFilters={showFilters}
+          setShowFilters={setShowFilters}
           fields={[
             { key: 'services', label: 'Services', placeholder: 'e.g., Cleaning', type: 'text' },
             { key: 'city', label: 'City', placeholder: 'Filter by city', type: 'text' },
@@ -638,8 +646,6 @@ const AdminProvidersPage = () => {
             { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
             { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' }
           ]}
-          showFilters={showFilters}
-          setShowFilters={setShowFilters}
         />
 
         {/* Content */}
@@ -720,6 +726,7 @@ const AdminProvidersPage = () => {
           onConfirm={handleModalConfirm}
           onCancel={handleModalCancel}
           processing={processingAction === approvalAction}
+          selectedProvider={selectedProvider}
         />
         {documentView.visible && (
           <DocumentViewModal
@@ -834,12 +841,25 @@ const DocumentViewModal = React.memo(({ documentView, closeDocumentView }) => (
         <h3 className="text-lg font-semibold text-secondary">
           {documentView.type === 'image' ? 'Image Preview' : 'Document View'}
         </h3>
-        <button
-          onClick={closeDocumentView}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-2">
+          {documentView.url && (
+            <a
+              href={documentView.url}
+              download="document.jpg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-700 text-white rounded-lg hover:from-teal-600 hover:to-teal-800 transition-all duration-200 font-bold text-xs shadow-sm"
+            >
+              Download File
+            </a>
+          )}
+          <button
+            onClick={closeDocumentView}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
       </div>
       <div className="p-4 flex items-center justify-center bg-gray-50 min-h-[400px]">
         {documentView.type === 'image' ? (
@@ -1170,15 +1190,58 @@ const ProviderDetailsModal = ({
                         {selectedProvider.bankDetails.address || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2">
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
                       <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verification Status</span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.verified
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.bankVerificationStatus === 'verified'
+                          ? 'bg-green-100 text-green-800'
+                          : selectedProvider.bankDetails.bankVerificationStatus === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                        {selectedProvider.bankDetails.verified ? 'Verified' : 'Pending'}
+                        {selectedProvider.bankDetails.bankVerificationStatus ? selectedProvider.bankDetails.bankVerificationStatus.toUpperCase() : (selectedProvider.bankDetails.verified ? 'VERIFIED' : 'PENDING')}
                       </span>
                     </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Document Uploaded At</span>
+                      <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                        {selectedProvider.bankDetails.uploadedAt ? new Date(selectedProvider.bankDetails.uploadedAt).toLocaleString() : 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Uploaded By</span>
+                      <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                        Provider
+                      </span>
+                    </div>
+
+                    {selectedProvider.bankDetails.bankVerifiedAt && (
+                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                        <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verified At</span>
+                        <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                          {new Date(selectedProvider.bankDetails.bankVerifiedAt).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedProvider.bankDetails.bankVerifiedBy && (
+                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                        <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verified By</span>
+                        <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                          {selectedProvider.bankDetails.bankVerifiedBy.name || selectedProvider.bankDetails.bankVerifiedBy.email || 'Admin'}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedProvider.bankDetails.bankRejectReason && (
+                      <div className="py-2">
+                        <span className="text-sm text-red-500 font-bold block mb-1">Bank Reject Reason</span>
+                        <span className="text-xs text-red-700 bg-red-50 p-2.5 rounded-lg block font-medium">
+                          {selectedProvider.bankDetails.bankRejectReason}
+                        </span>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-gray-500 text-center py-4">Bank details not provided</p>
@@ -1235,10 +1298,49 @@ const ProviderDetailsModal = ({
                         </div>
                         <button
                           onClick={() => viewDocument(selectedProvider, doc.type)}
-                          className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium"
+                          className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs"
                         >
                           View Full Size
                         </button>
+                        {doc.type === 'passbook' && (
+                          <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-[11px] text-gray-500 font-medium">
+                            <div className="flex justify-between">
+                              <span>Uploaded Date:</span>
+                              <span className="text-secondary font-bold">
+                                {selectedProvider.bankDetails?.uploadedAt ? new Date(selectedProvider.bankDetails.uploadedAt).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Uploaded By:</span>
+                              <span className="text-secondary font-bold">Provider</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Verification Status:</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${selectedProvider.bankDetails?.bankVerificationStatus === 'verified'
+                                  ? 'bg-green-50 text-green-700'
+                                  : selectedProvider.bankDetails?.bankVerificationStatus === 'rejected'
+                                    ? 'bg-rose-50 text-rose-600'
+                                    : 'bg-amber-50 text-amber-600'
+                                }`}>
+                                {selectedProvider.bankDetails?.bankVerificationStatus || 'pending'}
+                              </span>
+                            </div>
+                            {selectedProvider.bankDetails?.bankRejectReason && (
+                              <div className="text-[10px] text-red-500 font-bold bg-rose-50/50 p-2 rounded-lg mt-1">
+                                Reject Reason: {selectedProvider.bankDetails.bankRejectReason}
+                              </div>
+                            )}
+                            <a
+                              href={doc.src}
+                              download={`passbook_${selectedProvider.name}.jpg`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full py-2 bg-gradient-to-r from-teal-500 to-teal-700 text-white rounded-lg hover:from-teal-600 hover:to-teal-800 transition-all duration-200 font-bold text-center block mt-2 text-[10px]"
+                            >
+                              Download Passbook Document
+                            </a>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1363,8 +1465,18 @@ const ApprovalModal = ({
   onRemarksChange,
   onConfirm,
   onCancel,
-  processing
+  processing,
+  selectedProvider
 }) => {
+  const [comparisonConfirmed, setComparisonConfirmed] = useState(false);
+
+  // Reset comparison checkbox when modal opens/closes
+  React.useEffect(() => {
+    if (show) {
+      setComparisonConfirmed(false);
+    }
+  }, [show]);
+
   if (!show) return null;
 
   const isApprove = action === 'approved' || action === 'bank_approved';
@@ -1372,7 +1484,7 @@ const ApprovalModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-center mb-4">
             {isApprove ? (
@@ -1393,20 +1505,111 @@ const ApprovalModal = ({
             {action === 'bank_rejected' && 'Reject Bank Update'}
           </h3>
 
-          <p className="text-center text-gray-600 mb-6">
+          <p className="text-center text-gray-600 mb-6 text-sm">
             Are you sure you want to {isApprove ? 'approve' : 'reject'} <strong>{providerName}</strong>{action.startsWith('bank_') ? "'s bank details update" : ''}?
           </p>
 
+          {/* Verification Comparison Sheet */}
+          {action === 'bank_approved' && selectedProvider && (
+            <div className="mb-6 border border-teal-200 rounded-xl p-4 bg-teal-50/10 text-xs text-secondary font-medium space-y-4">
+              <h4 className="font-bold text-teal-800 text-sm border-b pb-2">Verification Comparison Sheet</h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Proposed bank details */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Submitted Bank Details</span>
+                  <div className="space-y-2 bg-white p-3 rounded-lg border border-teal-50">
+                    <div>
+                      <span className="text-gray-500 block text-[9px] uppercase font-bold">Holder Name</span>
+                      <div className="font-bold text-secondary text-xs">{selectedProvider.bankDetails?.accountName || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[9px] uppercase font-bold">Account Number</span>
+                      <div className="font-bold text-secondary font-mono text-xs">{selectedProvider.bankDetails?.accountNo || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[9px] uppercase font-bold">IFSC Code</span>
+                      <div className="font-bold text-secondary font-mono text-xs">{selectedProvider.bankDetails?.ifsc || 'N/A'}</div>
+                    </div>
+                    {selectedProvider.bankDetails?.bankName && (
+                      <div>
+                        <span className="text-gray-500 block text-[9px] uppercase font-bold">Bank Name</span>
+                        <div className="font-bold text-secondary text-xs">{selectedProvider.bankDetails.bankName}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Passbook preview */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Passbook Document</span>
+                  {selectedProvider.bankDetails?.passbookImage ? (
+                    <div className="space-y-2">
+                      <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden border border-teal-150 relative">
+                        {selectedProvider.bankDetails.passbookImage.toLowerCase().endsWith('.pdf') ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-teal-50/20 text-center">
+                            <FileText className="w-8 h-8 text-rose-500 mb-1" />
+                            <span className="text-[10px] font-black text-rose-600">PDF Passbook</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={selectedProvider.bankDetails.passbookImage}
+                            alt="Passbook Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={selectedProvider.bankDetails.passbookImage}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-1.5 bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 rounded-lg text-[9px] font-bold text-center transition-colors"
+                        >
+                          Open Full Image
+                        </a>
+                        <a
+                          href={selectedProvider.bankDetails.passbookImage}
+                          download={`passbook_${selectedProvider.name}.jpg`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[9px] font-bold text-center transition-colors"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-red-500 font-bold py-4 text-center">No Passbook Uploaded!</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-teal-200/60 pt-3 flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="confirm-matched"
+                  checked={comparisonConfirmed}
+                  onChange={(e) => setComparisonConfirmed(e.target.checked)}
+                  className="mt-0.5 accent-primary h-3.5 w-3.5 border-teal-300 rounded cursor-pointer"
+                />
+                <label htmlFor="confirm-matched" className="text-[10px] font-medium leading-tight text-slate-600 cursor-pointer select-none">
+                  I confirm that I have compared the submitted Holder Name, Account Number, and IFSC Code against the passbook image and found them to match.
+                </label>
+              </div>
+            </div>
+          )}
+
           <div className="mb-6 text-left">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               {isApprove ? 'Remarks' : 'Reason for Rejection'} {!isApprove && <span className="text-red-500">*</span>}
             </label>
             <textarea
               value={remarks}
               onChange={onRemarksChange}
               placeholder={isApprove ? 'Optional remarks for approval...' : 'Please provide a reason for rejection...'}
-              className={`w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 ${isApprove ? 'focus:ring-primary' : 'focus:ring-red-500'} focus:border-transparent transition-all duration-200 resize-none`}
-              rows={3}
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 ${isApprove ? 'focus:ring-primary' : 'focus:ring-red-500'} focus:border-transparent transition-all duration-200 resize-none text-sm`}
+              rows={2}
               required={!isApprove}
             />
           </div>
@@ -1415,21 +1618,21 @@ const ApprovalModal = ({
             <button
               onClick={onCancel}
               disabled={processing}
-              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+              className="flex-1 px-4 py-2.5 bg-gray-150 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-bold text-xs"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
-              disabled={processing || (!isApprove && !remarks.trim())}
-              className={`flex-1 px-4 py-3 text-white rounded-lg transition-all duration-200 font-semibold ${isApprove
+              disabled={processing || (!isApprove && !remarks.trim()) || (action === 'bank_approved' && !comparisonConfirmed)}
+              className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-all duration-200 font-bold text-xs ${isApprove
                 ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50'
                 : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:opacity-50'
                 } disabled:cursor-not-allowed`}
             >
               {processing ? (
                 <div className="flex items-center justify-center">
-                  <div className=" rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <div className="rounded-full h-4 w-4 border-b-2 border-white mr-2 animate-spin"></div>
                   Processing...
                 </div>
               ) : (

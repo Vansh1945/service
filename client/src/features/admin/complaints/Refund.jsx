@@ -1,5 +1,5 @@
 // src/features/admin/complaints/Refund.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
@@ -756,8 +756,10 @@ const RefundPage = () => {
     fetchLedgerData();
   }, [fetchLedgerData]);
 
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
-    if (searchParams.get('openDetail') === 'true' && refunds.length > 0 && !selectedItem) {
+    if (searchParams.get('openDetail') === 'true' && refunds.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = searchParams.get('search');
       const target = refunds.find(r =>
         r.refundId === searchVal ||
@@ -772,7 +774,7 @@ const RefundPage = () => {
         setIsLedgerItem(true);
       }
     }
-  }, [searchParams, refunds, selectedItem]);
+  }, [searchParams, refunds]);
 
   const handleRetryRefund = async (refundId) => {
     try {
@@ -1108,7 +1110,15 @@ const RefundPage = () => {
         <DetailedInspectionModal
           data={selectedItem}
           isLedgerItem={isLedgerItem}
-          onClose={() => setSelectedItem(null)}
+          onClose={() => {
+            setSelectedItem(null);
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('openDetail')) {
+              params.delete('openDetail');
+              const qs = params.toString();
+              navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+            }
+          }}
           onActionSuccess={fetchLedgerData}
           onRetry={handleRetryRefund}
         />

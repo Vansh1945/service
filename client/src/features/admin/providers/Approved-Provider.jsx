@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Modal from '../../../components/ui/Modal';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import {
   Filter,
   Eye,
@@ -115,20 +116,23 @@ const getRatingStars = (rating) => {
 
 const AdminProviders = () => {
   const { token, API, showToast } = useAuth();
+  const { reset } = useAdminFilter();
 
   const [providers, setProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
   const [searchTerm, setSearchTerm] = useState(urlSearch);
+  const hasAutoOpenedRef = useRef(false);
 
   useEffect(() => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
 
   useEffect(() => {
-    if (searchParams.get('openDetail') === 'true' && providers.length > 0 && !showViewModal) {
+    if (searchParams.get('openDetail') === 'true' && providers.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = searchParams.get('search');
       const target = providers.find(p =>
         p._id === searchVal ||
@@ -142,7 +146,16 @@ const AdminProviders = () => {
         setShowViewModal(true);
       }
     }
-  }, [searchParams, providers, showViewModal]);
+  }, [searchParams, providers]);
+
+  const handleCloseViewModal = () => {
+    setShowViewModal(false);
+    if (searchParams.get('openDetail') === 'true') {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('openDetail');
+      setSearchParams(newParams, { replace: true });
+    }
+  };
 
   const [statusFilter, setStatusFilter] = useState('approved');
   const [serviceFilter, setServiceFilter] = useState('all');
@@ -213,11 +226,13 @@ const AdminProviders = () => {
   }, []);
 
   const clearFilters = useCallback(() => {
-    setStatusFilter('approved');
-    setServiceFilter('all');
-    setRatingFilter('all');
-    setSearchTerm('');
-  }, []);
+    reset(() => {
+      setStatusFilter('approved');
+      setServiceFilter('all');
+      setRatingFilter('all');
+      setSearchTerm('');
+    }, fetchProviders);
+  }, [reset, fetchProviders]);
   const handleStatusUpdate = async (action, durationDays = null) => {
     if (!selectedProvider) return;
 
@@ -385,6 +400,17 @@ const AdminProviders = () => {
 
         {/* Filters and Search */}
         <AdminLocalFilterBar
+          searchValue={searchTerm}
+          onSearchChange={(e) => setSearchTerm(e.target.value)}
+          onSearchClear={() => {
+            setSearchTerm('');
+            const newParams = new URLSearchParams(searchParams);
+            if (newParams.has('search')) {
+              newParams.delete('search');
+              setSearchParams(newParams, { replace: true });
+            }
+          }}
+          searchPlaceholder="Search provider by name, email, phone, ID, city, state, pincode..."
           filters={{ status: statusFilter, service: serviceFilter, rating: ratingFilter }}
           onChange={handleLocalFilterChange}
           onClear={clearFilters}
@@ -520,7 +546,7 @@ const AdminProviders = () => {
         {showViewModal && selectedProvider && (
           <ProviderModal
             provider={selectedProvider}
-            onClose={() => setShowViewModal(false)}
+            onClose={handleCloseViewModal}
             approvalRemarks={approvalRemarks}
             setApprovalRemarks={setApprovalRemarks}
             processingAction={processingAction}
@@ -775,28 +801,108 @@ const ProviderModal = ({
             </div>
           </SectionCard>
 
-          {/* Bank Details */}
+          {/* Bank & Payout Details (PART 9) */}
           {provider.bankDetails && (
-            <SectionCard title="Bank Details" icon={Banknote} iconColor="text-emerald-600">
+            <SectionCard title="Bank & Payout Verification" icon={Banknote} iconColor="text-emerald-600">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoRow label="Account Name" value={bd.accountName} />
                 <InfoRow label="Account Number" value={bd.accountNo} mono />
                 <InfoRow label="Bank Name" value={bd.bankName} />
                 <InfoRow label="IFSC Code" value={bd.ifsc} mono />
-                <InfoRow label="District" value={bd.district} />
-                <div className="sm:col-span-2">
-                  <InfoRow label="Address" value={bd.address} />
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Verification Status</span>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${bd.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                    {bd.verified ? '✓ Verified' : '⏳ Pending Verification'}
+                <InfoRow label="UPI ID" value={bd.upiId || 'N/A'} mono />
+                <InfoRow label="Preferred Payout Method" value={bd.preferredMethod || 'bank_account'} />
+                {bd.district && <InfoRow label="District" value={bd.district} />}
+                {bd.address && (
+                  <div className="sm:col-span-2">
+                    <InfoRow label="Branch Address" value={bd.address} />
+                  </div>
+                )}
+                <div className="sm:col-span-2 flex items-center justify-between pt-2 border-t border-gray-100">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Verification Status</span>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                    bd.bankVerificationStatus === 'verified'
+                      ? 'bg-green-100 text-green-800'
+                      : bd.bankVerificationStatus === 'rejected'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {bd.bankVerificationStatus === 'verified'
+                      ? '✓ Verified & Active'
+                      : bd.bankVerificationStatus === 'rejected'
+                        ? '✕ Rejected'
+                        : '⏳ Pending Admin Review'}
                   </span>
                 </div>
               </div>
 
+              {/* Visual Comparison: Current vs Backup/Pending (If Re-verification Pending) */}
+              {(() => {
+                let backupData = null;
+                if (provider.rejectionReason && provider.rejectionReason.startsWith('{') && provider.rejectionReason.endsWith('}')) {
+                  try { backupData = JSON.parse(provider.rejectionReason); } catch (e) { backupData = null; }
+                }
+                if (!backupData) return null;
 
+                const fields = [
+                  { label: 'Holder Name', curr: backupData.accountName, proposed: bd.accountName },
+                  { label: 'Account Number', curr: backupData.accountNo, proposed: bd.accountNo },
+                  { label: 'IFSC Code', curr: backupData.ifsc, proposed: bd.ifsc },
+                  { label: 'Bank Name', curr: backupData.bankName, proposed: bd.bankName },
+                ];
+                const changedFields = fields.filter(f => (f.curr || '').trim() !== (f.proposed || '').trim());
+
+                return (
+                  <div className="mt-4 pt-3 border-t border-gray-100 bg-amber-50/50 p-4 rounded-xl border border-amber-200">
+                    <span className="text-xs font-bold text-amber-900 uppercase tracking-wider block mb-2">
+                      ⚠️ Visual Comparison (Current Verified vs New Proposed)
+                    </span>
+                    {changedFields.length === 0 ? (
+                      <p className="text-xs text-amber-800 italic">No fields changed.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {fields.map(f => {
+                          const isChanged = (f.curr || '').trim() !== (f.proposed || '').trim();
+                          return (
+                            <div key={f.label} className={`grid grid-cols-3 gap-2 text-xs p-2 rounded-lg ${isChanged ? 'bg-amber-100 border border-amber-300 font-bold' : 'bg-white/60'}`}>
+                              <span className="text-gray-500 font-semibold">{f.label}</span>
+                              <span className="text-gray-700">Current: {f.curr || '—'}</span>
+                              <span className={isChanged ? 'text-amber-900 font-extrabold' : 'text-gray-700'}>
+                                New: {f.proposed || '—'} {isChanged && '✏️'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Passbook / Cancelled Cheque Image */}
+              {bd.passbookImage && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Passbook / Cheque Document</span>
+                  <a href={bd.passbookImage} target="_blank" rel="noopener noreferrer" className="inline-block">
+                    <img src={bd.passbookImage} alt="Passbook/Cheque" className="w-32 h-24 object-cover rounded-xl border border-gray-200 hover:opacity-90 transition-opacity shadow-sm" />
+                  </a>
+                </div>
+              )}
+
+              {/* Verification History Timeline */}
+              {Array.isArray(bd.verificationHistory) && bd.verificationHistory.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Verification Timeline</span>
+                  <div className="space-y-2">
+                    {bd.verificationHistory.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <span className="font-semibold uppercase tracking-wider text-gray-600">{item.status}</span>
+                        <span className="text-gray-400">{new Date(item.timestamp).toLocaleString()}</span>
+                        <span className="text-gray-500 italic">{item.reason || 'No remarks'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </SectionCard>
           )}
 

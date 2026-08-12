@@ -1519,6 +1519,12 @@ class AdminService {
 
             const provider = providers[0];
 
+            // Populate bank verified by admins for audit log
+            await Provider.populate(provider, [
+                { path: 'bankDetails.bankVerifiedBy', select: 'name email' },
+                { path: 'bankDetails.verificationHistory.verifiedBy', select: 'name email' }
+            ]);
+
             // Calculate age and performance badge dynamically
             if (provider.dateOfBirth) {
                 const today = new Date();
@@ -1757,7 +1763,7 @@ class AdminService {
 
     static async getDashboardSummary(req, res) {
         try {
-            const { city, serviceCategory } = req.query;
+            const { city, serviceCategory, zoneIds } = req.query;
             const today = moment().startOf('day');
             const currentMonth = moment().startOf('month');
 
@@ -1765,6 +1771,12 @@ class AdminService {
             let bookingMatchConditions = {};
             if (city) {
                 bookingMatchConditions['address.city'] = { $regex: city, $options: 'i' };
+            }
+            if (zoneIds) {
+                const zoneIdArray = zoneIds.split(',').filter(Boolean);
+                if (zoneIdArray.length > 0) {
+                    bookingMatchConditions.zoneId = { $in: zoneIdArray.map(id => new mongoose.Types.ObjectId(id)) };
+                }
             }
             if (serviceCategory) {
                 // Find category IDs that match the category name
@@ -2424,12 +2436,17 @@ class AdminService {
             if (req.query.startDate || req.query.endDate) {
                 matchStage.createdAt = {};
                 if (req.query.startDate) {
-                    matchStage.createdAt.$gte = new Date(req.query.startDate);
+                    const parsedStart = new Date(req.query.startDate);
+                    if (!isNaN(parsedStart.getTime())) {
+                        matchStage.createdAt.$gte = parsedStart;
+                    }
                 }
                 if (req.query.endDate) {
-                    const endDateObj = new Date(req.query.endDate);
-                    endDateObj.setHours(23, 59, 59, 999);
-                    matchStage.createdAt.$lte = endDateObj;
+                    const parsedEnd = new Date(req.query.endDate);
+                    if (!isNaN(parsedEnd.getTime())) {
+                        parsedEnd.setHours(23, 59, 59, 999);
+                        matchStage.createdAt.$lte = parsedEnd;
+                    }
                 }
             } else {
                 matchStage.createdAt = { $gte: startDate };

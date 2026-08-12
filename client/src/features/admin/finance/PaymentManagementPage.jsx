@@ -21,7 +21,6 @@ import EmptyState from '../../../components/ui/EmptyState';
 import Button from '../../../components/ui/Button';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import PaymentViewDetailModal from './components/PaymentViewDetailModal';
 import { fmtDate, fmtDateTime } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
@@ -53,7 +52,8 @@ const PaymentManagementPage = () => {
     searchQuery,
     paymentMethod,
     openInvestigationDrawer,
-    getMergedQuery
+    getMergedQuery,
+    refresh
   } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
@@ -274,7 +274,7 @@ const PaymentManagementPage = () => {
             {payments.length} Records
           </span>
           <button
-            onClick={fetchPayments}
+            onClick={() => refresh(fetchPayments, setLoading)}
             className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all cursor-pointer"
             title="Refresh"
           >

@@ -52,6 +52,45 @@ const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
 
       const { SystemConfig } = require('../../features/system-setting/system-setting-model');
       const settings = await SystemConfig.findOne();
+
+      // Stronger validation logic for passbookImage and security checks
+      const validateFile = (file) => {
+        if (!file) return;
+        const ext = file.originalname.split('.').pop().toLowerCase();
+        const mime = file.mimetype.toLowerCase();
+        
+        if (file.fieldname === 'passbookImage') {
+          if (!file.size || file.size === 0) {
+            throw new Error('Security Alert: File is empty or corrupt.');
+          }
+          
+          const allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+          const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+          const blocklistedExts = ['exe', 'zip', 'js', 'svg', 'html', 'sh', 'bat'];
+
+          if (blocklistedExts.includes(ext)) {
+            throw new Error(`Security Alert: File extension .${ext} is rejected.`);
+          }
+
+          if (!allowedExts.includes(ext) || !allowedMimes.includes(mime)) {
+            throw new Error(`Security Alert: File type not allowed. Expected formats: ${allowedExts.join(', ')}`);
+          }
+
+          const maxMB = (settings && settings.uploadSettings && settings.uploadSettings.maxImageSizeMB) || 5;
+          if (file.size > maxMB * 1024 * 1024) {
+            throw new Error(`Security Alert: File size exceeds the limit of ${maxMB}MB`);
+          }
+        }
+      };
+
+      if (req.file) validateFile(req.file);
+      if (req.files) {
+        if (Array.isArray(req.files)) {
+          req.files.forEach(validateFile);
+        } else if (typeof req.files === 'object') {
+          Object.values(req.files).flat().forEach(validateFile);
+        }
+      }
       if (settings && settings.uploadSettings) {
         const { maxImageSizeMB, allowedImageFormats } = settings.uploadSettings;
         if (maxImageSizeMB) {
@@ -268,7 +307,7 @@ const rawBannerImage = multer({
 const rawGeneral = multer({
   storage: localStorage,
   limits: { fileSize: maxUploadLimit },
-  fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
+  fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif', 'application/pdf'], ['jpg', 'jpeg', 'png', 'heic', 'heif', 'pdf'])
 });
 
 // Error handler middleware

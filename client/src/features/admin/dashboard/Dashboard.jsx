@@ -13,7 +13,6 @@ import {
 import * as AdminService from '../../../services/AdminService';
 import { formatDate, formatCurrency } from '../../../utils/format';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import StatCard from '../../../components/ui/StatCard';
 
 // Pure helpers at module scope — created once, never re-allocated
@@ -35,7 +34,8 @@ const AdminDashboard = () => {
     month,
     quarter,
     zoneIds,
-    getMergedQuery
+    getMergedQuery,
+    refresh
   } = useAdminFilter();
 
   useEffect(() => {
@@ -104,7 +104,7 @@ const AdminDashboard = () => {
           <p className="text-gray-600">Welcome back, {user?.name || 'Admin'}</p>
         </div>
         <button
-          onClick={() => fetchDashboardData()}
+          onClick={() => refresh(() => fetchDashboardData(false), setLoading)}
           className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700"
         >
           <FiRefreshCw className="mr-2" />

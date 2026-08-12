@@ -16,11 +16,11 @@ import * as PaymentService from '../../../services/PaymentService';
 import * as BookingService from '../../../services/BookingService';
 import { useAuth } from '../../../context/auth';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar, { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
+import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
 const AdminEarningReports = () => {
   const { API, _token, showToast } = useAuth();
-  const { getComputedDateRange, getMergedQuery, resetGlobalFilters, openInvestigationDrawer } = useAdminFilter();
+  const { getComputedDateRange, getMergedQuery, resetGlobalFilters, openInvestigationDrawer, reset } = useAdminFilter();
   const [loading, setLoading] = useState(false);
 
   const [activeReport, setActiveReport] = useState(null);
@@ -258,11 +258,12 @@ const AdminEarningReports = () => {
   }, [dateRange.startDate, dateRange.endDate]);
 
   const clearFilters = () => {
-    resetGlobalFilters();
-    setProviderId('');
-    setGroupBy('month');
-    setDateError('');
-    showToast?.('Filters cleared', 'info');
+    reset(() => {
+      setProviderId('');
+      setGroupBy('month');
+      setDateError('');
+      showToast?.('Filters cleared', 'info');
+    });
   };
 
   const isDateRangeValid = !dateError;

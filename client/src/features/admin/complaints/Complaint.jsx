@@ -1,5 +1,5 @@
 // src/pages/admin/ComplaintsPage.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useSearchParams } from 'react-router-dom';
 import StatCard from '../../../components/ui/StatCard';
@@ -1183,7 +1183,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
 // ── Main Page ─────────────────────────────────────────────────
 const ComplaintsPage = () => {
   const { token, API, showToast } = useAuth();
-  const { getComputedDateRange, getMergedQuery, resetGlobalFilters } = useAdminFilter();
+  const { getComputedDateRange, getMergedQuery, resetGlobalFilters, refresh, reset } = useAdminFilter();
   const [searchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('complaintId');
   const urlSearch = searchParams.get('search') || '';
@@ -1240,8 +1240,10 @@ const ComplaintsPage = () => {
     finally { if (!silent) setLoading(false); }
   };
 
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
-    if (searchParams.get('openDetail') === 'true' && complaints.length > 0 && !showModal) {
+    if (searchParams.get('openDetail') === 'true' && complaints.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = searchParams.get('search') || searchParams.get('entityId') || searchParams.get('complaintId');
       const target = complaints.find(c =>
         c.complaintId === searchVal ||
@@ -1254,7 +1256,18 @@ const ComplaintsPage = () => {
         setShowModal(true);
       }
     }
-  }, [searchParams, complaints, showModal]);
+  }, [searchParams, complaints]);
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setSelectedComplaint(null);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('openDetail')) {
+      params.delete('openDetail');
+      const qs = params.toString();
+      navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+    }
+  };
 
   // Silent Refresh on window focus and online status
   useEffect(() => {
@@ -1323,9 +1336,10 @@ const ComplaintsPage = () => {
   };
 
   const clearFilters = () => {
-    resetGlobalFilters();
-    setFilters({ status: '', category: '', search: '', startDate: '', endDate: '', userType: '', providerId: '' });
-    setPagination(p => ({ ...p, page: 1 }));
+    reset(() => {
+      setFilters({ status: '', category: '', search: '', startDate: '', endDate: '', userType: '', providerId: '' });
+      setPagination(p => ({ ...p, page: 1 }));
+    }, () => fetchComplaints(false));
   };
 
   // Reactively default dateRange to global computed dates on change
@@ -1359,7 +1373,7 @@ const ComplaintsPage = () => {
           subtitle="Monitor and manage all customer & provider complaints"
           action={
             <button
-              onClick={fetchComplaints}
+              onClick={() => refresh(() => fetchComplaints(false), setLoading)}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-secondary hover:text-primary border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-all font-semibold text-sm cursor-pointer shrink-0"
             >
               <FiRefreshCw size={14} /> Refresh
@@ -1401,6 +1415,18 @@ const ComplaintsPage = () => {
 
         {/* ── Filters ── */}
         <AdminLocalFilterBar
+          searchValue={filters.search || ''}
+          onSearchChange={(e) => handleFilterChange('search', e.target.value)}
+          onSearchClear={() => {
+            handleFilterChange('search', '');
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('search')) {
+              params.delete('search');
+              const qs = params.toString();
+              navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+            }
+          }}
+          searchPlaceholder="Search complaints by ID, title, customer, provider..."
           filters={filters}
           onChange={handleFilterChange}
           onClear={clearFilters}
@@ -1563,7 +1589,7 @@ const ComplaintsPage = () => {
       {showModal && selectedComplaint && (
         <ComplaintDetailsModal
           data={selectedComplaint}
-          onClose={() => setShowModal(false)}
+          onClose={handleCloseModal}
           onUpdateStatus={updateComplaintStatus}
           onResolve={resolveComplaint}
           onPreviewImage={(url) => setPreviewImage(url)}

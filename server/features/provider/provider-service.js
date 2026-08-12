@@ -645,9 +645,18 @@ class ProviderService {
                 provider.zoneUpdatedAt = new Date();
             }
 
-            // Update bank details if provided
-            if (accountNo || cleanIfsc) {
+            // Update bank details if provided (Move into structured payload logic)
+            if (accountNo || cleanIfsc || accountName) {
+                const passbookFile = req.files && req.files['passbookImage'] ? req.files['passbookImage'][0] : null;
+                if (!passbookFile) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Bank Passbook or Cancelled Cheque is required.'
+                    });
+                }
+
                 provider.bankDetails = {
+                    ...provider.bankDetails,
                     accountNo: accountNo || provider.bankDetails?.accountNo || '',
                     ifsc: cleanIfsc || provider.bankDetails?.ifsc || '',
                     bankName: ifscDetails?.BANK ? `${ifscDetails.BANK}${ifscDetails.BRANCH ? ' - ' + ifscDetails.BRANCH : ''}` : (bankName || provider.bankDetails?.bankName || ''),
@@ -655,10 +664,13 @@ class ProviderService {
                     city: ifscDetails?.CITY || provider.bankDetails?.city || '',
                     address: ifscDetails?.ADDRESS || provider.bankDetails?.address || '',
                     accountName: accountName || provider.bankDetails?.accountName || '',
-                    passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : provider.bankDetails?.passbookImage,
-                    passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : provider.bankDetails?.passbookImagePublicId,
+                    passbookImage: passbookFile.path,
+                    passbookImagePublicId: passbookFile.filename,
+                    uploadedAt: new Date(),
+                    updatedAt: new Date(),
                     verified: false,
-                    bankVerificationStatus: 'pending'
+                    bankVerificationStatus: 'pending',
+                    payoutEnabled: false
                 };
             }
 
@@ -1155,6 +1167,19 @@ class ProviderService {
                 }
             }
 
+            delete updates.verified;
+            delete updates.bankVerificationStatus;
+            delete updates.payoutEnabled;
+            delete updates.bankVerifiedAt;
+            delete updates.bankVerifiedBy;
+            if (updates.bankDetails) {
+                delete updates.bankDetails.verified;
+                delete updates.bankDetails.bankVerificationStatus;
+                delete updates.bankDetails.payoutEnabled;
+                delete updates.bankDetails.bankVerifiedAt;
+                delete updates.bankDetails.bankVerifiedBy;
+            }
+
             // Determine if bank update is requested
             const isBankUpdateRequested = (
                 (!updateType || updateType === 'bank') &&
@@ -1176,10 +1201,71 @@ class ProviderService {
                 updates.rejectionReason = JSON.stringify(backupDetails);
             }
 
-            if (!updateType || updateType === 'bank') {
-                // Bank Details Updates
-                if (accountNo || ifsc || bankName || accountName) {
-                    // Validate IFSC using ifsc package
+            if (!updateType || updateType === 'bank' || req.body.upiId !== undefined || req.body.preferredMethod !== undefined) {
+                const { isSameBankDetails, isSameUPIDetails } = require('../../utils/bankComparison');
+                const reqUpi = req.body.upiId !== undefined ? req.body.upiId.trim() : null;
+                const reqPref = req.body.preferredMethod;
+
+                const isBankPayload = Boolean(accountNo || ifsc || bankName || accountName || (req.files && req.files['passbookImage']) || (req.file && req.file.fieldname === 'passbookImage'));
+                const isUpiPayload = reqUpi !== null;
+                const hasPassbookUploaded = !!((req.files && req.files['passbookImage']) || (req.file && req.file.fieldname === 'passbookImage'));
+
+                // Enforce bank passbook upload mandatory checks
+                if (isBankPayload) {
+                    const hasExistingBank = !!(currentProvider.bankDetails && currentProvider.bankDetails.accountNo);
+                    const isBankIdentical = hasExistingBank ? isSameBankDetails(currentProvider.bankDetails, { accountNo, ifsc, accountName, bankName }) : false;
+
+                    if (!hasExistingBank) {
+                        // Case 1: First Bank Added
+                        if (!hasPassbookUploaded) {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Bank Passbook or Cancelled Cheque is required.'
+                            });
+                        }
+                    } else {
+                        // Case 2: Bank Edited
+                        if (!isBankIdentical && !hasPassbookUploaded) {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Bank Passbook or Cancelled Cheque is required.'
+                            });
+                        }
+                    }
+                }
+
+                // Check duplicate bank details
+                if (isBankPayload && currentProvider.bankDetails) {
+                    const isBankIdentical = isSameBankDetails(currentProvider.bankDetails, { accountNo, ifsc, accountName, bankName });
+                    if (isBankIdentical && !hasPassbookUploaded) {
+                        return res.status(200).json({
+                            success: false,
+                            isSameData: true,
+                            message: 'Your verified payout account is already up-to-date.',
+                            provider: currentProvider
+                        });
+                    }
+                }
+
+                // Check duplicate UPI details
+                if (isUpiPayload && currentProvider.bankDetails) {
+                    const isUpiIdentical = isSameUPIDetails(currentProvider.bankDetails, { upiId: reqUpi });
+                    if (isUpiIdentical) {
+                        return res.status(200).json({
+                            success: false,
+                            isSameData: true,
+                            message: 'Your verified payout account is already up-to-date.',
+                            provider: currentProvider
+                        });
+                    }
+                }
+
+                if (reqUpi !== null || reqPref || accountNo || ifsc || bankName || accountName || hasPassbookUploaded) {
+                    const currentHistory = Array.isArray(currentProvider.bankDetails?.verificationHistory)
+                        ? currentProvider.bankDetails.verificationHistory
+                        : [];
+
+                    // Validate IFSC if provided
                     let ifscDetails = {};
                     let cleanIfsc = ifsc ? ifsc.trim().toUpperCase() : null;
                     if (cleanIfsc) {
@@ -1189,7 +1275,6 @@ class ProviderService {
                                 message: 'Invalid IFSC format. Expected format: ABCD0123456'
                             });
                         }
-
                         const isIfscValid = require('ifsc').validate(cleanIfsc);
                         if (!isIfscValid) {
                             return res.status(400).json({
@@ -1197,7 +1282,6 @@ class ProviderService {
                                 message: 'Invalid IFSC code. Validation failed.'
                             });
                         }
-
                         try {
                             ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
                             if (!ifscDetails) throw new Error('Details not found');
@@ -1209,7 +1293,6 @@ class ProviderService {
                         }
                     }
 
-                    // Validate account number if provided
                     if (accountNo && !/^[0-9]{9,18}$/.test(accountNo)) {
                         return res.status(400).json({
                             success: false,
@@ -1217,13 +1300,13 @@ class ProviderService {
                         });
                     }
 
-                    const currentHistory = Array.isArray(currentProvider.bankDetails?.verificationHistory)
-                        ? currentProvider.bankDetails.verificationHistory
-                        : [];
+                    const passbookFileObj = (req.files && req.files['passbookImage']) ? req.files['passbookImage'][0] : (req.file && req.file.fieldname === 'passbookImage' ? req.file : null);
+                    const hasExistingBank = !!(currentProvider.bankDetails && currentProvider.bankDetails.accountNo);
+                    const isBankIdentical = hasExistingBank ? isSameBankDetails(currentProvider.bankDetails, { accountNo, ifsc, accountName, bankName }) : false;
 
-                    updates.bankDetails = {
+                    const nextBankDetails = {
                         ...currentProvider.bankDetails,
-                        ...(accountNo && { accountNo }),
+                        ...(accountNo !== undefined && { accountNo }),
                         ...(cleanIfsc && {
                             ifsc: cleanIfsc,
                             bankName: ifscDetails.BANK ? `${ifscDetails.BANK}${ifscDetails.BRANCH ? ' - ' + ifscDetails.BRANCH : ''}` : (bankName || ''),
@@ -1233,33 +1316,45 @@ class ProviderService {
                         }),
                         ...(bankName && !cleanIfsc && { bankName }),
                         ...(accountName && { accountName }),
-                        verified: false,
-                        bankVerificationStatus: 'pending',
-                        payoutEnabled: false,
-                        verificationHistory: [
+                        ...(reqUpi !== null && { upiId: reqUpi }),
+                        ...(reqPref && { preferredMethod: reqPref }),
+                        ...(passbookFileObj && {
+                            passbookImage: passbookFileObj.path,
+                            passbookImagePublicId: passbookFileObj.filename,
+                            uploadedAt: new Date()
+                        }),
+                        updatedAt: new Date()
+                    };
+
+                    // Only trigger re-verification if bank account details change (not just changing preferred method)
+                    if (accountNo || cleanIfsc || accountName || reqUpi || passbookFileObj) {
+                        nextBankDetails.verified = false;
+                        nextBankDetails.bankVerificationStatus = 'pending';
+                        nextBankDetails.payoutEnabled = false;
+
+                        let reason = reqUpi !== null ? 'UPI details updated by provider' : 'Bank details updated by provider';
+                        if (isBankPayload && isBankIdentical && passbookFileObj) {
+                            reason = 'Document changed';
+                        }
+
+                        nextBankDetails.verificationHistory = [
                             ...currentHistory,
                             {
                                 status: 'pending',
                                 timestamp: new Date(),
                                 updatedBy: 'provider',
-                                reason: 'Bank details updated by provider'
+                                reason,
+                                accountNo: currentProvider.bankDetails?.accountNo,
+                                ifsc: currentProvider.bankDetails?.ifsc,
+                                bankName: currentProvider.bankDetails?.bankName,
+                                accountName: currentProvider.bankDetails?.accountName,
+                                passbookImage: currentProvider.bankDetails?.passbookImage,
+                                passbookImagePublicId: currentProvider.bankDetails?.passbookImagePublicId
                             }
-                        ]
-                    };
-
-                    try {
-                        const { sendNotification } = require('../notification/notification-helper');
-                        sendNotification(
-                            currentProvider._id,
-                            'provider',
-                            'Bank Verification Submitted',
-                            'Your bank details have been submitted for verification. Payouts will be enabled once Admin approves.',
-                            'info',
-                            currentProvider._id
-                        );
-                    } catch (notifErr) {
-                        console.error('Failed to send bank submission notification:', notifErr);
+                        ];
                     }
+
+                    updates.bankDetails = nextBankDetails;
                 }
             }
 
@@ -1378,11 +1473,6 @@ class ProviderService {
                 if (req.files['passbookImage']) {
                     const passbookImage = req.files['passbookImage'][0];
 
-                    // Delete old passbook image only if NOT verified / approved
-                    if (!currentProvider.bankDetails?.verified && currentProvider.bankDetails?.passbookImagePublicId) {
-                        await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
-                    }
-
                     updates.bankDetails = {
                         ...currentProvider.bankDetails,
                         ...updates.bankDetails,
@@ -1390,7 +1480,7 @@ class ProviderService {
                         passbookImagePublicId: passbookImage.filename,
                         verified: false
                     };
-                    successMessage = 'Bank details updated successfully';
+                    successMessage = 'Bank details submitted successfully and are awaiting Admin verification.';
                 }
             }
 
@@ -1434,9 +1524,6 @@ class ProviderService {
                     updates.liveSelfiePublicId = req.file.filename;
                     successMessage = 'Live Selfie updated successfully';
                 } else if (fieldName === 'passbookImage') {
-                    if (!currentProvider.bankDetails?.verified && currentProvider.bankDetails?.passbookImagePublicId) {
-                        await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
-                    }
                     updates.bankDetails = {
                         ...currentProvider.bankDetails,
                         ...updates.bankDetails,
@@ -1444,7 +1531,7 @@ class ProviderService {
                         passbookImagePublicId: req.file.filename,
                         verified: false
                     };
-                    successMessage = 'Bank details updated successfully';
+                    successMessage = 'Bank details submitted successfully and are awaiting Admin verification.';
                 }
             }
 

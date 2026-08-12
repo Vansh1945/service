@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import Pagination from '../../../components/ui/Pagination';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import {
@@ -174,6 +175,7 @@ const ServiceRow = React.memo(({ service, onViewClick, onEditClick, onToggleStat
 
 const AdminServices = () => {
   const { token, API } = useAuth();
+  const { reset } = useAdminFilter();
 
   // State management
   const [services, setServices] = useState([]);
@@ -789,14 +791,21 @@ const AdminServices = () => {
 
         {/* Filters and Search */}
         <AdminLocalFilterBar
+          searchValue={searchTerm}
+          onSearchChange={(e) => setSearchTerm(e.target.value)}
+          onSearchClear={() => setSearchTerm('')}
+          searchPlaceholder="Search services by title, description, category..."
           filters={{ category: categoryFilter, status: statusFilter }}
           onChange={(key, value) => {
             if (key === 'category') setCategoryFilter(value);
             if (key === 'status') setStatusFilter(value);
           }}
           onClear={() => {
-            setCategoryFilter('');
-            setStatusFilter('all');
+            reset(() => {
+              setCategoryFilter('');
+              setStatusFilter('all');
+              setSearchTerm('');
+            }, () => fetchServices());
           }}
           fields={[
             {

@@ -24,7 +24,6 @@ import * as AdminService from '../../../services/AdminService';
 import * as ZoneService from '../../../services/ZoneService';
 import Pagination from '../../../components/ui/Pagination';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import HierarchicalZoneSelector from '../../../components/HierarchicalZoneSelector';
 import StatCard from '../../../components/ui/StatCard';
 

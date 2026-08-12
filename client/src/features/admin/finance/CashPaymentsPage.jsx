@@ -5,7 +5,6 @@ import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Pagination from '../../../components/ui/Pagination';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import QrPreviewModal from '../../../components/modals/QrPreviewModal';
 
 import { fmtDate, fmtDateTime } from '../../../utils/format';

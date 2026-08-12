@@ -176,3 +176,13 @@ export const getProviderAgreementPdf = (id) => {
 export const getProviderApprovalLetter = (id) => {
     return axiosInstance.get(`/admin/providers/${id}/approval-letter`, { responseType: 'blob' });
 };
+
+// Universal Advanced Search & Filter
+export const universalAdminSearch = (payload, options = {}) => {
+    return axiosInstance.post('/admin/search', payload, options);
+};
+
+// Global Cross-Module Search
+export const globalAdminSearch = (payload, options = {}) => {
+    return axiosInstance.post('/admin/search/global', payload, options);
+};

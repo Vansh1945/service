@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import Avatar from '../../../components/ui/Avatar';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import { useAuth } from '../../../context/auth';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import * as AdminService from '../../../services/AdminService';
 import { formatDate, formatAddress } from '../../../utils/format';
 import Modal from '../../../components/ui/Modal';
@@ -43,6 +44,7 @@ import StatCard from '../../../components/ui/StatCard';
 
 const AdminCustomersDashboard = () => {
     const { token, API, showToast } = useAuth();
+    const { reset } = useAdminFilter();
     const [customers, setCustomers] = useState([]);
     const [filteredCustomers, setFilteredCustomers] = useState([]);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -57,9 +59,10 @@ const AdminCustomersDashboard = () => {
     });
     const [activeDropdownId, setActiveDropdownId] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const urlSearch = searchParams.get('search') || '';
     const [searchTerm, setSearchTerm] = useState(urlSearch);
+    const hasAutoOpenedRef = useRef(false);
 
     // Edit form state
     const [editForm, setEditForm] = useState({
@@ -120,7 +123,8 @@ const AdminCustomersDashboard = () => {
     };
 
     useEffect(() => {
-        if (searchParams.get('openDetail') === 'true' && customers.length > 0 && !showViewModal) {
+        if (searchParams.get('openDetail') === 'true' && customers.length > 0 && !hasAutoOpenedRef.current) {
+            hasAutoOpenedRef.current = true;
             const searchVal = searchParams.get('search');
             const target = customers.find(c =>
                 c._id === searchVal ||
@@ -134,7 +138,16 @@ const AdminCustomersDashboard = () => {
                 setShowViewModal(true);
             }
         }
-    }, [searchParams, customers, showViewModal]);
+    }, [searchParams, customers]);
+
+    const handleCloseViewModal = () => {
+        setShowViewModal(false);
+        if (searchParams.get('openDetail') === 'true') {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('openDetail');
+            setSearchParams(newParams, { replace: true });
+        }
+    };
 
     // Calculate stats
     const calculateStats = (customersData) => {
@@ -324,8 +337,11 @@ const AdminCustomersDashboard = () => {
     };
 
     const clearFilters = () => {
-        setStatusFilter('all');
-        setBookingFilter('all');
+        reset(() => {
+            setStatusFilter('all');
+            setBookingFilter('all');
+            setSearchTerm('');
+        }, fetchCustomers);
     };
 
     // Format address
@@ -446,6 +462,17 @@ const AdminCustomersDashboard = () => {
 
                 {/* Filters and Search */}
                 <AdminLocalFilterBar
+                    searchValue={searchTerm}
+                    onSearchChange={(e) => setSearchTerm(e.target.value)}
+                    onSearchClear={() => {
+                        setSearchTerm('');
+                        const newParams = new URLSearchParams(searchParams);
+                        if (newParams.has('search')) {
+                            newParams.delete('search');
+                            setSearchParams(newParams, { replace: true });
+                        }
+                    }}
+                    searchPlaceholder="Search customer by name, email, phone, address..."
                     filters={{ status: statusFilter, bookings: bookingFilter }}
                     onChange={(key, value) => {
                         if (key === 'status') setStatusFilter(value);
@@ -783,7 +810,7 @@ const AdminCustomersDashboard = () => {
                 {showViewModal && selectedCustomer && (
                     <Modal
                         isOpen={showViewModal}
-                        onClose={() => setShowViewModal(false)}
+                        onClose={handleCloseViewModal}
                         title="Customer Details"
                         size="large"
                     >

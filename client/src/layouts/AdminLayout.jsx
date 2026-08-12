@@ -3,24 +3,27 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
   FiDollarSign, FiTag, FiAlertCircle, FiChevronDown,
-  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity,
+  FiLogOut, FiUser, FiSettings, FiCreditCard, FiActivity,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
-  FiMapPin, FiMail, FiSend, FiClock, FiAward, FiFileText
+  FiMapPin, FiMail, FiSend, FiClock, FiAward, FiFileText, FiSliders
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
+import { useAdminFilter } from '../context/AdminFilterContext';
 import NotificationBell from '../components/NotificationBell';
 import AdminSearchBar from '../components/AdminSearchBar';
+import AdminFilterBar, { getRouteFilterConfig } from '../components/AdminFilterBar';
 import FinanceInvestigationDrawer from '../components/FinanceInvestigationDrawer';
 
 
-import * as SystemService from '../services/SystemService';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logoutUser, API, _token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
+  const { user, logoutUser, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
+  const { showGlobalFilterBar, setShowGlobalFilterBar } = useAdminFilter();
+  const hasFilterConfig = !!getRouteFilterConfig(location.pathname);
 
   const logo = activeBranding?.logo || authSystemSettings?.logo || null;
   const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
@@ -324,9 +327,25 @@ const AdminLayout = () => {
                 {menuGroups.flatMap(g => g.items).find(item => item.path === location.pathname)?.name || 'Dashboard'}
               </h1>
 
-              {/* Desktop Global Search Bar */}
-              <div className="hidden lg:block w-full max-w-md ml-6">
-                <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages, bookings, providers..." />
+              {/* Desktop Global Search Bar & Filters Button */}
+              <div className="hidden lg:flex items-center flex-1 max-w-2xl ml-6 gap-3">
+                <div className="flex-1">
+                  <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search customers, providers, bookings, payments..." />
+                </div>
+                {hasFilterConfig && (
+                  <button
+                    type="button"
+                    onClick={() => setShowGlobalFilterBar(!showGlobalFilterBar)}
+                    title={showGlobalFilterBar ? "Hide Global Filters" : "Show Global Filters"}
+                    className={`flex items-center gap-2 px-3 py-2.2 rounded-lg border text-xs font-bold transition-all flex-shrink-0 ${showGlobalFilterBar
+                      ? 'bg-primary text-white border-primary shadow-xs hover:bg-teal-700'
+                      : 'bg-white border-gray-250 text-gray-600 hover:bg-gray-50 hover:border-gray-350 hover:text-secondary'
+                      }`}
+                  >
+                    <FiSliders className="w-4 h-4" />
+                    <span>Global Filters</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -423,6 +442,8 @@ const AdminLayout = () => {
             <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages..." />
           </div>
           <div className="p-4 lg:p-6 xl:p-8 space-y-4">
+            {/* Route-Aware Centralized Global Filter Bar */}
+            <AdminFilterBar />
             <Outlet />
           </div>
 

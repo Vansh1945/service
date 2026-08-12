@@ -7,6 +7,7 @@ import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import { formatDate, formatDateTime } from '../../../utils/format';
 import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import {
   MessageSquare,
   Eye,
@@ -197,6 +198,7 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
 // Main Component
 const UserContacts = () => {
   const { token, API, showToast } = useAuth();
+  const { reset, refresh } = useAdminFilter();
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -309,17 +311,18 @@ const UserContacts = () => {
   };
 
   const clearFilters = () => {
-    setFilters({
-      status: '',
-      search: '',
-      dateRange: 'month'
-    });
-    setPagination(prev => ({ ...prev, page: 1 }));
+    reset(() => {
+      setFilters({
+        status: '',
+        search: '',
+        dateRange: 'month'
+      });
+      setPagination(prev => ({ ...prev, page: 1 }));
+    }, () => fetchContacts());
   };
 
   const handleRefresh = () => {
-    setRefreshing(true);
-    fetchContacts();
+    refresh(() => fetchContacts(), setRefreshing);
   };
 
   const nextPage = () => {

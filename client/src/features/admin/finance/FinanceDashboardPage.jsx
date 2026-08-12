@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import {
   FiDollarSign,
   FiCreditCard,
@@ -46,6 +47,7 @@ import FinanceDashboardViewDetailModal from './components/FinanceDashboardViewDe
 
 const FinanceDashboardPage = () => {
   const navigate = useNavigate();
+  const { refresh } = useAdminFilter();
   const [selectedEntity, setSelectedEntity] = useState({ isOpen: false, type: null, data: null });
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState('Fetching live data...');
@@ -285,7 +287,7 @@ const FinanceDashboardPage = () => {
         <div className="flex items-center space-x-3 text-xs text-neutral-500">
           <span>Last updated: <strong className="text-neutral-700 font-semibold">{lastUpdated}</strong></span>
           <button
-            onClick={loadOverview}
+            onClick={() => refresh(() => loadOverview(), setLoading)}
             disabled={loading}
             className="p-2.5 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-xl transition-all cursor-pointer shadow-xs text-neutral-700 hover:text-neutral-900 flex items-center gap-1.5 font-bold"
             title="Refresh Live Financial Ledger"

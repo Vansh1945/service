@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import { useSocket } from '../../../socket/SocketContext';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import SectionHeader from '../../../components/ui/SectionHeader';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import useDebounce from '../../../hooks/useDebounce';
 import { getStatusColor } from '../../../utils/status';
 import axiosInstance from '../../../api/axiosInstance';
@@ -69,7 +70,7 @@ import Pagination from '../../../components/ui/Pagination';
 import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar, { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
+import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import StatCard from '../../../components/ui/StatCard';
 import { formatDate, formatTime, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
@@ -639,7 +640,8 @@ const AdminBookingsView = () => {
         month,
         quarter,
         zoneIds,
-        getMergedQuery
+        getMergedQuery,
+        reset
     } = useAdminFilter();
 
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -945,6 +947,32 @@ const AdminBookingsView = () => {
         }
     }, [showToast]);
 
+    const hasAutoOpenedRef = useRef(false);
+    useEffect(() => {
+        const params = new URLSearchParams(loc.search);
+        if (params.get('openDetail') === 'true' && bookings.length > 0 && !hasAutoOpenedRef.current) {
+            hasAutoOpenedRef.current = true;
+            const searchVal = params.get('search');
+            const target = bookings.find(b =>
+                b._id === searchVal ||
+                b.bookingId === searchVal
+            ) || bookings[0];
+            if (target && target._id) {
+                fetchBookingDetails(target._id);
+            }
+        }
+    }, [loc.search, bookings, fetchBookingDetails]);
+
+    const handleCloseModal = () => {
+        setShowModal(false);
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('openDetail')) {
+            params.delete('openDetail');
+            const qs = params.toString();
+            navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+        }
+    };
+
     // Initiate cancellation from table row
     const handleInitiateCancel = useCallback(async (booking) => {
         try {
@@ -1103,14 +1131,16 @@ const AdminBookingsView = () => {
 
     // Clear all filters
     const clearFilters = useCallback(() => {
-        setSearchQuery('');
-        setFilters({
-            status: '',
-            search: '',
-            paymentStatus: ''
-        });
-        setPagination(prev => ({ ...prev, page: 1 }));
-    }, []);
+        reset(() => {
+            setSearchQuery('');
+            setFilters({
+                status: '',
+                search: '',
+                paymentStatus: ''
+            });
+            setPagination(prev => ({ ...prev, page: 1 }));
+        }, () => fetchBookings(false));
+    }, [reset, fetchBookings]);
 
     // Pagination handlers
     const goToPage = useCallback((page) => {
@@ -1269,8 +1299,21 @@ const AdminBookingsView = () => {
             </div>
 
             {/* Local Page Filters Section */}
-
             <AdminLocalFilterBar
+                searchValue={searchQuery}
+                onSearchChange={(e) => {
+                    setSearchQuery(e.target.value);
+                }}
+                onSearchClear={() => {
+                    setSearchQuery('');
+                    const params = new URLSearchParams(window.location.search);
+                    if (params.has('search')) {
+                        params.delete('search');
+                        const qs = params.toString();
+                        navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+                    }
+                }}
+                searchPlaceholder="Search booking ID, customer, provider, service, address..."
                 filters={filters}
                 onChange={handleFilterChange}
                 onClear={clearFilters}
@@ -1445,7 +1488,7 @@ const AdminBookingsView = () => {
                                     )}
                                     <span className="text-xs text-gray-400 font-mono">{bk.bookingId || bk._id}</span>
                                 </div>
-                                <button onClick={() => setShowModal(false)} className="p-1 rounded-md text-gray-400 hover:text-secondary hover:bg-gray-100 transition-colors">
+                                <button onClick={handleCloseModal} className="p-1 rounded-md text-gray-400 hover:text-secondary hover:bg-gray-100 transition-colors">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>

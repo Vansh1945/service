@@ -388,6 +388,81 @@ const approveRefundById = async (req, res, next) => {
   }
 };
 
+
+const AdminSearchService = require('./admin-search-service');
+
+const searchUniversal = async (req, res, next) => {
+  try {
+    const payload = req.method === 'POST' ? req.body : req.query;
+    // Normalize parameters if sent as query params
+    const moduleName = payload.module || req.query.module || 'providers';
+    const search = payload.search || req.query.search || '';
+    const page = payload.page || req.query.page || 1;
+    const limit = payload.limit || req.query.limit || 20;
+    const sortBy = payload.sortBy || req.query.sortBy || 'createdAt';
+    const sortOrder = payload.sortOrder || req.query.sortOrder || 'desc';
+
+    // Parse filters object
+    let filters = payload.filters || {};
+    if (typeof filters === 'string') {
+      try {
+        filters = JSON.parse(filters);
+      } catch (e) {
+        filters = {};
+      }
+    }
+    // Also merge any remaining query params into filters if called via GET
+    if (req.method === 'GET') {
+      const { module, search: _s, page: _p, limit: _l, sortBy: _sb, sortOrder: _so, ...restQuery } = req.query;
+      filters = { ...filters, ...restQuery };
+    }
+
+    const result = await AdminSearchService.search({
+      module: moduleName,
+      search,
+      filters,
+      page,
+      limit,
+      sortBy,
+      sortOrder
+    });
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    global.logger.error(`[AdminController.searchUniversal] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Universal search failed',
+      error: error.message
+    });
+  }
+};
+
+const searchGlobal = async (req, res, next) => {
+  try {
+    const payload = req.method === 'POST' ? req.body : req.query;
+    const search = payload.search || req.query.search || '';
+    const limitPerType = payload.limitPerType || req.query.limitPerType || 5;
+
+    const result = await AdminSearchService.searchGlobal({
+      search,
+      limitPerType
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    global.logger.error(`[AdminController.searchGlobal] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Global search failed',
+      error: error.message
+    });
+  }
+};
+
 const rejectRefundById = async (req, res, next) => {
   try {
     await AdminService.rejectRefundById(req, res, next);
@@ -398,6 +473,8 @@ const rejectRefundById = async (req, res, next) => {
 };
 
 module.exports = {
+  searchUniversal,
+  searchGlobal,
   cancelBookingByAdmin,
   registerAdmin,
   getAdminProfile,

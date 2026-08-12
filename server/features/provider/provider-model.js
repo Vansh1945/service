@@ -279,6 +279,14 @@ const providerSchema = new mongoose.Schema({
         accountName: String,
         passbookImage: String,
         passbookImagePublicId: String,
+        uploadedAt: {
+            type: Date,
+            default: null
+        },
+        updatedAt: {
+            type: Date,
+            default: null
+        },
         verified: {
             type: Boolean,
             default: false
@@ -315,7 +323,13 @@ const providerSchema = new mongoose.Schema({
             timestamp: { type: Date, default: Date.now },
             updatedBy: { type: String, default: 'provider' },
             verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
-            reason: { type: String, default: null }
+            reason: { type: String, default: null },
+            accountNo: { type: String, default: null },
+            ifsc: { type: String, default: null },
+            bankName: { type: String, default: null },
+            accountName: { type: String, default: null },
+            passbookImage: { type: String, default: null },
+            passbookImagePublicId: { type: String, default: null }
         }],
         razorpayFundAccountId: {
             type: String,

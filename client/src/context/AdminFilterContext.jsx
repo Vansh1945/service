@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as BookingService from '../services/BookingService';
 import * as ZoneService from '../services/ZoneService';
+import * as AdminService from '../services/AdminService';
 import { useAuth } from './auth';
 
 const AdminFilterContext = createContext();
@@ -26,6 +27,7 @@ export const AdminFilterProvider = ({ children }) => {
   const [zoneIds, setZoneIds] = useState([]);
   const [zones, setZones] = useState([]);
   const [earliestYear, setEarliestYear] = useState(2024);
+  const [showGlobalFilterBar, setShowGlobalFilterBar] = useState(false);
 
   // Fetch earliest year from bookings & load zones list
   useEffect(() => {
@@ -99,6 +101,8 @@ export const AdminFilterProvider = ({ children }) => {
             start = new Date(endYear, 0, 1);
             end = new Date(endYear, 2, 31);
             break;
+          default:
+            break;
         }
       } else {
         switch (quarter) {
@@ -117,6 +121,8 @@ export const AdminFilterProvider = ({ children }) => {
           case 'Q4': // Oct - Dec
             start = new Date(startYear, 9, 1);
             end = new Date(startYear, 11, 31);
+            break;
+          default:
             break;
         }
       }
@@ -200,6 +206,15 @@ export const AdminFilterProvider = ({ children }) => {
       entityData: null
     });
     setDrawerHistory([]);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('openDetail')) {
+        params.delete('openDetail');
+        const qs = params.toString();
+        const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    } catch {}
   }, []);
 
   const popDrawerHistory = useCallback(() => {
@@ -220,7 +235,102 @@ export const AdminFilterProvider = ({ children }) => {
     });
   }, [closeInvestigationDrawer]);
 
-  const resetGlobalFilters = () => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // UNIVERSAL ADVANCED SEARCH & FILTER ENGINE STATE
+  // ─────────────────────────────────────────────────────────────────────────────
+  const [activeModule, setActiveModule] = useState('providers');
+  const [universalSearch, setUniversalSearch] = useState('');
+  const [universalFilters, setUniversalFilters] = useState({});
+  const [universalPagination, setUniversalPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1
+  });
+  const [universalResults, setUniversalResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+
+  // AbortController ref to cancel previous in-flight requests
+  const searchAbortControllerRef = useRef(null);
+
+  const executeUniversalSearch = useCallback(async ({
+    module: targetModule = activeModule,
+    search = universalSearch,
+    filters = universalFilters,
+    page = 1,
+    limit = 20,
+    sortBy = 'createdAt',
+    sortOrder = 'desc'
+  } = {}) => {
+    if (!isAdmin) return;
+
+    // Abort previous in-flight request
+    if (searchAbortControllerRef.current) {
+      searchAbortControllerRef.current.abort();
+    }
+    searchAbortControllerRef.current = new AbortController();
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      // Merge date range filters from global calendar/financial controls
+      const dateRange = getComputedDateRange();
+      const mergedFilters = {
+        ...dateRange,
+        ...(zoneIds.length > 0 && { zoneId: zoneIds[0], zoneIds: zoneIds.join(',') }),
+        ...filters
+      };
+
+      const payload = {
+        module: targetModule,
+        search: typeof search === 'string' ? search.trim() : '',
+        filters: mergedFilters,
+        page,
+        limit,
+        sortBy,
+        sortOrder
+      };
+
+      const response = await AdminService.universalAdminSearch(payload, {
+        signal: searchAbortControllerRef.current.signal
+      });
+
+      if (response?.data?.success) {
+        setUniversalResults(response.data.data || []);
+        if (response.data.pagination) {
+          setUniversalPagination(response.data.pagination);
+        }
+      } else {
+        setUniversalResults([]);
+        setSearchError(response?.data?.message || 'Search failed');
+      }
+    } catch (err) {
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Universal Search Error:', err);
+        setSearchError(err.response?.data?.message || err.message || 'Error executing search');
+        setUniversalResults([]);
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  }, [isAdmin, activeModule, universalSearch, universalFilters, getComputedDateRange, zoneIds]);
+
+  const resetUniversalSearch = useCallback(() => {
+    setUniversalSearch('');
+    setUniversalFilters({});
+    setUniversalPagination({
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 1
+    });
+    setUniversalResults([]);
+    setSearchError(null);
+  }, []);
+
+  const resetGlobalFilters = useCallback(() => {
     setFilterType('calendar');
     setYear(new Date().getFullYear());
     setMonth('');
@@ -233,10 +343,45 @@ export const AdminFilterProvider = ({ children }) => {
     setRefundStatus('all');
     setGatewayStatus('all');
     setSettlementStatus('all');
-  };
+    resetUniversalSearch();
+  }, [resetUniversalSearch]);
+
+  const refresh = useCallback(async (fetchFn, setLoader) => {
+    if (!fetchFn) return;
+    if (setLoader) setLoader(true);
+    try {
+      await fetchFn();
+    } catch (err) {
+      console.error('Refresh action failed:', err);
+    } finally {
+      if (setLoader) setLoader(false);
+    }
+  }, []);
+
+  const reset = useCallback(async (resetLocalFiltersFn, fetchFn) => {
+    resetGlobalFilters();
+    if (resetLocalFiltersFn) {
+      resetLocalFiltersFn();
+    }
+    if (fetchFn) {
+      setTimeout(() => {
+        fetchFn();
+      }, 0);
+    }
+  }, [resetGlobalFilters]);
 
   const getMergedQuery = useCallback((localFilters = {}) => {
     const dates = getComputedDateRange();
+    
+    // Clean local filters of null, undefined, or empty string values to prevent overwriting global filters
+    const cleanedLocal = {};
+    Object.keys(localFilters).forEach(key => {
+      const val = localFilters[key];
+      if (val !== null && val !== undefined && val !== '') {
+        cleanedLocal[key] = val;
+      }
+    });
+
     const query = {
       ...dates,
       ...(zoneIds.length > 0 && { zoneIds: zoneIds.join(',') }),
@@ -247,7 +392,7 @@ export const AdminFilterProvider = ({ children }) => {
       ...(refundStatus !== 'all' && { refundStatus }),
       ...(gatewayStatus !== 'all' && { gatewayStatus }),
       ...(settlementStatus !== 'all' && { settlementStatus }),
-      ...localFilters
+      ...cleanedLocal
     };
     return query;
   }, [getComputedDateRange, zoneIds, searchQuery, paymentMethod, bookingStatus, transactionType, refundStatus, gatewayStatus, settlementStatus]);
@@ -283,6 +428,7 @@ export const AdminFilterProvider = ({ children }) => {
       case 'wallet':
         return `/admin/customer-wallets?search=${encodeURIComponent(cleanId)}&openDetail=true`;
       case 'customer':
+      case 'user':
         return `/admin/customers?search=${encodeURIComponent(cleanId)}&openDetail=true`;
       case 'provider':
         return `/admin/approve-providers?search=${encodeURIComponent(cleanId)}&openDetail=true`;
@@ -291,6 +437,10 @@ export const AdminFilterProvider = ({ children }) => {
         return `/admin/audit-logs?search=${encodeURIComponent(cleanId)}&openDetail=true`;
       case 'fraud':
         return `/admin/fraud?search=${encodeURIComponent(cleanId)}&openDetail=true`;
+      case 'service':
+        return `/admin/add-services?search=${encodeURIComponent(cleanId)}`;
+      case 'feedback':
+        return `/admin/feedback?search=${encodeURIComponent(cleanId)}`;
       default:
         return `/admin/bookings?search=${encodeURIComponent(cleanId)}&openDetail=true`;
     }
@@ -335,7 +485,27 @@ export const AdminFilterProvider = ({ children }) => {
         getComputedDateRange,
         resetGlobalFilters,
         getMergedQuery,
-        getEntityRoute
+        getEntityRoute,
+        showGlobalFilterBar,
+        setShowGlobalFilterBar,
+        refresh,
+        reset,
+
+        // Universal Search & Filter Extensions
+        activeModule,
+        setActiveModule,
+        universalSearch,
+        setUniversalSearch,
+        universalFilters,
+        setUniversalFilters,
+        universalPagination,
+        setUniversalPagination,
+        universalResults,
+        setUniversalResults,
+        isSearching,
+        searchError,
+        executeUniversalSearch,
+        resetUniversalSearch
       }}
     >
       {children}
@@ -351,3 +521,4 @@ export const useAdminFilter = () => {
   return context;
 };
 
+export default AdminFilterContext;

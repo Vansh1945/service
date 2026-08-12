@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';
 import * as FeedbackService from '../../../services/FeedbackService';
@@ -10,9 +10,12 @@ import {
 } from 'lucide-react';
 import Pagination from '../../../components/ui/Pagination';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
+import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { formatDate } from '../../../utils/format';
 const AdminFeedback = () => {
   const { token, API, showToast } = useAuth();
+  const navigate = useNavigate();
+  const { reset } = useAdminFilter();
   const [feedbacks, setFeedbacks] = useState([]);
   const [selectedFeedback, setSelectedFeedback] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -120,8 +123,10 @@ const AdminFeedback = () => {
     setPagination(p => ({ ...p, page: 1 }));
   };
   const clearFilters = () => {
-    setFilters({ rating: '', type: '', search: '', startDate: '', endDate: '' });
-    setPagination(p => ({ ...p, page: 1 }));
+    reset(() => {
+      setFilters({ rating: '', type: '', search: '', startDate: '', endDate: '' });
+      setPagination(p => ({ ...p, page: 1 }));
+    }, () => fetchFeedbacks());
   };
 
   useEffect(() => { fetchFeedbacks(); }, [filters, pagination.page]);
@@ -191,6 +196,18 @@ const AdminFeedback = () => {
 
         {/* ── Filters ── */}
         <AdminLocalFilterBar
+          searchValue={filters.search || ''}
+          onSearchChange={(e) => handleFilterChange('search', e.target.value)}
+          onSearchClear={() => {
+            handleFilterChange('search', '');
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('search')) {
+              params.delete('search');
+              const qs = params.toString();
+              navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+            }
+          }}
+          searchPlaceholder="Search feedback by comment, customer, provider, service..."
           filters={filters}
           onChange={handleFilterChange}
           onClear={clearFilters}

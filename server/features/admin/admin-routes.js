@@ -22,6 +22,11 @@ const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 const { preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
 router.use(adminAuthMiddleware, adminRoleCheck);
 
+// Universal Admin Search & Filter API
+router.post('/search', adminActionLimiter, adminController.searchUniversal);
+
+// Global Cross-Module Search API
+router.post('/search/global', adminActionLimiter, adminController.searchGlobal);
 
 // Admin management
 router.get('/profile', adminController.getAdminProfile);

@@ -28,7 +28,6 @@ import { getAllZones } from '../../../services/ZoneService';
 import { formatCurrency, formatDate } from '../../../utils/format';
 import HierarchicalZoneSelector from '../../../components/HierarchicalZoneSelector';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import AdminFilterBar from '../../../components/AdminFilterBar';
 import StatCard from '../../../components/ui/StatCard';
 
 const AdminCoupons = () => {

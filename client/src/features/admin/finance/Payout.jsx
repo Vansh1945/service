@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
 import Processing from '../../../components/ui-skeletons/Processing';
@@ -188,7 +188,7 @@ const PayoutModal = ({
 const AdminPayout = () => {
 
   const { user, API } = useAuth();
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, openInvestigationDrawer, getMergedQuery, refresh, reset } = useAdminFilter();
   const [loading, setLoading] = useState(true);
   const [withdrawals, setWithdrawals] = useState([]);
   const [total, setTotal] = useState(0);
@@ -215,14 +215,15 @@ const AdminPayout = () => {
     fetchSystemSettings();
   }, []);
 
-  const fetchSystemSettings = async () => {
+  const fetchPayoutSettings = async () => {
     try {
-      const response = await SystemService.getAdminSystemSetting();
-      if (response.data?.success && response.data.data?.payoutSettings?.mode) {
-        setPayoutMode(response.data.data.payoutSettings.mode);
+      const response = await SystemService.getSystemSettingAdmin();
+      const data = response.data;
+      if (data.success && data.data?.payoutSettings) {
+        setPayoutSettings(data.data.payoutSettings);
       }
-    } catch (err) {
-      console.warn('System settings load failed:', err.message);
+    } catch {
+      toast.error('Failed to load payout settings');
     }
   };
 
@@ -233,8 +234,10 @@ const AdminPayout = () => {
 
   useEffect(() => { fetchWithdrawals(); }, [page, filters, searchQuery]);
 
+  const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
-    if (searchParams.get('openDetail') === 'true' && withdrawals.length > 0) {
+    if (searchParams.get('openDetail') === 'true' && withdrawals.length > 0 && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       const searchVal = searchParams.get('search');
       const target = withdrawals.find(w =>
         w._id === searchVal ||
@@ -277,7 +280,12 @@ const AdminPayout = () => {
   };
 
   const handleFilterChange = (newFilters) => { setFilters(newFilters); setPage(1); };
-  const clearFilters = () => { setFilters({ status: '', startDate: '', endDate: '', providerSearch: '', sortBy: '' }); setPage(1); };
+  const clearFilters = () => {
+    reset(() => {
+      setFilters({ status: '', startDate: '', endDate: '', providerSearch: '', sortBy: '' });
+      setPage(1);
+    }, () => fetchWithdrawals());
+  };
 
   const maskAccNo = (acc) => {
     if (!acc) return '••••••••';
@@ -454,8 +462,20 @@ const AdminPayout = () => {
 
         {/* ── Filters ── */}
         <AdminLocalFilterBar
+          searchValue={filters.providerSearch || ''}
+          onSearchChange={(e) => handleFilterChange({ ...filters, providerSearch: e.target.value })}
+          onSearchClear={() => {
+            handleFilterChange({ ...filters, providerSearch: '' });
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('search')) {
+              params.delete('search');
+              const qs = params.toString();
+              navigate(qs ? `?${qs}` : window.location.pathname, { replace: true });
+            }
+          }}
+          searchPlaceholder="Search payout by provider name, email, phone, ID, UTR..."
           filters={filters}
-          onChange={handleFilterChange}
+          onChange={(key, val) => handleFilterChange({ ...filters, [key]: val })}
           onClear={clearFilters}
           fields={[
             {
