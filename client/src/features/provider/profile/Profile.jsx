@@ -12,17 +12,25 @@ import { formatDate, formatCurrency, compressImage } from '../../../utils/format
 import AddressSelector from '../../../components/AddressSelector';
 import { IfscBankDetails } from '../../../components/IfscBankDetails';
 import ProfileSkeleton from '../../../components/ui-skeletons/ProfileSkeleton';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Processing from '../../../components/ui-skeletons/Processing';
 import PayoutProfileTab from './components/PayoutProfileTab';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('profile');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.tab || 'profile');
   const [documentModal, setDocumentModal] = useState({ isOpen: false, type: null, url: null });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, confirmed: false });
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const navigationItems = [
     { id: 'overview', label: 'Overview', icon: <Package className="w-4 h-4" /> },

@@ -947,7 +947,7 @@ const BookingConfirmation = () => {
       {/* Cash Confirmation Modal */}
       {showCashModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-secondary/40 backdrop-blur-sm" onClick={() => setShowCashModal(false)}></div>
+          <div className="absolute inset-0 bg-black/25" onClick={() => setShowCashModal(false)}></div>
           <div className="relative bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-xl">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-6">

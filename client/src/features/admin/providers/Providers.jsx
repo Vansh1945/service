@@ -121,6 +121,8 @@ const AdminProvidersPage = () => {
     avgDaysPending: 0
   });
 
+  const [tabCounts, setTabCounts] = useState({ pending: 0, bankPending: 0 });
+
   // Memoized provider status calculation
   const getProviderStatus = useCallback((provider) => {
     if (provider.approved) return 'approved';
@@ -128,7 +130,6 @@ const AdminProvidersPage = () => {
     return 'pending';
   }, []);
 
-  // Memoized days pending calculation
   const getDaysPending = useCallback((registrationDate) => {
     const created = new Date(registrationDate);
     const now = new Date();
@@ -149,6 +150,13 @@ const AdminProvidersPage = () => {
 
       if (data.success) {
         setAllProviders(data.providers || []);
+        if (data.stats) {
+          setStats(data.stats);
+        }
+        setTabCounts({
+          pending: data.pendingCount || 0,
+          bankPending: data.bankPendingCount || 0
+        });
       } else {
         showToast('Failed to fetch providers', 'error');
       }
@@ -174,53 +182,6 @@ const AdminProvidersPage = () => {
   useEffect(() => {
     applyFiltersAndSearch();
   }, [searchTerm, filters, sortBy, sortOrder, pendingProviders]);
-
-  // Stats calculation
-  useEffect(() => {
-    calculateStats();
-  }, [filteredProviders, allProviders, getDaysPending]);
-
-  const calculateStats = useCallback(() => {
-    const total = allProviders.length;
-    const pending = allProviders.filter(p => !p.approved && p.kycStatus !== 'rejected').length;
-
-    const today = new Date().toISOString().split('T')[0];
-    const todayRegistered = allProviders.filter(p => {
-      const regDate = new Date(p.registrationDate || p.createdAt).toISOString().split('T')[0];
-      return regDate === today;
-    }).length;
-
-    const todayApproved = allProviders.filter(p => {
-      if (p.approved && p.approvalDate) {
-        const approvalDate = new Date(p.approvalDate).toISOString().split('T')[0];
-        return approvalDate === today;
-      }
-      return false;
-    }).length;
-
-    const withResume = allProviders.filter(p => p.aadhaarFront && p.aadhaarBack && p.panCard && p.liveSelfie).length;
-    const withBankDetails = allProviders.filter(p => p.bankDetails?.accountNo).length;
-    const profileComplete = allProviders.filter(p => p.profileComplete).length;
-    const testPassed = allProviders.filter(p => p.testPassed).length;
-
-    let totalDays = 0;
-    const pendingProviders = allProviders.filter(p => !p.approved && p.kycStatus !== 'rejected');
-    pendingProviders.forEach(provider => {
-      totalDays += getDaysPending(provider.registrationDate || provider.createdAt);
-    });
-
-    setStats({
-      totalProviders: total,
-      pendingApproval: pending,
-      todayRegistered,
-      todayApproved,
-      withResume,
-      withBankDetails,
-      profileComplete,
-      testPassed,
-      avgDaysPending: pending > 0 ? Math.round(totalDays / pending) : 0
-    });
-  }, [allProviders, getDaysPending]);
 
   const applyFiltersAndSearch = useCallback(() => {
     let filtered = [...pendingProviders];
@@ -326,16 +287,10 @@ const AdminProvidersPage = () => {
       setFilters({
         services: '',
         city: '',
-        state: '',
-        experience: '',
-        age: '',
-        testPassed: '',
         profileComplete: '',
-        bankVerified: '',
-        minDaysPending: '',
-        maxDaysPending: '',
         hasResume: '',
-        hasPassbook: ''
+        testPassed: '',
+        bankVerified: ''
       });
       setSearchTerm('');
     }, () => fetchProviders(false));
@@ -562,32 +517,38 @@ const AdminProvidersPage = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-4 mb-6 bg-white/60 backdrop-blur-md p-2 rounded-2xl border border-gray-205 shadow-sm max-w-md">
+        <div className="flex gap-2.5 mb-6 bg-white/60 backdrop-blur-md p-1.5 rounded-xl border border-gray-200 shadow-sm max-w-md">
           <button
             onClick={() => {
               setActiveTab('pending_providers');
               setCurrentPage(1);
             }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all duration-300 ${activeTab === 'pending_providers'
-              ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${activeTab === 'pending_providers'
+              ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-sm transform scale-[1.02]'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-secondary'
               }`}
           >
-            <UserPlus className="w-5 h-5" />
-            Pending Providers
+            <UserPlus className="w-4 h-4 shrink-0" />
+            <span>Pending Providers</span>
+            <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-bold ${activeTab === 'pending_providers' ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>
+              {tabCounts.pending}
+            </span>
           </button>
           <button
             onClick={() => {
               setActiveTab('bank_pending');
               setCurrentPage(1);
             }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all duration-300 ${activeTab === 'bank_pending'
-              ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${activeTab === 'bank_pending'
+              ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-sm transform scale-[1.02]'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-secondary'
               }`}
           >
-            <CreditCard className="w-5 h-5" />
-            Bank Pending
+            <CreditCard className="w-4 h-4 shrink-0" />
+            <span>Bank Pending</span>
+            <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-bold ${activeTab === 'bank_pending' ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>
+              {tabCounts.bankPending}
+            </span>
           </button>
         </div>
 
@@ -605,28 +566,11 @@ const AdminProvidersPage = () => {
           fields={[
             { key: 'services', label: 'Services', placeholder: 'e.g., Cleaning', type: 'text' },
             { key: 'city', label: 'City', placeholder: 'Filter by city', type: 'text' },
-            { key: 'state', label: 'State', placeholder: 'Filter by state', type: 'text' },
-            { key: 'experience', label: 'Min Experience', placeholder: 'Years', type: 'number' },
-            { key: 'age', label: 'Min Age', placeholder: 'Age', type: 'number' },
-            {
-              key: 'testPassed', label: 'Test Status', type: 'select', options: [
-                { value: '', label: 'All' },
-                { value: 'true', label: 'Passed' },
-                { value: 'false', label: 'Not Passed' }
-              ]
-            },
             {
               key: 'profileComplete', label: 'Profile Status', type: 'select', options: [
                 { value: '', label: 'All' },
                 { value: 'true', label: 'Complete' },
                 { value: 'false', label: 'Incomplete' }
-              ]
-            },
-            {
-              key: 'bankVerified', label: 'Bank Verification', type: 'select', options: [
-                { value: '', label: 'All' },
-                { value: 'true', label: 'Verified' },
-                { value: 'false', label: 'Not Verified' }
               ]
             },
             {
@@ -637,14 +581,19 @@ const AdminProvidersPage = () => {
               ]
             },
             {
-              key: 'hasPassbook', label: 'Has Passbook', type: 'select', options: [
+              key: 'testPassed', label: 'Test Status', type: 'select', options: [
                 { value: '', label: 'All' },
-                { value: 'true', label: 'Yes' },
-                { value: 'false', label: 'No' }
+                { value: 'true', label: 'Passed' },
+                { value: 'false', label: 'Not Passed' }
               ]
             },
-            { key: 'minDaysPending', label: 'Min Days Pending', placeholder: 'Days', type: 'number' },
-            { key: 'maxDaysPending', label: 'Max Days Pending', placeholder: 'Days', type: 'number' }
+            {
+              key: 'bankVerified', label: 'Bank Verification', type: 'select', options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Verified' },
+                { value: 'false', label: 'Not Verified' }
+              ]
+            }
           ]}
         />
 

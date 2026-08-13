@@ -35,7 +35,11 @@ messaging.onBackgroundMessage((payload) => {
                     client.postMessage({
                         type: 'PLAY_SOUND',
                         soundUrl: soundUrl,
-                        isBookingAlert: isBookingAlert
+                        isBookingAlert: isBookingAlert,
+                        notificationId: data.notificationId || null,
+                        referenceId: data.referenceId || null,
+                        bookingId: data.bookingId || null,
+                        entityId: data.entityId || null
                     });
                 }
             })

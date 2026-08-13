@@ -12,6 +12,13 @@ const Razorpay = require('razorpay');
 
 const razorpay = require('./razorpay');
 
+const getBookingIdsForZones = async (zoneIds) => {
+  if (!zoneIds) return [];
+  const zoneIdsArray = zoneIds.split(',').map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
+  const bookings = await Booking.find({ zoneId: { $in: zoneIdsArray } }).select('_id').lean();
+  return bookings.map(b => b._id);
+};
+
 const rollbackWalletDeduction = async (transaction, session) => {
   if (transaction.paymentMethod === 'mixed' && transaction.paymentStatus === 'pending' && !transaction.description?.includes('Rolled Back')) {
     const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
@@ -735,18 +742,7 @@ const getAllTransactions = async (req, res, next) => {
     }
 
     if (req.query.zoneIds) {
-      const mongoose = require('mongoose');
-      const zoneIdsArray = req.query.zoneIds.split(',').map(id => {
-        try {
-          return new mongoose.Types.ObjectId(id);
-        } catch (e) {
-          return id;
-        }
-      });
-      const Booking = require('../booking/booking-model');
-      const bookingsInZones = await Booking.find({ zoneId: { $in: zoneIdsArray } }).select('_id');
-      const bookingIds = bookingsInZones.map(b => b._id);
-      filter.booking = { $in: bookingIds };
+      filter.booking = { $in: await getBookingIdsForZones(req.query.zoneIds) };
     }
 
     if (bookingId) {
@@ -1557,6 +1553,20 @@ const getCashLedger = async (req, res, next) => {
     }
 
     const filter = { paymentMethod: { $in: ['cash', 'cod', 'mixed'] } };
+
+    if (req.query.startDate || req.query.endDate) {
+      filter.createdAt = {};
+      if (req.query.startDate) filter.createdAt.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) {
+        const end = new Date(req.query.endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    if (req.query.zoneIds) {
+      filter.booking = { $in: await getBookingIdsForZones(req.query.zoneIds) };
+    }
     if (req.query.status && req.query.status !== 'all') {
       if (req.query.status === 'verified') {
         filter.paymentStatus = { $in: ['success', 'completed'] };
@@ -1823,6 +1833,10 @@ const getProviderWallets = async (req, res, next) => {
     const search = req.query.search || '';
 
     const providerFilter = {};
+    if (req.query.zoneIds) {
+      const zoneIdsArray = req.query.zoneIds.split(',');
+      providerFilter.currentZone = { $in: zoneIdsArray };
+    }
     if (search) {
       providerFilter.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -1922,10 +1936,26 @@ const getSettlements = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    const filter = {
+      type: { $in: ['settlement', 'payment', 'commissiondeduction', 'withdrawal'] }
+    };
+
+    if (req.query.startDate || req.query.endDate) {
+      filter.createdAt = {};
+      if (req.query.startDate) filter.createdAt.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) {
+        const end = new Date(req.query.endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    if (req.query.zoneIds) {
+      filter.booking = { $in: await getBookingIdsForZones(req.query.zoneIds) };
+    }
+
     const [settlementTxns, total] = await Promise.all([
-      Transaction.find({
-        type: { $in: ['settlement', 'payment', 'commissiondeduction', 'withdrawal'] }
-      })
+      Transaction.find(filter)
         .populate('booking', 'bookingId totalAmount commissionAmount providerEarnings status')
         .populate('user', 'name email')
         .populate('provider', 'name email')
@@ -1933,12 +1963,11 @@ const getSettlements = async (req, res, next) => {
         .skip(skip)
         .limit(limit)
         .lean(),
-      Transaction.countDocuments({
-        type: { $in: ['settlement', 'payment', 'commissiondeduction', 'withdrawal'] }
-      })
+      Transaction.countDocuments(filter)
     ]);
 
     const stats = await Transaction.aggregate([
+      { $match: filter },
       {
         $group: {
           _id: '$type',
@@ -2040,6 +2069,20 @@ const getFailedPayments = async (req, res, next) => {
         { 'razorpayResponse.error_code': { $exists: true, $ne: null } }
       ]
     };
+
+    if (req.query.startDate || req.query.endDate) {
+      filter.createdAt = {};
+      if (req.query.startDate) filter.createdAt.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) {
+        const end = new Date(req.query.endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    if (req.query.zoneIds) {
+      filter.booking = { $in: await getBookingIdsForZones(req.query.zoneIds) };
+    }
 
     const [transactions, total] = await Promise.all([
       Transaction.find(filter)
@@ -2958,13 +3001,18 @@ const getMasterLedger = async (req, res, next) => {
       bookingId,
       customerId,
       providerId,
-      referenceNumber
+      referenceNumber,
+      zoneIds
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // ── Build match filter ────────────────────────────────────────────────────
     const filter = {};
+
+    if (zoneIds) {
+      filter.booking = { $in: await getBookingIdsForZones(zoneIds) };
+    }
 
     if (startDate || endDate) {
       filter.createdAt = {};

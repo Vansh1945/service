@@ -118,6 +118,8 @@ const updateProviderProfileSchema = z.object({
   ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please enter a valid IFSC code").optional(),
   bankName: z.string().optional(),
   accountName: z.string().optional(),
+  upiId: z.string().optional().or(z.literal('')).or(z.null()),
+  preferredMethod: z.enum(['bank_account', 'upi']).optional(),
   updateType: z.string().optional(),
   isOnline: z.union([z.boolean(), z.string()]).optional().transform(val => typeof val === 'string' ? val === 'true' : val),
   availabilityStatus: z.enum(['online', 'busy', 'break', 'leave']).optional(),

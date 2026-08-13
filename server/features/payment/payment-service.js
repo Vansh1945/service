@@ -1687,10 +1687,17 @@ class PaymentService {
 
   static async getAllWithdrawalRequests(req, res) {
     try {
-      let { status, page = 1, limit = 10, startDate, endDate, providerSearch, sortBy } = req.query;
+      let { status, page = 1, limit = 10, startDate, endDate, providerSearch, sortBy, zoneIds } = req.query;
 
       const filter = {};
       if (status) filter.status = status; // requested / processing / completed / rejected
+
+      if (zoneIds) {
+        const zoneIdsArray = zoneIds.split(',');
+        const providers = await Provider.find({ currentZone: { $in: zoneIdsArray } }).select('_id').lean();
+        const providerIds = providers.map(p => p._id);
+        filter.provider = { $in: providerIds };
+      }
 
       // Date filter (optional) with validation
       if (startDate && endDate) {
@@ -2296,6 +2303,15 @@ class PaymentService {
         const providerIds = providers.map(p => p._id);
         filter.provider = { $in: providerIds };
       }
+      if (req.query.providerId) {
+        const prov = await Provider.findOne({
+          $or: [
+            { providerId: req.query.providerId },
+            { _id: mongoose.isValidObjectId(req.query.providerId) ? req.query.providerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.provider = prov ? prov._id : null;
+      }
 
       // Fetch PaymentRecords with provider details populated
       const records = await PaymentRecord.find(filter)
@@ -2467,6 +2483,17 @@ class PaymentService {
 
       const providerIds = providers.map(p => p._id);
 
+      let custId = null;
+      if (req.query.customerId) {
+        const cust = await User.findOne({
+          $or: [
+            { customerId: req.query.customerId },
+            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        if (cust) custId = cust._id;
+      }
+
       // 1. Batch Get Earnings Stats from ProviderEarning for all matching providers
       const allEarningStats = await ProviderEarning.aggregate([
         {
@@ -2484,6 +2511,7 @@ class PaymentService {
           }
         },
         { $unwind: { path: '$bookingInfo', preserveNullAndEmptyArrays: true } },
+        ...(custId ? [{ $match: { 'bookingInfo.user': custId } }] : []),
         {
           $lookup: {
             from: 'complaints',
@@ -2663,6 +2691,24 @@ class PaymentService {
       if (req.query.zoneIds) {
         const zones = req.query.zoneIds.split(',');
         filter.zoneId = { $in: zones };
+      }
+      if (req.query.providerId) {
+        const prov = await Provider.findOne({
+          $or: [
+            { providerId: req.query.providerId },
+            { _id: mongoose.isValidObjectId(req.query.providerId) ? req.query.providerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.provider = prov ? prov._id : null;
+      }
+      if (req.query.customerId) {
+        const cust = await User.findOne({
+          $or: [
+            { customerId: req.query.customerId },
+            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.user = cust ? cust._id : null;
       }
       const bookings = await Booking.find(filter)
         .populate('provider', 'name email providerId')
@@ -3004,10 +3050,23 @@ class PaymentService {
         }
       }
 
+      let resolvedCustomerId = null;
+      if (req.query.customerId) {
+        const cust = await User.findOne({
+          $or: [
+            { customerId: req.query.customerId },
+            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        if (cust) resolvedCustomerId = cust._id;
+      }
+
       let groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
 
       if (groupBy === 'week') {
         groupId = { year: { $year: '$createdAt' }, week: { $week: '$createdAt' } };
+      } else if (groupBy === 'year') {
+        groupId = { year: { $year: '$createdAt' } };
       }
 
       // Aggregate earnings
@@ -3024,6 +3083,7 @@ class PaymentService {
           }
         },
         { $unwind: '$booking' },
+        ...(resolvedCustomerId ? [{ $match: { 'booking.user': resolvedCustomerId } }] : []),
         { $match: { 'booking.status': 'completed' } },
         {
           $lookup: {
@@ -3045,7 +3105,7 @@ class PaymentService {
             complaintIds: { $addToSet: '$complaintInfo.complaintId' }
           }
         },
-        { $sort: { '_id.year': 1, '_id.month': 1 } }
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.week': 1 } }
       ]);
 
       // Get withdrawals for the same period
@@ -3082,11 +3142,11 @@ class PaymentService {
       summary.forEach(item => {
         const period = groupBy === 'week'
           ? `Week ${item._id.week}, ${item._id.year}`
-          : `${item._id.year}-${(item._id.month || 0).toString().padStart(2, '0')}`;
+          : (groupBy === 'year' ? `Year ${item._id.year}` : `${item._id.year}-${(item._id.month || 0).toString().padStart(2, '0')}`);
 
         const withdrawalData = withdrawals.find(w =>
           w._id.year === item._id.year &&
-          (groupBy === 'week' ? w._id.week === item._id.week : w._id.month === item._id.month)
+          (groupBy === 'week' ? w._id.week === item._id.week : (groupBy === 'year' ? true : w._id.month === item._id.month))
         );
 
         worksheet.addRow({
@@ -3193,6 +3253,13 @@ class PaymentService {
       if (req.query.zoneIds) {
         const zones = req.query.zoneIds.split(',');
         providerFilter.currentZone = { $in: zones };
+      }
+      if (req.query.providerId) {
+        if (mongoose.isValidObjectId(req.query.providerId)) {
+          providerFilter._id = req.query.providerId;
+        } else {
+          providerFilter.providerId = req.query.providerId;
+        }
       }
       const providers = await Provider.find(providerFilter).select('name email phone providerId').lean();
 
@@ -3463,6 +3530,24 @@ class PaymentService {
         const providerIds = providers.map(p => p._id);
         filter.provider = { $in: providerIds };
       }
+      if (req.query.providerId) {
+        const prov = await Provider.findOne({
+          $or: [
+            { providerId: req.query.providerId },
+            { _id: mongoose.isValidObjectId(req.query.providerId) ? req.query.providerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.provider = prov ? prov._id : null;
+      }
+      if (req.query.customerId) {
+        const cust = await User.findOne({
+          $or: [
+            { customerId: req.query.customerId },
+            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.customer = cust ? cust._id : null;
+      }
 
       const complaints = await Complaint.find(filter)
         .populate('customer', 'name email phone')
@@ -3552,6 +3637,30 @@ class PaymentService {
         const bookings = await Booking.find({ zoneId: { $in: zones } }).select('_id').lean();
         const bookingIds = bookings.map(b => b._id);
         filter.booking = { $in: bookingIds };
+      }
+      if (req.query.customerId) {
+        const cust = await User.findOne({
+          $or: [
+            { customerId: req.query.customerId },
+            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.user = cust ? cust._id : null;
+      }
+      if (req.query.providerId) {
+        const prov = await Provider.findOne({
+          $or: [
+            { providerId: req.query.providerId },
+            { _id: mongoose.isValidObjectId(req.query.providerId) ? req.query.providerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        if (prov) {
+          const bookings = await Booking.find({ provider: prov._id }).select('_id').lean();
+          const bookingIds = bookings.map(b => b._id);
+          filter.booking = { $in: bookingIds };
+        } else {
+          filter.booking = null;
+        }
       }
 
       const refunds = await Transaction.find(filter)

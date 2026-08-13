@@ -151,6 +151,18 @@ const PayoutProfileTab = ({ showToast }) => {
         fetchPayoutDetails();
     }, []);
 
+    useEffect(() => {
+        const shouldLock = modal.isOpen || !!selectedWithdrawalDetail;
+        if (shouldLock) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [modal.isOpen, selectedWithdrawalDetail]);
+
     const handleOpenModal = (type) => {
         setModal({ isOpen: true, type });
         if (type === 'bank_account') {
@@ -195,7 +207,7 @@ const PayoutProfileTab = ({ showToast }) => {
         }
 
         setPassbookFile(file);
-        
+
         if (file.type === 'application/pdf') {
             setPassbookPreview(URL.createObjectURL(file));
         } else {
@@ -225,7 +237,7 @@ const PayoutProfileTab = ({ showToast }) => {
                 }
 
                 const hasExistingBank = !!bankDetails.accountNo;
-                const detailsChanged = 
+                const detailsChanged =
                     formData.accountNo.trim() !== (bankDetails.accountNo || '') ||
                     formData.ifsc.trim().toUpperCase() !== (bankDetails.ifsc || '') ||
                     formData.accountName.trim() !== (bankDetails.accountName || '');
@@ -270,6 +282,7 @@ const PayoutProfileTab = ({ showToast }) => {
                 const fd = new FormData();
                 fd.append('accountName', formData.accountName.trim());
                 fd.append('upiId', formData.upiId.trim());
+                fd.append('updateType', 'upi');
 
                 const res = await ProviderService.updateProfile(fd);
 
@@ -314,7 +327,8 @@ const PayoutProfileTab = ({ showToast }) => {
     const handleSetDefault = async (method) => {
         try {
             setSaving(true);
-            const res = await ProviderService.updateProfile({ preferredMethod: method });
+            const mappedMethod = method === 'vpa' ? 'upi' : method;
+            const res = await ProviderService.updateProfile({ preferredMethod: mappedMethod });
             if (res.data?.success) {
                 if (showToast) showToast('Preferred payout method updated', 'success');
                 fetchPayoutDetails();
@@ -397,7 +411,70 @@ const PayoutProfileTab = ({ showToast }) => {
         bankDetails.verified === true &&
         bankDetails.payoutEnabled === true
     );
-    const isWithdrawalActive = isBankVerified;
+    const defaultMethodClean = String(bankDetails.defaultMethod || '').toLowerCase();
+    
+    // Verification Status Text & Color
+    let verificationText = 'Pending Verification';
+    let verificationColor = 'text-amber-600';
+    let VerificationIcon = AlertTriangle;
+
+    if (bankDetails.bankVerificationStatus === 'verified') {
+        verificationText = 'Verified ✓';
+        verificationColor = 'text-emerald-600';
+        VerificationIcon = ShieldCheck;
+    } else if (bankDetails.bankVerificationStatus === 'rejected') {
+        verificationText = 'Rejected';
+        verificationColor = 'text-rose-600';
+        VerificationIcon = XCircle;
+    }
+
+    // Withdrawal Status Text & Color
+    let withdrawalStatusText = 'Locked — Verification Required';
+    let withdrawalStatusColor = 'text-amber-600';
+    let WithdrawalIcon = Lock;
+
+    if (bankDetails.bankVerificationStatus === 'rejected') {
+        withdrawalStatusText = 'Locked — Verification Rejected';
+        withdrawalStatusColor = 'text-rose-600';
+        WithdrawalIcon = Lock;
+    } else if (!isBankVerified) {
+        if (bankDetails.payoutEnabled === false && bankDetails.verified && bankDetails.bankVerificationStatus === 'verified') {
+            withdrawalStatusText = 'Locked — Payout Disabled';
+        } else {
+            withdrawalStatusText = 'Locked — Verification Required';
+        }
+        withdrawalStatusColor = 'text-amber-600';
+        WithdrawalIcon = Lock;
+    } else if (walletData.availableBalance < minLimit) {
+        withdrawalStatusText = 'Locked — Minimum Balance Required';
+        withdrawalStatusColor = 'text-amber-600';
+        WithdrawalIcon = Lock;
+    } else {
+        withdrawalStatusText = 'Active / Ready';
+        withdrawalStatusColor = 'text-emerald-600';
+        WithdrawalIcon = CheckCircle2;
+    }
+
+    // Withdrawal Warnings
+    let withdrawalWarning = null;
+    let isWithdrawalDisabled = false;
+
+    if (!hasBank && !hasUpi) {
+        withdrawalWarning = "Add and verify a bank account or UPI ID.";
+        isWithdrawalDisabled = true;
+    } else if (bankDetails.bankVerificationStatus === 'rejected') {
+        withdrawalWarning = "Bank verification details were rejected. Please update them.";
+        isWithdrawalDisabled = true;
+    } else if (bankDetails.bankVerificationStatus === 'pending' || !bankDetails.verified) {
+        withdrawalWarning = "Bank verification is required before withdrawal.";
+        isWithdrawalDisabled = true;
+    } else if (bankDetails.payoutEnabled === false) {
+        withdrawalWarning = "Withdrawals are currently disabled.";
+        isWithdrawalDisabled = true;
+    } else if (walletData.availableBalance < minLimit) {
+        withdrawalWarning = `Minimum balance of ${formatCurrency(minLimit)} is required.`;
+        isWithdrawalDisabled = true;
+    }
 
     return (
         <div className="space-y-6 font-inter">
@@ -410,61 +487,39 @@ const PayoutProfileTab = ({ showToast }) => {
                             <CreditCard className="w-6 h-6 text-primary" />
                             Payout Profile & Withdrawal Center
                         </h2>
-                        <p className="text-xs text-slate-500 mt-1 font-inter">
-                            Enterprise Payout Readiness & Settlement Dashboard (Blinkit, Zepto & Urban Company Standard)
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 text-xs font-extrabold rounded-full border ${payoutMode === 'razorpayx' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'
-                            }`}>
-                            {payoutMode === 'razorpayx' ? 'Direct Gateway Transfer' : 'Standard Manual Mode'}
-                        </span>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-inter">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-[10px] sm:text-xs font-inter">
                     {/* Payout Mode */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Payout Mode</span>
-                        <span className="font-extrabold text-slate-900 text-sm mt-1 block uppercase">
-                            {payoutMode === 'razorpayx' ? 'RazorpayX Direct' : 'Manual Approval'}
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px] sm:text-[10px]">Payout Mode</span>
+                        <span className="font-extrabold text-slate-900 text-xs sm:text-sm mt-1 block uppercase">
+                            {payoutMode === 'razorpayx' ? 'RazorpayX' : 'Manual Approval'}
                         </span>
                     </div>
 
                     {/* Verification Status */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Verification Status</span>
-                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1.5 ${bankDetails.bankVerificationStatus === 'verified'
-                            ? 'text-emerald-600'
-                            : bankDetails.bankVerificationStatus === 'rejected'
-                                ? 'text-rose-600'
-                                : 'text-amber-600'
-                            }`}>
-                            {bankDetails.bankVerificationStatus === 'verified' ? (
-                                <><ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified ✓</>
-                            ) : bankDetails.bankVerificationStatus === 'rejected' ? (
-                                <><XCircle className="w-4 h-4 text-rose-600" /> Verification Rejected</>
-                            ) : (
-                                <><AlertTriangle className="w-4 h-4 text-amber-600" /> Pending Admin Review</>
-                            )}
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px] sm:text-[10px]">Verification Status</span>
+                        <span className={`font-extrabold text-xs sm:text-sm mt-1 inline-flex items-center gap-1.5 ${verificationColor}`}>
+                            <VerificationIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> {verificationText}
                         </span>
                     </div>
 
                     {/* Withdrawal Status */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Withdrawal Status</span>
-                        <span className={`font-extrabold text-sm mt-1 inline-flex items-center gap-1 ${isWithdrawalActive ? 'text-emerald-600' : 'text-amber-600'
-                            }`}>
-                            {isWithdrawalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Lock className="w-4 h-4 text-amber-600" />}
-                            {isWithdrawalActive ? 'Active / Ready' : 'Locked (Pending Verification)'}
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px] sm:text-[10px]">Withdrawal Status</span>
+                        <span className={`font-extrabold text-xs sm:text-sm mt-1 inline-flex items-center gap-1 ${withdrawalStatusColor}`}>
+                            <WithdrawalIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> {withdrawalStatusText}
                         </span>
                     </div>
 
                     {/* Preferred Method */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Preferred Method</span>
-                        <span className="font-extrabold text-slate-900 text-sm mt-1 block uppercase">
-                            {bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi' ? 'UPI VPA' : 'Bank Account'}
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider block text-[9px] sm:text-[10px]">Preferred Method</span>
+                        <span className="font-extrabold text-slate-900 text-xs sm:text-sm mt-1 block uppercase">
+                            {defaultMethodClean === 'vpa' || defaultMethodClean === 'upi' ? 'UPI' : 'Bank Account'}
                         </span>
                     </div>
                 </div>
@@ -479,37 +534,6 @@ const PayoutProfileTab = ({ showToast }) => {
                 )}
             </div>
 
-            {/* 2. SECTION 2: WALLET SUMMARY */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Available Balance</span>
-                    <span className="text-2xl font-black text-slate-900 mt-1 block font-mono">
-                        {formatCurrency(walletData.availableBalance)}
-                    </span>
-                </div>
-                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Pending Withdrawal</span>
-                    <span className="text-2xl font-black text-amber-600 mt-1 block font-mono">
-                        {formatCurrency(walletData.pendingWithdrawals)}
-                    </span>
-                </div>
-                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Total Withdrawn</span>
-                    <span className="text-2xl font-black text-emerald-600 mt-1 block font-mono">
-                        {formatCurrency(walletData.totalWithdrawn)}
-                    </span>
-                </div>
-                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Last Settlement</span>
-                    <span className="text-lg font-black text-slate-800 mt-1 block font-mono">
-                        {walletData.lastSettlementAmount ? formatCurrency(walletData.lastSettlementAmount) : '—'}
-                    </span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
-                        {walletData.lastSettlementDate ? formatDate(walletData.lastSettlementDate) : 'No settlement yet'}
-                    </span>
-                </div>
-            </div>
-
             {/* 3. SECTION 3: PAYMENT DESTINATION (BANK & UPI CARDS) */}
             <div className="space-y-3">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
@@ -518,7 +542,7 @@ const PayoutProfileTab = ({ showToast }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Bank Account Card */}
-                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${bankDetails.defaultMethod === 'bank_account' && hasBank
+                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${defaultMethodClean === 'bank_account' && hasBank
                         ? 'border-primary shadow-md ring-2 ring-primary/10'
                         : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
                         }`}>
@@ -533,7 +557,7 @@ const PayoutProfileTab = ({ showToast }) => {
                                 </div>
                             </div>
 
-                            {bankDetails.defaultMethod === 'bank_account' && hasBank && (
+                            {defaultMethodClean === 'bank_account' && hasBank && (
                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                                     <Check className="w-3 h-3" /> Preferred
                                 </span>
@@ -564,8 +588,8 @@ const PayoutProfileTab = ({ showToast }) => {
                                 )}
                                 <div className="flex justify-between border-t border-slate-200/60 pt-2">
                                     <span className="text-slate-500">Verification Status</span>
-                                    <span className={`font-bold ${isBankVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                        {isBankVerified ? 'Verified ✓' : 'Pending Admin Verification'}
+                                    <span className={`font-bold ${bankDetails.bankVerificationStatus === 'verified' ? 'text-emerald-600' : bankDetails.bankVerificationStatus === 'rejected' ? 'text-rose-600' : 'text-amber-600'}`}>
+                                        {bankDetails.bankVerificationStatus === 'verified' ? 'Verified ✓' : bankDetails.bankVerificationStatus === 'rejected' ? 'Rejected' : 'Pending Verification'}
                                     </span>
                                 </div>
                             </div>
@@ -597,7 +621,7 @@ const PayoutProfileTab = ({ showToast }) => {
                                         <Trash2 className="w-4 h-4" /> Delete
                                     </button>
                                 </div>
-                                {bankDetails.defaultMethod !== 'bank_account' && (
+                                {defaultMethodClean !== 'bank_account' && (
                                     <button
                                         onClick={() => handleSetDefault('bank_account')}
                                         disabled={saving}
@@ -611,7 +635,7 @@ const PayoutProfileTab = ({ showToast }) => {
                     </div>
 
                     {/* UPI VPA Card */}
-                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${(bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi') && hasUpi
+                    <div className={`relative bg-white rounded-2xl p-6 border transition-all ${(defaultMethodClean === 'vpa' || defaultMethodClean === 'upi') && hasUpi
                         ? 'border-primary shadow-md ring-2 ring-primary/10'
                         : 'border-slate-200/80 hover:border-slate-300 shadow-sm'
                         }`}>
@@ -626,7 +650,7 @@ const PayoutProfileTab = ({ showToast }) => {
                                 </div>
                             </div>
 
-                            {(bankDetails.defaultMethod === 'vpa' || bankDetails.defaultMethod === 'upi') && hasUpi && (
+                            {(defaultMethodClean === 'vpa' || defaultMethodClean === 'upi') && hasUpi && (
                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                                     <Check className="w-3 h-3" /> Preferred
                                 </span>
@@ -647,14 +671,14 @@ const PayoutProfileTab = ({ showToast }) => {
                                 </div>
                                 <div className="flex justify-between border-t border-slate-200/60 pt-2">
                                     <span className="text-slate-500">Verification Status</span>
-                                    <span className={`font-bold ${isBankVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                        {isBankVerified ? 'Active for UPI Payout' : 'Pending Verification'}
+                                    <span className={`font-bold ${bankDetails.bankVerificationStatus === 'verified' ? 'text-emerald-600' : bankDetails.bankVerificationStatus === 'rejected' ? 'text-rose-600' : 'text-amber-600'}`}>
+                                        {bankDetails.bankVerificationStatus === 'verified' ? 'Verified ✓' : bankDetails.bankVerificationStatus === 'rejected' ? 'Rejected' : 'Pending Verification'}
                                     </span>
                                 </div>
                             </div>
                         ) : (
                             <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                                <p className="text-xs text-slate-500 mb-3">No UPI ID linked yet.</p>
+                                <p className="text-xs text-slate-500 mb-3">No UPI ID added</p>
                                 <button
                                     onClick={() => handleOpenModal('vpa')}
                                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer"
@@ -680,7 +704,7 @@ const PayoutProfileTab = ({ showToast }) => {
                                         <Trash2 className="w-4 h-4" /> Delete
                                     </button>
                                 </div>
-                                {bankDetails.defaultMethod !== 'vpa' && bankDetails.defaultMethod !== 'upi' && (
+                                {defaultMethodClean !== 'vpa' && defaultMethodClean !== 'upi' && (
                                     <button
                                         onClick={() => handleSetDefault('vpa')}
                                         disabled={saving}
@@ -699,26 +723,23 @@ const PayoutProfileTab = ({ showToast }) => {
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 font-poppins">
-                        <Send className="w-4.5 h-4.5 text-primary" /> Initiate Withdrawal Request
+                        <Send className="w-4.5 h-4.5 text-primary" /> Withdraw Money
                     </h3>
-                    <span className="text-xs text-slate-400 font-medium">
-                        Processing Mode: <strong className="uppercase text-slate-700">{payoutMode}</strong>
-                    </span>
                 </div>
 
                 <form onSubmit={handleWithdrawSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available Balance</span>
-                            <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">{formatCurrency(walletData.availableBalance)}</span>
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                        <div className="p-2.5 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block leading-tight">Available Balance</span>
+                            <span className="text-xs sm:text-lg font-black text-slate-900 font-mono mt-1 block">{formatCurrency(walletData.availableBalance)}</span>
                         </div>
-                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Min Withdrawal Limit</span>
-                            <span className="text-lg font-black text-slate-800 font-mono mt-0.5 block">{formatCurrency(minLimit)}</span>
+                        <div className="p-2.5 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block leading-tight">Min Limit</span>
+                            <span className="text-xs sm:text-lg font-black text-slate-800 font-mono mt-1 block">{formatCurrency(minLimit)}</span>
                         </div>
-                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Max Single Request Limit</span>
-                            <span className="text-lg font-black text-slate-800 font-mono mt-0.5 block">{formatCurrency(maxLimit)}</span>
+                        <div className="p-2.5 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block leading-tight">Max Limit</span>
+                            <span className="text-xs sm:text-lg font-black text-slate-800 font-mono mt-1 block">{formatCurrency(maxLimit)}</span>
                         </div>
                     </div>
 
@@ -752,18 +773,16 @@ const PayoutProfileTab = ({ showToast }) => {
 
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-100">
                         <p className="text-xs text-slate-500">
-                            {!isBankVerified ? (
-                                <span className="text-amber-600 font-bold">⚠️ Bank details must be verified by Admin before withdrawing.</span>
-                            ) : walletData.availableBalance < minLimit ? (
-                                <span className="text-amber-600 font-bold">⚠️ Minimum wallet balance of {formatCurrency(minLimit)} required.</span>
+                            {withdrawalWarning ? (
+                                <span className="text-amber-600 font-bold">⚠️ {withdrawalWarning}</span>
                             ) : (
-                                <span>Requests are processed based on system settings ({payoutMode.toUpperCase()}).</span>
+                                <span>Requests are processed based on system settings.</span>
                             )}
                         </p>
 
                         <button
                             type="submit"
-                            disabled={withdrawing || !isBankVerified || walletData.availableBalance < minLimit}
+                            disabled={withdrawing || isWithdrawalDisabled}
                             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
                         >
                             {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -783,8 +802,8 @@ const PayoutProfileTab = ({ showToast }) => {
                 </div>
 
                 {recentWithdrawals.length === 0 ? (
-                    <div className="py-8 text-center text-slate-400 text-xs font-inter">
-                        No withdrawal transactions recorded yet.
+                    <div className="py-4 text-center text-slate-400 text-xs font-inter">
+                        No withdrawals yet.
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -792,29 +811,27 @@ const PayoutProfileTab = ({ showToast }) => {
                             <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold">
                                 <tr>
                                     <th className="p-3">Withdrawal ID</th>
+                                    <th className="p-3">Date</th>
                                     <th className="p-3">Amount</th>
-                                    <th className="p-3">Method</th>
+                                    <th className="p-3">Destination</th>
                                     <th className="p-3">Status</th>
-                                    <th className="p-3">Transaction ID / UTR</th>
-                                    <th className="p-3">Requested On</th>
-                                    <th className="p-3">Completed On</th>
                                     <th className="p-3 text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 font-medium">
                                 {recentWithdrawals.map((w, idx) => {
                                     const badge = getWithdrawalStatusBadge(w.status);
+                                    const isUpi = w.withdrawalMethod === 'upi' || w.paymentMethod === 'upi';
+                                    const destinationLabel = isUpi ? 'UPI VPA' : 'Bank Account';
                                     return (
                                         <tr key={w._id || idx} className="hover:bg-slate-50/60">
                                             <td className="p-3 font-mono text-teal-700 font-bold">{w.transactionReference || `#${(w._id || '').slice(-6)}`}</td>
+                                            <td className="p-3 text-slate-500 whitespace-nowrap">{formatDate(w.createdAt)}</td>
                                             <td className="p-3 font-bold text-slate-900 font-mono">{formatCurrency(w.amount || 0)}</td>
-                                            <td className="p-3 uppercase text-[11px] font-bold text-slate-700">{w.withdrawalMethod || w.paymentMethod || 'Bank'}</td>
+                                            <td className="p-3 uppercase text-[11px] font-bold text-slate-700">{destinationLabel}</td>
                                             <td className="p-3">
                                                 <span className={badge.className}>{badge.label}</span>
                                             </td>
-                                            <td className="p-3 font-mono text-slate-600">{w.utrNo || w.notes || '—'}</td>
-                                            <td className="p-3 text-slate-500 whitespace-nowrap">{formatDate(w.createdAt)}</td>
-                                            <td className="p-3 text-slate-500 whitespace-nowrap">{w.completedAt ? formatDate(w.completedAt) : '—'}</td>
                                             <td className="p-3 text-right">
                                                 <button
                                                     onClick={() => setSelectedWithdrawalDetail(w)}
@@ -833,65 +850,12 @@ const PayoutProfileTab = ({ showToast }) => {
                 )}
             </div>
 
-            {/* 6. SECTION 6: VERIFICATION TIMELINE */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-3 border-slate-100 flex items-center gap-2 font-poppins">
-                    <Activity className="w-4 h-4 text-primary" /> Payout Readiness Lifecycle
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs font-inter">
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold bg-emerald-500 text-white shrink-0">1</div>
-                        <div>
-                            <span className="font-bold text-slate-800 block">Profile Approved</span>
-                            <span className="text-[10px] text-emerald-600 font-bold">Complete ✓</span>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${hasBank || hasUpi ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>2</div>
-                        <div>
-                            <span className="font-bold text-slate-800 block">Bank Added</span>
-                            <span className="text-[10px] text-slate-400">{hasBank || hasUpi ? 'Complete ✓' : 'Pending'}</span>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${bankDetails.bankVerificationStatus === 'verified' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>3</div>
-                        <div>
-                            <span className="font-bold text-slate-800 block">Admin Verification</span>
-                            <span className="text-[10px] text-slate-400">{bankDetails.bankVerificationStatus === 'verified' ? 'Complete ✓' : 'In Review'}</span>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${isBankVerified ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>4</div>
-                        <div>
-                            <span className="font-bold text-slate-800 block">Verified</span>
-                            <span className="text-[10px] text-slate-400">{isBankVerified ? 'Verified ✓' : 'Pending'}</span>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold shrink-0 ${isWithdrawalActive ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>5</div>
-                        <div>
-                            <span className="font-bold text-slate-800 block">Withdrawal Enabled</span>
-                            <span className="text-[10px] text-slate-400">{isWithdrawalActive ? 'Enabled ✓' : 'Locked'}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* 7. SECTION 7: RECENT NOTIFICATIONS */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 font-inter">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-2 border-slate-100 flex items-center gap-2 font-poppins">
-                    <Bell className="w-4 h-4 text-primary" /> Recent Payout Notifications
-                </h3>
-
-                {notifications.length === 0 ? (
-                    <div className="py-4 text-center text-slate-400 text-xs font-inter">
-                        No recent payout notifications recorded.
-                    </div>
-                ) : (
+            {notifications.length > 0 && (
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 font-inter">
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-2 border-slate-100 flex items-center gap-2 font-poppins">
+                        <Bell className="w-4 h-4 text-primary" /> Recent Payout Notifications
+                    </h3>
                     <div className="space-y-2 text-xs font-inter">
                         {notifications.map((n, idx) => (
                             <div key={n._id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
@@ -904,13 +868,13 @@ const PayoutProfileTab = ({ showToast }) => {
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* WITHDRAWAL DETAIL MODAL */}
             {selectedWithdrawalDetail && (
-                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 font-inter">
+                <div className="fixed inset-0 z-50 bg-black/25 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-4 sm:p-6 shadow-xl border border-slate-100 space-y-4 font-inter">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 font-poppins">
                                 <DollarSign className="w-5 h-5 text-primary" /> Withdrawal Details
@@ -967,9 +931,9 @@ const PayoutProfileTab = ({ showToast }) => {
 
             {/* MODAL FOR ADD / EDIT ACCOUNT */}
             {modal.isOpen && (
-                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 animate-in fade-in zoom-in duration-150 font-inter">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="fixed inset-0 z-[100] bg-black/25 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-xl border border-slate-100 animate-in fade-in zoom-in duration-150 font-inter">
+                        <div className="flex items-center justify-between border-b border-slate-100 p-4 sm:p-6 pb-3 flex-shrink-0">
                             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 font-poppins">
                                 {modal.type === 'bank_account' ? <CreditCard className="w-5 h-5 text-primary" /> : <QrCode className="w-5 h-5 text-emerald-600" />}
                                 {modal.type === 'bank_account' ? 'Bank Account Details' : 'UPI ID Details'}
@@ -977,129 +941,131 @@ const PayoutProfileTab = ({ showToast }) => {
                             <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 text-sm font-semibold cursor-pointer">✕</button>
                         </div>
 
-                        <form onSubmit={handleSave} className="space-y-4">
-                            {modal.type === 'bank_account' ? (
-                                <>
-                                    <IfscBankDetails
-                                        value={{
-                                            ifsc: formData.ifsc,
-                                            accountNo: formData.accountNo,
-                                            bankName: formData.bankName
-                                        }}
-                                        onChange={(updated) => setFormData(prev => ({ ...prev, ...updated }))}
-                                        showAccountName={true}
-                                        accountNameValue={formData.accountName}
-                                        onAccountNameChange={(val) => setFormData(prev => ({ ...prev, accountName: val }))}
-                                    />
-                                    
-                                    <div className="mt-4 space-y-2">
-                                        <label className="block text-xs font-semibold text-slate-700">
-                                            Bank Passbook / Cancelled Cheque *
-                                        </label>
-                                        
-                                        {(passbookPreview || bankDetails.passbookImage) ? (
-                                            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-white border flex items-center justify-center relative flex-shrink-0">
-                                                        {(passbookPreview ? passbookFile?.type === 'application/pdf' : bankDetails.passbookImage?.toLowerCase().endsWith('.pdf')) ? (
-                                                            <div className="flex flex-col items-center justify-center text-center">
-                                                                <span className="text-[10px] font-black text-rose-500">PDF</span>
-                                                            </div>
-                                                        ) : (
-                                                            <img 
-                                                                src={passbookPreview || bankDetails.passbookImage} 
-                                                                alt="Passbook Thumbnail" 
-                                                                className="w-full h-full object-cover" 
-                                                            />
+                        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0">
+                            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 py-4 space-y-4">
+                                {modal.type === 'bank_account' ? (
+                                    <>
+                                        <IfscBankDetails
+                                            value={{
+                                                ifsc: formData.ifsc,
+                                                accountNo: formData.accountNo,
+                                                bankName: formData.bankName
+                                            }}
+                                            onChange={(updated) => setFormData(prev => ({ ...prev, ...updated }))}
+                                            showAccountName={true}
+                                            accountNameValue={formData.accountName}
+                                            onAccountNameChange={(val) => setFormData(prev => ({ ...prev, accountName: val }))}
+                                        />
+
+                                        <div className="mt-4 space-y-2">
+                                            <label className="block text-xs font-semibold text-slate-700">
+                                                Bank Passbook / Cancelled Cheque *
+                                            </label>
+
+                                            {(passbookPreview || bankDetails.passbookImage) ? (
+                                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-white border flex items-center justify-center relative flex-shrink-0">
+                                                            {(passbookPreview ? passbookFile?.type === 'application/pdf' : bankDetails.passbookImage?.toLowerCase().endsWith('.pdf')) ? (
+                                                                <div className="flex flex-col items-center justify-center text-center">
+                                                                    <span className="text-[10px] font-black text-rose-500">PDF</span>
+                                                                </div>
+                                                            ) : (
+                                                                <img
+                                                                    src={passbookPreview || bankDetails.passbookImage}
+                                                                    alt="Passbook Thumbnail"
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="text-xs font-bold text-slate-700 block truncate max-w-[150px]">
+                                                                {passbookFile ? passbookFile.name : 'Passbook Uploaded'}
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 font-bold block uppercase mt-0.5">
+                                                                {bankDetails.uploadedAt ? `Uploaded: ${new Date(bankDetails.uploadedAt).toLocaleDateString()}` : 'Document Uploaded'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1.5 flex-shrink-0 w-full sm:w-auto justify-start sm:justify-end border-t sm:border-t-0 border-slate-200/60 pt-2 sm:pt-0 mt-1 sm:mt-0">
+                                                        <label htmlFor="passbook-modal-upload" className="px-2.5 py-1 text-slate-600 hover:text-primary hover:bg-slate-100 rounded-lg text-[10px] font-bold cursor-pointer transition-colors border border-slate-200 hover:border-primary text-center flex-1 sm:flex-none">
+                                                            Replace
+                                                        </label>
+
+                                                        {(passbookPreview || bankDetails.passbookImage) && (
+                                                            <a
+                                                                href={passbookPreview || bankDetails.passbookImage}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="px-2.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-[10px] font-bold text-center block transition-colors border border-primary/20 flex-1 sm:flex-none"
+                                                            >
+                                                                Preview
+                                                            </a>
+                                                        )}
+
+                                                        {bankDetails.passbookImage && (
+                                                            <a
+                                                                href={bankDetails.passbookImage}
+                                                                download={`passbook_${bankDetails.accountName || 'provider'}.jpg`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="px-2.5 py-1 text-emerald-600 hover:bg-emerald-50 rounded-lg text-[10px] font-bold text-center block transition-colors border border-emerald-200/50 flex-1 sm:flex-none"
+                                                            >
+                                                                Download
+                                                            </a>
                                                         )}
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <span className="text-xs font-bold text-slate-700 block truncate max-w-[150px]">
-                                                            {passbookFile ? passbookFile.name : 'Passbook Uploaded'}
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-400 font-bold block uppercase mt-0.5">
-                                                            {bankDetails.uploadedAt ? `Uploaded: ${new Date(bankDetails.uploadedAt).toLocaleDateString()}` : 'Document Uploaded'}
-                                                        </span>
-                                                    </div>
                                                 </div>
-                                                
-                                                <div className="flex gap-1 flex-shrink-0">
-                                                    <label htmlFor="passbook-modal-upload" className="px-2 py-1 text-slate-600 hover:text-primary hover:bg-slate-100 rounded-lg text-[10px] font-bold cursor-pointer transition-colors">
-                                                        Replace
+                                            ) : (
+                                                <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 bg-slate-50/50 text-center hover:bg-slate-50 transition-colors relative">
+                                                    <label htmlFor="passbook-modal-upload" className="cursor-pointer block">
+                                                        <div className="space-y-1">
+                                                            <span className="text-xs text-primary font-bold block">Click to upload Passbook / Cheque</span>
+                                                            <span className="text-[10px] text-slate-400 block font-medium">Accepted Formats: JPG, PNG, PDF (Max 5 MB)</span>
+                                                        </div>
                                                     </label>
-                                                    
-                                                    {(passbookPreview || bankDetails.passbookImage) && (
-                                                        <a 
-                                                            href={passbookPreview || bankDetails.passbookImage} 
-                                                            target="_blank" 
-                                                            rel="noopener noreferrer" 
-                                                            className="px-2 py-1 text-primary hover:bg-primary/10 rounded-lg text-[10px] font-bold text-center block transition-colors"
-                                                        >
-                                                            Preview
-                                                        </a>
-                                                    )}
-
-                                                    {bankDetails.passbookImage && (
-                                                        <a 
-                                                            href={bankDetails.passbookImage} 
-                                                            download={`passbook_${bankDetails.accountName || 'provider'}.jpg`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded-lg text-[10px] font-bold text-center block transition-colors"
-                                                        >
-                                                            Download
-                                                        </a>
-                                                    )}
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 bg-slate-50/50 text-center hover:bg-slate-50 transition-colors relative">
-                                                <label htmlFor="passbook-modal-upload" className="cursor-pointer block">
-                                                    <div className="space-y-1">
-                                                        <span className="text-xs text-primary font-bold block">Click to upload Passbook / Cheque</span>
-                                                        <span className="text-[10px] text-slate-400 block font-medium">Accepted Formats: JPG, PNG, PDF (Max 5 MB)</span>
-                                                    </div>
-                                                </label>
-                                            </div>
-                                        )}
-                                        
-                                        <input 
-                                            id="passbook-modal-upload" 
-                                            type="file" 
-                                            onChange={handlePassbookFileChange} 
-                                            accept="image/jpeg,image/png,image/jpg,application/pdf" 
-                                            className="hidden" 
-                                        />
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Account Holder Full Name</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={formData.accountName}
-                                            onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
-                                            placeholder="Enter full name as per bank"
-                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-700 mb-1">UPI ID / VPA</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={formData.upiId}
-                                            onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
-                                            placeholder="e.g. name@okaxis or 9876543210@paytm"
-                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                                        />
-                                    </div>
-                                </>
-                            )}
+                                            )}
 
-                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                                            <input
+                                                id="passbook-modal-upload"
+                                                type="file"
+                                                onChange={handlePassbookFileChange}
+                                                accept="image/jpeg,image/png,image/jpg,application/pdf"
+                                                className="hidden"
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-700 mb-1">Account Holder Full Name</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.accountName}
+                                                onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
+                                                placeholder="Enter full name as per bank"
+                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-700 mb-1">UPI ID / VPA</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.upiId}
+                                                onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
+                                                placeholder="e.g. name@okaxis or 9876543210@paytm"
+                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 p-4 sm:p-6 pt-3 border-t border-slate-100 flex-shrink-0">
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}

@@ -212,7 +212,7 @@ const AdminPayout = () => {
   const [filters, setFilters] = useState({ status: '', startDate: '', endDate: '', providerSearch: urlSearch || searchQuery || '', sortBy: '' });
 
   useEffect(() => {
-    fetchSystemSettings();
+    fetchPayoutSettings();
   }, []);
 
   const fetchPayoutSettings = async () => {
@@ -220,7 +220,7 @@ const AdminPayout = () => {
       const response = await SystemService.getSystemSettingAdmin();
       const data = response.data;
       if (data.success && data.data?.payoutSettings) {
-        setPayoutSettings(data.data.payoutSettings);
+        setPayoutMode(data.data.payoutSettings.mode || 'manual');
       }
     } catch {
       toast.error('Failed to load payout settings');

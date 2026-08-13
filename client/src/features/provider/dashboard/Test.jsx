@@ -796,8 +796,8 @@ const ProviderTestPage = () => {
             </div>
 
             {showConfirmSubmit && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                <div className="bg-white/95 backdrop-blur-md rounded-xl p-6 max-w-md w-full border border-white/20 shadow-2xl">
+              <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-xl p-6 max-w-md w-full border border-gray-100 shadow-2xl">
                   <h3 className="text-lg font-semibold text-secondary mb-4">Submit Test?</h3>
                   <p className="text-secondary/80 mb-6">
                     Are you sure you want to submit your test? You have answered {Object.keys(answers).length} out of {currentTest.questions.length} questions.

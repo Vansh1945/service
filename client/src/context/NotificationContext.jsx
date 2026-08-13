@@ -27,18 +27,40 @@ export const NotificationProvider = ({ children }) => {
     const activeAudioRef = useRef(null);
     const pendingAudioRef = useRef(null);
     const recentNotifKeysRef = useRef(new Set());
+    const hasUserInteractedRef = useRef(false); // Chrome requires user gesture before vibrate
     const [isAlertRinging, setIsAlertRinging] = useState(false);
+
+    const SS_PREFIX = 'seen_notif_';
 
     const isDuplicateNotification = (...keys) => {
         const validKeys = keys.filter(Boolean).map(String);
         if (validKeys.length === 0) return false;
 
-        const isDup = validKeys.some(k => recentNotifKeysRef.current.has(k));
-        validKeys.forEach(k => recentNotifKeysRef.current.add(k));
+        const inMemory = validKeys.some(k => recentNotifKeysRef.current.has(k));
+        
+        let inSession = false;
+        try {
+            inSession = validKeys.some(k => sessionStorage.getItem(SS_PREFIX + k) === '1');
+        } catch (e) {
+            // sessionStorage block or disabled
+        }
 
-        setTimeout(() => {
-            validKeys.forEach(k => recentNotifKeysRef.current.delete(k));
-        }, 8000);
+        const isDup = inMemory || inSession;
+
+        if (!isDup) {
+            validKeys.forEach(k => {
+                recentNotifKeysRef.current.add(k);
+                try {
+                    sessionStorage.setItem(SS_PREFIX + k, '1');
+                } catch (e) {
+                    // quota exceeded or storage disabled
+                }
+            });
+
+            setTimeout(() => {
+                validKeys.forEach(k => recentNotifKeysRef.current.delete(k));
+            }, 8000);
+        }
 
         return isDup;
     };
@@ -100,9 +122,10 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    // Global listener for interaction to play blocked audio
+    // Global listener for interaction to play blocked audio and enable vibrate
     useEffect(() => {
         const handleUserInteraction = () => {
+            hasUserInteractedRef.current = true;
             if (pendingAudioRef.current) {
                 const audio = pendingAudioRef.current;
                 audio.play().then(() => {
@@ -127,6 +150,13 @@ export const NotificationProvider = ({ children }) => {
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
         if (!newToken || !authToken) return;
+
+        // Skip API call if this exact FCM token is already registered
+        const alreadySaved = localStorage.getItem('fcmToken');
+        if (alreadySaved === newToken) {
+            console.log('[FCM] Token unchanged, skipping save.');
+            return;
+        }
 
         try {
             const res = await NotificationService.saveToken({
@@ -225,10 +255,23 @@ export const NotificationProvider = ({ children }) => {
                     navigate(targetRouteWithEntity, { state: { fromNotification: true } });
                 }
             } else if (event.data && event.data.type === 'PLAY_SOUND') {
-                const { soundUrl, isBookingAlert } = event.data;
-                console.log('[SW Message] Play sound request received:', soundUrl);
+                // SW sends PLAY_SOUND for background/closed-app notifications.
+                // When the app is in the foreground, FCM onMessage + Socket already
+                // play the sound — playing it again here causes duplicate ringtones.
+                if (document.visibilityState === 'visible') {
+                    console.log('[SW Message] PLAY_SOUND skipped — app is in foreground, FCM/Socket already handling it.');
+                    return;
+                }
+                const { soundUrl, isBookingAlert, notificationId, referenceId, bookingId, entityId } = event.data;
+                console.log('[SW Message] Play sound request received (background):', soundUrl);
                 if (isBookingAlert) {
-                    startBookingAlert(soundUrl, 60, true);
+                    const swKey = notificationId || referenceId || bookingId || entityId;
+                    const isSwDup = swKey ? isDuplicateNotification(swKey) : false;
+                    if (!isSwDup) {
+                        startBookingAlert(soundUrl, 60, true);
+                    } else {
+                        console.log('[SW Message] PLAY_SOUND booking alert suppressed — duplicate key:', swKey);
+                    }
                 } else {
                     playNormalNotificationSound(soundUrl);
                 }
@@ -304,7 +347,8 @@ export const NotificationProvider = ({ children }) => {
             const payloadNotif = payload.notification || {};
 
             const notifKey = payload.messageId || payloadData.notificationId || payloadData.referenceId || payloadData.entityId || payloadData._id;
-            const isDup = isDuplicateNotification(notifKey);
+            const bookingKey = payloadData.referenceId || payloadData.entityId || payloadData.bookingId;
+            const isDup = isDuplicateNotification(notifKey, bookingKey);
 
             const title = payloadNotif.title || payloadData.title || 'New Notification';
             const body = payloadNotif.body || payloadData.body || '';
@@ -368,7 +412,7 @@ export const NotificationProvider = ({ children }) => {
                         startBookingAlert(soundUrl, bookingAlertDuration, bookingRepeatAlert);
                     }
 
-                    if (bookingVibration && 'vibrate' in navigator) {
+                    if (bookingVibration && 'vibrate' in navigator && hasUserInteractedRef.current) {
                         try {
                             navigator.vibrate([500, 200, 500, 200, 500]);
                         } catch (vErr) {
@@ -416,7 +460,10 @@ export const NotificationProvider = ({ children }) => {
         };
     }, [isAuthenticated, token, userRole, isAdmin]);
 
-    // Socket-based fallback to trigger ringtone for real-time notifications
+    // Socket-based fallback — used for real-time notification updates.
+    // Booking alert ringtone: only plays via socket when FCM token is NOT registered,
+    // because FCM onMessage already handles it in the foreground when FCM is active.
+    // Non-booking sounds (chat, payment) always play via socket as they are lightweight.
     useEffect(() => {
         if (!token) return;
 
@@ -428,29 +475,26 @@ export const NotificationProvider = ({ children }) => {
 
             const notifKey = payload._id || payload.referenceId || payload.entityId || payload.notificationId;
             if (isDuplicateNotification(notifKey, payload._id, payload.referenceId)) {
-                console.log('[Socket] Duplicate notification suppressed for key:', notifKey);
+                console.log('[Socket] Duplicate notification suppressed:', notifKey);
                 return;
             }
 
             if (payload.isBookingAlert) {
-                const soundUrl = payload.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
-                const bookingAlertTone = true;
-                const bookingVibration = true;
-                const bookingAlertDuration = Number(payload.bookingAlertDuration || 60);
-                const bookingRepeatAlert = true;
-
-                if (bookingAlertTone && soundUrl) {
-                    startBookingAlert(soundUrl, bookingAlertDuration, bookingRepeatAlert);
+                // If FCM is active, FCM onMessage already fired the ringtone — skip here.
+                if (fcmToken) {
+                    console.log('[Socket] Booking alert skipped — FCM is active and already handles audio.');
+                    return;
                 }
+                // FCM not available (no permission / token) — socket is the only audio channel.
+                const soundUrl = payload.soundUrl || 'https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav';
+                const bookingAlertDuration = Number(payload.bookingAlertDuration || 60);
+                startBookingAlert(soundUrl, bookingAlertDuration, true);
 
-                if (bookingVibration && 'vibrate' in navigator) {
-                    try {
-                        navigator.vibrate([500, 200, 500, 200, 500]);
-                    } catch (vErr) {
-                        console.warn('[Socket Context] Vibrate blocked:', vErr.message);
-                    }
+                if ('vibrate' in navigator && hasUserInteractedRef.current) {
+                    try { navigator.vibrate([500, 200, 500, 200, 500]); } catch (e) { /* blocked */ }
                 }
             } else {
+                // Non-booking notifications (chat, payment, etc.) — always play via socket.
                 const soundUrl = payload.soundUrl || '/assets/sounds/notification.mp3';
                 playNormalNotificationSound(soundUrl);
             }
@@ -460,7 +504,7 @@ export const NotificationProvider = ({ children }) => {
         return () => {
             socket.off('new_notification', handleSocketNotification);
         };
-    }, [token]);
+    }, [token, fcmToken]);
 
     const contextValue = {
         fcmToken,

@@ -102,8 +102,7 @@ const paymentRecordSchema = new Schema({
   // Future RazorpayX Integration Fields
   razorpayPayoutId: {
     type: String,
-    sparse: true,
-    index: true
+    sparse: true
   },
   razorpayStatus: {
     type: String,

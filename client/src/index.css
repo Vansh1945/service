@@ -262,3 +262,23 @@
     box-shadow: none !important;
   }
 }
+
+/* Project-wide Modal Backdrop Reset (No Blur, Clean Light Transparency Overlay) */
+.backdrop-blur-sm,
+.backdrop-blur-md,
+.backdrop-blur-lg,
+.backdrop-blur-xl,
+.backdrop-blur-2xl,
+.backdrop-blur-3xl,
+.backdrop-blur {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Target and normalize all modal/drawer backdrop overlays to a light 20% opacity black */
+div[class*="inset-0"][class*="bg-black"],
+div[class*="inset-0"][class*="bg-slate-900"],
+div[class*="inset-0"][class*="bg-secondary"] {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  opacity: 1 !important;
+}

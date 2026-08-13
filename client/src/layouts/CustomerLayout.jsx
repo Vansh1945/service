@@ -119,7 +119,7 @@ const CustomerLayout = () => {
     return (
         <div className="min-h-screen bg-background lg:pb-0">
             {/* Desktop Header */}
-            <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-neutral-100 shadow-sm transition-all duration-300">
+            <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-neutral-100 shadow-sm transition-all duration-300">
                 <div className="w-full px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16 md:h-20">
                         {/* Left Logo */}
@@ -238,7 +238,7 @@ const CustomerLayout = () => {
             {/* Mobile Bottom Sheet (Blinkit Style - Redesigned) */}
             {mobileMenuOpen && (
                 <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300" onClick={() => setMobileMenuOpen(false)} />
+                    <div className="absolute inset-0 bg-black/25 transition-opacity duration-300" onClick={() => setMobileMenuOpen(false)} />
                     <div className="relative bg-white rounded-t-[24px] shadow-2xl border-t border-neutral-100 max-h-[85vh] overflow-y-auto z-10 transition-transform duration-300 transform translate-y-0 pb-6 px-4">
                         {/* Drag handle */}
                         <div className="flex items-center justify-between pt-3 pb-2.5">

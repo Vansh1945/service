@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import {
   X, Eye, Building, BarChart3, FileText, Download,
@@ -14,7 +14,7 @@ import StatCard from '../../../components/ui/StatCard';
 import Pagination from '../../../components/ui/Pagination';
 import usePagination from '../../../hooks/usePagination';
 
-// ── Shared UI Badge ──────────────────────────────────────────────────────────
+// ── Shared UI Badge ─────────────────────
 const Badge = ({ status, className = "" }) => {
   const cfg = getStatusConfig(status);
   const Icon = cfg.icon;
@@ -29,6 +29,7 @@ const Badge = ({ status, className = "" }) => {
 // ── Main Dashboard Component ─────────────────────────────────────────────────
 const ProviderEarningsDashboard = () => {
   const { showToast, systemSettings } = useAuth();
+  const navigate = useNavigate();
 
   const fallbackSplits = systemSettings?.surgeSplitSettings || {
     visiting: 60,
@@ -69,11 +70,9 @@ const ProviderEarningsDashboard = () => {
   const [earningsReport, setEarningsReport] = useState([]);
   const [heldEarnings, setHeldEarnings] = useState([]);
   const [withdrawalReport, setWithdrawalReport] = useState([]);
-  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
   const [expandedWeekly, setExpandedWeekly] = useState(false);
   const [expandedMonthly, setExpandedMonthly] = useState(false);
-  const [withdrawalForm, setWithdrawalForm] = useState({ amount: '' });
   const [downloading, setDownloading] = useState({
     earnings: false,
     withdrawals: false
@@ -84,7 +83,7 @@ const ProviderEarningsDashboard = () => {
   const [timeFilter, setTimeFilter] = useState('month');
   const [weeklyData, setWeeklyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
-  const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   // ── API Handlers ─────────────────────────────────────────────────────────────
   const fetchSummary = useCallback(async () => {
@@ -125,9 +124,12 @@ const ProviderEarningsDashboard = () => {
           totalPendingWithdrawals: data.pendingWithdrawals || 0,
           minWithdrawalLimit: data.minWithdrawalLimit ?? 500
         });
+      } else {
+        setHasError(true);
       }
     } catch (err) {
       console.error('Failed to fetch summary:', err);
+      setHasError(true);
     }
   }, [timeFilter]);
 
@@ -138,9 +140,12 @@ const ProviderEarningsDashboard = () => {
       if (data.success) {
         setWeeklyData(data.weekly || []);
         setMonthlyData(data.monthly || []);
+      } else {
+        setHasError(true);
       }
     } catch (err) {
       console.error('Failed to fetch weekly/monthly stats:', err);
+      setHasError(true);
     }
   }, []);
 
@@ -155,9 +160,12 @@ const ProviderEarningsDashboard = () => {
       if (data.success) {
         setEarningsReport(data.earnings || []);
         setTotalItems(data.total || 0);
+      } else {
+        setHasError(true);
       }
     } catch {
       showToast('Failed to fetch earnings', 'error');
+      setHasError(true);
     }
   }, [currentPage, limit, dateFilter, showToast, setTotalItems]);
 
@@ -179,9 +187,14 @@ const ProviderEarningsDashboard = () => {
 
       const response = await PaymentService.getWithdrawalReport(params);
       const data = response.data;
-      if (data.success) setWithdrawalReport(data.records || []);
+      if (data.success) {
+        setWithdrawalReport(data.records || []);
+      } else {
+        setHasError(true);
+      }
     } catch {
       showToast('Failed to fetch withdrawals', 'error');
+      setHasError(true);
     }
   }, [dateFilter, showToast]);
 
@@ -197,29 +210,7 @@ const ProviderEarningsDashboard = () => {
     return null;
   }, []);
 
-  const handleWithdrawalRequest = async () => {
-    const minLimit = summary.minWithdrawalLimit ?? 500;
-    if (!withdrawalForm.amount || withdrawalForm.amount < minLimit) { showToast(`Minimum ₹${minLimit} required`, 'error'); return; }
-    if (withdrawalForm.amount > summary.availableBalance) { showToast(`Insufficient balance. Available: ${formatCurrency(summary.availableBalance)}`, 'error'); return; }
 
-    try {
-      setProcessingWithdrawal(true);
-      const response = await PaymentService.withdraw({ amount: parseFloat(withdrawalForm.amount) });
-      const data = response.data;
-      if (data.success) {
-        showToast(data.message || 'Withdrawal requested successfully!', 'success');
-        setShowWithdrawalModal(false);
-        setWithdrawalForm({ amount: '' });
-        refreshAll();
-      } else {
-        showToast(data.error || 'Withdrawal failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.response?.data?.error || err.message || 'Processing error', 'error');
-    } finally {
-      setProcessingWithdrawal(false);
-    }
-  };
 
   const downloadReport = async (type) => {
     if (!dateFilter.startDate || !dateFilter.endDate) { showToast('Select date range', 'error'); return; }
@@ -268,6 +259,7 @@ const ProviderEarningsDashboard = () => {
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
+    setHasError(false);
     try {
       await Promise.all([
         fetchSummary(),
@@ -277,7 +269,12 @@ const ProviderEarningsDashboard = () => {
         fetchHeldEarnings(),
         fetchProviderProfile()
       ]);
-    } catch (err) { console.error('Refresh all error:', err); } finally { setLoading(false); }
+    } catch (err) {
+      console.error('Refresh all error:', err);
+      setHasError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [fetchSummary, fetchWeeklyMonthlyData, fetchEarningsReport, fetchWithdrawalReport, fetchHeldEarnings, fetchProviderProfile]);
 
   const getTrend = (current, previous) => ({
@@ -370,12 +367,11 @@ const ProviderEarningsDashboard = () => {
 
             <div className="shrink-0">
               <button
-                onClick={() => { fetchProviderProfile(); setShowWithdrawalModal(true); }}
-                disabled={summary.availableBalance < summary.minWithdrawalLimit}
-                className="w-full sm:w-auto px-5 py-2.5 bg-accent text-white font-bold text-xs rounded-xl hover:bg-accent/90 transition-all disabled:opacity-50 shadow-sm flex items-center justify-center gap-1.5 min-w-[140px]"
+                onClick={() => navigate('/provider/profile', { state: { tab: 'payout' } })}
+                className="w-full sm:w-auto px-5 py-2.5 bg-accent text-white font-bold text-xs rounded-xl hover:bg-accent/90 transition-all shadow-sm flex items-center justify-center gap-1.5 min-w-[140px]"
               >
                 <DollarSign className="w-3.5 h-3.5" />
-                <span>Withdraw Cash</span>
+                <span>Withdraw / Manage Payout</span>
               </button>
             </div>
           </div>
@@ -511,7 +507,7 @@ const ProviderEarningsDashboard = () => {
                     <span className="text-[10px] md:text-xs font-bold text-neutral-500 uppercase tracking-wider">
                       Gross Billed
                     </span>
-                    <p className="text-lg md:text-xl font-extrabold text-neutral-800 mt-1">{formatCurrency(summary.totalEarnings)}</p>
+                    <p className="text-lg md:text-xl font-extrabold text-neutral-800 mt-1">{hasError ? '—' : formatCurrency(summary.totalEarnings)}</p>
                   </div>
                   <p className="text-[9px] text-neutral-400 font-medium mt-2 pt-1.5 border-t border-neutral-50 leading-tight">
                     Net booking revenue from {periodText}
@@ -522,7 +518,7 @@ const ProviderEarningsDashboard = () => {
                     <span className="text-[10px] md:text-xs font-bold text-neutral-500 uppercase tracking-wider">
                       Total Withdrawn
                     </span>
-                    <p className="text-lg md:text-xl font-extrabold text-neutral-800 mt-1">{formatCurrency(summary.totalWithdrawn)}</p>
+                    <p className="text-lg md:text-xl font-extrabold text-neutral-800 mt-1">{hasError ? '—' : formatCurrency(summary.totalWithdrawn)}</p>
                   </div>
                   <p className="text-[9px] text-neutral-400 font-medium mt-2 pt-1.5 border-t border-neutral-50 leading-tight">
                     Completed payouts from {periodText}
@@ -980,86 +976,11 @@ const ProviderEarningsDashboard = () => {
 
       </div>
 
-      {/* Withdrawal Modal */}
-      {showWithdrawalModal && (
-        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden border border-neutral-100 animate-scale-up">
-            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-neutral-800">Withdraw Cash</h3>
-              <button onClick={() => setShowWithdrawalModal(false)} className="p-1 hover:bg-neutral-50 rounded-lg text-neutral-400">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="p-4 space-y-4">
-              <div>
-                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Available Balance</p>
-                <p className="text-2xl font-extrabold text-primary mt-1">{formatCurrency(summary.availableBalance)}</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-neutral-600 mb-1">Enter Amount (₹)</label>
-                <input
-                  type="number"
-                  value={withdrawalForm.amount}
-                  onChange={e => setWithdrawalForm({ amount: e.target.value })}
-                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-lg font-bold text-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  placeholder="0.00"
-                />
-                <p className="mt-1 text-[10px] text-neutral-400">* Minimum limit: ₹{summary.minWithdrawalLimit}</p>
-              </div>
-
-              {providerBankDetails && (
-                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Destination Account</p>
-                    <Link to="/provider/profile" className="text-[9px] text-primary font-bold hover:underline">Edit</Link>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Building className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-neutral-755 truncate">{providerBankDetails.bankName || 'Your Bank'}</p>
-                      <p className="text-[11px] text-neutral-500 font-semibold mt-0.5">A/C: {providerBankDetails.accountNo?.replace(/.(?=.{4})/g, '•') || 'N/A'}</p>
-                    </div>
-                  </div>
-
-                  <div className="pt-1.5 border-t border-neutral-200">
-                    {providerBankDetails.bankVerificationStatus === 'verified' && providerBankDetails.payoutEnabled === true && providerBankDetails.verified === true ? (
-                      <span className="text-[10px] text-success font-semibold flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> Active & Verified
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-warning font-semibold flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> {providerBankDetails.bankVerificationStatus === 'rejected' ? 'Verification Rejected' : 'Pending Verification'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handleWithdrawalRequest}
-                disabled={
-                  processingWithdrawal ||
-                  !withdrawalForm.amount ||
-                  withdrawalForm.amount < summary.minWithdrawalLimit ||
-                  providerBankDetails?.bankVerificationStatus !== 'verified' ||
-                  providerBankDetails?.payoutEnabled !== true ||
-                  providerBankDetails?.verified !== true
-                }
-                className="w-full py-2.5 bg-accent text-white rounded-lg text-sm font-bold hover:bg-accent/95 transition-all disabled:opacity-50"
-              >
-                {processingWithdrawal ? 'Requesting...' : 'Request Payout'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Withdrawal Details Modal */}
       {selectedWithdrawal && (
-        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/25 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden border border-neutral-100 animate-scale-up">
             <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
               <div>

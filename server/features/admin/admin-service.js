@@ -38,17 +38,25 @@ const emitProviderStatusChange = (provider, status) => {
         const io = getIO();
         if (io) {
             const providerIdStr = (provider && provider._id) ? provider._id.toString() : String(provider);
-            io.emit('provider:status_change', {
+            const payload = {
                 providerId: providerIdStr,
                 status,
                 timestamp: new Date()
-            });
-            io.to(`provider:${providerIdStr}`).emit('provider:status_updated', {
+            };
+            io.emit('provider:status_change', payload);
+            io.emit('provider-status-changed', payload);
+            io.to(providerIdStr).emit('provider-status-changed', payload);
+            io.to('admin_live_room').emit('provider-status-changed', payload);
+
+            const statusUpdatedPayload = {
                 status,
                 approved: provider?.approved,
                 kycStatus: provider?.kycStatus,
                 bankDetails: provider?.bankDetails
-            });
+            };
+            io.to(`provider:${providerIdStr}`).emit('provider:status_updated', statusUpdatedPayload);
+            io.to(`provider_${providerIdStr}`).emit('provider:status_updated', statusUpdatedPayload);
+            io.to(providerIdStr).emit('provider:status_updated', statusUpdatedPayload);
         }
     } catch (err) {
         console.error('Failed to emit provider status change socket event:', err.message);
@@ -1313,10 +1321,101 @@ class AdminService {
                 { $limit: limit }
             ];
 
-            const [providers, total] = await Promise.all([
+            const statsFilter = {
+                isDeleted: false,
+                $or: [
+                    { approved: false },
+                    { approved: true, 'bankDetails.verified': false, 'bankDetails.accountNo': { $exists: true, $ne: '' } }
+                ]
+            };
+            if (search) {
+                statsFilter.$and = [
+                    {
+                        $or: [
+                            { name: { $regex: search, $options: 'i' } },
+                            { email: { $regex: search, $options: 'i' } },
+                            { phone: { $regex: search, $options: 'i' } },
+                            { providerId: { $regex: search, $options: 'i' } }
+                        ]
+                    }
+                ];
+            }
+            if (startDate || endDate) {
+                const dateFilter = {};
+                if (startDate) dateFilter.$gte = new Date(startDate);
+                if (endDate) {
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59, 999);
+                    dateFilter.$lte = end;
+                }
+                statsFilter.createdAt = dateFilter;
+            }
+
+            const [providers, total, statsProviders] = await Promise.all([
                 Provider.aggregate(providersPipeline),
-                Provider.countDocuments(filter)
+                Provider.countDocuments(filter),
+                Provider.find(statsFilter, {
+                    approved: 1,
+                    kycStatus: 1,
+                    createdAt: 1,
+                    registrationDate: 1,
+                    approvalDate: 1,
+                    aadhaarFront: 1,
+                    aadhaarBack: 1,
+                    panCard: 1,
+                    liveSelfie: 1,
+                    profileComplete: 1,
+                    testPassed: 1,
+                    'bankDetails.verified': 1,
+                    'bankDetails.accountNo': 1
+                }).lean()
             ]);
+
+            // Compute stats
+            const totalPendingAndBankPending = statsProviders.length;
+            const pendingCount = statsProviders.filter(p => !p.approved).length;
+            const bankPendingCount = statsProviders.filter(p => p.approved && p.bankDetails?.accountNo && !p.bankDetails?.verified).length;
+
+            const today = new Date().toISOString().split('T')[0];
+            const todayRegistered = statsProviders.filter(p => {
+                const regDate = new Date(p.registrationDate || p.createdAt).toISOString().split('T')[0];
+                return regDate === today;
+            }).length;
+
+            const todayApproved = statsProviders.filter(p => {
+                if (p.approved && p.approvalDate) {
+                    const approvalDate = new Date(p.approvalDate).toISOString().split('T')[0];
+                    return approvalDate === today;
+                }
+                return false;
+            }).length;
+
+            const withResume = statsProviders.filter(p => p.aadhaarFront && p.aadhaarBack && p.panCard && p.liveSelfie).length;
+            const withBankDetails = statsProviders.filter(p => p.bankDetails?.accountNo).length;
+            const profileComplete = statsProviders.filter(p => p.profileComplete).length;
+            const testPassed = statsProviders.filter(p => p.testPassed).length;
+
+            // Avg days pending
+            let totalDays = 0;
+            statsProviders.forEach(p => {
+                const created = new Date(p.createdAt);
+                const now = new Date();
+                const diffTime = Math.abs(now - created);
+                totalDays += Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            });
+            const avgDaysPending = totalPendingAndBankPending > 0 ? Math.round(totalDays / totalPendingAndBankPending) : 0;
+
+            const stats = {
+                totalProviders: totalPendingAndBankPending,
+                pendingApproval: pendingCount,
+                todayRegistered,
+                todayApproved,
+                withResume,
+                withBankDetails,
+                profileComplete,
+                testPassed,
+                avgDaysPending
+            };
 
             // Calculate age and performance badge for each provider
             providers.forEach(provider => {
@@ -1342,6 +1441,9 @@ class AdminService {
                 total,
                 page,
                 pages: Math.ceil(total / limit),
+                pendingCount,
+                bankPendingCount,
+                stats,
                 providers
             });
         } catch (error) {

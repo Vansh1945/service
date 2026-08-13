@@ -368,7 +368,7 @@ const ProviderSupportPage = () => {
 
       {/* New Ticket Modal */}
       {openNewComplaint && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto" onClick={() => { setOpenNewComplaint(false); resetForm(); }}>
+        <div className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto" onClick={() => { setOpenNewComplaint(false); resetForm(); }}>
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] my-auto border border-neutral-150 animate-scale-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-5 py-4 border-b border-neutral-100 sticky top-0 bg-white z-10">
               <div>
@@ -464,7 +464,7 @@ const ProviderSupportPage = () => {
 
       {/* Ticket Detail Modal */}
       {openComplaintDetail && selectedComplaint && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" onClick={() => setOpenComplaintDetail(false)}>
+        <div className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50" onClick={() => setOpenComplaintDetail(false)}>
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] border border-neutral-150 animate-scale-up" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-neutral-100 flex justify-between items-center">
               <div>

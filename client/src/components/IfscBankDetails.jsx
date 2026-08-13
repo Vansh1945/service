@@ -316,8 +316,8 @@ export const IfscBankDetails = ({
       )}
 
       {/* ─── Account Numbers Row ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+        <div className="flex flex-col gap-1 min-w-0">
           <label className="text-xs font-semibold text-secondary uppercase tracking-wide">
             Account Number *
           </label>
@@ -339,7 +339,7 @@ export const IfscBankDetails = ({
           )}
         </div>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 min-w-0">
           <label className="text-xs font-semibold text-secondary uppercase tracking-wide">
             Confirm Account Number *
           </label>

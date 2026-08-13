@@ -162,7 +162,7 @@ const AdminLayout = () => {
           }`}
       >
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+          className="fixed inset-0 bg-black bg-opacity-25"
           onClick={() => setSidebarOpen(false)}
         />
 

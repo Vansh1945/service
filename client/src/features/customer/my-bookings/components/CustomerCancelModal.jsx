@@ -39,7 +39,7 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 animate-fadeIn">
       <div 
         className="relative w-full max-w-lg overflow-hidden bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}

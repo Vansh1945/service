@@ -129,8 +129,7 @@ const transactionSchema = new Schema({
   razorpayOrderId: String,
   razorpayPaymentId: String,
   razorpayPayoutId: {
-    type: String,
-    sparse: true
+    type: String
   },
   razorpaySignature: String,
   razorpayResponse: Object,

@@ -376,18 +376,15 @@ const Dashboard = () => {
               </p>
             </div>
           </div>
-        )}
-
-        {/* Phase 8: Payout Readiness Status Card (Single Source of Truth - PART 4/5/8) */}
-        {profile && (() => {
+        )}        {profile && (() => {
           const payoutState = getProviderPayoutState(profile.bankDetails);
           return (
             <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shrink-0 ${
-                  payoutState.bankVerificationStatus === 'verified'
+                  payoutState.statusColor === 'emerald'
                     ? 'bg-emerald-600'
-                    : payoutState.bankVerificationStatus === 'rejected'
+                    : payoutState.statusColor === 'rose'
                       ? 'bg-rose-600'
                       : 'bg-amber-500'
                 }`}>
@@ -397,9 +394,9 @@ const Dashboard = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Payout Readiness Status</span>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      payoutState.bankVerificationStatus === 'verified'
+                      payoutState.statusColor === 'emerald'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : payoutState.bankVerificationStatus === 'rejected'
+                        : payoutState.statusColor === 'rose'
                           ? 'bg-rose-50 text-rose-700 border-rose-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>
@@ -407,7 +404,7 @@ const Dashboard = () => {
                     </span>
                   </div>
                   <p className="text-neutral-600 text-xs mt-0.5">
-                    Preferred Method: <strong className="uppercase text-neutral-800">{payoutState.preferredMethod}</strong>
+                    Preferred Method: <strong className="uppercase text-neutral-800">{payoutState.preferredMethod.replace(/_/g, ' ')}</strong>
                     {payoutState.bankVerificationStatus === 'rejected' && (
                       <span className="text-rose-600 font-medium ml-2">Reason: {payoutState.bankRejectReason || 'Verification rejected'}</span>
                     )}
@@ -421,9 +418,11 @@ const Dashboard = () => {
                   <span className={`text-xs font-extrabold ${
                     payoutState.isWithdrawalReady
                       ? 'text-emerald-600'
-                      : 'text-amber-600'
+                      : payoutState.statusColor === 'rose'
+                        ? 'text-rose-600'
+                        : 'text-amber-600'
                   }`}>
-                    {payoutState.isWithdrawalReady ? 'Yes (Withdrawal Ready)' : 'No (Pending Verification)'}
+                    {payoutState.withdrawalReadyLabel}
                   </span>
                 </div>
                 <Link

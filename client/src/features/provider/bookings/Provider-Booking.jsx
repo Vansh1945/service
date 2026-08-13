@@ -182,7 +182,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
   const isStart = action === 'start';
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto scroll-hidden">
+    <div className="fixed inset-0 bg-black/25 z-[60] flex items-center justify-center p-4 overflow-y-auto scroll-hidden">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Sticky Header */}
         <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-3 bg-white">
@@ -476,7 +476,7 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="fixed inset-0 bg-black/25 z-[60] flex items-center justify-center p-4 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
           {/* Header matching Start/Complete ProofModal */}
           <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-white">

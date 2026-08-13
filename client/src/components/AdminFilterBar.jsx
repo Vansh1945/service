@@ -455,7 +455,6 @@ export const AdminLocalFilterBar = ({
   fields = [],
   showFilters,
   setShowFilters,
-  // Optional search bar props for unified single-row toolbar
   searchProps,
   searchValue,
   onSearchChange,
@@ -473,11 +472,11 @@ export const AdminLocalFilterBar = ({
 
   return (
     <div className={`bg-white rounded-xl border border-gray-150 p-4 mb-6 shadow-sm ${className}`}>
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-        {/* Left Side: Search Bar + Filter Dropdowns */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 flex-1 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Left Side: Search Bar OR Inline Fields */}
+        <div className="flex-1">
           {hasSearch ? (
-            <div className="w-full sm:w-56 md:w-60 lg:w-64">
+            <div className="max-w-md">
               {searchProps ? (
                 <AdminSearchBar {...searchProps} isGlobal={false} />
               ) : (
@@ -492,16 +491,78 @@ export const AdminLocalFilterBar = ({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2 pb-1.5">
-              <h3 className="text-xs font-bold text-secondary flex items-center gap-1.5 font-inter">
-                <FiFilter className="w-3.5 h-3.5 text-primary" /> Filter Options
-              </h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 mr-2 pb-0.5">
+                <FiFilter className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="text-xs font-bold text-secondary font-inter shrink-0">Filters:</span>
+              </div>
+              {fields.map((field) => (
+                <div key={field.key} className="flex flex-col min-w-[120px]">
+                  <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 font-inter">
+                    {field.label}
+                  </label>
+                  {field.type === 'select' ? (
+                    <select
+                      value={filters[field.key] ?? ''}
+                      onChange={(e) => onChange(field.key, e.target.value)}
+                      className="w-full px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter cursor-pointer"
+                    >
+                      {field.options.map((opt) => {
+                        const val = typeof opt === 'object' ? opt.value : opt;
+                        const label = typeof opt === 'object' ? opt.label : opt;
+                        return (
+                          <option key={val} value={val}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <input
+                      type={field.type || 'text'}
+                      value={filters[field.key] ?? ''}
+                      onChange={(e) => onChange(field.key, e.target.value)}
+                      placeholder={field.placeholder || ''}
+                      className="w-full px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter"
+                    />
+                  )}
+                </div>
+              ))}
             </div>
           )}
+        </div>
 
-          {/* Filter Dropdowns/Inputs (rendered directly as siblings) */}
-          {shouldRenderFields && fields.map((field) => (
-            <div key={field.key} className="flex flex-col min-w-[110px] sm:min-w-[125px] flex-1 sm:flex-initial">
+        {/* Right Side: Clear Filters & Collapsible Controls */}
+        <div className="flex items-center justify-end gap-3 flex-wrap shrink-0">
+          {actions}
+          {onClear && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5 font-inter py-1.5 px-2.5 rounded-lg hover:bg-red-50/50 cursor-pointer"
+            >
+              <FiRefreshCw className="w-3.5 h-3.5" /> Clear Filters
+            </button>
+          )}
+          {isCollapsible && (
+            <button
+              type="button"
+              onClick={() => setShowFilters(!showFilters)}
+              className="p-1.5 text-gray-500 hover:text-secondary rounded-lg border border-gray-250 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-xs font-semibold font-inter cursor-pointer"
+            >
+              <FiFilter className="w-4 h-4 text-primary" />
+              <span>{showFilters ? 'Hide Filters' : 'More Filters'}</span>
+              {showFilters ? <FiX className="w-3.5 h-3.5" /> : null}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Grid for Filters (1 or 2 rows on desktop) */}
+      {hasSearch && shouldRenderFields && fields.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mt-3.5 border-t border-gray-100/80 pt-3.5">
+          {fields.map((field) => (
+            <div key={field.key} className="flex flex-col w-full">
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 font-inter">
                 {field.label}
               </label>
@@ -509,7 +570,7 @@ export const AdminLocalFilterBar = ({
                 <select
                   value={filters[field.key] ?? ''}
                   onChange={(e) => onChange(field.key, e.target.value)}
-                  className="w-full px-2.5 py-2 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter cursor-pointer"
+                  className="w-full px-2.5 py-1.5 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter cursor-pointer"
                 >
                   {field.options.map((opt) => {
                     const val = typeof opt === 'object' ? opt.value : opt;
@@ -527,38 +588,13 @@ export const AdminLocalFilterBar = ({
                   value={filters[field.key] ?? ''}
                   onChange={(e) => onChange(field.key, e.target.value)}
                   placeholder={field.placeholder || ''}
-                  className="w-full px-2.5 py-2 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter"
+                  className="w-full px-2.5 py-1.5 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter"
                 />
               )}
             </div>
           ))}
         </div>
-
-        {/* Right Side: Clear Filters & Collapsible Controls */}
-        <div className="flex items-center justify-end gap-3 flex-wrap shrink-0 pb-0.5">
-          {actions}
-          {onClear && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5 font-inter py-1.5 px-2.5 rounded-lg hover:bg-red-50/50"
-            >
-              <FiRefreshCw className="w-3.5 h-3.5" /> Clear Filters
-            </button>
-          )}
-          {isCollapsible && (
-            <button
-              type="button"
-              onClick={() => setShowFilters(!showFilters)}
-              className="p-1.5 text-gray-500 hover:text-secondary rounded-lg border border-gray-250 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-xs font-semibold font-inter"
-            >
-              <FiFilter className="w-4 h-4 text-primary" />
-              <span>{showFilters ? 'Hide Filters' : 'More Filters'}</span>
-              {showFilters ? <FiX className="w-3.5 h-3.5" /> : null}
-            </button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

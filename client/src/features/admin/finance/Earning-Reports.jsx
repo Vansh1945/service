@@ -29,6 +29,7 @@ const AdminEarningReports = () => {
     endDate: ''
   });
   const [providerId, setProviderId] = useState('');
+  const [customerId, setCustomerId] = useState('');
   const [groupBy, setGroupBy] = useState('month');
   const [dateError, setDateError] = useState('');
 
@@ -150,6 +151,10 @@ const AdminEarningReports = () => {
         params.providerId = providerId;
       }
 
+      if (customerId) {
+        params.customerId = customerId;
+      }
+
       const config = { responseType: 'blob' };
       let response;
 
@@ -257,10 +262,42 @@ const AdminEarningReports = () => {
     validateDateRange();
   }, [dateRange.startDate, dateRange.endDate]);
 
+  const handleGroupByChange = (val) => {
+    setGroupBy(val);
+    const today = new Date();
+    if (val === 'week') {
+      const day = today.getDay();
+      const diffToMonday = today.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(today.getFullYear(), today.getMonth(), diffToMonday);
+      setDateRange({
+        startDate: monday.toISOString().split('T')[0],
+        endDate: today.toISOString().split('T')[0]
+      });
+    } else if (val === 'month') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      setDateRange({
+        startDate: firstDay.toISOString().split('T')[0],
+        endDate: today.toISOString().split('T')[0]
+      });
+    } else if (val === 'year') {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+      setDateRange({
+        startDate: oneYearAgo.toISOString().split('T')[0],
+        endDate: today.toISOString().split('T')[0]
+      });
+    }
+  };
+
   const clearFilters = () => {
     reset(() => {
       setProviderId('');
+      setCustomerId('');
       setGroupBy('month');
+      setDateRange({
+        startDate: globalDates.startDate || '',
+        endDate: globalDates.endDate || ''
+      });
       setDateError('');
       showToast?.('Filters cleared', 'info');
     });
@@ -276,17 +313,21 @@ const AdminEarningReports = () => {
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Earning Reports</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Financial Reports</h1>
               <p className="text-gray-600 mt-1">Generate and download comprehensive financial reports</p>
             </div>
           </div>
 
           {/* Filter Section */}
           <AdminLocalFilterBar
-            filters={{ groupBy, providerId }}
+            filters={{ groupBy, providerId, customerId, startDate: dateRange.startDate, endDate: dateRange.endDate }}
             onChange={(key, value) => {
-              if (key === 'groupBy') setGroupBy(value);
+              if (key === 'groupBy') handleGroupByChange(value);
               if (key === 'providerId') setProviderId(value);
+              if (key === 'customerId') setCustomerId(value);
+              if (key === 'startDate' || key === 'endDate') {
+                setDateRange(prev => ({ ...prev, [key]: value }));
+              }
             }}
             onClear={clearFilters}
             fields={[
@@ -296,7 +337,8 @@ const AdminEarningReports = () => {
                 type: 'select',
                 options: [
                   { value: 'month', label: 'Monthly' },
-                  { value: 'week', label: 'Weekly' }
+                  { value: 'week', label: 'Weekly' },
+                  { value: 'year', label: 'Yearly' }
                 ]
               },
               {
@@ -304,6 +346,22 @@ const AdminEarningReports = () => {
                 label: 'Provider ID',
                 type: 'text',
                 placeholder: 'e.g., PROV001'
+              },
+              {
+                key: 'customerId',
+                label: 'Customer ID',
+                type: 'text',
+                placeholder: 'e.g., CUST001'
+              },
+              {
+                key: 'startDate',
+                label: 'Start Date',
+                type: 'date'
+              },
+              {
+                key: 'endDate',
+                label: 'End Date',
+                type: 'date'
               }
             ]}
           />

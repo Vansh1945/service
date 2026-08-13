@@ -5398,10 +5398,41 @@ class BookingService {
         return res.status(400).json({ message: "Maximum date range should be 2 months" });
       }
 
-      // Fetch bookings with necessary details
-      const bookings = await Booking.find({
+      const filter = {
         date: { $gte: startDate, $lte: endDate }
-      })
+      };
+
+      if (req.query.zoneIds) {
+        const zones = req.query.zoneIds.split(',');
+        filter.zoneId = { $in: zones };
+      }
+
+      if (req.query.providerId) {
+        const mongoose = require('mongoose');
+        const Provider = require('../provider/provider-model');
+        const prov = await Provider.findOne({
+          $or: [
+            { providerId: req.query.providerId },
+            { _id: mongoose.isValidObjectId(req.query.providerId) ? req.query.providerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.provider = prov ? prov._id : null;
+      }
+
+      if (req.query.customerId) {
+        const mongoose = require('mongoose');
+        const User = require('../user/user-model');
+        const cust = await User.findOne({
+          $or: [
+            { customerId: req.query.customerId },
+            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
+          ].filter(Boolean)
+        }).select('_id');
+        filter.customer = cust ? cust._id : null;
+      }
+
+      // Fetch bookings with necessary details
+      const bookings = await Booking.find(filter)
         .populate('customer', 'name email phone')
         .populate('provider', 'name area providerId')
         .populate({

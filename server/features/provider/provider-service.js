@@ -1206,12 +1206,14 @@ class ProviderService {
                 const reqUpi = req.body.upiId !== undefined ? req.body.upiId.trim() : null;
                 const reqPref = req.body.preferredMethod;
 
+                const isUpiRequest = updateType === 'upi' || reqUpi !== null;
                 const isBankPayload = Boolean(accountNo || ifsc || bankName || accountName || (req.files && req.files['passbookImage']) || (req.file && req.file.fieldname === 'passbookImage'));
                 const isUpiPayload = reqUpi !== null;
+                const actualBankPayload = isBankPayload && !isUpiRequest;
                 const hasPassbookUploaded = !!((req.files && req.files['passbookImage']) || (req.file && req.file.fieldname === 'passbookImage'));
 
                 // Enforce bank passbook upload mandatory checks
-                if (isBankPayload) {
+                if (actualBankPayload) {
                     const hasExistingBank = !!(currentProvider.bankDetails && currentProvider.bankDetails.accountNo);
                     const isBankIdentical = hasExistingBank ? isSameBankDetails(currentProvider.bankDetails, { accountNo, ifsc, accountName, bankName }) : false;
 
@@ -1234,27 +1236,71 @@ class ProviderService {
                     }
                 }
 
-                // Check duplicate bank details
-                if (isBankPayload && currentProvider.bankDetails) {
+                // Check if another provider has the same Bank account number
+                if (actualBankPayload && accountNo) {
+                    const duplicateBankProvider = await Provider.findOne({
+                        _id: { $ne: req.providerId },
+                        'bankDetails.accountNo': accountNo.trim()
+                    });
+                    if (duplicateBankProvider) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Bank account number already exists.'
+                        });
+                    }
+                }
+
+                // Check if another provider has the same UPI ID
+                if (isUpiRequest && reqUpi) {
+                    const duplicateUpiProvider = await Provider.findOne({
+                        _id: { $ne: req.providerId },
+                        'bankDetails.upiId': reqUpi.trim().toLowerCase()
+                    });
+                    if (duplicateUpiProvider) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'UPI ID already exists.'
+                        });
+                    }
+                }
+
+                // Validate UPI ID format
+                if (isUpiRequest && reqUpi) {
+                    if (!/^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/.test(reqUpi)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Please enter a valid UPI ID (e.g. name@bank)'
+                        });
+                    }
+                    if (reqUpi.length > 100) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'UPI ID is too long'
+                        });
+                    }
+                }
+
+                // Check duplicate bank details (for current provider)
+                if (actualBankPayload && currentProvider.bankDetails) {
                     const isBankIdentical = isSameBankDetails(currentProvider.bankDetails, { accountNo, ifsc, accountName, bankName });
                     if (isBankIdentical && !hasPassbookUploaded) {
                         return res.status(200).json({
                             success: false,
                             isSameData: true,
-                            message: 'Your verified payout account is already up-to-date.',
+                            message: 'Your verified bank account is already up-to-date.',
                             provider: currentProvider
                         });
                     }
                 }
 
-                // Check duplicate UPI details
-                if (isUpiPayload && currentProvider.bankDetails) {
+                // Check duplicate UPI details (for current provider)
+                if (isUpiRequest && reqUpi && currentProvider.bankDetails) {
                     const isUpiIdentical = isSameUPIDetails(currentProvider.bankDetails, { upiId: reqUpi });
                     if (isUpiIdentical) {
                         return res.status(200).json({
                             success: false,
                             isSameData: true,
-                            message: 'Your verified payout account is already up-to-date.',
+                            message: 'Your verified UPI ID is already up-to-date.',
                             provider: currentProvider
                         });
                     }
@@ -1326,16 +1372,36 @@ class ProviderService {
                         updatedAt: new Date()
                     };
 
-                    // Only trigger re-verification if bank account details change (not just changing preferred method)
-                    if (accountNo || cleanIfsc || accountName || reqUpi || passbookFileObj) {
+                    // Determine if verification reset is needed
+                    let resetVerification = false;
+                    let resetReason = 'Bank details updated by provider';
+
+                    if (actualBankPayload) {
+                        const isBankIdentical = hasExistingBank ? isSameBankDetails(currentProvider.bankDetails, { accountNo, ifsc, accountName, bankName }) : false;
+                        if (!isBankIdentical) {
+                            resetVerification = true;
+                            resetReason = 'Bank details updated by provider';
+                        } else if (passbookFileObj) {
+                            resetVerification = true;
+                            resetReason = 'Document changed';
+                        }
+                    } else if (isUpiRequest) {
+                        const isUpiIdentical = isSameUPIDetails(currentProvider.bankDetails, { upiId: reqUpi });
+                        if (!isUpiIdentical) {
+                            // Only reset verification status if the bank account is NOT verified
+                            // If bank account is verified, adding/updating UPI must not reset bank verification
+                            const hasVerifiedBank = !!(currentProvider.bankDetails?.accountNo && currentProvider.bankDetails?.verified);
+                            if (!hasVerifiedBank) {
+                                resetVerification = true;
+                                resetReason = 'UPI details updated by provider';
+                            }
+                        }
+                    }
+
+                    if (resetVerification) {
                         nextBankDetails.verified = false;
                         nextBankDetails.bankVerificationStatus = 'pending';
                         nextBankDetails.payoutEnabled = false;
-
-                        let reason = reqUpi !== null ? 'UPI details updated by provider' : 'Bank details updated by provider';
-                        if (isBankPayload && isBankIdentical && passbookFileObj) {
-                            reason = 'Document changed';
-                        }
 
                         nextBankDetails.verificationHistory = [
                             ...currentHistory,
@@ -1343,7 +1409,7 @@ class ProviderService {
                                 status: 'pending',
                                 timestamp: new Date(),
                                 updatedBy: 'provider',
-                                reason,
+                                reason: resetReason,
                                 accountNo: currentProvider.bankDetails?.accountNo,
                                 ifsc: currentProvider.bankDetails?.ifsc,
                                 bankName: currentProvider.bankDetails?.bankName,
@@ -2224,7 +2290,8 @@ class ProviderService {
                         name: provider?.name,
                         providerId: provider?.providerId,
                         approved: provider?.approved,
-                        testPassed: provider?.testPassed
+                        testPassed: provider?.testPassed,
+                        bankDetails: provider?.bankDetails
                     }
                 }
             });
