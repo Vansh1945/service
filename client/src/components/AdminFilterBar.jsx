@@ -462,13 +462,89 @@ export const AdminLocalFilterBar = ({
   searchPlaceholder,
   searchLoading,
   actions,
-  className = ''
+  className = '',
+  isInline = false
 }) => {
   const isCollapsible = typeof showFilters === 'boolean' && typeof setShowFilters === 'function';
   const shouldRenderFields = !isCollapsible || showFilters;
 
   // Derive search configuration if provided
   const hasSearch = !!(searchProps || searchValue !== undefined || onSearchChange);
+
+  if (isInline) {
+    return (
+      <div className={`bg-white rounded-xl border border-gray-150 p-4 mb-6 shadow-sm ${className}`}>
+        <div className="flex flex-wrap items-center gap-4 justify-between">
+          <div className="flex flex-wrap items-center gap-4 flex-1">
+            {hasSearch && (
+              <div className="w-full sm:w-72 md:w-80 shrink-0">
+                {searchProps ? (
+                  <AdminSearchBar {...searchProps} isGlobal={false} />
+                ) : (
+                  <AdminSearchBar
+                    value={searchValue}
+                    onChange={onSearchChange}
+                    onClear={onSearchClear}
+                    placeholder={searchPlaceholder || 'Search name, email, phone, ID, address...'}
+                    loading={searchLoading}
+                    isGlobal={false}
+                  />
+                )}
+              </div>
+            )}
+            {shouldRenderFields && fields.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                {fields.map((field) => (
+                  <div key={field.key} className="flex flex-col min-w-[120px]">
+                    <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 font-inter">
+                      {field.label}
+                    </label>
+                    {field.type === 'select' ? (
+                      <select
+                        value={filters[field.key] ?? ''}
+                        onChange={(e) => onChange(field.key, e.target.value)}
+                        className="w-full px-2 py-1 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter cursor-pointer"
+                      >
+                        {field.options.map((opt) => {
+                          const val = typeof opt === 'object' ? opt.value : opt;
+                          const label = typeof opt === 'object' ? opt.label : opt;
+                          return (
+                            <option key={val} value={val}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <input
+                        type={field.type || 'text'}
+                        value={filters[field.key] ?? ''}
+                        onChange={(e) => onChange(field.key, e.target.value)}
+                        placeholder={field.placeholder || ''}
+                        className="w-full px-2 py-1 bg-gray-50/50 border border-gray-250 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {actions}
+            {onClear && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5 font-inter py-1.5 px-2.5 rounded-lg hover:bg-red-50/50 cursor-pointer"
+              >
+                <FiRefreshCw className="w-3.5 h-3.5" /> Clear Filters
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`bg-white rounded-xl border border-gray-150 p-4 mb-6 shadow-sm ${className}`}>

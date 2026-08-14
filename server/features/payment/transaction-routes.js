@@ -53,6 +53,7 @@ router.post('/admin/mark-paid/:id', adminAuthMiddleware, adminRoleCheck, payment
 
 // Additional Finance Admin Endpoints
 router.get('/admin/finance-overview', adminAuthMiddleware, adminRoleCheck, paymentController.getFinanceOverview);
+router.get('/admin/chart-trends', adminAuthMiddleware, adminRoleCheck, paymentController.getChartTrends);
 router.get('/admin/cash-ledger', adminAuthMiddleware, adminRoleCheck, paymentController.getCashLedger);
 router.get('/admin/wallets/customers', adminAuthMiddleware, adminRoleCheck, paymentController.getCustomerWallets);
 router.get('/admin/wallets/providers', adminAuthMiddleware, adminRoleCheck, paymentController.getProviderWallets);

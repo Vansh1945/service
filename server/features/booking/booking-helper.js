@@ -16,7 +16,7 @@ const getBookingProgress = (booking) => {
   // 2. Map based on current internal status
   switch (status) {
     case 'pending':
-      if (paymentStatus !== 'paid' && paymentStatus !== 'escrow_hold') {
+      if (paymentStatus !== 'paid' && paymentStatus !== 'escrowhold') {
         return 'pending_payment';
       }
       return 'confirmed';
@@ -148,7 +148,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   });
 
   // 9. Payment Completed
-  const isPaid = ['paid', 'escrow_hold'].includes(booking.paymentStatus);
+  const isPaid = ['paid', 'escrowhold'].includes(booking.paymentStatus);
   steps.push({
     title: "Payment Completed",
     completed: isPaid,

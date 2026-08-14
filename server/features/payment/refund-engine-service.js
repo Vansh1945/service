@@ -477,7 +477,7 @@ class RefundEngineService {
       if (!booking.cancellationProgress) {
         booking.cancellationProgress = {};
       }
-      booking.cancellationProgress.status = 'refund_completed';
+      booking.cancellationProgress.status = 'refundcompleted';
       booking.cancellationProgress.refundAmount = totalRefund;
       booking.cancellationProgress.refundCompletedAt = new Date();
       booking.cancellationProgress.refundId = refundDoc.refundId;

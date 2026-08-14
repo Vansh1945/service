@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
-const cloudinary = require('../../shared/config/cloudinary'); // Updated import path for services/
+const cloudinary = require('../../shared/config/cloudinary');
 const mongoose = require('mongoose');
 const Booking = require('../booking/booking-model');
 const Feedback = require('../feedback/feedback-model');
@@ -19,7 +19,7 @@ const Zone = require('../zone/zone-model');
 
 const getPayoutStatus = (earning, booking) => {
     if (!earning) return 'Not Processed';
-    if (booking.disputeRaised || booking.disputeStatus === 'under_review') return 'Dispute Hold';
+    if (booking.disputeRaised || booking.disputeStatus === 'underreview') return 'Dispute Hold';
 
     switch (earning.status) {
         case 'held': return 'Payout On Hold';
@@ -1926,7 +1926,8 @@ class ProviderService {
                 provider,
                 pendingPayouts,
                 lastPayout,
-                recentBookings
+                recentBookings,
+                recentWithdrawals
             ] = await Promise.all([
                 // 1. Booking Stats
                 Booking.aggregate([
@@ -2094,6 +2095,12 @@ class ProviderService {
                 Booking.find({ provider: providerId })
                     .populate('customer', 'name phone')
                     .populate('services.service', 'title')
+                    .sort({ createdAt: -1 })
+                    .limit(10)
+                    .lean(),
+
+                // 13. Recent withdrawals
+                PaymentRecord.find({ provider: providerId })
                     .sort({ createdAt: -1 })
                     .limit(10)
                     .lean()
@@ -2292,7 +2299,8 @@ class ProviderService {
                         approved: provider?.approved,
                         testPassed: provider?.testPassed,
                         bankDetails: provider?.bankDetails
-                    }
+                    },
+                    recentWithdrawals: recentWithdrawals || []
                 }
             });
 

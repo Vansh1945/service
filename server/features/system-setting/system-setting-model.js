@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 const bannerSchema = new mongoose.Schema(
   {
     image: {
-      type: String, // image URL (Cloudinary / S3)
+      type: String,
       required: true,
     },
     title: {
@@ -333,6 +333,14 @@ const systemConfigSchema = new mongoose.Schema(
       retryFailedPayout: {
         type: Boolean,
         default: true
+      },
+      safetyCooldownEnabled: {
+        type: Boolean,
+        default: true
+      },
+      safetyCooldownHours: {
+        type: Number,
+        default: 24
       },
       retryCount: {
         type: Number,

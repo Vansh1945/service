@@ -270,7 +270,7 @@ const triggerCustomerReferralReward = async (booking) => {
       return;
     }
 
-    if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'success' && booking.paymentStatus !== 'escrow_hold') {
+    if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'success' && booking.paymentStatus !== 'escrowhold') {
       console.log(`Booking payment is not successful (status: ${booking.paymentStatus})`);
       return;
     }

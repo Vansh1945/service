@@ -100,7 +100,7 @@ const createOrder = async (req, res, next) => {
     }
 
     // CHECK: booking.paymentStatus !== 'paid'
-    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold' || booking.paymentStatus === 'success' || booking.paymentStatus === 'completed') {
+    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold' || booking.paymentStatus === 'success' || booking.paymentStatus === 'completed') {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -462,7 +462,7 @@ const verifyPayment = async (req, res, next) => {
 
     await transaction.save({ session });
 
-    booking.paymentStatus = 'escrow_hold';
+    booking.paymentStatus = 'escrowhold';
     booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
     booking.confirmedBooking = true;
     if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
@@ -644,7 +644,7 @@ const handleSuccessfulPayment = async (payment, session) => {
     await transaction.save({ session });
   }
 
-  booking.paymentStatus = 'escrow_hold';
+  booking.paymentStatus = 'escrowhold';
   booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
   booking.paidAmount = transaction.amount;
   booking.paymentDate = new Date();
@@ -713,7 +713,7 @@ const handleRefundProcessed = async (refund, session) => {
       transaction.booking,
       {
         paymentStatus: 'refunded',
-        'cancellationProgress.status': 'refund_completed',
+        'cancellationProgress.status': 'refundcompleted',
         'cancellationProgress.refundCompletedAt': new Date()
       },
       { session }
@@ -1500,6 +1500,112 @@ const getFinanceOverview = async (req, res, next) => {
     });
   } catch (error) {
     global.logger.error(`[TransactionController.getFinanceOverview] Executive dashboard overview error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+
+/**
+ * GET /admin/chart-trends
+ * Real daily aggregations for Finance Dashboard charts (last 30 days)
+ */
+const getChartTrends = async (req, res, next) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const Refund = require('./refund-model');
+    const Booking = mongoose.model('Booking');
+
+    const dayFormat = '%Y-%m-%d'; // group key: "2026-08-13"
+
+    const [revenueDays, refundDays, bookingDays] = await Promise.all([
+      // 1. Daily revenue + platform earnings from Transactions
+      Transaction.aggregate([
+        { $match: { paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: since } } },
+        { $group: {
+            _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
+            revenue: { $sum: '$amount' },
+            earnings: { $sum: { $ifNull: ['$commission', { $multiply: ['$amount', 0.2] }] } }
+        }},
+        { $sort: { _id: 1 } }
+      ]),
+
+      // 2. Daily refunds (completed + pending)
+      Refund.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: {
+            _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
+            completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$amount', 0] } },
+            pending: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing']] }, '$amount', 0] } }
+        }},
+        { $sort: { _id: 1 } }
+      ]),
+
+      // 3. Daily bookings count + booking revenue
+      Booking.aggregate([
+        { $match: { createdAt: { $gte: since } } },
+        { $group: {
+            _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
+            bookings: { $sum: 1 },
+            revenue: { $sum: { $ifNull: ['$totalAmount', '$amount', 0] } }
+        }},
+        { $sort: { _id: 1 } }
+      ])
+    ]);
+
+    // Build a complete date range so gaps (days with 0 txns) show as 0
+    const buildRange = () => {
+      const result = {};
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        // Short label: "13 Aug"
+        const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        result[key] = { key, label };
+      }
+      return result;
+    };
+
+    const range = buildRange();
+
+    // Merge revenue
+    const revMap = {};
+    revenueDays.forEach(r => { revMap[r._id] = r; });
+    const revenueTrend = Object.values(range).map(({ key, label }) => ({
+      name: label,
+      revenue: Math.round(revMap[key]?.revenue || 0),
+      earnings: Math.round(revMap[key]?.earnings || 0)
+    }));
+
+    // Merge refunds
+    const refMap = {};
+    refundDays.forEach(r => { refMap[r._id] = r; });
+    const refundTrend = Object.values(range).map(({ key, label }) => ({
+      name: label,
+      completed: Math.round(refMap[key]?.completed || 0),
+      pending: Math.round(refMap[key]?.pending || 0),
+      total: Math.round((refMap[key]?.completed || 0) + (refMap[key]?.pending || 0))
+    }));
+
+    // Merge bookings
+    const bookMap = {};
+    bookingDays.forEach(b => { bookMap[b._id] = b; });
+    const bookingVsRevenue = Object.values(range).map(({ key, label }) => ({
+      name: label,
+      bookings: bookMap[key]?.bookings || 0,
+      revenue: Math.round(bookMap[key]?.revenue || 0)
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: { revenueTrend, refundTrend, bookingVsRevenue }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.getChartTrends] Error: ${error.message}`, error);
     next(error);
   }
 };
@@ -2364,7 +2470,8 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         };
       }
     } else if (['customer', 'customer_wallet'].includes(type)) {
-      let user = await User.findById(id).select('-password').lean();
+      let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { customerId: id };
+      let user = await User.findOne(query).select('-password').lean();
       if (user) {
         payload.mongoData = user;
         payload.customer = user;
@@ -2449,7 +2556,8 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         };
       }
     } else if (['payout', 'withdrawal'].includes(type)) {
-      let pRecord = await PaymentRecord.findById(id).populate('provider admin').lean();
+      let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { transactionReference: id };
+      let pRecord = await PaymentRecord.findOne(query).populate('provider admin').lean();
       if (pRecord) {
         payload.mongoData = pRecord;
         payload.withdrawal = pRecord;
@@ -2458,38 +2566,148 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         const w = provider.wallet || {};
 
         const withdrawalAmount = pRecord.amount || 0;
-        const availableBalance = w.availableBalance || 0;
-        const remainingBalance = Math.max(0, availableBalance - withdrawalAmount);
+        const dbBalance = typeof w.availableBalance === 'number' ? w.availableBalance : 0;
+
+        const isRejected = pRecord.status === 'rejected';
+        const availableBalance = isRejected ? dbBalance : (dbBalance + withdrawalAmount);
+        const remainingBalance = isRejected ? Math.max(0, dbBalance - withdrawalAmount) : dbBalance;
+
+        // Aggregate actual pending payouts from the database safely
+        let pendingPayout = 0;
+        if (provider._id && mongoose.Types.ObjectId.isValid(provider._id)) {
+          const pendingPayouts = await PaymentRecord.aggregate([
+            {
+              $match: {
+                provider: new mongoose.Types.ObjectId(provider._id),
+                status: { $in: ['pending', 'processing', 'requested', 'underreview', 'under_review'] }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                totalPending: { $sum: '$amount' }
+              }
+            }
+          ]);
+          pendingPayout = pendingPayouts.length > 0 ? pendingPayouts[0].totalPending : 0;
+        }
+
+        const isCompleted = ['completed', 'transferred', 'approved'].includes(pRecord.status);
+        const alreadyWithdrawn = isCompleted
+          ? Math.max(0, (w.totalWithdrawn || 0) - withdrawalAmount)
+          : (w.totalWithdrawn || 0);
 
         payload.walletSummary = {
           availableBalance,
-          pendingPayout: w.pendingPayout || provider.pendingPayout || 0,
-          escrowBalance: w.escrowBalance || 0,
-          alreadyWithdrawn: w.totalWithdrawn || 0,
+          pendingPayout,
+          escrowBalance: w.escrowBalance !== undefined ? w.escrowBalance : null,
+          alreadyWithdrawn,
           currentWithdrawalAmount: withdrawalAmount,
           remainingBalanceAfterWithdrawal: remainingBalance
         };
 
         const [settlementTxn, relatedTxn] = await Promise.all([
-          Transaction.findOne({ provider: provider._id, type: { $in: ['settlement', 'payment'] } }).lean(),
-          Transaction.findOne({ provider: provider._id }).sort({ createdAt: -1 }).lean()
+          Transaction.findOne({ booking: pRecord._id, type: 'settlement' }).lean(),
+          Transaction.findOne({ booking: pRecord._id, type: 'withdrawal' }).lean()
         ]);
 
+        // Simulated/calculated settlement information using the payout request record
         payload.settlement = settlementTxn || {
-          providerEarnings: provider.earnings || 0,
-          platformCommission: (provider.earnings || 0) * 0.1,
-          settlementAmount: withdrawalAmount,
-          settlementDate: pRecord.completedAt || pRecord.updatedAt,
-          settlementStatus: pRecord.status === 'completed' ? 'settled' : 'pending'
+          _id: pRecord._id,
+          settlementId: pRecord.transactionReference || `#${pRecord._id.toString().slice(-6)}`,
+          providerEarnings: provider.earnings || pRecord.amount || 0,
+          platformCommission: 0,
+          settlementAmount: pRecord.amount || 0,
+          settlementDate: pRecord.completedAt || pRecord.updatedAt || pRecord.createdAt,
+          settlementStatus: ['completed', 'transferred'].includes(pRecord.status) ? 'settled' : 'pending'
         };
 
+        // Simulated/calculated transaction information matching the payout request record
         payload.transaction = relatedTxn || {
+          _id: pRecord._id,
           transactionId: pRecord.transactionReference || `#${pRecord._id.toString().slice(-6)}`,
           referenceNumber: pRecord.utrNo || pRecord.transactionReference || 'N/A',
-          amount: withdrawalAmount,
-          status: pRecord.status,
+          amount: pRecord.amount || 0,
+          paymentStatus: pRecord.status,
           createdAt: pRecord.createdAt
         };
+
+        // Calculate and format Provider Rating
+        const ratingVal = provider.performanceScore?.rating || provider.averageRating || 0;
+        payload.providerRating = ratingVal > 0 ? `★ ${Number(ratingVal).toFixed(1)}` : 'N/A';
+
+        // Helper to format Date/Time in backend matching localized client standard
+        const fmtDate = (d) => {
+          if (!d) return null;
+          return new Date(d).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+        };
+
+        // Construct standard lifecycle timeline array
+        const timeline = [];
+        const status = (pRecord.status || 'requested').toLowerCase();
+
+        // 1. Requested (Always completed)
+        timeline.push({
+          title: 'Requested',
+          time: fmtDate(pRecord.createdAt),
+          description: `Withdrawal request of ₹${pRecord.amount || 0} initiated.`,
+          status: 'completed'
+        });
+
+        // 2. Under Review
+        const isReviewed = !['requested'].includes(status);
+        timeline.push({
+          title: 'Under Review',
+          time: isReviewed ? fmtDate(pRecord.updatedAt || pRecord.createdAt) : null,
+          description: isReviewed ? 'Request review completed by admin.' : 'Request is under review.',
+          status: isReviewed ? 'completed' : 'current'
+        });
+
+        if (status === 'rejected') {
+          timeline.push({
+            title: 'Rejected',
+            time: fmtDate(pRecord.processedAt || pRecord.updatedAt),
+            description: `Request rejected. Reason: ${pRecord.rejectionReason || 'No reason specified.'}`,
+            status: 'completed'
+          });
+        } else {
+          // 3. Approved
+          const isApproved = ['approved', 'transferred', 'completed'].includes(status);
+          const isCurrentApproved = status === 'processing' || status === 'underreview' || status === 'under_review';
+          timeline.push({
+            title: 'Approved',
+            time: isApproved ? fmtDate(pRecord.processedAt || pRecord.approvedAt || pRecord.updatedAt) : null,
+            description: isApproved ? 'Request approved by admin.' : (isCurrentApproved ? 'Approve pending.' : 'Pending approval.'),
+            status: isApproved ? 'completed' : (isCurrentApproved ? 'current' : 'pending')
+          });
+
+          if (status === 'failed') {
+            timeline.push({
+              title: 'Failed',
+              time: fmtDate(pRecord.updatedAt),
+              description: `Payout execution failed. Error: ${pRecord.lastError || 'Transaction failed.'}`,
+              status: 'completed'
+            });
+          } else {
+            // 4. Transferred
+            const isTransferred = ['transferred', 'completed'].includes(status);
+            const isCurrentTransferred = status === 'approved';
+            timeline.push({
+              title: 'Transferred',
+              time: isTransferred ? fmtDate(pRecord.transferDate || pRecord.completedAt || pRecord.updatedAt) : null,
+              description: isTransferred ? 'Funds transferred to payout destination.' : (isCurrentTransferred ? 'Transfer pending.' : 'Pending transfer.'),
+              status: isTransferred ? 'completed' : (isCurrentTransferred ? 'current' : 'pending')
+            });
+          }
+        }
+        payload.timeline = timeline;
 
         payload.audit = {
           requestedBy: provider.name || 'Provider',
@@ -2501,7 +2719,8 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         };
       }
     } else if (['provider', 'provider_wallet', 'provider_earning'].includes(type)) {
-      let provider = await Provider.findById(id).select('-password').lean();
+      let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { providerId: id };
+      let provider = await Provider.findOne(query).select('-password').lean();
       if (!provider && mongoose.Types.ObjectId.isValid(id)) {
         let pRecord = await PaymentRecord.findById(id).populate('provider').lean();
         if (pRecord) {
@@ -3520,7 +3739,26 @@ const handleQRSuccessPayment = async (payment, session, qrCodeId) => {
     return;
   }
 
-  if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+  // Idempotency: Check if transaction has already been registered for this payment ID
+  if (payment.id) {
+    const existingTx = await Transaction.findOne({
+      $or: [
+        { razorpayPaymentId: payment.id },
+        { transactionId: payment.id }
+      ]
+    }).session(session);
+
+    if (existingTx) {
+      global.logger.info(`[handleQRSuccessPayment] Payment ID ${payment.id} already processed (transaction exists).`);
+      return;
+    }
+  }
+
+  if (
+    booking.paymentVerification?.status === 'verified' ||
+    booking.paymentStatus === 'paid' ||
+    booking.status === 'completed'
+  ) {
     global.logger.info(`[handleQRSuccessPayment] Booking ${booking._id} already completed / payment verified.`);
     return;
   }
@@ -3549,6 +3787,7 @@ const handleQRSuccessPayment = async (payment, session, qrCodeId) => {
   };
   booking.status = 'completed';
   booking.paymentStatus = 'paid';
+  booking.paymentMethod = 'online'; // Ensure payment method becomes online
   booking.completedAt = new Date();
   booking.commissionProcessed = true;
   booking.commissionAmount = commission;
@@ -3638,19 +3877,35 @@ const generateBookingQR = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
     }
 
-    const booking = await Booking.findById(bookingId);
+    let booking = await Booking.findById(bookingId);
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
-    }
-
-    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
-      return res.status(400).json({ success: false, message: 'Booking is already completed and verified.' });
     }
 
     const { SystemConfig } = require('../system-setting/system-setting-model');
     let settings = await SystemConfig.findOne().lean();
     const qrExpiryMinutes = settings?.bookingSettings?.qrExpiryMinutes || 10;
     const expiryTimestamp = Math.floor(Date.now() / 1000) + (qrExpiryMinutes * 60);
+
+    // Calculate outstanding amount using only verified successful/completed payments
+    const successfulTxns = await Transaction.find({
+      booking: booking._id,
+      paymentStatus: { $in: ['success', 'completed'] },
+      type: 'payment'
+    });
+    const successfullyPaidAmount = successfulTxns.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const outstandingAmount = booking.totalAmount - successfullyPaidAmount;
+
+    if (
+      booking.paymentStatus === 'paid' ||
+      booking.paymentStatus === 'completed' ||
+      booking.paymentStatus === 'captured' ||
+      booking.paymentVerification?.status === 'verified' ||
+      booking.status === 'completed' ||
+      outstandingAmount <= 0
+    ) {
+      return res.status(400).json({ success: false, message: 'Payment already completed for this booking.' });
+    }
 
     // Reuse existing active QR code if still valid
     if (
@@ -3667,15 +3922,78 @@ const generateBookingQR = async (req, res, next) => {
           qrCodeId: booking.paymentVerification.qrCodeId,
           imageUrl: booking.paymentVerification.qrImageUrl,
           expiresAt: booking.paymentVerification.qrExpiresAt,
-          totalAmount: booking.totalAmount,
+          totalAmount: outstandingAmount,
           qrExpiryMinutes
         }
       });
     }
 
-    if (booking.paymentVerification?.qrCodeId && booking.paymentVerification?.status === 'waiting_payment') {
+    // Concurrency Lock: Reset expired locks (older than 15 seconds)
+    const lockExpiryMs = 15000;
+    const expiredTime = Date.now() - lockExpiryMs;
+    await Booking.updateOne(
+      {
+        _id: bookingId,
+        'paymentVerification.idempotencyKey': { $regex: /^LOCK_/, $lt: `LOCK_${expiredTime}` }
+      },
+      {
+        $set: { 'paymentVerification.idempotencyKey': null }
+      }
+    );
+
+    // Concurrency Lock: Try to acquire the lock atomically
+    const lockedBooking = await Booking.findOneAndUpdate(
+      {
+        _id: bookingId,
+        status: { $ne: 'completed' },
+        paymentStatus: { $nin: ['paid', 'completed', 'captured', 'escrowhold'] },
+        'paymentVerification.status': { $nin: ['verified'] },
+        $or: [
+          { 'paymentVerification.idempotencyKey': { $exists: false } },
+          { 'paymentVerification.idempotencyKey': null },
+          { 'paymentVerification.idempotencyKey': { $not: /^LOCK_/ } }
+        ]
+      },
+      {
+        $set: {
+          'paymentVerification.idempotencyKey': `LOCK_${Date.now()}`
+        }
+      },
+      { new: true }
+    );
+
+    if (!lockedBooking) {
+      // Re-query to see if the QR was successfully generated by the concurrent request
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const recheck = await Booking.findById(bookingId);
+      if (
+        recheck.paymentVerification?.qrCodeId &&
+        recheck.paymentVerification?.qrImageUrl &&
+        recheck.paymentVerification?.status === 'waiting_payment' &&
+        recheck.paymentVerification?.qrExpiresAt &&
+        new Date(recheck.paymentVerification.qrExpiresAt) > new Date()
+      ) {
+        return res.status(200).json({
+          success: true,
+          message: 'Active QR code reused',
+          data: {
+            qrCodeId: recheck.paymentVerification.qrCodeId,
+            imageUrl: recheck.paymentVerification.qrImageUrl,
+            expiresAt: recheck.paymentVerification.qrExpiresAt,
+            totalAmount: outstandingAmount,
+            qrExpiryMinutes
+          }
+        });
+      }
+      return res.status(409).json({
+        success: false,
+        message: 'Another request is currently generating a QR code. Please refresh or try again.'
+      });
+    }
+
+    if (lockedBooking.paymentVerification?.qrCodeId && lockedBooking.paymentVerification?.status === 'waiting_payment') {
       try {
-        await razorpay.qrCode.close(booking.paymentVerification.qrCodeId);
+        await razorpay.qrCode.close(lockedBooking.paymentVerification.qrCodeId);
       } catch (err) {
         console.warn(`Non-critical warning closing previous QR: ${err.message}`);
       }
@@ -3685,19 +4003,24 @@ const generateBookingQR = async (req, res, next) => {
     try {
       qrCode = await razorpay.qrCode.create({
         type: 'upi_qr',
-        name: `Booking #${booking.bookingId || booking._id.toString().slice(-6)}`,
+        name: `Booking #${lockedBooking.bookingId || lockedBooking._id.toString().slice(-6)}`,
         usage: 'single_use',
         fixed_amount: true,
-        payment_amount: Math.round(booking.totalAmount * 100),
-        description: `Payment for booking ${booking.bookingId || booking._id}`,
+        payment_amount: Math.round(outstandingAmount * 100),
+        description: `Payment for booking ${lockedBooking.bookingId || lockedBooking._id}`,
         close_by: expiryTimestamp,
         notes: {
-          bookingId: booking._id.toString(),
+          bookingId: lockedBooking._id.toString(),
           providerId: providerId?.toString()
         }
       });
     } catch (razorpayErr) {
       console.error('Razorpay QR API failed:', razorpayErr.message);
+      // Release lock on failure so the user can retry
+      await Booking.updateOne(
+        { _id: bookingId, 'paymentVerification.idempotencyKey': { $regex: /^LOCK_/ } },
+        { $set: { 'paymentVerification.idempotencyKey': null } }
+      );
       return res.status(400).json({
         success: false,
         message: `Failed to generate Razorpay QR code: ${razorpayErr.message || 'Razorpay Gateway Error'}`
@@ -3705,46 +4028,31 @@ const generateBookingQR = async (req, res, next) => {
     }
 
     const qrExpiresAt = new Date(Date.now() + qrExpiryMinutes * 60 * 1000);
-    booking.paymentVerification = {
+    lockedBooking.paymentVerification = {
       method: 'qr_code',
       status: 'waiting_payment',
       qrCodeId: qrCode.id,
       qrImageUrl: qrCode.image_url,
       qrExpiresAt: qrExpiresAt,
-      idempotencyKey: `QR-${Date.now()}`
+      idempotencyKey: `QR-${qrCode.id}`
     };
 
-    booking.statusHistory.push({
-      status: booking.status,
+    lockedBooking.statusHistory.push({
+      status: lockedBooking.status,
       timestamp: new Date(),
-      note: `Dynamic QR Code generated for ₹${booking.totalAmount} (Valid for ${qrExpiryMinutes} mins). QR ID: ${qrCode.id}`,
+      note: `Dynamic QR Code generated for ₹${outstandingAmount} (Valid for ${qrExpiryMinutes} mins). QR ID: ${qrCode.id}`,
       updatedBy: 'provider'
     });
 
-    await booking.save();
-
-    const qrTx = new Transaction({
-      booking: booking._id,
-      bookingId: booking.bookingId || booking._id.toString(),
-      user: booking.customer,
-      provider: providerId,
-      amount: booking.totalAmount,
-      paymentMethod: 'upi',
-      paymentStatus: 'pending',
-      type: 'payment',
-      ledgerType: 'payment',
-      razorpayResponse: qrCode,
-      description: `QR Code generated for booking ${booking.bookingId || booking._id}`
-    });
-    await qrTx.save();
+    await lockedBooking.save();
 
     try {
       const { getIO } = require('../../shared/socket/socket-server');
       const io = getIO();
       if (io) {
-        io.to(`booking_${booking._id}`).emit('payment_verification_updated', {
-          bookingId: booking._id,
-          paymentVerification: booking.paymentVerification
+        io.to(`booking_${lockedBooking._id}`).emit('payment_verification_updated', {
+          bookingId: lockedBooking._id,
+          paymentVerification: lockedBooking.paymentVerification
         });
       }
     } catch (sErr) { }
@@ -3756,7 +4064,7 @@ const generateBookingQR = async (req, res, next) => {
         qrCodeId: qrCode.id,
         imageUrl: qrCode.image_url,
         expiresAt: qrExpiresAt,
-        totalAmount: booking.totalAmount,
+        totalAmount: outstandingAmount,
         qrExpiryMinutes
       }
     });
@@ -4048,6 +4356,7 @@ module.exports = {
   adminMarkPaid,
   rollbackWalletDeduction,
   getFinanceOverview,
+  getChartTrends,
   getCashLedger,
   getCustomerWallets,
   getProviderWallets,

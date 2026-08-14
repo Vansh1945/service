@@ -25,6 +25,8 @@ import * as AdminService from '../../../services/AdminService';
 import * as SystemService from '../../../services/SystemService';
 import PayoutViewDetailModal from './components/PayoutViewDetailModal';
 import PdfPreviewModal from '../../../components/modals/PdfPreviewModal';
+import Badge from '../../../components/ui/Badge';
+import StatusBadge from '../../../components/ui/StatusBadge';
 
 
 const PayoutModal = ({
@@ -43,10 +45,16 @@ const PayoutModal = ({
 }) => {
   if (!isOpen) return null;
 
+  const selectedProvider = isDirectPayout && providers?.find(p => p._id === formData.providerId);
+  const bank = selectedProvider?.bankDetails || {};
+  const preferred = bank.preferredMethod || 'bank_account';
+  const isVerified = bank.bankVerificationStatus === 'verified' && bank.verified && bank.payoutEnabled;
+  const hasDetails = preferred === 'upi' ? !!bank.upiId : (!!bank.accountNo && !!bank.ifsc);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-secondary">{title}</h2>
             <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
@@ -56,40 +64,27 @@ const PayoutModal = ({
           </button>
         </div>
 
-        {/* Banner for Approve Withdrawal */}
-        {!isDirectPayout && selectedWithdrawal && (
-          <div className="mx-6 mt-4 p-4 bg-primary bg-opacity-5 rounded-xl border border-primary border-opacity-20 flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center shrink-0">
-              <Check className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
-              <p className="text-xs text-gray-500">{selectedWithdrawal.provider?.name}</p>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={onSubmit} className="px-6 py-4 space-y-4">
+        <form onSubmit={onSubmit} className="px-6 py-4 space-y-4 overflow-y-auto flex-1 text-slate-600">
           {isDirectPayout ? (
             <>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1.5">Select Provider <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-medium mb-1.5">Select Provider *</label>
                 <select
                   required
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm cursor-pointer"
                   value={formData.providerId}
                   onChange={e => {
-                    const pId = e.target.value;
-                    const p = providers.find(pr => pr._id === pId);
+                    const p = providers?.find(pr => pr._id === e.target.value);
                     setFormData(prev => ({
                       ...prev,
-                      providerId: pId,
-                      amount: p ? (p.wallet?.availableBalance || 0).toString() : ''
+                      providerId: e.target.value,
+                      amount: p ? (p.wallet?.availableBalance || 0).toString() : '',
+                      paymentMethod: p?.bankDetails?.preferredMethod === 'upi' ? 'upi' : 'banktransfer'
                     }));
                   }}
                 >
                   <option value="">Choose a provider...</option>
-                  {providers.map(p => (
+                  {providers?.map(p => (
                     <option key={p._id} value={p._id}>
                       {p.name} (Wallet: {formatCurrency(p.wallet?.availableBalance || 0)})
                     </option>
@@ -97,85 +92,127 @@ const PayoutModal = ({
                 </select>
               </div>
 
+              {formData.providerId && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2 text-slate-600 font-medium">
+                  <div className="flex justify-between items-center font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                    <span>Payout Destination</span>
+                    <span className={isVerified && hasDetails ? 'text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100 font-bold' : 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 font-bold'}>
+                      {isVerified && hasDetails ? 'Verified ✓' : 'Unverified ⚠'}
+                    </span>
+                  </div>
+                  {!hasDetails ? (
+                    <div className="text-rose-600 font-bold bg-rose-50 p-2 rounded-lg border border-rose-100">No payout destination configured.</div>
+                  ) : !isVerified ? (
+                    <div className="text-amber-600 font-bold bg-amber-50 p-2 rounded-lg border border-amber-100">Pending verification or disabled.</div>
+                  ) : preferred === 'upi' ? (
+                    <div className="space-y-1">
+                      <div className="flex justify-between"><span className="text-slate-400">Type:</span><strong className="text-slate-800">UPI / VPA</strong></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Account Holder:</span><strong className="text-slate-800">{bank.accountName || selectedProvider?.name}</strong></div>
+                      <div className="flex justify-between"><span className="text-slate-400">UPI ID:</span><strong className="text-slate-800 font-mono">{bank.upiId}</strong></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex justify-between"><span className="text-slate-400">Type:</span><strong className="text-slate-800">Bank Account</strong></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Account Holder:</span><strong className="text-slate-800">{bank.accountName || selectedProvider?.name}</strong></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Bank Name:</span><strong className="text-slate-800">{bank.bankName || 'N/A'}</strong></div>
+                      <div className="flex justify-between"><span className="text-slate-400">IFSC:</span><strong className="text-slate-800 font-mono">{bank.ifsc}</strong></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Account Number:</span><strong className="text-slate-800 font-mono">{bank.accountNo}</strong></div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1.5">Payout Amount (₹) <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-medium mb-1.5">Payout Amount (₹) *</label>
                 <input
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  required
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                  placeholder="Enter amount to pay out"
+                  type="number" step="any" min="0.01" required
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
                   value={formData.amount}
                   onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
                 />
+                {selectedProvider && formData.amount && parseFloat(formData.amount) > (selectedProvider.wallet?.availableBalance || 0) && (
+                  <p className="text-[11px] text-red-500 font-semibold mt-1">Amount exceeds available balance</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1.5">Payment Method <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-medium mb-1.5">Payment Method *</label>
                 <select
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  disabled={preferred === 'upi'}
+                  className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm ${preferred === 'upi' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-gray-50 text-slate-800 cursor-pointer'}`}
                   value={formData.paymentMethod}
                   onChange={e => setFormData(p => ({ ...p, paymentMethod: e.target.value }))}
                 >
-                  <option value="banktransfer">Bank Transfer</option>
-                  <option value="upi">UPI</option>
-                  <option value="neft">NEFT</option>
-                  <option value="rtgs">RTGS</option>
-                  <option value="other">Other</option>
+                  {preferred === 'upi' ? (
+                    <option value="upi">UPI</option>
+                  ) : (
+                    <>
+                      <option value="banktransfer">Bank Transfer</option>
+                      <option value="neft">NEFT</option>
+                      <option value="rtgs">RTGS</option>
+                      <option value="imps">IMPS</option>
+                      <option value="other">Other</option>
+                    </>
+                  )}
                 </select>
               </div>
             </>
-          ) : null}
+          ) : (
+            selectedWithdrawal && (
+              <div className="space-y-3">
+                <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 flex justify-between items-center text-sm font-semibold">
+                  <span>{formatCurrency(selectedWithdrawal.amount)}</span>
+                  <span className="text-xs text-gray-500">{selectedWithdrawal.provider?.name}</span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Payment Method *</label>
+                  <select
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm cursor-pointer text-slate-800"
+                    value={formData.paymentMethod || 'banktransfer'}
+                    onChange={e => setFormData(p => ({ ...p, paymentMethod: e.target.value }))}
+                  >
+                    <option value="banktransfer">Bank Transfer</option>
+                    <option value="neft">NEFT</option>
+                    <option value="rtgs">RTGS</option>
+                    <option value="imps">IMPS</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+            )
+          )}
 
           <div>
-            <label className="block text-sm font-medium text-secondary mb-1.5">
-              UTR Number {isDirectPayout ? <span className="text-gray-400 font-normal">(optional)</span> : <span className="text-red-400">*</span>}
-            </label>
-            <input type="text" required={!isDirectPayout}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-              placeholder="Enter UTR / Transaction reference"
-              value={formData.utrNo}
-              onChange={e => setFormData(p => ({ ...p, utrNo: e.target.value }))}
-            />
+            <label className="block text-sm font-medium mb-1.5">UTR Number {isDirectPayout ? '(optional)' : '*'}</label>
+            <input type="text" required={!isDirectPayout} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" placeholder="Enter UTR reference" value={formData.utrNo} onChange={e => setFormData(p => ({ ...p, utrNo: e.target.value }))} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-secondary mb-1.5">Transfer Date <span className="text-red-400">*</span></label>
-              <input type="date" required
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                value={formData.transferDate}
-                onChange={e => setFormData(p => ({ ...p, transferDate: e.target.value }))}
-              />
+              <label className="block text-sm font-medium mb-1.5">Transfer Date *</label>
+              <input type="date" required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm cursor-pointer" value={formData.transferDate} onChange={e => setFormData(p => ({ ...p, transferDate: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary mb-1.5">Transfer Time <span className="text-red-400">*</span></label>
-              <input type="time" required
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                value={formData.transferTime}
-                onChange={e => setFormData(p => ({ ...p, transferTime: e.target.value }))}
-              />
+              <label className="block text-sm font-medium mb-1.5">Transfer Time *</label>
+              <input type="time" required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm cursor-pointer" value={formData.transferTime} onChange={e => setFormData(p => ({ ...p, transferTime: e.target.value }))} />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-secondary mb-1.5">
-              {isDirectPayout ? "Admin Remark / Notes" : "Admin Remark"} <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <textarea rows={isDirectPayout ? 2 : 3} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm resize-none"
-              placeholder={isDirectPayout ? "Direct payout reason..." : "Add any notes…"}
-              value={isDirectPayout ? formData.notes : formData.adminRemark}
-              onChange={e => setFormData(p => ({ ...p, [isDirectPayout ? 'notes' : 'adminRemark']: e.target.value }))} />
+            <label className="block text-sm font-medium mb-1.5">Remark / Notes</label>
+            <textarea rows={2} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none" placeholder="Notes..." value={isDirectPayout ? formData.notes : formData.adminRemark} onChange={e => setFormData(p => ({ ...p, [isDirectPayout ? 'notes' : 'adminRemark']: e.target.value }))} />
           </div>
 
-          <div className="flex gap-3 pb-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-medium text-secondary bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+          <div className="flex gap-3 pb-2 shrink-0">
+            <button type="button" onClick={onClose} className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors cursor-pointer">
               Cancel
             </button>
-            <Processing type="submit" loading={submitting} loadingText="Processing…"
-              className="flex-1 py-2.5 text-sm font-medium text-white bg-primary hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <Processing
+              type="submit"
+              loading={submitting}
+              disabled={isDirectPayout ? (!hasDetails || !isVerified || !formData.amount || parseFloat(formData.amount) <= 0 || parseFloat(formData.amount) > (selectedProvider?.wallet?.availableBalance || 0) || submitting) : (!formData.utrNo || submitting)}
+              className="flex-1 py-2 bg-primary hover:bg-teal-700 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
+            >
               {isDirectPayout ? "Confirm Payout" : "Approve Payment"}
             </Processing>
           </div>
@@ -201,7 +238,7 @@ const AdminPayout = () => {
   const [providers, setProviders] = useState([]);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
   const [selectedDetails, setSelectedDetails] = useState(null);
-  const [approveForm, setApproveForm] = useState({ utrNo: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' });
+  const [approveForm, setApproveForm] = useState({ utrNo: '', paymentMethod: 'banktransfer', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' });
   const [rejectReason, setRejectReason] = useState('');
   const [directPayoutForm, setDirectPayoutForm] = useState({ providerId: '', amount: '', paymentMethod: 'banktransfer', utrNo: '', notes: '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5) });
   const [submitting, setSubmitting] = useState(false);
@@ -293,6 +330,41 @@ const AdminPayout = () => {
     return str.length > 4 ? `•••• ${str.slice(-4)}` : str;
   };
 
+  const getDestinationDisplay = (w) => {
+    const bank = w.paymentDetails || w.bankDetails || {};
+    const isUpi = w.paymentMethod === 'upi';
+
+    if (isUpi) {
+      if (bank.upiId) {
+        return bank.upiId;
+      }
+      // Snapshot missing for UPI! Check provider fallback
+      const providerUpi = w.provider?.bankDetails?.upiId;
+      if (providerUpi) {
+        return (
+          <span className="text-amber-600 font-medium" title="Historical destination snapshot missing. Using provider's current profile as fallback.">
+            {providerUpi} (Fallback)
+          </span>
+        );
+      }
+      return <span className="text-red-500 italic text-[11px]">Destination unavailable in historical record</span>;
+    } else {
+      if (bank.accountNumber) {
+        return bank.accountNumber;
+      }
+      // Snapshot missing for Bank! Check provider fallback
+      const providerAcc = w.provider?.bankDetails?.accountNo || w.provider?.bankDetails?.accountNumber;
+      if (providerAcc) {
+        return (
+          <span className="text-amber-600 font-mono font-medium" title="Historical destination snapshot missing. Using provider's current profile as fallback.">
+            {providerAcc} (Fallback)
+          </span>
+        );
+      }
+      return <span className="text-red-500 italic text-[11px]">Destination unavailable in historical record</span>;
+    }
+  };
+
   const handleRejectSubmit = async (e) => {
     e.preventDefault();
     if (!rejectReason.trim()) { toast.error('Please enter a rejection reason'); return; }
@@ -317,6 +389,7 @@ const AdminPayout = () => {
       await PaymentService.approveWithdrawalRequest(selectedWithdrawal._id, {
         transactionReference: approveForm.utrNo,
         utrNo: approveForm.utrNo,
+        paymentMethod: approveForm.paymentMethod || 'banktransfer',
         transferDate: approveForm.transferDate,
         transferTime: approveForm.transferTime,
         notes: approveForm.adminRemark
@@ -477,6 +550,7 @@ const AdminPayout = () => {
           filters={filters}
           onChange={(key, val) => handleFilterChange({ ...filters, [key]: val })}
           onClear={clearFilters}
+          isInline={true}
           fields={[
             {
               key: 'status',
@@ -525,52 +599,39 @@ const AdminPayout = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600 min-w-[1700px]">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1000px]">
               <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
                   <th className="p-3">Withdrawal ID</th>
                   <th className="p-3">Provider</th>
-                  <th className="p-3">Provider Phone</th>
-                  <th className="p-3">Provider Email</th>
                   <th className="p-3">Amount</th>
-                  <th className="p-3">Bank Name</th>
-                  <th className="p-3">Account Holder</th>
-                  <th className="p-3">Masked Account No.</th>
-                  <th className="p-3">IFSC</th>
-                  <th className="p-3">Contact Status</th>
-                  <th className="p-3">Fund Account Status</th>
-                  <th className="p-3">Payout Mode</th>
-                  <th className="p-3">Payout Status</th>
-                  <th className="p-3">Last Payout</th>
-                  <th className="p-3">Retry Status</th>
+                  <th className="p-3">Payout Method</th>
+                  <th className="p-3">Destination</th>
+                  <th className="p-3">Status</th>
                   <th className="p-3">Requested Date</th>
-                  <th className="p-3">Approved Date</th>
-                  <th className="p-3">Transferred Date</th>
-                  <th className="p-3">UTR Number</th>
-                  <th className="p-3">Processed By</th>
-                  <th className="p-3">Last Updated</th>
+                  <th className="p-3">Processed Date</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {loading ? (
-                  <TableSkeleton rows={8} cols={22} />
+                  <TableSkeleton rows={8} cols={9} />
                 ) : withdrawals.length === 0 ? (
                   <tr>
-                    <td colSpan="22" className="px-6 py-12 text-center">
+                    <td colSpan="9" className="px-6 py-12 text-center">
                       <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                       <p className="text-slate-800 font-medium">No withdrawal requests found</p>
                       <p className="text-sm text-slate-400 mt-1">Try adjusting your search filters</p>
                     </td>
                   </tr>
                 ) : withdrawals.map(w => {
-                  const bank = w.paymentDetails || w.bankDetails || {};
                   return (
                     <tr key={w._id} className="hover:bg-slate-50 transition-colors">
 
                       {/* 1. Withdrawal ID (Clickable Drawer) */}
                       <td className="p-3 font-mono font-bold text-teal-700">
                         <button
+                          type="button"
                           onClick={() => handleView(w)}
                           className="hover:underline text-left cursor-pointer"
                         >
@@ -581,90 +642,51 @@ const AdminPayout = () => {
                       {/* 2. Provider (Clickable Drawer) */}
                       <td className="p-3 font-bold text-slate-900">
                         <button
+                          type="button"
                           onClick={() => openInvestigationDrawer('provider', w.provider?._id || w.provider, w.provider)}
-                          className="text-teal-700 hover:underline cursor-pointer"
+                          className="text-teal-700 hover:underline cursor-pointer text-left"
                         >
                           {w.provider?.name || 'Provider'}
                         </button>
                       </td>
 
-                      {/* 3. Provider Phone */}
-                      <td className="p-3 text-slate-600">{w.provider?.phone || 'N/A'}</td>
-
-                      {/* 4. Provider Email */}
-                      <td className="p-3 text-slate-500">{w.provider?.email || 'N/A'}</td>
-
-                      {/* 5. Amount */}
+                      {/* 3. Amount */}
                       <td className="p-3 font-black text-slate-900 text-sm">
                         {formatCurrency(w.amount || 0)}
                       </td>
 
-                      {/* 6. Bank Name */}
-                      <td className="p-3 text-slate-700">{bank.bankName || 'Bank Transfer'}</td>
-
-                      {/* 7. Account Holder */}
-                      <td className="p-3 font-semibold text-slate-800">{bank.accountName || w.provider?.name || 'N/A'}</td>
-
-                      {/* 8. Masked Account Number */}
-                      <td className="p-3 font-mono text-slate-700">{maskAccNo(bank.accountNumber)}</td>
-
-                      {/* 9. IFSC */}
-                      <td className="p-3 font-mono text-slate-500">{bank.ifscCode || 'N/A'}</td>
-
-                      {/* 10. Contact Status (Future Ready) */}
+                      {/* 4. Payout Method */}
                       <td className="p-3">
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700 border border-slate-200">
-                          {w.contactStatus || (payoutMode === 'razorpayx' ? 'Active' : 'Manual')}
-                        </span>
+                        <Badge variant={w.paymentMethod === 'upi' ? 'info' : 'primary'}>
+                          {w.paymentMethod === 'upi' ? 'UPI' : 'BANK ACCOUNT'}
+                        </Badge>
                       </td>
 
-                      {/* 11. Fund Account Status (Future Ready) */}
+                      {/* 5. Destination */}
+                      <td className="p-3 font-mono text-slate-700">
+                        {getDestinationDisplay(w)}
+                      </td>
+
+                      {/* 6. Status */}
                       <td className="p-3">
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700 border border-slate-200">
-                          {w.fundAccountStatus || (payoutMode === 'razorpayx' ? 'Verified' : 'Manual')}
-                        </span>
+                        <StatusBadge status={w.status} module="withdrawal" />
                       </td>
 
-                      {/* 12. Payout Mode (Future Ready) */}
-                      <td className="p-3 font-mono text-[11px] font-extrabold uppercase text-slate-700">
-                        {w.withdrawalType || w.paymentMethod || (payoutMode === 'razorpayx' ? 'RAZORPAYX' : 'MANUAL')}
+                      {/* 7. Requested Date */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">
+                        {formatDate(w.createdAt)}
                       </td>
 
-                      {/* 13. Payout Status (Badge from utils/status.jsx) */}
-                      <td className="p-3">{getStatusBadge(w.status)}</td>
-
-                      {/* 14. Last Payout */}
-                      <td className="p-3 text-slate-500 whitespace-nowrap">
-                        {w.completedAt ? formatDate(w.completedAt) : (w.updatedAt ? formatDate(w.updatedAt) : '—')}
+                      {/* 8. Processed Date */}
+                      <td className="p-3 text-slate-400 whitespace-nowrap">
+                        {w.approvedAt || w.processedAt || w.completedAt ? formatDate(w.approvedAt || w.processedAt || w.completedAt) : 'Pending'}
                       </td>
 
-                      {/* 15. Retry Status */}
-                      <td className="p-3 text-slate-600 font-medium">
-                        {w.retryCount !== undefined ? `${w.retryCount} Retries` : (payoutMode === 'razorpayx' ? '0 Retries' : 'N/A')}
-                      </td>
-
-                      {/* 16. Requested Date */}
-                      <td className="p-3 text-slate-400 whitespace-nowrap">{formatDate(w.createdAt)}</td>
-
-                      {/* 17. Approved Date */}
-                      <td className="p-3 text-slate-400 whitespace-nowrap">{w.approvedAt || w.processedAt ? formatDate(w.approvedAt || w.processedAt) : 'Pending'}</td>
-
-                      {/* 18. Transferred Date */}
-                      <td className="p-3 text-slate-400 whitespace-nowrap">{w.transferDate || w.completedAt ? formatDate(w.transferDate || w.completedAt) : 'Pending'}</td>
-
-                      {/* 19. UTR Number */}
-                      <td className="p-3 font-mono text-slate-600 font-bold">{w.utrNo || w.transactionReference || '—'}</td>
-
-                      {/* 20. Processed By */}
-                      <td className="p-3 text-slate-600">{w.admin?.name || 'Admin'}</td>
-
-                      {/* 21. Last Updated */}
-                      <td className="p-3 text-slate-400 whitespace-nowrap">{formatDate(w.updatedAt || w.createdAt)}</td>
-
-                      {/* 22. Actions */}
+                      {/* 9. Actions */}
                       <td className="p-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            type="button"
                             onClick={() => handleView(w)}
                             className="inline-flex items-center px-2.5 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-700 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                           >
@@ -673,12 +695,14 @@ const AdminPayout = () => {
                           {['requested', 'processing', 'under_review'].includes(w.status) && (
                             <>
                               <button
+                                type="button"
                                 onClick={() => { setSelectedWithdrawal(w); setApproveForm({ utrNo: w.utrNo || w.transactionReference || '', transferDate: new Date().toISOString().split('T')[0], transferTime: new Date().toTimeString().split(' ')[0].slice(0, 5), adminRemark: '' }); setShowApproveModal(true); }}
                                 className="inline-flex items-center px-2.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                               >
                                 <Check size={13} className="mr-1" /> Approve
                               </button>
                               <button
+                                type="button"
                                 onClick={() => { setSelectedWithdrawal(w); setRejectReason(''); setShowRejectModal(true); }}
                                 className="inline-flex items-center px-2.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                               >

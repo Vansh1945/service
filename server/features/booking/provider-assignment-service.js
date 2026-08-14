@@ -749,7 +749,7 @@ class ProviderAssignmentService {
           commission: booking.commissionAmount || 0,
           providerEarning: booking.providerEarnings || 0,
           commissionRule: booking.commissionRule,
-          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold') && {
             paymentStatus: isOnline ? 'success' : 'completed'
           })
         }
@@ -913,7 +913,7 @@ class ProviderAssignmentService {
     });
 
     // Handle refunds for online/prepaid bookings via Centralized Refund Engine
-    if (['paid', 'escrow_hold'].includes(booking.paymentStatus) || ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
+    if (['paid', 'escrowhold'].includes(booking.paymentStatus) || ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
       try {
         const RefundEngineService = require('../payment/refund-engine-service');
         await RefundEngineService.processRefundRequest({

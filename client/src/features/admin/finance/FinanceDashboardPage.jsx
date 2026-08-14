@@ -41,6 +41,7 @@ import {
   Line
 } from 'recharts';
 import * as TransactionService from '../../../services/TransactionService';
+import { getChartTrends } from '../../../services/TransactionService';
 import PriceDisplay from '../../../components/PriceDisplay';
 import ChartSkeleton from '../../../components/ui-skeletons/ChartSkeleton';
 import FinanceDashboardViewDetailModal from './components/FinanceDashboardViewDetailModal';
@@ -135,7 +136,7 @@ const FinanceDashboardPage = () => {
           cashPendingVerification: d.cashPendingVerification ?? 0
         });
 
-        // 1. Payment Method Split Chart Data
+        // Payment Method Split — derived from real totals in overview
         setPaymentSplitData([
           { name: 'Online', value: onlineCol, color: '#3B82F6' },
           { name: 'Cash', value: cashCol, color: '#10B981' },
@@ -143,54 +144,26 @@ const FinanceDashboardPage = () => {
           { name: 'Mixed', value: mixedCol, color: '#8B5CF6' }
         ]);
 
-        // 2. Revenue Trend Chart Data (Derived from live metrics over past 7 days)
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const baseDaily = Math.round(totalRev / 7);
-        const trend = days.map((day, idx) => {
-          const factor = 0.7 + (idx * 0.1) + ((idx % 2 === 0 ? 0.15 : -0.05));
-          const dayRev = Math.round(baseDaily * factor);
-          return {
-            name: day,
-            revenue: dayRev,
-            earnings: Math.round(dayRev * 0.2)
-          };
-        });
-        setRevenueTrendData(trend);
-
-        // 3. Refund Trend Chart Data
-        const baseRefund = Math.round(totalRef / 7);
-        const refundTrend = days.map((day, idx) => {
-          const totalDayRef = Math.round(baseRefund * (0.8 + (idx % 3) * 0.2));
-          const completedDayRef = Math.round(totalDayRef * 0.75);
-          return {
-            name: day,
-            completed: completedDayRef,
-            pending: totalDayRef - completedDayRef,
-            total: totalDayRef
-          };
-        });
-        setRefundTrendData(refundTrend);
-
-        // 4. Booking vs Revenue Chart Data
-        const baseBookings = Math.max(12, Math.round(totalRev / 1500));
-        const bookingVsRev = days.map((day, idx) => {
-          const dayBookings = Math.round((baseBookings / 7) * (0.8 + (idx * 0.1)));
-          const dayRev = Math.round(dayBookings * 1450);
-          return {
-            name: day,
-            bookings: dayBookings,
-            revenue: dayRev
-          };
-        });
-        setBookingVsRevenueData(bookingVsRev);
-
-        // 5. Settlement Status Chart Data
+        // Settlement Status Chart Data (computed from overview totals — not time-series)
         setSettlementStatusData([
           { status: 'Settled', amount: d.reconciliation?.totalSettled || totalRev, color: '#10B981' },
           { status: 'Pending Settlement', amount: pendingSet, color: '#F59E0B' },
           { status: 'Processing', amount: Math.round(onlineCol * 0.15), color: '#6366F1' },
           { status: 'Failed', amount: d.reconciliation?.failedSettlement || 0, color: '#EF4444' }
         ]);
+      }
+
+      // Fetch real daily trend data from DB aggregations
+      try {
+        const trendsRes = await getChartTrends(30);
+        if (trendsRes.data?.success && trendsRes.data?.data) {
+          const td = trendsRes.data.data;
+          if (td.revenueTrend?.length) setRevenueTrendData(td.revenueTrend);
+          if (td.refundTrend?.length) setRefundTrendData(td.refundTrend);
+          if (td.bookingVsRevenue?.length) setBookingVsRevenueData(td.bookingVsRevenue);
+        }
+      } catch (tErr) {
+        console.warn('Chart trends fetch failed, keeping computed data:', tErr);
       }
 
       if (settlementsRes.status === 'fulfilled' && settlementsRes.value.data?.success && settlementsRes.value.data?.data?.settlements) {

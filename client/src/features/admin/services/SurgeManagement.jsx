@@ -735,124 +735,95 @@ const SurgeManagement = () => {
               </button>
             </div>
 
-            {/* Flat Emergency Charge Setting */}
-            <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100 max-w-sm space-y-4">
+            {/* All split fields in one unified row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 items-end">
+
+              {/* Emergency Flat Rate */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Emergency Surcharge Flat Rate (₹)</label>
-                <div className="relative col-span-1">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Emergency Rate (₹)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
                   <input
                     type="number"
                     value={systemSettings.bookingSettings?.emergencySurgeCharge ?? 0}
                     onChange={(e) => handleEmergencySurgeChargeChange(e.target.value)}
                     min="0"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-205 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1.5 leading-normal">Flat rate surcharge added to emergency bookings by default.</p>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200/50">
-                <div>
-                  <label htmlFor="chargeVisitingOnEmergency" className="block text-xs font-bold text-gray-700 uppercase cursor-pointer select-none">Charge Visiting Fee</label>
-                  <p className="text-[9px] text-gray-400 mt-0.5">Apply standard visiting charges on emergency bookings.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  id="chargeVisitingOnEmergency"
-                  checked={systemSettings.bookingSettings?.chargeVisitingOnEmergency ?? false}
-                  onChange={(e) => handleChargeVisitingOnEmergencyToggle(e.target.checked)}
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
-                />
+              {/* Charge Visiting Fee toggle */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Visiting on Emergency</label>
+                <label htmlFor="chargeVisitingOnEmergency" className="flex items-center gap-2.5 w-full px-3 py-2 border border-gray-200 rounded-lg bg-white cursor-pointer select-none" style={{minHeight:'38px'}}>
+                  <input
+                    type="checkbox"
+                    id="chargeVisitingOnEmergency"
+                    checked={systemSettings.bookingSettings?.chargeVisitingOnEmergency ?? false}
+                    onChange={(e) => handleChargeVisitingOnEmergencyToggle(e.target.checked)}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer shrink-0"
+                  />
+                  <span className="text-sm font-semibold text-gray-600">Apply fee</span>
+                </label>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+              {/* Visiting Share */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Visiting Share (%)</label>
                 <div className="relative">
-                  <input
-                    type="number"
-                    value={systemSettings.surgeSplitSettings?.visiting ?? 60}
-                    onChange={(e) => handleSplitChange('visiting', e.target.value)}
-                    min="0"
-                    max="100"
-                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                  <input type="number" value={systemSettings.surgeSplitSettings?.visiting ?? 60} onChange={(e) => handleSplitChange('visiting', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
+
+              {/* Rain Share */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Rain Share (%)</label>
                 <div className="relative">
-                  <input
-                    type="number"
-                    value={systemSettings.surgeSplitSettings?.rain ?? 70}
-                    onChange={(e) => handleSplitChange('rain', e.target.value)}
-                    min="0"
-                    max="100"
-                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                  <input type="number" value={systemSettings.surgeSplitSettings?.rain ?? 70} onChange={(e) => handleSplitChange('rain', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
+
+              {/* Traffic Share */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Traffic Share (%)</label>
                 <div className="relative">
-                  <input
-                    type="number"
-                    value={systemSettings.surgeSplitSettings?.traffic ?? 70}
-                    onChange={(e) => handleSplitChange('traffic', e.target.value)}
-                    min="0"
-                    max="100"
-                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                  <input type="number" value={systemSettings.surgeSplitSettings?.traffic ?? 70} onChange={(e) => handleSplitChange('traffic', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
+
+              {/* Night Share */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Night Share (%)</label>
                 <div className="relative">
-                  <input
-                    type="number"
-                    value={systemSettings.surgeSplitSettings?.night ?? 70}
-                    onChange={(e) => handleSplitChange('night', e.target.value)}
-                    min="0"
-                    max="100"
-                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                  <input type="number" value={systemSettings.surgeSplitSettings?.night ?? 70} onChange={(e) => handleSplitChange('night', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
+
+              {/* Demand Share */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Demand Share (%)</label>
                 <div className="relative">
-                  <input
-                    type="number"
-                    value={systemSettings.surgeSplitSettings?.demand ?? 50}
-                    onChange={(e) => handleSplitChange('demand', e.target.value)}
-                    min="0"
-                    max="100"
-                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                  <input type="number" value={systemSettings.surgeSplitSettings?.demand ?? 50} onChange={(e) => handleSplitChange('demand', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
+
+              {/* Emergency Share */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Emergency Share (%)</label>
                 <div className="relative">
-                  <input
-                    type="number"
-                    value={systemSettings.surgeSplitSettings?.emergency ?? 85}
-                    onChange={(e) => handleSplitChange('emergency', e.target.value)}
-                    min="0"
-                    max="100"
-                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                  <input type="number" value={systemSettings.surgeSplitSettings?.emergency ?? 85} onChange={(e) => handleSplitChange('emergency', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
+
             </div>
+
           </div>
         )}
 

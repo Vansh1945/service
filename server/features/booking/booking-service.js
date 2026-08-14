@@ -315,7 +315,7 @@ const getZoneRelation = async (bookingZoneId, providerZoneId) => {
 class BookingService {
   static getPayoutStatus(earning, booking) {
     if (!earning) return 'Not Processed';
-    if (booking.disputeRaised || booking.disputeStatus === 'underreview' || booking.disputeStatus === 'under_review') return 'Dispute Hold';
+    if (booking.disputeRaised || booking.disputeStatus === 'underreview') return 'Dispute Hold';
 
     switch (earning.status) {
       case 'held': return 'Payout On Hold';
@@ -1998,7 +1998,7 @@ class BookingService {
         return res.status(400).json({ success: false, message: 'Cannot pay for a booking that is in progress, completed, or cancelled' });
       }
 
-      if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') {
+      if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold') {
         await safeAbort(session);
         safeEnd(session);
         return res.status(400).json({ success: false, message: 'Booking already paid' });
@@ -2121,7 +2121,7 @@ class BookingService {
       }
 
       // Update booking
-      booking.paymentStatus = 'escrow_hold';
+      booking.paymentStatus = 'escrowhold';
       booking.confirmedBooking = true;
       if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
         booking.status = 'pending';
@@ -2453,7 +2453,7 @@ class BookingService {
           await pendingTxn.save({ session });
         }
 
-        if ((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
+         if ((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold') && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
           const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
           const platformFee = booking.platformFee || 0;
           const refundAmount = Math.max(0, booking.totalAmount - platformFee - previouslyRefunded);
@@ -3277,7 +3277,7 @@ class BookingService {
               providerEarning: updatedBooking.providerEarnings || 0,
               commissionRule: updatedBooking.commissionRule,
               // Sync payment status if booking is already paid
-              ...((updatedBooking.paymentStatus === 'paid' || updatedBooking.paymentStatus === 'escrow_hold') && {
+              ...((updatedBooking.paymentStatus === 'paid' || updatedBooking.paymentStatus === 'escrowhold') && {
                 paymentStatus: isOnline ? 'success' : 'completed'
               })
             },
@@ -3414,7 +3414,7 @@ class BookingService {
 
       // STEP 4 — PAYMENT BEFORE SERVICE START (Accepts either paid, escrow_hold, or cash payment method)
       const isCashOrPayAfterService = booking.paymentMethod === 'cash';
-      if (!isCashOrPayAfterService && booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'escrow_hold') {
+      if (!isCashOrPayAfterService && booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'escrowhold') {
         return res.status(400).json({
           success: false,
           message: "Customer payment pending. Service cannot start."
@@ -4082,7 +4082,7 @@ class BookingService {
           booking.disputeRaised = true; // Flag for review
           booking.disputeStatus = 'underreview';
         }
-        booking.payoutHoldUntil = new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
+        booking.payoutHoldUntil = holdPeriodHours === 0 ? null : new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
       }
 
       // Add status history note
@@ -4157,8 +4157,8 @@ class BookingService {
         earningStatus = "paid"; // provider already received cash
         availableAfter = new Date();
       } else {
-        earningStatus = "held"; // 48h hold for online payments
-        availableAfter = booking.payoutHoldUntil;
+        earningStatus = holdPeriodHours === 0 ? "available" : "held";
+        availableAfter = holdPeriodHours === 0 ? new Date() : booking.payoutHoldUntil;
       }
 
       const providerEarningResult = await ProviderEarning.findOneAndUpdate(
@@ -4231,12 +4231,16 @@ class BookingService {
           await commissionTx.save({ session });
         }
       } else {
+        const providerUpdate = {
+          $inc: { completedBookings: 1 },
+          $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+        };
+        if (holdPeriodHours === 0) {
+          providerUpdate.$inc['wallet.availableBalance'] = booking.providerEarnings;
+        }
         await Provider.findByIdAndUpdate(
           providerId,
-          {
-            $inc: { completedBookings: 1 },
-            $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
-          },
+          providerUpdate,
           { session }
         );
       }
@@ -4244,14 +4248,25 @@ class BookingService {
       // Notify provider about payout hold
       if (booking.paymentMethod !== "cash") {
         try {
-          sendNotification(
-            providerId,
-            'provider',
-            'Payout Under Review',
-            `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for ${holdPeriodHours} hours.`,
-            'payouthold',
-            booking._id
-          );
+          if (holdPeriodHours === 0) {
+            sendNotification(
+              providerId,
+              'provider',
+              'Payout Ready',
+              `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is ready for withdrawal.`,
+              'payoutready',
+              booking._id
+            );
+          } else {
+            sendNotification(
+              providerId,
+              'provider',
+              'Payout Under Review',
+              `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for ${holdPeriodHours} hours.`,
+              'payouthold',
+              booking._id
+            );
+          }
         } catch (err) { console.error("Error sending payout hold notification:", err); }
       }
 
@@ -4632,7 +4647,7 @@ class BookingService {
                 then: 'Not Processed',
                 else: {
                   $cond: {
-                    if: { $or: [{ $eq: ['$disputeRaised', true] }, { $eq: ['$disputeStatus', 'underreview'] }, { $eq: ['$disputeStatus', 'under_review'] }] },
+                    if: { $or: [{ $eq: ['$disputeRaised', true] }, { $eq: ['$disputeStatus', 'underreview'] }] },
                     then: 'Dispute Hold',
                     else: {
                       $switch: {
@@ -4721,7 +4736,7 @@ class BookingService {
       if (req.query.forRefunds === 'true' && req.query.refundStatus && req.query.refundStatus !== 'all') {
         const refundMatch = {};
         if (req.query.refundStatus === 'pending') {
-          refundMatch.paymentStatus = { $in: ['paid', 'escrow_hold'] };
+          refundMatch.paymentStatus = { $in: ['paid', 'escrowhold'] };
           refundMatch.disputeRaised = true;
         } else if (req.query.refundStatus === 'completed') {
           refundMatch.$or = [
@@ -5147,7 +5162,7 @@ class BookingService {
               commission: booking.commissionAmount || 0,
               providerEarning: booking.providerEarnings || 0,
               commissionRule: booking.commissionRule,
-              ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+              ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold') && {
                 paymentStatus: isOnline ? 'success' : 'completed'
               })
             },
@@ -5398,41 +5413,10 @@ class BookingService {
         return res.status(400).json({ message: "Maximum date range should be 2 months" });
       }
 
-      const filter = {
-        date: { $gte: startDate, $lte: endDate }
-      };
-
-      if (req.query.zoneIds) {
-        const zones = req.query.zoneIds.split(',');
-        filter.zoneId = { $in: zones };
-      }
-
-      if (req.query.providerId) {
-        const mongoose = require('mongoose');
-        const Provider = require('../provider/provider-model');
-        const prov = await Provider.findOne({
-          $or: [
-            { providerId: req.query.providerId },
-            { _id: mongoose.isValidObjectId(req.query.providerId) ? req.query.providerId : null }
-          ].filter(Boolean)
-        }).select('_id');
-        filter.provider = prov ? prov._id : null;
-      }
-
-      if (req.query.customerId) {
-        const mongoose = require('mongoose');
-        const User = require('../user/user-model');
-        const cust = await User.findOne({
-          $or: [
-            { customerId: req.query.customerId },
-            { _id: mongoose.isValidObjectId(req.query.customerId) ? req.query.customerId : null }
-          ].filter(Boolean)
-        }).select('_id');
-        filter.customer = cust ? cust._id : null;
-      }
-
       // Fetch bookings with necessary details
-      const bookings = await Booking.find(filter)
+      const bookings = await Booking.find({
+        date: { $gte: startDate, $lte: endDate }
+      })
         .populate('customer', 'name email phone')
         .populate('provider', 'name area providerId')
         .populate({

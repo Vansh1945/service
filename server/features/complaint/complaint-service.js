@@ -18,7 +18,7 @@ const checkAndAutoEscalate = async (complaintId) => {
 
       if (complaint.booking) {
         await Booking.findByIdAndUpdate(complaint.booking, {
-          disputeStatus: 'Escalated'
+          disputeStatus: 'underreview'
         });
       }
     }
@@ -75,9 +75,9 @@ const calculateRecoverySplits = async (booking, refundAmount, absorption, absorb
 
   if (earningStatus === 'held') {
     held = providerLoss;
-  } else if (earningStatus === 'under_review') {
+  } else if (earningStatus === 'underreview') {
     held = providerLoss;
-  } else if (earningStatus === 'pending_release') {
+  } else if (earningStatus === 'pendingrelease') {
     pendingRelease = providerLoss;
   } else if (earningStatus === 'available') {
     available = providerLoss;
@@ -428,7 +428,7 @@ class ComplaintService {
         // If customer raises service issue, mark as dispute ONLY if refund eligible
         if (category === 'Service issue' && userRole === 'customer' && isRefundEligible) {
           updateData.disputeRaised = true;
-          updateData.disputeStatus = 'Under Review';
+           updateData.disputeStatus = 'underreview';
 
           // Hold provider earnings if they exist
           const ProviderEarning = mongoose.model('ProviderEarning');
@@ -950,7 +950,7 @@ class ComplaintService {
         } else if (decision === 'request_more_evidence') {
           // Update disputeStatus on booking
           await Booking.findByIdAndUpdate(bookingId, {
-            disputeStatus: 'under_review'
+            disputeStatus: 'underreview'
           }, { session });
 
           // Notify customer
@@ -1309,7 +1309,7 @@ class ComplaintService {
                 if (!booking.cancellationProgress) {
                   booking.cancellationProgress = {};
                 }
-                booking.cancellationProgress.status = 'refund_completed';
+                booking.cancellationProgress.status = 'refundcompleted';
                 booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
                 booking.cancellationProgress.refundCompletedAt = new Date();
                 booking.adminRemark = resolutionNotes || 'Admin approved refund via complaint resolution';

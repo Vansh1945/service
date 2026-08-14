@@ -338,10 +338,17 @@ exports.getZoneById = async (req, res, next) => {
     let matchedUsers = [];
     let matchedBookings = [];
 
+    // Limit booking analytics to last 6 months to avoid full-collection scans
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const bookingDateFilter = { createdAt: { $gte: sixMonthsAgo } };
+    // Only the fields needed for analytics metrics
+    const bookingProjection = '_id provider couponApplied commissionAmount address zoneId';
+
     if (polygonCoords) {
       const bbox = getPolygonBoundingBox(polygonCoords);
 
-      const [providersInZone, allProviders, usersInZone, allUsers, bookingsInZone, allBookings] = await Promise.all([
+      const [providersInZone, allProviders, usersInZone, bookingsInZone, allBookings] = await Promise.all([
         Provider.find({
           isDeleted: false,
           $or: [
@@ -365,35 +372,19 @@ exports.getZoneById = async (req, res, next) => {
           'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng }
         }).select('_id name email phone profilePicUrl status currentLocation address').lean(),
 
+        // Users matched only by currentZone — geo scan across all users is too slow
         User.find({
           isSuspended: { $ne: true },
-          $or: [
-            { currentZone: id },
-            {
-              currentLocation: {
-                $geoWithin: {
-                  $geometry: {
-                    type: "Polygon",
-                    coordinates: zone.polygon.coordinates
-                  }
-                }
-              }
-            }
-          ]
-        }).select('_id name email phone profilePicUrl currentLocation address').lean(),
+          currentZone: id
+        }).select('_id name email phone profilePicUrl').lean(),
 
-        User.find({
-          isSuspended: { $ne: true },
-          'address.lat': { $gte: bbox.minLat, $lte: bbox.maxLat },
-          'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng }
-        }).select('_id name email phone profilePicUrl currentLocation address').lean(),
-
-        Booking.find({ zoneId: id }).lean(),
+        Booking.find({ zoneId: id, ...bookingDateFilter }).select(bookingProjection).lean(),
 
         Booking.find({
           'address.lat': { $gte: bbox.minLat, $lte: bbox.maxLat },
-          'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng }
-        }).lean()
+          'address.lng': { $gte: bbox.minLng, $lte: bbox.maxLng },
+          ...bookingDateFilter
+        }).select(bookingProjection).lean()
       ]);
 
       // Provider matching
@@ -418,27 +409,8 @@ exports.getZoneById = async (req, res, next) => {
       });
       matchedProviders = Array.from(matchedProvMap.values());
 
-      // User matching
-      const matchedUserMap = new Map();
-      usersInZone.forEach(u => matchedUserMap.set(u._id.toString(), u));
-      allUsers.forEach(u => {
-        if (matchedUserMap.has(u._id.toString())) return;
-        if (u.currentLocation && u.currentLocation.coordinates && u.currentLocation.coordinates.length === 2) {
-          const [lng, lat] = u.currentLocation.coordinates;
-          if (lat !== 0 || lng !== 0) {
-            if (isPointInPolygon(lat, lng, polygonCoords)) {
-              matchedUserMap.set(u._id.toString(), u);
-              return;
-            }
-          }
-        }
-        if (u.address && typeof u.address.lat === 'number' && typeof u.address.lng === 'number' && !isNaN(u.address.lat) && !isNaN(u.address.lng)) {
-          if (isPointInPolygon(u.address.lat, u.address.lng, polygonCoords)) {
-            matchedUserMap.set(u._id.toString(), u);
-          }
-        }
-      });
-      matchedUsers = Array.from(matchedUserMap.values());
+      // Users already filtered by currentZone — direct assignment
+      matchedUsers = usersInZone;
 
       // Booking matching
       const matchedBookingMap = new Map();
@@ -456,8 +428,8 @@ exports.getZoneById = async (req, res, next) => {
     } else {
       const [providers, users, bookings] = await Promise.all([
         Provider.find({ currentZone: id, isDeleted: false }).select('_id name email phone profilePicUrl status').lean(),
-        User.find({ currentZone: id, isSuspended: false }).select('_id name email phone profilePicUrl').lean(),
-        Booking.find({ zoneId: id }).lean()
+        User.find({ currentZone: id, isSuspended: { $ne: true } }).select('_id name email phone profilePicUrl').lean(),
+        Booking.find({ zoneId: id, ...bookingDateFilter }).select(bookingProjection).lean()
       ]);
       matchedProviders = providers;
       matchedUsers = users;

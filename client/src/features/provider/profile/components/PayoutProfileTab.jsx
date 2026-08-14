@@ -103,7 +103,9 @@ const PayoutProfileTab = ({ showToast }) => {
                 uploadedAt: details.uploadedAt || null
             });
 
-            setWithdrawForm(prev => ({ ...prev, method: payoutState.preferredMethod }));
+            // Normalize to lowercase to match <select> option values ('upi' / 'bank_account')
+            const normalizedMethod = (payoutState.preferredMethod || 'bank_account').toLowerCase();
+            setWithdrawForm(prev => ({ ...prev, method: normalizedMethod }));
 
             if (dashboardRes.data?.data) {
                 const dash = dashboardRes.data.data;

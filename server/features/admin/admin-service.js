@@ -1770,9 +1770,9 @@ class AdminService {
                     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
                 ]),
                 Booking.countDocuments({ $or: [{ paymentStatus: 'refunded' }, { refundProcessed: true }] }),
-                Booking.countDocuments({ disputeStatus: 'under_review' }),
+                Booking.countDocuments({ disputeStatus: 'underreview' }),
                 Booking.countDocuments({ disputeStatus: 'resolved' }),
-                Booking.countDocuments({ disputeStatus: 'refund_approved' })
+                Booking.countDocuments({ disputeStatus: 'refundapproved' })
             ]);
 
             const rStats = revenueStats[0] || {};
@@ -2393,7 +2393,7 @@ class AdminService {
                 Provider.countDocuments({ approved: false, kycStatus: 'pending' }),
                 PaymentRecord.countDocuments({ status: { $in: ['requested', 'processing'] } }),
                 Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } }),
-                Booking.countDocuments({ 'cancellationProgress.status': 'processing_refund' })
+                Booking.countDocuments({ 'cancellationProgress.status': 'processingrefund' })
             ]);
 
             res.status(200).json({
@@ -2925,7 +2925,7 @@ class AdminService {
             // --- NEW STRICT EARNING STATUS CHECKS ---
             let earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
             if (earning) {
-                const allowedStatuses = ['held', 'under_review', 'pending_release', 'available', 'paid', 'withdrawn', 'cancelled'];
+                const allowedStatuses = ['held', 'underreview', 'pendingrelease', 'available', 'paid', 'withdrawn', 'cancelled'];
                 if (!allowedStatuses.includes(earning.status)) {
                     throw new Error(`Refund is not allowed for current earning status: ${earning.status}`);
                 }
@@ -3290,7 +3290,7 @@ class AdminService {
             // ── 3. EARNINGS RELEASE ──
             if (ProviderEarning) {
                 const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
-                if (earning && (earning.status === 'held' || earning.status === 'under_review')) {
+                 if (earning && (earning.status === 'held' || earning.status === 'underreview')) {
                     earning.status = 'available';
                     await earning.save({ session });
                 }

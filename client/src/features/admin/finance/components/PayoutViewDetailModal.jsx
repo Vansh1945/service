@@ -4,6 +4,12 @@ import PriceDisplay from '../../../../components/PriceDisplay';
 import { formatDate, formatDateTime } from '../../../../utils/format';
 import { getWithdrawalStatusBadge } from '../../../../utils/status';
 
+const maskAccNo = (acc) => {
+  if (!acc || acc === 'N/A') return '••••••••';
+  const str = String(acc);
+  return str.length > 4 ? `•••• ${str.slice(-4)}` : str;
+};
+
 const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manual', openInvestigationDrawer }) => {
   if (!isOpen || !entityData) return null;
 
@@ -12,14 +18,14 @@ const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manu
   const statusBadge = getWithdrawalStatusBadge(status);
   const isRazorpayX = payoutMode === 'razorpayx' || data.withdrawalType === 'razorpayx';
 
-  const providerName = data.provider?.name || data.providerName || 'Service Provider';
-  const providerPhone = data.provider?.phone || data.providerPhone || 'N/A';
-  const providerEmail = data.provider?.email || data.providerEmail || 'N/A';
+  const provider = data.provider || {};
+  const providerName = provider.name || data.providerName || 'Service Provider';
+  const providerPhone = provider.phone || data.providerPhone || 'N/A';
+  const providerEmail = provider.email || data.providerEmail || 'N/A';
   const amount = data.amount || 0;
-  const bankName = data.paymentDetails?.bankName || data.bankDetails?.bankName || data.bankName || 'N/A';
-  const accountNumber = data.paymentDetails?.accountNumber || data.bankDetails?.accountNumber || data.accountNumber || 'N/A';
-  const ifscCode = data.paymentDetails?.ifscCode || data.bankDetails?.ifscCode || data.ifscCode || 'N/A';
-  const accountName = data.paymentDetails?.accountName || data.bankDetails?.accountName || providerName;
+
+  const bank = data.paymentDetails || data.bankDetails || {};
+  const accountName = bank.accountName || provider.bankDetails?.accountName || providerName;
 
   const handleEntityClick = (type, id) => {
     if (openInvestigationDrawer && id) {
@@ -116,26 +122,59 @@ const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manu
           {/* Bank Account Details */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-3">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-2 border-slate-100 flex items-center gap-2">
-              <FiCreditCard className="text-primary" /> Beneficiary Bank Account
+              <FiCreditCard className="text-primary" /> {data.paymentMethod === 'upi' ? 'Beneficiary UPI Account' : 'Beneficiary Bank Account'}
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-1">
-              <div>
-                <span className="text-xs text-slate-400 font-medium block">Account Name</span>
-                <span className="font-bold text-slate-800">{accountName}</span>
+            {data.paymentMethod === 'upi' ? (
+              <div className="grid grid-cols-2 gap-4 text-sm pt-1">
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">Account Name</span>
+                  <span className="font-bold text-slate-800">{accountName}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">UPI ID / VPA</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {bank.upiId 
+                      ? bank.upiId 
+                      : (provider.bankDetails?.upiId 
+                        ? `${provider.bankDetails.upiId} (Fallback)` 
+                        : 'Destination unavailable in historical record')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">UPI Verification Status</span>
+                  <span className="font-semibold text-slate-800">{provider.bankDetails?.upiVerificationStatus || 'N/A'}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-xs text-slate-400 font-medium block">Bank Name</span>
-                <span className="font-bold text-slate-800">{bankName}</span>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-1">
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">Account Name</span>
+                  <span className="font-bold text-slate-800">{accountName}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">Bank Name</span>
+                  <span className="font-bold text-slate-800">{bank.bankName || provider.bankDetails?.bankName || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">Account Number</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {bank.accountNumber 
+                      ? maskAccNo(bank.accountNumber) 
+                      : ((provider.bankDetails?.accountNo || provider.bankDetails?.accountNumber)
+                        ? `${maskAccNo(provider.bankDetails.accountNo || provider.bankDetails.accountNumber)} (Fallback)` 
+                        : 'Destination unavailable in historical record')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">IFSC Code</span>
+                  <span className="font-mono font-bold text-slate-800">{bank.ifscCode || provider.bankDetails?.ifsc || provider.bankDetails?.ifscCode || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 font-medium block">Bank Verification Status</span>
+                  <span className="font-semibold text-slate-800">{provider.bankDetails?.bankVerificationStatus || 'N/A'}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-xs text-slate-400 font-medium block">Account Number</span>
-                <span className="font-mono font-bold text-slate-800">{accountNumber}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 font-medium block">IFSC Code</span>
-                <span className="font-mono font-bold text-slate-800">{ifscCode}</span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* RazorpayX Advanced Diagnostics (Future Mode Only) */}

@@ -53,6 +53,10 @@ export const getFinanceOverview = () => {
     return axiosInstance.get("/transaction/admin/finance-overview");
 };
 
+export const getChartTrends = (days = 30) => {
+    return axiosInstance.get("/transaction/admin/chart-trends", { params: { days } });
+};
+
 export const getCashLedger = (params) => {
     return axiosInstance.get("/transaction/admin/cash-ledger", { params });
 };

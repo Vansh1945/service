@@ -198,9 +198,28 @@ const HeatmapLayer = ({ points }) => {
       }
     });
 
-    heatLayer.addTo(map);
+    const addSafely = () => {
+      // Ensure the map container has non-zero dimensions before drawing
+      const container = map.getContainer();
+      if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) return;
+      try {
+        map.invalidateSize(); // sync Leaflet canvas to actual DOM size
+        heatLayer.addTo(map);
+      } catch (e) {
+        console.warn('HeatmapLayer: skipped draw due to zero-size canvas', e);
+      }
+    };
+
+    // If map is already visible and sized, add immediately; otherwise wait for resize
+    const container = map.getContainer();
+    if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+      addSafely();
+    } else {
+      map.once('resize', addSafely);
+    }
 
     return () => {
+      map.off('resize', addSafely);
       try {
         map.removeLayer(heatLayer);
       } catch (e) {
@@ -1208,7 +1227,7 @@ const ZoneManagement = () => {
   }, [bookings]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-150px)] text-gray-850 font-sans relative overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-150px)] text-gray-850 font-sans relative overflow-hidden overflow-x-hidden">
       {/* Mobile view Tab Selectors */}
       <div className="flex lg:hidden bg-gray-100 p-1.5 rounded-xl mb-4 shrink-0 shadow-sm border border-gray-200">
         <button
@@ -1277,8 +1296,8 @@ const ZoneManagement = () => {
       <div className="flex-1 flex flex-col lg:flex-row gap-4 relative min-h-0 overflow-hidden">
         {/* Left Side Sidebar Panel - Controls & Zone lists */}
         <div className={`${sidebarOpen ? 'w-full lg:w-96 lg:shrink-0' : 'w-0 lg:w-0'} ${activeTab === 'list' ? 'flex' : 'hidden lg:flex'
-          } bg-white border border-gray-200 rounded-2xl flex flex-col min-h-0 overflow-hidden transition-all duration-300 relative z-[2] shadow-sm`}>
-          <div className="p-4 border-b border-gray-100 space-y-3 shrink-0 max-h-[70vh] overflow-y-auto">
+          } bg-white border border-gray-200 rounded-2xl flex flex-col min-h-0 overflow-hidden overflow-x-hidden transition-all duration-300 relative z-[2] shadow-sm`}>
+          <div className="p-4 border-b border-gray-100 space-y-3 shrink-0 overflow-hidden">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">

@@ -8,6 +8,7 @@ import PriceDisplay from '../../../../components/PriceDisplay';
 import { useAdminFilter } from '../../../../context/AdminFilterContext';
 import * as TransactionService from '../../../../services/TransactionService';
 import { fmtDate, fmtDateOnly } from '../../../../utils/format';
+import Loader from '../../../../components/ui/Loader';
 
 const maskAccNo = (acc) => {
   if (!acc) return '••••••••';
@@ -119,6 +120,8 @@ const WithdrawalDetailModal = ({ isOpen, onClose, entityData, withdrawalId }) =>
     setTimeout(() => setCopiedUTR(false), 2000);
   };
 
+
+
   const getStatusType = (st) => {
     const clean = (st || '').toLowerCase();
     if (['completed', 'transferred', 'approved'].includes(clean)) return 'success';
@@ -131,7 +134,7 @@ const WithdrawalDetailModal = ({ isOpen, onClose, entityData, withdrawalId }) =>
     { id: 'overview',    label: 'Overview',     icon: FiDollarSign },
     { id: 'provider',    label: 'Provider',     icon: FiUser },
     { id: 'wallet',      label: 'Wallet',       icon: FiBriefcase },
-    { id: 'bank',        label: 'Bank Details', icon: FiCreditCard },
+    { id: 'bank',        label: withdrawal.paymentMethod === 'upi' ? 'UPI Details' : 'Bank Details', icon: FiCreditCard },
     { id: 'settlement',  label: 'Settlement',   icon: FiShield },
     { id: 'transaction', label: 'Transaction',  icon: FiFileText },
     { id: 'audit',       label: 'Audit Log',    icon: FiFileText },
@@ -155,7 +158,7 @@ const WithdrawalDetailModal = ({ isOpen, onClose, entityData, withdrawalId }) =>
               </div>
               <p className="text-xs text-neutral-300 font-medium mt-0.5">
                 Ref ID: <span className="font-mono font-bold text-white">{withdrawal.transactionReference || `#${(withdrawal._id || '').slice(-6)}`}</span>
-                {withdrawal.utrNo && ` | UTR: ${withdrawal.utrNo}`}
+                {` | UTR: ${withdrawal.utrNo || 'Not available'}`}
               </p>
             </div>
           </div>
@@ -209,216 +212,298 @@ const WithdrawalDetailModal = ({ isOpen, onClose, entityData, withdrawalId }) =>
 
         {/* Modal Content Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {loading ? (
+            <Loader text="Loading withdrawal details..." />
+          ) : (
+            <>
+              {/* TAB 1: OVERVIEW */}
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
+                  <div className="p-5 bg-gradient-to-r from-teal-50 via-emerald-50 to-slate-50 rounded-2xl border border-teal-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Withdrawal Amount Requested</p>
+                      <p className="text-3xl font-black text-slate-900 mt-1">
+                        <PriceDisplay amount={withdrawal.amount || 0} />
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusChip label={(withdrawal.status || 'requested').toUpperCase()} type={getStatusType(withdrawal.status)} />
+                      <span className="text-xs font-semibold text-slate-500">
+                        Mode: <strong className="text-slate-800 font-mono uppercase">{withdrawal.paymentMethod || withdrawal.withdrawalType || 'Bank Transfer'}</strong>
+                      </span>
+                    </div>
+                  </div>
 
-          {/* TAB 1: OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div className="p-5 bg-gradient-to-r from-teal-50 via-emerald-50 to-slate-50 rounded-2xl border border-teal-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Withdrawal Amount Requested</p>
-                  <p className="text-3xl font-black text-slate-900 mt-1">
-                    <PriceDisplay amount={withdrawal.amount || 0} />
-                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <SectionCard title="Withdrawal Overview" icon={FiDollarSign}>
+                      <InfoRow label="Withdrawal ID" value={withdrawal.transactionReference || `#${(withdrawal._id || '').slice(-6)}`} mono />
+                      <InfoRow label="Requested Date" value={fmtDate(withdrawal.createdAt)} />
+                      <InfoRow label="Approved Date" value={fmtDate(withdrawal.processedAt || withdrawal.approvedAt || withdrawal.updatedAt)} />
+                      <InfoRow label="Transferred Date" value={withdrawal.completedAt ? fmtDate(withdrawal.completedAt) : 'Pending Transfer'} />
+                      <InfoRow label="UTR / Ref Number" value={withdrawal.utrNo || 'Not available'} mono />
+                    </SectionCard>
+
+                    <SectionCard title="Key Provider & Wallet Summary" icon={FiUser}>
+                      <InfoRow
+                        label="Provider Name"
+                        value={provider.name || 'Provider'}
+                        onClick={() => openInvestigationDrawer('provider', provider._id)}
+                      />
+                      <InfoRow
+                        label="Available Wallet Balance"
+                        value={<PriceDisplay amount={walletSummary.availableBalance} freeText={null} className="text-blue-600 font-bold" />}
+                        onClick={() => openInvestigationDrawer('provider_wallet', provider._id)}
+                      />
+                      <InfoRow
+                        label="Remaining Balance After Payout"
+                        badge={<span className="font-black text-slate-900"><PriceDisplay amount={walletSummary.remainingBalanceAfterWithdrawal} freeText={null} /></span>}
+                      />
+                      {withdrawal.paymentMethod === 'upi' ? (
+                        <InfoRow 
+                          label="UPI ID / VPA" 
+                          value={
+                            bank.upiId 
+                              ? bank.upiId 
+                              : (provider.bankDetails?.upiId 
+                                ? `${provider.bankDetails.upiId} (Fallback)` 
+                                : 'Destination unavailable in historical record')
+                          } 
+                          mono 
+                        />
+                      ) : (
+                        <InfoRow 
+                          label="Bank Name" 
+                          value={
+                            bank.bankName 
+                              ? bank.bankName 
+                              : (provider.bankDetails?.bankName 
+                                ? `${provider.bankDetails.bankName} (Fallback)` 
+                                : 'Destination unavailable in historical record')
+                          } 
+                        />
+                      )}
+                    </SectionCard>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <StatusChip label={(withdrawal.status || 'requested').toUpperCase()} type={getStatusType(withdrawal.status)} />
-                  <span className="text-xs font-semibold text-slate-500">
-                    Mode: <strong className="text-slate-800 font-mono uppercase">{withdrawal.paymentMethod || withdrawal.withdrawalType || 'Bank Transfer'}</strong>
-                  </span>
-                </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <SectionCard title="Withdrawal Overview" icon={FiDollarSign}>
-                  <InfoRow label="Withdrawal ID" value={withdrawal.transactionReference || `#${(withdrawal._id || '').slice(-6)}`} mono />
-                  <InfoRow label="Requested Date" value={fmtDate(withdrawal.createdAt)} />
-                  <InfoRow label="Approved Date" value={fmtDate(withdrawal.transferDate || withdrawal.processedAt || withdrawal.updatedAt)} />
-                  <InfoRow label="Transferred Date" value={withdrawal.completedAt ? fmtDate(withdrawal.completedAt) : 'Pending Transfer'} />
-                  <InfoRow label="UTR / Ref Number" value={withdrawal.utrNo || withdrawal.transactionReference || '—'} mono />
-                </SectionCard>
-
-                <SectionCard title="Key Provider & Wallet Summary" icon={FiUser}>
+              {/* TAB 2: PROVIDER */}
+              {activeTab === 'provider' && (
+                <SectionCard title="Provider Details & Profile" icon={FiUser}>
                   <InfoRow
                     label="Provider Name"
-                    value={provider.name || 'Provider'}
+                    value={provider.name || 'N/A'}
                     onClick={() => openInvestigationDrawer('provider', provider._id)}
                   />
+                  <InfoRow label="Provider ID" value={provider.providerId || provider._id} mono />
+                  <InfoRow label="Phone Number" value={provider.phone || 'N/A'} />
+                  <InfoRow label="Email Address" value={provider.email || 'N/A'} />
+                  <InfoRow 
+                    label="Rating" 
+                    value={data.providerRating || 'N/A'} 
+                  />
+                  <InfoRow
+                    label="Current Status"
+                    badge={<StatusChip label={provider.status || (provider.payoutHold ? 'HOLD ACTIVE' : 'ACTIVE')} type={provider.payoutHold ? 'danger' : 'success'} />}
+                  />
+                </SectionCard>
+              )}
+
+              {/* TAB 3: WALLET */}
+              {activeTab === 'wallet' && (
+                <SectionCard title="Provider Wallet Breakup (Single Source Backend)" icon={FiBriefcase}>
                   <InfoRow
                     label="Available Wallet Balance"
-                    badge={<span className="font-bold text-blue-700"><PriceDisplay amount={walletSummary.availableBalance} /></span>}
+                    value={<PriceDisplay amount={walletSummary.availableBalance} freeText={null} className="text-blue-600 font-bold" />}
                     onClick={() => openInvestigationDrawer('provider_wallet', provider._id)}
                   />
                   <InfoRow
-                    label="Remaining Balance After Payout"
-                    badge={<span className="font-black text-slate-900"><PriceDisplay amount={walletSummary.remainingBalanceAfterWithdrawal} /></span>}
+                    label="Pending Payout Balance"
+                    badge={<span className="font-bold text-purple-600"><PriceDisplay amount={walletSummary.pendingPayout} freeText={null} /></span>}
                   />
-                  <InfoRow label="Bank Name" value={bank.bankName || 'Bank Transfer'} />
+                  <InfoRow
+                    label="Escrow Reserve Balance"
+                    value={walletSummary.escrowBalance ? undefined : 'N/A'}
+                    badge={walletSummary.escrowBalance ? <span className="font-bold text-amber-600"><PriceDisplay amount={walletSummary.escrowBalance} freeText={null} /></span> : null}
+                  />
+                  <InfoRow
+                    label="Total Already Withdrawn"
+                    badge={<span className="font-bold text-emerald-600"><PriceDisplay amount={walletSummary.alreadyWithdrawn} freeText={null} /></span>}
+                  />
+                  <InfoRow
+                    label="Current Withdrawal Amount"
+                    badge={<span className="font-black text-rose-600">- <PriceDisplay amount={walletSummary.currentWithdrawalAmount} freeText={null} /></span>}
+                  />
+                  <InfoRow
+                    label="Remaining Balance After Withdrawal"
+                    badge={<span className="font-black text-slate-900 text-sm"><PriceDisplay amount={walletSummary.remainingBalanceAfterWithdrawal} freeText={null} /></span>}
+                  />
                 </SectionCard>
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* TAB 2: PROVIDER */}
-          {activeTab === 'provider' && (
-            <SectionCard title="Provider Details & Profile" icon={FiUser}>
-              <InfoRow
-                label="Provider Name"
-                value={provider.name || 'N/A'}
-                onClick={() => openInvestigationDrawer('provider', provider._id)}
-              />
-              <InfoRow label="Provider ID" value={provider.providerId || provider._id} mono />
-              <InfoRow label="Phone Number" value={provider.phone || 'N/A'} />
-              <InfoRow label="Email Address" value={provider.email || 'N/A'} />
-              <InfoRow label="Rating" value={provider.rating ? `★ ${provider.rating}` : 'N/A'} />
-              <InfoRow
-                label="Current Status"
-                badge={<StatusChip label={provider.status || (provider.payoutHold ? 'HOLD ACTIVE' : 'ACTIVE')} type={provider.payoutHold ? 'danger' : 'success'} />}
-              />
-            </SectionCard>
-          )}
+              {/* TAB 4: BANK DETAILS */}
+              {activeTab === 'bank' && (
+                <SectionCard title={withdrawal.paymentMethod === 'upi' ? "UPI Details" : "Beneficiary Bank Account Details"} icon={FiCreditCard}>
+                  {withdrawal.paymentMethod === 'upi' ? (
+                    <>
+                      <InfoRow 
+                        label="Account Holder Name" 
+                        value={bank.accountName || provider.bankDetails?.accountName || provider.name || 'N/A'} 
+                      />
+                      <InfoRow 
+                        label="UPI ID / VPA" 
+                        value={
+                          bank.upiId 
+                            ? bank.upiId 
+                            : (provider.bankDetails?.upiId 
+                              ? `${provider.bankDetails.upiId} (Fallback)` 
+                              : 'Destination unavailable in historical record')
+                        } 
+                        mono 
+                      />
+                      <InfoRow 
+                        label="UPI Verification Status" 
+                        value={provider.bankDetails?.upiVerificationStatus || 'N/A'} 
+                      />
+                      <InfoRow label="Payment Mode" value="UPI" />
+                    </>
+                  ) : (
+                    <>
+                      <InfoRow 
+                        label="Account Holder Name" 
+                        value={bank.accountName || provider.bankDetails?.accountName || provider.name || 'N/A'} 
+                      />
+                      <InfoRow 
+                        label="Bank Name" 
+                        value={bank.bankName || provider.bankDetails?.bankName || 'N/A'} 
+                      />
+                      <InfoRow 
+                        label="Branch Name" 
+                        value={bank.branchName || provider.bankDetails?.branchName || 'Main Branch'} 
+                      />
+                      <InfoRow 
+                        label="IFSC Code" 
+                        value={bank.ifscCode || provider.bankDetails?.ifsc || provider.bankDetails?.ifscCode || 'N/A'} 
+                        mono 
+                      />
+                      <InfoRow 
+                        label="Masked Account Number" 
+                        value={
+                          bank.accountNumber 
+                            ? maskAccNo(bank.accountNumber) 
+                            : ((provider.bankDetails?.accountNo || provider.bankDetails?.accountNumber)
+                              ? `${maskAccNo(provider.bankDetails.accountNo || provider.bankDetails.accountNumber)} (Fallback)` 
+                              : 'Destination unavailable in historical record')
+                        } 
+                        mono 
+                      />
+                      <InfoRow 
+                        label="Bank Verification Status" 
+                        value={provider.bankDetails?.bankVerificationStatus || 'N/A'} 
+                      />
+                      <InfoRow label="Payment Mode" value={(withdrawal.paymentMethod || 'banktransfer').toUpperCase()} />
+                    </>
+                  )}
+                </SectionCard>
+              )}
 
-          {/* TAB 3: WALLET */}
-          {activeTab === 'wallet' && (
-            <SectionCard title="Provider Wallet Breakup (Single Source Backend)" icon={FiBriefcase}>
-              <InfoRow
-                label="Available Wallet Balance"
-                badge={<span className="font-bold text-blue-700"><PriceDisplay amount={walletSummary.availableBalance} /></span>}
-                onClick={() => openInvestigationDrawer('provider_wallet', provider._id)}
-              />
-              <InfoRow
-                label="Pending Payout Balance"
-                badge={<span className="font-bold text-purple-600"><PriceDisplay amount={walletSummary.pendingPayout} /></span>}
-              />
-              <InfoRow
-                label="Escrow Reserve Balance"
-                badge={<span className="font-bold text-amber-600"><PriceDisplay amount={walletSummary.escrowBalance} /></span>}
-              />
-              <InfoRow
-                label="Total Already Withdrawn"
-                badge={<span className="font-bold text-emerald-600"><PriceDisplay amount={walletSummary.alreadyWithdrawn} /></span>}
-              />
-              <InfoRow
-                label="Current Withdrawal Amount"
-                badge={<span className="font-black text-rose-600">- <PriceDisplay amount={walletSummary.currentWithdrawalAmount} /></span>}
-              />
-              <InfoRow
-                label="Remaining Balance After Withdrawal"
-                badge={<span className="font-black text-slate-900 text-sm"><PriceDisplay amount={walletSummary.remainingBalanceAfterWithdrawal} /></span>}
-              />
-            </SectionCard>
-          )}
+              {/* TAB 5: SETTLEMENT */}
+              {activeTab === 'settlement' && (
+                <SectionCard title="Settlement Information" icon={FiShield}>
+                  {settlement && settlement._id ? (
+                    <>
+                      <InfoRow
+                        label="Provider Total Earnings"
+                        badge={<span className="font-bold text-slate-900"><PriceDisplay amount={settlement.providerEarnings || provider.earnings || 0} /></span>}
+                      />
+                      <InfoRow
+                        label="Settlement Amount"
+                        badge={<span className="font-black text-emerald-700"><PriceDisplay amount={settlement.settlementAmount || withdrawal.amount || 0} /></span>}
+                      />
+                      <InfoRow label="Settlement Date" value={fmtDate(settlement.settlementDate || withdrawal.updatedAt)} />
+                      <InfoRow label="Settlement Status" badge={<StatusChip label={(settlement.settlementStatus || 'settled').toUpperCase()} type={getStatusType(settlement.settlementStatus)} />} />
+                      <InfoRow
+                        label="Related Settlement Record"
+                        value={settlement._id}
+                        onClick={() => openInvestigationDrawer('settlement', settlement._id)}
+                      />
+                    </>
+                  ) : (
+                    <div className="text-center py-8 text-slate-400 italic">
+                      No settlement linked
+                    </div>
+                  )}
+                </SectionCard>
+              )}
 
-          {/* TAB 4: BANK DETAILS */}
-          {activeTab === 'bank' && (
-            <SectionCard title="Beneficiary Bank Account Details" icon={FiCreditCard}>
-              <InfoRow label="Account Holder Name" value={bank.accountName || provider.name || 'N/A'} />
-              <InfoRow label="Bank Name" value={bank.bankName || 'N/A'} />
-              <InfoRow label="Branch Name" value={bank.branchName || 'Main Branch'} />
-              <InfoRow label="IFSC Code" value={bank.ifscCode || 'N/A'} mono />
-              <InfoRow label="Masked Account Number" value={maskAccNo(bank.accountNumber)} mono />
-              <InfoRow label="Payment Mode" value={(withdrawal.paymentMethod || 'banktransfer').toUpperCase()} />
-            </SectionCard>
-          )}
+              {/* TAB 6: TRANSACTION */}
+              {activeTab === 'transaction' && (
+                <SectionCard title="Ledger Transaction Information" icon={FiFileText}>
+                  {transaction && transaction._id ? (
+                    <>
+                      <InfoRow
+                        label="Transaction ID"
+                        value={transaction.transactionId || `#${(transaction._id || '').slice(-6)}`}
+                        mono
+                        onClick={() => openInvestigationDrawer('payment', transaction._id)}
+                      />
+                      <InfoRow label="Reference / UTR Number" value={transaction.referenceNumber || transaction.bankReference || withdrawal.utrNo || 'N/A'} mono />
+                      <InfoRow
+                        label="Transaction Amount"
+                        badge={<span className="font-black text-slate-900"><PriceDisplay amount={transaction.amount || withdrawal.amount || 0} /></span>}
+                      />
+                      <InfoRow label="Transaction Status" badge={<StatusChip label={(transaction.paymentStatus || transaction.status || withdrawal.status || 'completed').toUpperCase()} type={getStatusType(transaction.paymentStatus || transaction.status || withdrawal.status)} />} />
+                      <InfoRow label="Created Date" value={fmtDate(transaction.createdAt || withdrawal.createdAt)} />
+                    </>
+                  ) : (
+                    <div className="text-center py-8 text-slate-400 italic">
+                      No transaction linked
+                    </div>
+                  )}
+                </SectionCard>
+              )}
 
-          {/* TAB 5: SETTLEMENT */}
-          {activeTab === 'settlement' && (
-            <SectionCard title="Settlement Information" icon={FiShield}>
-              <InfoRow
-                label="Provider Total Earnings"
-                badge={<span className="font-bold text-slate-900"><PriceDisplay amount={settlement.providerEarnings || provider.earnings || 0} /></span>}
-              />
-              <InfoRow
-                label="Platform Commission"
-                badge={<span className="font-bold text-rose-600"><PriceDisplay amount={settlement.platformCommission || 0} /></span>}
-              />
-              <InfoRow
-                label="Settlement Amount"
-                badge={<span className="font-black text-emerald-700"><PriceDisplay amount={settlement.settlementAmount || withdrawal.amount || 0} /></span>}
-              />
-              <InfoRow label="Settlement Date" value={fmtDate(settlement.settlementDate || withdrawal.updatedAt)} />
-              <InfoRow label="Settlement Status" badge={<StatusChip label={(settlement.settlementStatus || 'completed').toUpperCase()} type="success" />} />
-              <InfoRow
-                label="Related Settlement Record"
-                value={settlement._id || 'Linked'}
-                onClick={() => openInvestigationDrawer('settlement', settlement._id || withdrawal._id)}
-              />
-            </SectionCard>
-          )}
+              {/* TAB 7: AUDIT LOG */}
+              {activeTab === 'audit' && (
+                <SectionCard title="Audit History & Admin Actions" icon={FiFileText}>
+                  <InfoRow label="Requested By" value={audit.requestedBy || provider.name || 'Provider'} />
+                  <InfoRow label="Approved By" value={audit.approvedBy || 'Admin'} />
+                  {audit.rejectedBy && <InfoRow label="Rejected By" value={audit.rejectedBy} />}
+                  <InfoRow label="Processed By" value={audit.processedBy || 'System Administrator'} />
+                  <InfoRow label="Admin Remark / Reason" value={audit.reason || 'Standard withdrawal request processing.'} />
+                  <InfoRow label="Audit Timestamp" value={fmtDate(audit.timestamp || withdrawal.updatedAt)} />
+                </SectionCard>
+              )}
 
-          {/* TAB 6: TRANSACTION */}
-          {activeTab === 'transaction' && (
-            <SectionCard title="Ledger Transaction Information" icon={FiFileText}>
-              <InfoRow
-                label="Transaction ID"
-                value={transaction.transactionId || withdrawal.transactionReference || `#${(withdrawal._id || '').slice(-6)}`}
-                mono
-                onClick={() => openInvestigationDrawer('payment', transaction._id || withdrawal._id)}
-              />
-              <InfoRow label="Reference / UTR Number" value={transaction.referenceNumber || withdrawal.utrNo || 'N/A'} mono />
-              <InfoRow
-                label="Transaction Amount"
-                badge={<span className="font-black text-slate-900"><PriceDisplay amount={transaction.amount || withdrawal.amount || 0} /></span>}
-              />
-              <InfoRow label="Transaction Status" badge={<StatusChip label={(transaction.status || withdrawal.status || 'completed').toUpperCase()} type={getStatusType(withdrawal.status)} />} />
-              <InfoRow label="Created Date" value={fmtDate(transaction.createdAt || withdrawal.createdAt)} />
-            </SectionCard>
-          )}
-
-          {/* TAB 7: AUDIT LOG */}
-          {activeTab === 'audit' && (
-            <SectionCard title="Audit History & Admin Actions" icon={FiFileText}>
-              <InfoRow label="Requested By" value={audit.requestedBy || provider.name || 'Provider'} />
-              <InfoRow label="Approved By" value={audit.approvedBy || 'Admin'} />
-              {audit.rejectedBy && <InfoRow label="Rejected By" value={audit.rejectedBy} />}
-              <InfoRow label="Processed By" value={audit.processedBy || 'System Administrator'} />
-              <InfoRow label="Admin Remark / Reason" value={audit.reason || 'Standard withdrawal request processing.'} />
-              <InfoRow label="Audit Timestamp" value={fmtDate(audit.timestamp || withdrawal.updatedAt)} />
-            </SectionCard>
-          )}
-
-          {/* TAB 8: TIMELINE */}
-          {activeTab === 'timeline' && (
-            <SectionCard title="Withdrawal Request Lifecycle" icon={FiClock}>
-              <div className="space-y-4 text-xs">
-                <div className="flex gap-3">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-bold text-slate-800">1. Requested</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{fmtDate(withdrawal.createdAt)}</p>
+              {/* TAB 8: TIMELINE */}
+              {activeTab === 'timeline' && (
+                <SectionCard title="Withdrawal Request Lifecycle" icon={FiClock}>
+                  <div className="space-y-4 relative before:absolute before:top-2 before:bottom-2 before:left-[15px] before:w-0.5 before:bg-slate-200">
+                    {(data.timeline || []).map((item, idx) => {
+                      const done = item.status === 'completed';
+                      const current = item.status === 'current';
+                      return (
+                        <div key={idx} className="flex gap-4 relative items-start">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 bg-white z-10 font-bold text-[10px] shrink-0 ${
+                            done ? 'border-teal-500 text-teal-600' : (current ? 'border-amber-500 text-amber-600 animate-pulse' : 'border-slate-200 text-slate-400')
+                          }`}>
+                            {done ? '✓' : idx + 1}
+                          </div>
+                          <div className="flex-1 bg-white p-3.5 rounded-xl border border-slate-100 shadow-2xs">
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-slate-800 text-xs">{item.title}</span>
+                              {item.time && <span className="text-[10px] text-slate-400 font-medium">{item.time}</span>}
+                            </div>
+                            {item.description && <p className="text-[11px] text-slate-500 mt-1 font-medium">{item.description}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-bold text-slate-800">2. Reviewed</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{fmtDate(withdrawal.updatedAt || withdrawal.createdAt)}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className={`w-3 h-3 rounded-full ${withdrawal.status === 'rejected' ? 'bg-rose-500' : 'bg-emerald-500'} mt-0.5 shrink-0`} />
-                  <div>
-                    <p className="font-bold text-slate-800">3. {withdrawal.status === 'rejected' ? 'Rejected' : 'Approved'}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{fmtDate(withdrawal.processedAt || withdrawal.updatedAt)}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className={`w-3 h-3 rounded-full ${['transferred', 'completed'].includes(withdrawal.status) ? 'bg-emerald-500' : 'bg-slate-300'} mt-0.5 shrink-0`} />
-                  <div>
-                    <p className="font-bold text-slate-800">4. Transferred</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{withdrawal.transferDate ? fmtDate(withdrawal.transferDate) : 'Pending Bank Transfer'}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className={`w-3 h-3 rounded-full ${withdrawal.status === 'completed' ? 'bg-emerald-500' : 'bg-slate-300'} mt-0.5 shrink-0`} />
-                  <div>
-                    <p className="font-bold text-slate-800">5. Completed</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{withdrawal.completedAt ? fmtDate(withdrawal.completedAt) : 'Pending Confirmation'}</p>
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
+                </SectionCard>
+              )}
+            </>
           )}
-
         </div>
 
         {/* Modal Footer */}

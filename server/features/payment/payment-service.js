@@ -59,6 +59,16 @@ const safeCommit = async (session) => {
   }
 };
 
+const safeEnd = (session) => {
+  if (session) {
+    try {
+      session.endSession();
+    } catch (err) {
+      console.warn("[Transaction] end session failed:", err.message);
+    }
+  }
+};
+
 const syncEarningsStatus = async (providerId) => {
   try {
     const [earningsStats, withdrawalsStats, deductionsStats] = await Promise.all([
@@ -107,7 +117,7 @@ const syncEarningsStatus = async (providerId) => {
       const amount = stat.totalNet || 0;
       if (stat._id === 'paid' || stat._id === 'withdrawn') {
         totalWithdrawn += amount;
-      } else if (stat._id === 'held') {
+      } else if (stat._id === 'held' || stat._id === 'underreview' || stat._id === 'pendingrelease') {
         heldBalance += amount;
       } else if (stat._id === 'pending_withdrawal') {
         pendingWithdrawal += amount;
@@ -123,7 +133,7 @@ const syncEarningsStatus = async (providerId) => {
       const amount = stat.totalAmount || 0;
       if (stat._id === 'completed' || stat._id === 'transferred') {
         totalCompletedWithdrawals += amount;
-      } else if (['requested', 'processing', 'under_review', 'approved'].includes(stat._id)) {
+      } else if (['requested', 'processing', 'under_review', 'underreview', 'approved'].includes(stat._id)) {
         totalPendingWithdrawals += amount;
       }
     });
@@ -903,17 +913,21 @@ class PaymentService {
         return res.status(403).json({ success: false, error: "Withdrawal locked due to active dispute. Please resolve it first." });
       }
 
-      // WITHDRAWAL COOLDOWN: 24 hours (Task 10 — use immutable PaymentRecord timestamp)
-      const lastPaymentRecord = await PaymentRecord.findOne(
-        { provider: new mongoose.Types.ObjectId(providerId) },
-        { createdAt: 1 },
-        { sort: { createdAt: -1 } }
-      ).lean();
-      if (lastPaymentRecord) {
-        const hoursSinceLast = (new Date() - new Date(lastPaymentRecord.createdAt)) / (1000 * 60 * 60);
-        if (hoursSinceLast < 24) {
-          const hoursRemaining = Math.ceil(24 - hoursSinceLast);
-          return res.status(403).json({ success: false, error: `Please wait ${hoursRemaining} hour(s) before making another withdrawal request.` });
+      // WITHDRAWAL COOLDOWN: configurable hours (admin-controlled via system settings)
+      const cooldownEnabled = settings?.payoutSettings?.safetyCooldownEnabled ?? true;
+      if (cooldownEnabled) {
+        const cooldownHours = settings?.payoutSettings?.safetyCooldownHours ?? 24;
+        const lastPaymentRecord = await PaymentRecord.findOne(
+          { provider: new mongoose.Types.ObjectId(providerId) },
+          { createdAt: 1 },
+          { sort: { createdAt: -1 } }
+        ).lean();
+        if (lastPaymentRecord) {
+          const hoursSinceLast = (new Date() - new Date(lastPaymentRecord.createdAt)) / (1000 * 60 * 60);
+          if (hoursSinceLast < cooldownHours) {
+            const hoursRemaining = Math.ceil(cooldownHours - hoursSinceLast);
+            return res.status(403).json({ success: false, error: `Please wait ${hoursRemaining} hour(s) before making another withdrawal request.` });
+          }
         }
       }
 
@@ -969,12 +983,16 @@ class PaymentService {
           const balanceAfter = provider.wallet.availableBalance;
           provider.wallet.lastUpdated = new Date();
 
+          const preferred = provider.bankDetails?.preferredMethod || 'bank_account';
           const paymentRecord = new PaymentRecord({
             provider: providerId,
             amount,
             netAmount: amount,
-            paymentMethod: "bank_transfer",
-            paymentDetails: {
+            paymentMethod: preferred === 'upi' ? 'upi' : 'banktransfer',
+            paymentDetails: preferred === 'upi' ? {
+              upiId: provider.bankDetails.upiId,
+              accountName: provider.bankDetails.accountName || provider.name,
+            } : {
               accountNumber: provider.bankDetails.accountNo,
               accountName: provider.bankDetails.accountName,
               ifscCode: provider.bankDetails.ifsc,
@@ -1243,7 +1261,7 @@ class PaymentService {
 
       if (status) {
         if (status === 'held') {
-          filter.status = { $in: ['held', 'under_review', 'pending_release'] };
+          filter.status = { $in: ['held', 'underreview', 'pendingrelease'] };
         } else {
           filter.status = status;
         }
@@ -1327,7 +1345,7 @@ class PaymentService {
                 "Active customer dispute under admin review",
                 {
                   $cond: [
-                    { $in: ["$status", ["held", "under_review", "pending_release"]] },
+                    { $in: ["$status", ["held", "underreview", "pendingrelease"]] },
                     {
                       $concat: [
                         { $toString: { $ifNull: ["$systemSettings.commissionSettings.payoutHoldHours", 48] } },
@@ -1356,7 +1374,7 @@ class PaymentService {
                     "held",
                     {
                       $cond: [
-                        { $in: ["$status", ["held", "under_review", "pending_release"]] },
+                        { $in: ["$status", ["held", "underreview", "pendingrelease"]] },
                         "held",
                         "$status"
                       ]
@@ -3414,7 +3432,7 @@ class PaymentService {
           const booking = earning.booking;
           if (booking) {
             const bookingId = booking._id;
-            if (booking.disputeRaised || booking.disputeStatus === 'pending' || booking.disputeStatus === 'under_review') {
+            if (booking.disputeRaised || booking.disputeStatus === 'pending' || booking.disputeStatus === 'underreview') {
               console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${bookingId}`);
               continue;
             }
@@ -3761,6 +3779,27 @@ class PaymentService {
         return res.status(400).json({ success: false, message: `Insufficient provider balance. Available: ₹${provider.wallet.availableBalance}` });
       }
 
+      // Resolve & verify payout details from database authoritative source
+      const bank = provider.bankDetails || {};
+      const isVerified = bank.bankVerificationStatus === 'verified' && bank.verified && bank.payoutEnabled;
+      if (!isVerified) {
+        await safeAbort(session); safeEnd(session);
+        return res.status(400).json({ success: false, message: "Provider payout configuration is not verified/enabled." });
+      }
+
+      const isUpi = bank.preferredMethod === 'upi';
+      if (isUpi ? !bank.upiId : (!bank.accountNo || !bank.ifsc)) {
+        await safeAbort(session); safeEnd(session);
+        return res.status(400).json({ success: false, message: "Preferred payout details are missing." });
+      }
+
+      const resolvedMethod = isUpi
+        ? 'upi'
+        : (['banktransfer', 'neft', 'rtgs', 'imps', 'other'].includes(paymentMethod) ? paymentMethod : 'banktransfer');
+      const resolvedDetails = isUpi
+        ? { upiId: bank.upiId, accountName: bank.accountName || provider.name }
+        : { accountNumber: bank.accountNo, accountName: bank.accountName || provider.name, ifscCode: bank.ifsc, bankName: bank.bankName || 'N/A' };
+
       // Deduct available balance and increment total withdrawn
       provider.wallet.availableBalance -= amount;
       provider.wallet.totalWithdrawn += amount;
@@ -3772,20 +3811,12 @@ class PaymentService {
         await provider.save();
       }
 
-      const finalMethod = ['bank_transfer', 'upi', 'neft', 'rtgs', 'other'].includes(paymentMethod) ? paymentMethod : 'bank_transfer';
-
       const paymentRecord = new PaymentRecord({
         provider: provider._id,
         amount,
         netAmount: amount,
-        paymentMethod: finalMethod,
-        paymentDetails: {
-          accountNumber: provider.bankDetails?.accountNo || '',
-          accountName: provider.bankDetails?.accountName || provider.name,
-          ifscCode: provider.bankDetails?.ifsc || '',
-          upiId: provider.bankDetails?.upiId || '',
-          bankName: provider.bankDetails?.bankName || '',
-        },
+        paymentMethod: resolvedMethod,
+        paymentDetails: resolvedDetails,
         status: 'completed',
         utrNo: utrNo || '',
         transferDate: transferDate ? new Date(transferDate) : new Date(),

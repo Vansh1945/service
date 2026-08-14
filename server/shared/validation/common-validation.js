@@ -143,7 +143,7 @@ const releaseHeldRewardSchema = z.object({
 
 // Surge Schemas
 const createSurgeRuleSchema = z.object({
-  chargeType: z.enum(['night_charge', 'festive_charge', 'rain_charge', 'high_demand']),
+  chargeType: z.enum(['rain', 'traffic', 'night', 'demand', 'festival', 'custom', 'visiting', 'platform']),
   scope: z.enum(['global', 'zone']),
   zoneId: z.union([objectIdSchema, z.literal('')]).optional().nullable(),
   mode: z.enum(['flat', 'percentage']),

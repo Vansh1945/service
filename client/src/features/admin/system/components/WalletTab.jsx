@@ -25,14 +25,6 @@ const WalletTab = ({ systemSettings, handleNestedChange }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SettingInput
-          label="Minimum Payout Request (INR)"
-          value={systemSettings.walletSettings?.minWithdrawal || 500}
-          onChange={(e) => handleNestedChange('walletSettings', 'minWithdrawal', Number(e.target.value))}
-          type="number"
-          min="1"
-          description="Minimum amount required to allow a provider to request payout withdrawals."
-        />
         <ToggleSwitch
           label="Force Refund to Wallet Only"
           description="Global override forcing all booking refunds strictly to customer wallet, bypassing payment gateways."
@@ -124,13 +116,16 @@ const WalletTab = ({ systemSettings, handleNestedChange }) => {
             description="Maximum single transaction withdrawal limit permitted per request."
           />
 
-          <SettingInput
-            label={`Settlement Cut-off Time (${systemSettings.timeFormat || '12h'} format)`}
-            value={systemSettings.payoutSettings?.settlementTime || '17:00'}
-            onChange={(e) => handleNestedChange('payoutSettings', 'settlementTime', e.target.value)}
-            type="text"
-            description={`Daily operating cut-off time for payout batch settlement. Preview: ${formatTime(systemSettings.payoutSettings?.settlementTime || '17:00')} (Formatted per ${systemSettings.timeFormat || '12h'} System Setting).`}
-          />
+          {(systemSettings.payoutSettings?.mode || 'manual') !== 'manual' && (
+            <SettingInput
+              label="Settlement Cut-off Time (24h)"
+              value={systemSettings.payoutSettings?.settlementTime || '17:00'}
+              onChange={(e) => handleNestedChange('payoutSettings', 'settlementTime', e.target.value)}
+              type="text"
+              placeholder="HH:MM (e.g. 17:00)"
+              description="Daily cut-off time for automated payout batch settlement in 24-hour format."
+            />
+          )}
 
           <ToggleSwitch
             label="Auto Retry Failed Payouts"
@@ -139,6 +134,24 @@ const WalletTab = ({ systemSettings, handleNestedChange }) => {
             onChange={(val) => handleNestedChange('payoutSettings', 'retryFailedPayout', val)}
           />
 
+          <ToggleSwitch
+            label="Enable Withdrawal Safety Cooldown"
+            description="Enforce a waiting period cooldown between successive provider withdrawal requests."
+            checked={systemSettings.payoutSettings?.safetyCooldownEnabled ?? true}
+            onChange={(val) => handleNestedChange('payoutSettings', 'safetyCooldownEnabled', val)}
+          />
+
+          {(systemSettings.payoutSettings?.safetyCooldownEnabled ?? true) && (
+            <SettingInput
+              label="Cooldown Duration (Hours)"
+              value={systemSettings.payoutSettings?.safetyCooldownHours ?? 24}
+              onChange={(e) => handleNestedChange('payoutSettings', 'safetyCooldownHours', Number(e.target.value))}
+              type="number"
+              min="1"
+              max="168"
+              description="Minimum hours a provider must wait before submitting another withdrawal request."
+            />
+          )}
           <SettingInput
             label="Retry Attempts Count"
             value={systemSettings.payoutSettings?.retryCount ?? 3}

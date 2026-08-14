@@ -18,19 +18,39 @@ import { useAuth } from '../../../context/auth';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
+const getDateRangeForGroup = (val) => {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  if (val === 'week') {
+    const day = today.getDay();
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day + (day === 0 ? -6 : 1));
+    return { startDate: monday.toISOString().split('T')[0], endDate: todayStr };
+  }
+  if (val === 'year') {
+    const oneYearAgo = new Date(today);
+    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    return { startDate: oneYearAgo.toISOString().split('T')[0], endDate: todayStr };
+  }
+  // default: month → last 1 month to today
+  const oneMonthAgo = new Date(today);
+  const d = today.getDate();
+  oneMonthAgo.setMonth(today.getMonth() - 1);
+  // Handle overflow (e.g. 31 March → clamp to last day of Feb)
+  if (oneMonthAgo.getDate() !== d) oneMonthAgo.setDate(0);
+  return { startDate: oneMonthAgo.toISOString().split('T')[0], endDate: todayStr };
+};
+
 const AdminEarningReports = () => {
   const { API, _token, showToast } = useAuth();
   const { getComputedDateRange, getMergedQuery, resetGlobalFilters, openInvestigationDrawer, reset } = useAdminFilter();
+  const isManualDate = React.useRef(false); // true when user manually edited the date inputs
   const [loading, setLoading] = useState(false);
 
   const [activeReport, setActiveReport] = useState(null);
-  const [dateRange, setDateRange] = useState({
-    startDate: '',
-    endDate: ''
-  });
+  const [groupBy, setGroupBy] = useState('month');
+  const [dateRange, setDateRange] = useState(() => getDateRangeForGroup('month'));
   const [providerId, setProviderId] = useState('');
   const [customerId, setCustomerId] = useState('');
-  const [groupBy, setGroupBy] = useState('month');
   const [dateError, setDateError] = useState('');
 
   const reports = [
@@ -125,6 +145,7 @@ const AdminEarningReports = () => {
   };
 
   const handleDateChange = (field, value) => {
+    isManualDate.current = true; // user is manually overriding — stop syncing global dates
     setDateRange(prev => ({ ...prev, [field]: value }));
   };
 
@@ -246,14 +267,12 @@ const AdminEarningReports = () => {
     }
   };
 
-  // Reactively default dateRange to global computed dates on change
+  // Sync local dates with global filter date range (year/month/quarter)
+  // only when the user has NOT manually edited the date inputs
   const globalDates = getComputedDateRange();
   useEffect(() => {
-    if (globalDates.startDate && globalDates.endDate) {
-      setDateRange({
-        startDate: globalDates.startDate,
-        endDate: globalDates.endDate
-      });
+    if (!isManualDate.current && globalDates.startDate && globalDates.endDate) {
+      setDateRange({ startDate: globalDates.startDate, endDate: globalDates.endDate });
     }
   }, [globalDates.startDate, globalDates.endDate]);
 
@@ -262,42 +281,20 @@ const AdminEarningReports = () => {
     validateDateRange();
   }, [dateRange.startDate, dateRange.endDate]);
 
+  // When groupBy changes, recalculate dates from local helper (clears manual override)
   const handleGroupByChange = (val) => {
+    isManualDate.current = false;
     setGroupBy(val);
-    const today = new Date();
-    if (val === 'week') {
-      const day = today.getDay();
-      const diffToMonday = today.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(today.getFullYear(), today.getMonth(), diffToMonday);
-      setDateRange({
-        startDate: monday.toISOString().split('T')[0],
-        endDate: today.toISOString().split('T')[0]
-      });
-    } else if (val === 'month') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      setDateRange({
-        startDate: firstDay.toISOString().split('T')[0],
-        endDate: today.toISOString().split('T')[0]
-      });
-    } else if (val === 'year') {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(today.getFullYear() - 1);
-      setDateRange({
-        startDate: oneYearAgo.toISOString().split('T')[0],
-        endDate: today.toISOString().split('T')[0]
-      });
-    }
+    setDateRange(getDateRangeForGroup(val));
   };
 
   const clearFilters = () => {
     reset(() => {
+      isManualDate.current = false; // allow global dates to flow in again after clear
       setProviderId('');
       setCustomerId('');
       setGroupBy('month');
-      setDateRange({
-        startDate: globalDates.startDate || '',
-        endDate: globalDates.endDate || ''
-      });
+      setDateRange(getDateRangeForGroup('month'));
       setDateError('');
       showToast?.('Filters cleared', 'info');
     });

@@ -1366,7 +1366,7 @@ const ProviderBooking = () => {
               <div className="w-full">
                 {isAccepted ? (
                   <button
-                    disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
+                    disabled={actionLoading.id !== null}
                     onClick={() => handleBookingAction(booking, 'start')}
                     className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all disabled:bg-neutral-300 disabled:cursor-not-allowed"
                   >
@@ -2242,7 +2242,7 @@ const ProviderBooking = () => {
               )}
               {(selectedBooking.status === 'accepted' || selectedBooking.status === 'assigned') && (
                 <button
-                  disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}
+                  disabled={actionLoading.id !== null}
                   onClick={() => handleBookingAction(selectedBooking, 'start')}
                   className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5 disabled:opacity-50"
                 >
