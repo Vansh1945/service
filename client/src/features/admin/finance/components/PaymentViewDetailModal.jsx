@@ -14,7 +14,7 @@ import * as TransactionService from '../../../../services/TransactionService';
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper utilities
 // ─────────────────────────────────────────────────────────────────────────────
-import { fmtDate, fmtDateOnly } from '../../../../utils/format';
+import { fmtDate, fmtDateOnly, fmtDateTime, formatBankName } from '../../../../utils/format';
 
 const AmtCell = ({ amount, colorClass = 'text-slate-900' }) => (
   <span className={`font-black text-sm ${colorClass}`}>
@@ -126,7 +126,9 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
 
   const rawData = initialData || entityData;
   const paymentType = (details?.paymentType || (rawData?.paymentMethod || 'online')).toLowerCase();
-  const hasVerification = Boolean(details?.paymentVerification || details?.booking?.paymentVerification);
+  const pvData = details?.paymentVerification || details?.booking?.paymentVerification;
+  const isActualQR = Boolean(pvData?.method === 'qr_code' || pvData?.qrCodeId || details?.paymentMethod === 'qr_code' || details?.paymentMethod === 'upi_qr');
+  const hasVerification = Boolean(paymentType === 'cash' || isActualQR);
   const tabs = buildTabs(paymentType, hasVerification);
 
   // ── Load enriched payment details on modal open ───────────────────────────
@@ -193,23 +195,36 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
       ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
       : 'bg-amber-500/20 text-amber-300 border-amber-500/30';
 
+  const nav = {
+    booking: (id) => navigate(`/admin/bookings?search=${encodeURIComponent(id || '')}&openDetail=true`),
+    payment: (id) => navigate(`/admin/payments?search=${encodeURIComponent(id || '')}&openDetail=true`),
+    transaction: (id) => navigate(`/admin/transactions?search=${encodeURIComponent(id || '')}&openDetail=true`),
+    customer: (name) => navigate(`/admin/customers?search=${encodeURIComponent(name || '')}&openDetail=true`),
+    provider: (name) => navigate(`/admin/approve-providers?search=${encodeURIComponent(name || '')}&openDetail=true`),
+    providerEarnings: () => navigate('/admin/provider-earnings'),
+    complaint: () => navigate('/admin/complaints'),
+    settlement: () => navigate('/admin/settlements'),
+    refund: () => navigate('/admin/refunds'),
+    payout: (id) => navigate(`/admin/payout?search=${encodeURIComponent(id || '')}&openDetail=true`),
+  };
+
   const copyToClipboard = (text, field) => {
-    if (!text || text === '—') return;
+    if (!text || text === '—' || text === 'N/A') return;
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };
 
   const CopyBtn = ({ text, field }) => (
-    <button onClick={() => copyToClipboard(text, field)} className="ml-1.5 text-slate-400 hover:text-white transition-colors inline-flex" title="Copy">
+    <button onClick={() => copyToClipboard(text, field)} className="ml-1.5 text-slate-400 hover:text-white transition-colors inline-flex cursor-pointer" title="Copy">
       {copiedField === field ? <FiCheck className="w-3.5 h-3.5 text-emerald-400" /> : <FiCopy className="w-3.5 h-3.5" />}
     </button>
   );
 
-  const EntityLink = ({ label, path, className = '' }) => (
+  const EntityLink = ({ label, onClick, className = '' }) => (
     <button
-      onClick={() => navigate(path)}
-      className={`inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold hover:underline text-xs ${className}`}
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold hover:underline text-xs cursor-pointer ${className}`}
     >
       {label} <FiExternalLink className="w-3 h-3" />
     </button>
@@ -300,56 +315,59 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                       <p className="text-xl font-black text-neutral-900 mt-1"><PriceDisplay amount={d.totalAmount || 0} /></p>
                     </div>
                     <div className="p-4 bg-blue-50 rounded-2xl text-center border border-blue-100">
-                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Online Paid</p>
-                      <p className="text-xl font-black text-blue-800 mt-1"><PriceDisplay amount={d.onlinePaid || 0} /></p>
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Actually Paid</p>
+                      <p className="text-xl font-black text-blue-800 mt-1"><PriceDisplay amount={d.finalPaid != null ? d.finalPaid : (d.totalAmount || 0)} /></p>
                     </div>
                     <div className="p-4 bg-amber-50 rounded-2xl text-center border border-amber-100">
                       <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Wallet Paid</p>
                       <p className="text-xl font-black text-amber-800 mt-1"><PriceDisplay amount={d.walletPaid || 0} /></p>
                     </div>
                     <div className="p-4 bg-emerald-50 rounded-2xl text-center border border-emerald-100">
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Final Paid</p>
-                      <p className="text-xl font-black text-emerald-800 mt-1"><PriceDisplay amount={d.finalPaid || d.totalAmount || 0} /></p>
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Cash / QR Paid</p>
+                      <p className="text-xl font-black text-emerald-800 mt-1">
+                        <PriceDisplay amount={d.paymentType === 'cash' ? (d.cashPaid || d.finalPaid || 0) : (d.onlinePaid || d.finalPaid || 0)} />
+                      </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <SectionCard title="Payment Summary" icon={FiDollarSign}>
                       <InfoRow label="Payment Status" badge={
-                        <StatusChip label={d.paymentStatus || '—'} type={['success', 'completed', 'paid'].includes(payStatus) ? 'success' : payStatus === 'failed' ? 'danger' : 'warning'} />
+                        <StatusChip label={d.paymentStatus || 'Pending'} type={['success', 'completed', 'paid'].includes(payStatus) ? 'success' : payStatus === 'failed' ? 'danger' : 'warning'} />
                       } />
                       <InfoRow label="Capture Status" badge={
-                        <StatusChip label={d.captureStatus || '—'} type={d.captureStatus === 'captured' ? 'success' : d.captureStatus === 'failed' ? 'danger' : 'warning'} />
+                        <StatusChip label={d.captureStatus || (['success', 'completed', 'paid'].includes(payStatus) ? 'Captured' : 'Pending')} type={d.captureStatus === 'captured' || ['success', 'completed', 'paid'].includes(payStatus) ? 'success' : d.captureStatus === 'failed' ? 'danger' : 'warning'} />
                       } />
-                      <InfoRow label="Settlement Status" badge={
-                        <StatusChip label={d.settlementStatus || '—'} type={['settled', 'completed'].includes(d.settlementStatus) ? 'success' : d.settlementStatus === 'failed' ? 'danger' : 'default'} />
-                      } />
-                      <InfoRow label="Payment Type" badge={<StatusChip label={d.paymentType || '—'} type="info" />} />
-                      <InfoRow label="Payment Method" value={d.paymentMethod || '—'} />
+                      <InfoRow label="Settlement Status" badge={(() => {
+                        const st = (d.settlementStatus || d.settlement?.settlementStatus || 'pending').toLowerCase();
+                        return <StatusChip label={st.toUpperCase()} type={st === 'settled' ? 'success' : st === 'processing' ? 'warning' : 'default'} />;
+                      })()} />
+                      <InfoRow label="Payment Type" badge={<StatusChip label={d.paymentType || 'Online'} type="info" />} />
+                      <InfoRow label="Payment Method" value={d.paymentMethod || 'Online'} />
                       <InfoRow label="Gateway" value={
-                        d.paymentType === 'cash' ? 'COD Direct' :
+                        d.paymentType === 'cash' ? 'N/A' :
                           d.paymentType === 'wallet' ? 'Platform Wallet' :
                             d.paymentType === 'mixed' ? 'Razorpay + Wallet' : 'Razorpay'
                       } />
                     </SectionCard>
 
                     <SectionCard title="Financial Breakup" icon={FiTrendingUp}>
-                      <InfoRow label="Subtotal" value={<AmtCell amount={d.subtotal || 0} />} />
-                      <InfoRow label="Discount" value={d.discount > 0 ? <AmtCell amount={d.discount} colorClass="text-rose-600" /> : '—'} />
+                      <InfoRow label="Subtotal" value={<AmtCell amount={d.subtotal || d.totalAmount || 0} />} />
+                      <InfoRow label="Discount" value={d.discount > 0 ? <AmtCell amount={d.discount} colorClass="text-rose-600" /> : '₹0'} />
                       {d.coupon?.code && <InfoRow label="Coupon" value={<span className="px-2 py-0.5 bg-green-100 text-green-800 rounded font-bold text-[11px]">{d.coupon.code}</span>} />}
                       <InfoRow label="Total Amount" value={<AmtCell amount={d.totalAmount || 0} />} />
-                      <InfoRow label="Commission" value={d.commissionAmount > 0 ? <AmtCell amount={d.commissionAmount} colorClass="text-purple-700" /> : '—'} />
-                      <InfoRow label="Provider Earnings" value={d.providerEarnings > 0 ? <AmtCell amount={d.providerEarnings} colorClass="text-blue-700" /> : '—'} />
+                      <InfoRow label="Platform Commission" value={<AmtCell amount={d.commissionAmount || 0} colorClass="text-purple-700" />} />
+                      <InfoRow label="Provider Earnings" value={<AmtCell amount={d.providerEarnings || 0} colorClass="text-blue-700" />} />
                     </SectionCard>
                   </div>
 
                   <SectionCard title="Payment IDs" icon={FiFileText} iconColor="text-indigo-600">
-                    <InfoRow label="Transaction ID" value={d.transactionId || d._id || '—'} mono />
-                    <InfoRow label="Razorpay Payment ID" value={d.razorpayPaymentId || '—'} mono />
-                    <InfoRow label="Razorpay Order ID" value={d.razorpayOrderId || '—'} mono />
-                    <InfoRow label="Razorpay Signature" value={d.razorpaySignature ? `${d.razorpaySignature.slice(0, 20)}…` : '—'} mono />
-                    <InfoRow label="Created At" value={fmtDate(d.createdAt)} />
-                    <InfoRow label="Updated At" value={fmtDate(d.updatedAt)} />
+                    <InfoRow label="Transaction ID" value={d.transactionId || d._id || 'N/A'} mono />
+                    <InfoRow label="Razorpay Payment ID" value={d.razorpayPaymentId || 'N/A'} mono />
+                    <InfoRow label="Razorpay Order ID" value={d.razorpayOrderId || 'N/A'} mono />
+                    <InfoRow label="Razorpay Signature" value={d.razorpaySignature ? `${d.razorpaySignature.slice(0, 20)}…` : 'N/A'} mono />
+                    <InfoRow label="Created At" value={fmtDateTime(d.createdAt)} />
+                    <InfoRow label="Updated At" value={fmtDateTime(d.updatedAt)} />
                   </SectionCard>
                 </div>
               )}
@@ -361,26 +379,34 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     <>
                       <SectionCard title="Booking Information" icon={FiBriefcase} iconColor="text-purple-600">
                         <InfoRow label="Booking ID" value={
-                          <EntityLink label={d.booking.bookingId || d.booking._id || '—'} path="/admin/bookings" />
+                          <EntityLink
+                            label={d.booking.bookingId || d.booking._id || 'N/A'}
+                            onClick={() => nav.booking(d.booking.bookingId || d.booking._id)}
+                          />
                         } />
                         <InfoRow label="Booking Status" badge={
-                          <StatusChip label={d.booking.status || '—'} type={d.booking.status === 'completed' ? 'success' : d.booking.status === 'cancelled' ? 'danger' : 'warning'} />
+                          <StatusChip label={d.booking.status || 'Pending'} type={d.booking.status === 'completed' ? 'success' : d.booking.status === 'cancelled' ? 'danger' : 'warning'} />
                         } />
                         <InfoRow label="Payment Status" badge={
-                          <StatusChip label={d.booking.paymentStatus || '—'} type={['paid', 'escrowhold'].includes(d.booking.paymentStatus) ? 'success' : 'default'} />
+                          <StatusChip label={d.booking.paymentStatus || 'Pending'} type={['paid', 'escrowhold'].includes(d.booking.paymentStatus) ? 'success' : 'default'} />
                         } />
                         <InfoRow label="Service Date" value={fmtDateOnly(d.booking.date)} />
-                        <InfoRow label="Service Time" value={d.booking.time || '—'} />
-                        <InfoRow label="Booking Notes" value={d.booking.notes || '—'} />
+                        <InfoRow label="Service Time" value={d.booking.time || 'N/A'} />
+                        <InfoRow label="Booking Notes" value={d.booking.notes || 'None'} />
                       </SectionCard>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <SectionCard title="Customer" icon={FiUser} iconColor="text-blue-600">
                           {d.customer ? (
                             <>
-                              <InfoRow label="Name" value={<EntityLink label={d.customer.name || '—'} path="/admin/users" />} />
-                              <InfoRow label="Email" value={d.customer.email || '—'} />
-                              <InfoRow label="Phone" value={d.customer.phone || '—'} />
+                              <InfoRow label="Name" value={
+                                <EntityLink
+                                  label={d.customer.name || 'Customer'}
+                                  onClick={() => nav.customer(d.customer.name)}
+                                />
+                              } />
+                              <InfoRow label="Email" value={d.customer.email || 'N/A'} />
+                              <InfoRow label="Phone" value={d.customer.phone || 'N/A'} />
                             </>
                           ) : <p className="text-xs text-slate-400">Customer data unavailable</p>}
                         </SectionCard>
@@ -388,20 +414,29 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                         <SectionCard title="Assigned Provider" icon={FiBriefcase} iconColor="text-emerald-600">
                           {d.provider ? (
                             <>
-                              <InfoRow label="Name" value={<EntityLink label={d.provider.name || '—'} path="/admin/providers" />} />
-                              <InfoRow label="Email" value={d.provider.email || '—'} />
-                              <InfoRow label="Phone" value={d.provider.phone || '—'} />
-                              <InfoRow label="Provider ID" value={d.provider.providerId || '—'} mono />
+                              <InfoRow label="Name" value={
+                                <EntityLink
+                                  label={d.provider.name || 'Provider'}
+                                  onClick={() => nav.provider(d.provider.name)}
+                                />
+                              } />
+                              <InfoRow label="Email" value={d.provider.email || 'N/A'} />
+                              <InfoRow label="Phone" value={d.provider.phone || 'N/A'} />
+                              <InfoRow label="Provider ID" value={d.provider.providerId || 'N/A'} mono />
                             </>
-                          ) : <p className="text-xs text-slate-400 italic">Provider not assigned yet</p>}
+                          ) : <p className="text-xs text-slate-400 italic">Not Assigned</p>}
                         </SectionCard>
                       </div>
 
-                      {d.booking.address && (
+                      {d.booking.address ? (
                         <SectionCard title="Service Address" icon={FiCalendar} iconColor="text-slate-600">
                           <p className="text-xs text-slate-700 leading-relaxed">
-                            {[d.booking.address.houseNumber, d.booking.address.street, d.booking.address.area, d.booking.address.city, d.booking.address.state, d.booking.address.postalCode].filter(Boolean).join(', ')}
+                            {[d.booking.address.houseNumber, d.booking.address.street, d.booking.address.area, d.booking.address.city, d.booking.address.state, d.booking.address.postalCode].filter(Boolean).join(', ') || 'N/A'}
                           </p>
+                        </SectionCard>
+                      ) : (
+                        <SectionCard title="Service Address" icon={FiCalendar} iconColor="text-slate-600">
+                          <p className="text-xs text-slate-400 italic">N/A</p>
                         </SectionCard>
                       )}
 
@@ -418,21 +453,28 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                         </SectionCard>
                       )}
 
-                      {d.booking.statusHistory?.length > 0 && (
-                        <SectionCard title="Booking Timeline" icon={FiClock}>
-                          <div className="space-y-0">
-                            {d.booking.statusHistory.map((h, i) => (
-                              <TimelineItem
-                                key={i}
-                                label={`Status: ${h.status?.toUpperCase()}`}
-                                timestamp={h.timestamp}
-                                status="done"
-                                isLast={i === d.booking.statusHistory.length - 1}
-                              />
-                            ))}
-                          </div>
-                        </SectionCard>
-                      )}
+                      {d.booking.statusHistory?.length > 0 && (() => {
+                        const dedupedTimeline = d.booking.statusHistory.filter((h, i, arr) => {
+                          if (i === 0) return true;
+                          return h.status !== arr[i - 1].status;
+                        });
+
+                        return (
+                          <SectionCard title="Booking Timeline" icon={FiClock}>
+                            <div className="space-y-0">
+                              {dedupedTimeline.map((h, i) => (
+                                <TimelineItem
+                                  key={i}
+                                  label={`Status: ${h.status?.toUpperCase()}`}
+                                  timestamp={h.timestamp}
+                                  status="done"
+                                  isLast={i === dedupedTimeline.length - 1}
+                                />
+                              ))}
+                            </div>
+                          </SectionCard>
+                        );
+                      })()}
                     </>
                   ) : (
                     <div className="py-16 text-center text-slate-400">
@@ -455,51 +497,64 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   {!gatewayLoading && (
                     <>
                       <SectionCard title="Razorpay Gateway" icon={FiZap} iconColor="text-blue-500">
-                        <InfoRow label="Razorpay Payment ID" value={d.razorpayPaymentId || gatewayData?.paymentId || '—'} mono />
-                        <InfoRow label="Razorpay Order ID" value={d.razorpayOrderId || gatewayData?.orderId || '—'} mono />
+                        <InfoRow label="Razorpay Payment ID" value={d.razorpayPaymentId || gatewayData?.paymentId || 'N/A'} mono />
+                        <InfoRow label="Razorpay Order ID" value={d.razorpayOrderId || gatewayData?.orderId || 'N/A'} mono />
                         <InfoRow label="Capture Status" badge={
-                          <StatusChip label={gatewayData?.status || d.paymentStatus || '—'} type="info" />
+                          <StatusChip label={gatewayData?.status || d.paymentStatus || 'Captured'} type="info" />
                         } />
                         <InfoRow label="Authorized" badge={
-                          <StatusChip label={gatewayData?.livePayment?.status === 'captured' ? 'Yes' : 'No'} type={gatewayData?.livePayment?.status === 'captured' ? 'success' : 'warning'} />
+                          <StatusChip label={gatewayData?.livePayment?.status === 'captured' || ['success', 'completed', 'paid'].includes(payStatus) ? 'Yes' : 'No'} type={gatewayData?.livePayment?.status === 'captured' || ['success', 'completed', 'paid'].includes(payStatus) ? 'success' : 'warning'} />
                         } />
                         <InfoRow label="Signature Verified" badge={
-                          <StatusChip label={gatewayData?.signatureVerified ? 'Verified' : 'Unverified'} type={gatewayData?.signatureVerified ? 'success' : 'danger'} />
+                          <StatusChip label={d.razorpaySignature || gatewayData?.signatureVerified ? 'Verified' : 'N/A'} type={d.razorpaySignature || gatewayData?.signatureVerified ? 'success' : 'default'} />
                         } />
                       </SectionCard>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <SectionCard title="Payment Method Details" icon={FiCreditCard}>
-                          <InfoRow label="Method" value={gatewayData?.method || d.razorpayStoredResponse?.method || d.gatewayMethod || '—'} />
-                          <InfoRow label="UPI VPA" value={gatewayData?.vpa || d.upiVpa || '—'} mono />
-                          <InfoRow label="Bank" value={gatewayData?.bank || d.bank || '—'} />
-                          <InfoRow label="Wallet" value={gatewayData?.wallet || d.walletGateway || '—'} />
+                          <InfoRow label="Method" value={gatewayData?.method || d.razorpayStoredResponse?.method || d.gatewayMethod || d.paymentMethod || 'Online'} />
+                          {(gatewayData?.vpa || d.upiVpa) && (
+                            <InfoRow label="UPI VPA" value={gatewayData?.vpa || d.upiVpa} mono />
+                          )}
+                          {(gatewayData?.bank || d.bank) && (
+                            <InfoRow label="Bank" value={formatBankName(gatewayData?.bank || d.bank)} />
+                          )}
+                          {(gatewayData?.wallet || d.walletGateway) && (
+                            <InfoRow label="Gateway Wallet" value={gatewayData?.wallet || d.walletGateway} />
+                          )}
                           {(gatewayData?.card || d.card) && (
                             <>
-                              <InfoRow label="Card Network" value={(gatewayData?.card || d.card)?.network || '—'} />
-                              <InfoRow label="Card Issuer" value={(gatewayData?.card || d.card)?.issuer || '—'} />
-                              <InfoRow label="Card Type" value={(gatewayData?.card || d.card)?.type || '—'} />
+                              <InfoRow label="Card Network" value={(gatewayData?.card || d.card)?.network || 'N/A'} />
+                              <InfoRow label="Card Issuer" value={(gatewayData?.card || d.card)?.issuer || 'N/A'} />
+                              <InfoRow label="Card Type" value={(gatewayData?.card || d.card)?.type || 'N/A'} />
                             </>
                           )}
                         </SectionCard>
 
                         <SectionCard title="Settlement & Fees" icon={FiTrendingUp} iconColor="text-emerald-600">
-                          <InfoRow label="Gateway Fee" value={<AmtCell amount={gatewayData?.fee || d.settlement?.gatewayFee || 0} colorClass="text-rose-600" />} />
-                          <InfoRow label="Gateway Tax" value={<AmtCell amount={gatewayData?.tax || d.settlement?.gatewayTax || 0} colorClass="text-rose-600" />} />
-                          <InfoRow label="Settlement Status" badge={
-                            <StatusChip label={d.settlementStatus || '—'} type={['settled', 'completed'].includes(d.settlementStatus) ? 'success' : 'default'} />
-                          } />
-                          <InfoRow label="Settlement Date" value={fmtDate(d.settlement?.settlementDate)} />
-                          <InfoRow label="Settlement ID" value={d.settlement?.razorpaySettlementId || '—'} mono />
-                          <InfoRow label="Bank Reference" value={d.settlement?.bankReference || '—'} mono />
+                          <InfoRow label="Gateway Fee" value={<AmtCell amount={gatewayData?.fee ?? d.settlement?.gatewayFee ?? 0} colorClass="text-rose-600" />} />
+                          <InfoRow label="Gateway Tax" value={<AmtCell amount={gatewayData?.tax ?? d.settlement?.gatewayTax ?? 0} colorClass="text-rose-600" />} />
+                          <InfoRow label="Settlement Status" badge={(() => {
+                            const st = d.settlement?.settlementStatus || d.settlementStatus || 'pending';
+                            return <StatusChip label={st.toUpperCase()} type={st === 'settled' ? 'success' : st === 'processing' ? 'warning' : 'default'} />;
+                          })()} />
+                          {(d.settlement?.settlementStatus === 'settled' || d.settlementStatus === 'settled') && (
+                            <InfoRow label="Settlement Date" value={d.settlement?.settlementDate ? fmtDateTime(d.settlement.settlementDate) : '—'} />
+                          )}
+                          <InfoRow label="Settlement ID" value={d.settlement?.razorpaySettlementId || (d.settlement?.settlementStatus === 'processing' ? 'Awaiting Batch (T+2 Days)' : 'N/A')} mono={Boolean(d.settlement?.razorpaySettlementId)} />
+                          <InfoRow label="Bank Reference (UTR)" value={d.settlement?.bankReference || (d.settlement?.settlementStatus === 'processing' ? 'Awaiting Bank Transfer' : 'N/A')} mono={Boolean(d.settlement?.bankReference)} />
                         </SectionCard>
                       </div>
 
-                      {gatewayData?.livePayment && (
+                      {gatewayData?.livePayment ? (
                         <SectionCard title="Raw Gateway Response" icon={FiFileText} iconColor="text-slate-500">
                           <div className="bg-slate-900 text-slate-300 rounded-xl p-4 font-mono text-[11px] overflow-x-auto max-h-64">
                             <pre>{JSON.stringify(gatewayData.livePayment, null, 2)}</pre>
                           </div>
+                        </SectionCard>
+                      ) : (
+                        <SectionCard title="Raw Gateway Response" icon={FiFileText} iconColor="text-slate-500">
+                          <p className="text-xs text-slate-400 italic">N/A</p>
                         </SectionCard>
                       )}
                     </>
@@ -512,7 +567,7 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                 <div className="space-y-5">
                   <SectionCard title="Wallet Payment Summary" icon={FiLayers} iconColor="text-amber-600">
                     <InfoRow label="Wallet Amount Used" value={<AmtCell amount={d.walletPaid || 0} colorClass="text-amber-700" />} />
-                    <InfoRow label="Payment Type" badge={<StatusChip label={d.paymentType || '—'} type="warning" />} />
+                    <InfoRow label="Payment Type" badge={<StatusChip label={d.paymentType || 'Wallet'} type="warning" />} />
                     {d.paymentType === 'mixed' && (
                       <>
                         <InfoRow label="Online (Razorpay) Part" value={<AmtCell amount={d.onlinePaid || 0} colorClass="text-blue-700" />} />
@@ -553,9 +608,17 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
               {/* ══ TAB 3c: PAYMENT VERIFICATION (Cash & Dynamic Razorpay QR) ════ */}
               {activeTab === 'cash_verify' && (() => {
                 const pv = d.paymentVerification || d.booking?.paymentVerification || {};
-                const method = pv.method || (d.paymentType === 'cash' ? 'cash_received' : 'qr_code');
+                const isQR = pv.method === 'qr_code' || Boolean(pv.qrCodeId) || d.paymentMethod === 'qr_code' || d.paymentMethod === 'upi_qr';
+                const isCash = pv.method === 'cash_received' || d.paymentType === 'cash' || d.paymentMethod === 'cash';
                 const vStatus = pv.status || (d.booking?.paymentStatus === 'paid' ? 'verified' : 'pending');
-                const isQR = method === 'qr_code' || Boolean(pv.qrCodeId);
+
+                const getMethodBadge = () => {
+                  if (isQR) return { label: 'Dynamic Razorpay QR', type: 'purple' };
+                  if (isCash) return { label: 'Cash Received', type: 'success' };
+                  return { label: (d.paymentMethod || 'Online').toUpperCase(), type: 'info' };
+                };
+
+                const methodBadge = getMethodBadge();
 
                 const getVBadgeType = (st) => {
                   if (st === 'verified' || st === 'paid') return 'success';
@@ -572,12 +635,12 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <SectionCard title="Payment Verification Status" icon={FiCheck} iconColor="text-emerald-600">
                         <InfoRow label="Verification Method" badge={
-                          <StatusChip label={method === 'cash_received' ? 'Cash Received' : 'Dynamic Razorpay QR'} type={method === 'cash_received' ? 'success' : 'purple'} />
+                          <StatusChip label={methodBadge.label} type={methodBadge.type} />
                         } />
                         <InfoRow label="Verification Status" badge={
                           <StatusChip label={vStatus?.toUpperCase() || 'PENDING'} type={getVBadgeType(vStatus)} />
                         } />
-                        <InfoRow label="Verified Date & Time" value={fmtDate(pv.verifiedAt || d.booking?.paymentDate)} />
+                        <InfoRow label="Verified Date & Time" value={fmtDateTime(pv.verifiedAt || d.booking?.paymentDate || d.updatedAt)} />
                         <InfoRow label="Idempotency Protection" value={pv.idempotencyKey || 'Protected'} mono />
                         <InfoRow label="Confirmed By Provider" value={d.booking?.confirmedBooking ? 'Verified' : 'Pending Provider Signoff'} />
                       </SectionCard>
@@ -585,14 +648,14 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                       <SectionCard title="Financial Audit & Earnings" icon={FiTrendingUp} iconColor="text-blue-600">
                         <InfoRow label="Total Amount" value={<AmtCell amount={d.totalAmount || 0} />} />
                         <InfoRow label="Wallet Used" value={<AmtCell amount={d.walletPaid || 0} colorClass="text-amber-700" />} />
-                        <InfoRow label="Cash / QR Collection" value={<AmtCell amount={d.cashPaid || d.onlinePaid || d.totalAmount || 0} colorClass="text-emerald-700" />} />
+                        <InfoRow label="Cash / QR Collection" value={<AmtCell amount={d.paymentType === 'cash' ? (d.cashPaid || d.finalPaid || 0) : (d.onlinePaid || d.finalPaid || 0)} colorClass="text-emerald-700" />} />
                         <InfoRow label="Platform Commission" value={<AmtCell amount={d.commissionAmount || 0} colorClass="text-purple-700" />} />
                         <InfoRow label="Provider Net Earnings" value={<AmtCell amount={d.providerEarnings || 0} colorClass="text-blue-700" />} />
                       </SectionCard>
                     </div>
 
-                    {/* Razorpay Dynamic QR Details (if QR code payment) */}
-                    {isQR && (
+                    {/* Razorpay Dynamic QR Details (ONLY when actual QR code exists) */}
+                    {isQR && (pv.qrCodeId || pv.qrImageUrl) && (
                       <SectionCard title="Razorpay QR Code Management" icon={FiZap} iconColor="text-indigo-600">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           {pv.qrImageUrl && (
@@ -602,11 +665,11 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                             </div>
                           )}
                           <div className={`space-y-1 ${pv.qrImageUrl ? 'md:col-span-2' : 'md:col-span-3'}`}>
-                            <InfoRow label="Razorpay QR ID" value={pv.qrCodeId || '—'} mono />
+                            <InfoRow label="Razorpay QR ID" value={pv.qrCodeId || 'N/A'} mono />
                             <InfoRow label="QR Status" badge={
                               <StatusChip label={isExpired ? 'EXPIRED' : (vStatus === 'verified' ? 'PAID' : 'ACTIVE')} type={vStatus === 'verified' ? 'success' : isExpired ? 'danger' : 'warning'} />
                             } />
-                            <InfoRow label="QR Expiry Date" value={pv.qrExpiresAt ? fmtDate(pv.qrExpiresAt) : '—'} />
+                            <InfoRow label="QR Expiry Date" value={pv.qrExpiresAt ? fmtDateTime(pv.qrExpiresAt) : 'N/A'} />
                             <InfoRow label="Webhook Verification" badge={
                               <StatusChip label={d.razorpaySignature ? 'Verified via Webhook' : 'Direct Sync'} type={d.razorpaySignature ? 'success' : 'info'} />
                             } />
@@ -617,9 +680,9 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
 
                     <SectionCard title="Booking & Service Audit" icon={FiCheckCircle} iconColor="text-emerald-600">
                       <InfoRow label="Booking Status" badge={
-                        <StatusChip label={d.booking?.status || '—'} type={d.booking?.status === 'completed' ? 'success' : 'warning'} />
+                        <StatusChip label={d.booking?.status || 'Pending'} type={d.booking?.status === 'completed' ? 'success' : 'warning'} />
                       } />
-                      <InfoRow label="Service Completed At" value={fmtDate(d.booking?.serviceCompletedAt || d.booking?.completedAt)} />
+                      <InfoRow label="Service Completed At" value={fmtDateTime(d.booking?.serviceCompletedAt || d.booking?.completedAt)} />
                       <InfoRow label="Admin Remark" value={d.booking?.adminRemark || 'None'} />
                     </SectionCard>
                   </div>
@@ -642,19 +705,24 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                         {d.ledgerEntries.map((entry, i) => (
                           <div key={i} className="grid grid-cols-6 px-5 py-3 border-b border-slate-50 hover:bg-slate-50 text-xs items-center">
                             <span className="col-span-2 font-mono text-[11px] text-indigo-700 font-semibold truncate" title={entry.transactionId || entry._id}>
-                              {(entry.transactionId || entry._id || '—').slice(0, 20)}
+                              <button
+                                onClick={() => nav.transaction(entry.transactionId || entry._id)}
+                                className="hover:underline font-bold text-left cursor-pointer"
+                              >
+                                {(entry.transactionId || entry._id || 'N/A').slice(0, 20)}
+                              </button>
                             </span>
                             <span>
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${entry.entryType === 'credit' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                {entry.entryType || entry.type || '—'}
+                                {entry.entryType || entry.type || 'N/A'}
                               </span>
                             </span>
-                            <span className="text-slate-600">{entry.paymentMethod || '—'}</span>
+                            <span className="text-slate-600">{entry.paymentMethod || 'N/A'}</span>
                             <span className={`text-right font-black ${entry.entryType === 'credit' ? 'text-emerald-700' : 'text-rose-700'}`}>
                               {entry.entryType === 'credit' ? '+' : '-'}<PriceDisplay amount={entry.amount || 0} />
                             </span>
                             <span className="text-right">
-                              <StatusChip label={entry.paymentStatus || '—'} type={['success', 'completed'].includes(entry.paymentStatus) ? 'success' : entry.paymentStatus === 'failed' ? 'danger' : 'warning'} />
+                              <StatusChip label={entry.paymentStatus || 'Pending'} type={['success', 'completed'].includes(entry.paymentStatus) ? 'success' : entry.paymentStatus === 'failed' ? 'danger' : 'warning'} />
                             </span>
                           </div>
                         ))}
@@ -663,7 +731,7 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   ) : (
                     <div className="py-16 text-center text-slate-400">
                       <FiActivity className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">No ledger entries found for this booking.</p>
+                      <p className="text-sm font-semibold text-slate-500">No ledger entries found for this booking.</p>
                     </div>
                   )}
                 </div>
@@ -675,23 +743,23 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   {d.refund ? (
                     <>
                       <SectionCard title="Refund Summary" icon={FiRotateCcw} iconColor="text-purple-600">
-                        <InfoRow label="Refund ID" value={d.refund.refundId || '—'} mono />
+                        <InfoRow label="Refund ID" value={d.refund.refundId || 'N/A'} mono />
                         <InfoRow label="Refund Status" badge={
-                          <StatusChip label={d.refund.refundStatus || '—'} type={d.refund.refundStatus === 'completed' ? 'success' : d.refund.refundStatus === 'failed' ? 'danger' : 'warning'} />
+                          <StatusChip label={d.refund.refundStatus || 'Pending'} type={d.refund.refundStatus === 'completed' ? 'success' : d.refund.refundStatus === 'failed' ? 'danger' : 'warning'} />
                         } />
                         <InfoRow label="Refund Amount" value={<AmtCell amount={d.refund.refundAmount || 0} colorClass="text-purple-700" />} />
                         <InfoRow label="Gateway Refund" value={<AmtCell amount={d.refund.gatewayRefundAmount || 0} colorClass="text-blue-700" />} />
                         <InfoRow label="Wallet Refund" value={<AmtCell amount={d.refund.walletRefundAmount || 0} colorClass="text-amber-700" />} />
-                        <InfoRow label="Refund Source" value={d.refund.refundSource?.replace(/_/g, ' ') || '—'} />
+                        <InfoRow label="Refund Source" value={d.refund.refundSource?.replace(/_/g, ' ') || 'N/A'} />
                         <InfoRow label="Refund Destination" badge={
-                          <StatusChip label={d.refund.refundDestination?.replace(/_/g, ' ') || '—'} type="info" />
+                          <StatusChip label={d.refund.refundDestination?.replace(/_/g, ' ') || 'N/A'} type="info" />
                         } />
-                        <InfoRow label="Gateway Refund ID" value={d.refund.gatewayRefundId || '—'} mono />
-                        <InfoRow label="Wallet Txn ID" value={d.refund.walletTransactionId || '—'} mono />
-                        <InfoRow label="Requested At" value={fmtDate(d.refund.createdAt)} />
-                        <InfoRow label="Completed At" value={fmtDate(d.refund.completedAt)} />
+                        <InfoRow label="Gateway Refund ID" value={d.refund.gatewayRefundId || 'N/A'} mono />
+                        <InfoRow label="Wallet Txn ID" value={d.refund.walletTransactionId || 'N/A'} mono />
+                        <InfoRow label="Requested At" value={fmtDateTime(d.refund.createdAt)} />
+                        <InfoRow label="Completed At" value={fmtDateTime(d.refund.completedAt)} />
                         {d.refund.approvedBy && (
-                          <InfoRow label="Approved By" value={d.refund.approvedBy.name || '—'} />
+                          <InfoRow label="Approved By" value={d.refund.approvedBy.name || 'N/A'} />
                         )}
                         {d.refund.failureReason && (
                           <InfoRow label="Failure Reason" value={d.refund.failureReason} />
@@ -717,8 +785,8 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   ) : (
                     <div className="py-20 text-center text-slate-400">
                       <FiRotateCcw className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                      <p className="text-base font-semibold text-slate-500">No refund has been initiated.</p>
-                      <p className="text-xs text-slate-400 mt-1">Refunds appear here after a cancellation or dispute resolution.</p>
+                      <p className="text-base font-semibold text-slate-500">No refund recorded.</p>
+                      <p className="text-xs text-slate-400 mt-1">Refunds appear here when initiated for this payment.</p>
                     </div>
                   )}
                 </div>
@@ -730,15 +798,15 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   {d.complaint ? (
                     <SectionCard title="Complaint Details" icon={FiMessageSquare} iconColor="text-rose-600">
                       <InfoRow label="Complaint ID" value={
-                        <EntityLink label={d.complaint.complaintId || d.complaint._id || '—'} path="/admin/complaints" />
+                        <EntityLink label={d.complaint.complaintId || d.complaint._id || 'Complaint'} onClick={nav.complaint} />
                       } />
                       <InfoRow label="Status" badge={
-                        <StatusChip label={d.complaint.status || '—'} type={d.complaint.status === 'resolved' ? 'success' : d.complaint.status === 'closed' ? 'default' : 'danger'} />
+                        <StatusChip label={d.complaint.status || 'Open'} type={d.complaint.status === 'resolved' ? 'success' : d.complaint.status === 'closed' ? 'default' : 'danger'} />
                       } />
-                      <InfoRow label="Reason" value={d.complaint.reason || '—'} />
+                      <InfoRow label="Reason" value={d.complaint.reason || 'N/A'} />
                       <InfoRow label="Resolution" value={d.complaint.resolution || 'Pending resolution'} />
-                      <InfoRow label="Created" value={fmtDate(d.complaint.createdAt)} />
-                      <InfoRow label="Updated" value={fmtDate(d.complaint.updatedAt)} />
+                      <InfoRow label="Created" value={fmtDateTime(d.complaint.createdAt)} />
+                      <InfoRow label="Updated" value={fmtDateTime(d.complaint.updatedAt)} />
                     </SectionCard>
                   ) : (
                     <div className="py-20 text-center text-slate-400">
@@ -758,30 +826,37 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-center">
                           <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Settlement Amount</p>
-                          <p className="text-xl font-black text-emerald-800 mt-1"><PriceDisplay amount={d.settlement.settlementAmount || 0} /></p>
+                          <p className="text-xl font-black text-emerald-800 mt-1"><PriceDisplay amount={d.settlement.settlementAmount || d.totalAmount || 0} /></p>
                         </div>
                         <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 text-center">
                           <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Provider Earnings</p>
-                          <p className="text-xl font-black text-blue-800 mt-1"><PriceDisplay amount={d.settlement.providerEarnings || 0} /></p>
+                          <p className="text-xl font-black text-blue-800 mt-1">
+                            <button onClick={nav.providerEarnings} className="hover:underline cursor-pointer">
+                              <PriceDisplay amount={d.settlement.providerEarnings || d.providerEarnings || 0} />
+                            </button>
+                          </p>
                         </div>
                         <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 text-center">
                           <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Commission</p>
-                          <p className="text-xl font-black text-purple-800 mt-1"><PriceDisplay amount={d.settlement.commissionAmount || 0} /></p>
+                          <p className="text-xl font-black text-purple-800 mt-1"><PriceDisplay amount={d.settlement.commissionAmount || d.commissionAmount || 0} /></p>
                         </div>
                       </div>
 
                       <SectionCard title="Settlement Details" icon={FiTrendingUp} iconColor="text-emerald-600">
-                        <InfoRow label="Settlement Status" badge={
-                          <StatusChip label={d.settlement.settlementStatus || '—'} type={['settled', 'completed'].includes(d.settlement.settlementStatus) ? 'success' : 'default'} />
-                        } />
-                        <InfoRow label="Settlement Date" value={fmtDate(d.settlement.settlementDate)} />
-                        <InfoRow label="Settlement ID" value={d.settlement.razorpaySettlementId || '—'} mono />
-                        <InfoRow label="Bank Reference" value={d.settlement.bankReference || '—'} mono />
+                        <InfoRow label="Settlement Status" badge={(() => {
+                          const st = d.settlement.settlementStatus || 'pending';
+                          return <StatusChip label={st.toUpperCase()} type={st === 'settled' ? 'success' : st === 'processing' ? 'warning' : 'default'} />;
+                        })()} />
+                        {d.settlement.settlementStatus === 'settled' && (
+                          <InfoRow label="Settlement Date" value={d.settlement.settlementDate ? fmtDateTime(d.settlement.settlementDate) : '—'} />
+                        )}
+                        <InfoRow label="Settlement ID" value={d.settlement.razorpaySettlementId || (d.settlement.settlementStatus === 'processing' ? 'Awaiting Batch (T+2 Days)' : 'N/A')} mono={Boolean(d.settlement.razorpaySettlementId)} />
+                        <InfoRow label="Bank Reference" value={d.settlement.bankReference || (d.settlement.settlementStatus === 'processing' ? 'Awaiting Bank Transfer' : 'N/A')} mono={Boolean(d.settlement.bankReference)} />
                         <InfoRow label="Gateway Fee" value={<AmtCell amount={d.settlement.gatewayFee || 0} colorClass="text-rose-600" />} />
                         <InfoRow label="Gateway Tax" value={<AmtCell amount={d.settlement.gatewayTax || 0} colorClass="text-rose-600" />} />
-                        <InfoRow label="Net Settlement" value={<AmtCell amount={d.settlement.netSettlementAmount || 0} colorClass="text-emerald-700" />} />
+                        <InfoRow label="Net Settlement" value={<AmtCell amount={d.settlement.netSettlementAmount || d.totalAmount || 0} colorClass="text-emerald-700" />} />
                         <InfoRow label="Provider Payout Status" badge={
-                          <StatusChip label={d.settlement.providerPayoutStatus || 'Pending'} type="warning" />
+                          <StatusChip label={d.settlement.providerPayoutStatus || 'Available'} type="success" />
                         } />
                       </SectionCard>
                     </>
@@ -803,7 +878,7 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     } />
                     <InfoRow label="Idempotency Safe" badge={<StatusChip label="Yes" type="success" />} />
                     <InfoRow label="Duplicate Check" badge={<StatusChip label="Passed" type="success" />} />
-                    <InfoRow label="Payment Method" value={d.paymentMethod || '—'} />
+                    <InfoRow label="Payment Method" value={d.paymentMethod || 'Online'} />
                     <InfoRow label="Gateway" value={d.paymentType === 'cash' ? 'Direct (No Gateway)' : 'Razorpay'} />
                   </SectionCard>
 

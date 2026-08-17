@@ -79,7 +79,10 @@ const transactionSchema = new Schema({
       'settlement', 'cashback', 'adjustment', 'escrow_hold', 'escrow_release'
     ],
     default: 'payment',
-
+    set: function (v) {
+      if (!v) return v;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
   },
   ledgerType: {
     type: String,

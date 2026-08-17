@@ -31,6 +31,7 @@ router.put('/admin/settings', adminAuthMiddleware, validateBody(updateReferralSe
 router.get('/admin/milestones', adminAuthMiddleware, referralController.getMilestones);
 router.post('/admin/milestones', adminAuthMiddleware, validateBody(addMilestoneSchema), referralController.addMilestone);
 router.delete('/admin/milestones/:id', adminAuthMiddleware, referralController.deleteMilestone);
+router.get('/admin/referrals', adminAuthMiddleware, referralController.getAdminReferralsList);
 router.get('/admin/fraud', adminAuthMiddleware, referralController.getFraudReferrals);
 router.get('/admin/logs', adminAuthMiddleware, referralController.getRewardLogs);
 router.post('/admin/release', adminAuthMiddleware, validateBody(releaseHeldRewardSchema), referralController.releaseHeldReward);

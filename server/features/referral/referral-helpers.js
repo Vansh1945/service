@@ -200,11 +200,14 @@ const checkFraudFlags = async (referrer, referredUser, req, type) => {
  * Computes the customer referral reward amount.
  */
 const calculateCustomerReward = (booking, settings) => {
+  if (settings.customerReferrerRewardAmount && settings.customerReferrerRewardAmount > 0) {
+    return settings.customerReferrerRewardAmount;
+  }
   if (settings.rewardCalculationMode === 'fixed') {
     return settings.fixedRewardAmount || 50;
   }
-  const rewardPercent = settings.commissionPercentage;
-  return parseFloat(((booking.commissionAmount * rewardPercent) / 100).toFixed(2)) || 0;
+  const rewardPercent = settings.commissionPercentage || 10;
+  return parseFloat((((booking.commissionAmount || 0) * rewardPercent) / 100).toFixed(2)) || 0;
 };
 
 /**
@@ -230,18 +233,19 @@ const calculateROI = (totalReferralCommission, totalRewardsPaid, totalWelcomeRew
  * 9. createReferralCoupon()
  * Creates and persists a referral coupon using the Coupon model.
  */
-const createReferralCoupon = async (code, value, minBooking, expiryDays, assignedTo, creatorId) => {
+const createReferralCoupon = async (code, value, minBooking, expiryDays, assignedTo, creatorId, options = {}) => {
   const coupon = new Coupon({
     code,
-    discountType: 'flat',
+    discountType: options.discountType || 'flat',
     discountValue: value,
+    maxDiscountAmount: options.maxDiscount || value,
     minBookingValue: minBooking,
-    expiryDate: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+    expiryDate: new Date(Date.now() + (expiryDays || 30) * 24 * 60 * 60 * 1000),
     isReferralCoupon: true,
     stackable: false,
     assignedTo,
     isActive: true,
-    usageLimit: 1,
+    usageLimit: options.usageLimit || 1,
     createdBy: creatorId
   });
   await coupon.save();
@@ -252,61 +256,121 @@ const createReferralCoupon = async (code, value, minBooking, expiryDays, assigne
  * 10. releaseReferralReward()
  * Credits wallets, records transactions, saves logs, and triggers notifications.
  */
-const releaseReferralReward = async (referral, referrer, rewardAmount, booking, type) => {
+const releaseReferralReward = async (referral, referrer, rewardAmount, booking, type, milestoneCount, session) => {
   if (rewardAmount <= 0) return;
 
+  const ReferralRewardLog = mongoose.model('ReferralRewardLog');
+  
+  // Calculate remaining cap per referral
+  const sysSettings = await bootstrapReferralSettings();
+  const maxCap = sysSettings.maxRewardPerReferral || 1000;
+  
+  const releasedLogs = await ReferralRewardLog.find({
+    referral: referral._id,
+    status: 'released'
+  }).session(session).lean();
+  const totalReleased = releasedLogs.reduce((sum, log) => sum + log.amount, 0);
+  
+  let finalReward = rewardAmount;
+  if (type === 'provider') {
+    if (totalReleased >= maxCap) {
+      console.log(`[ReferralReward] Referral cap of ₹${maxCap} reached for referral ${referral._id}`);
+      return;
+    }
+    if (totalReleased + rewardAmount > maxCap) {
+      finalReward = Math.max(0, maxCap - totalReleased);
+    }
+  }
+  
+  if (finalReward <= 0) return;
+
+  // Atomically update ReferralRewardLog status from 'held' to 'released'
+  // Or check if log exists and is held, then update
+  let rewardLog = null;
+  if (type === 'provider') {
+    rewardLog = await ReferralRewardLog.findOneAndUpdate(
+      {
+        referral: referral._id,
+        rewardType: 'providermilestone',
+        'details.milestoneBookingsCount': milestoneCount,
+        status: 'held'
+      },
+      { $set: { status: 'released', amount: finalReward } },
+      { session, new: true }
+    );
+    if (!rewardLog) {
+      console.log(`[ReferralReward] Held reward log for milestone ${milestoneCount} not found or already released.`);
+      return;
+    }
+  } else {
+    // For customer referrals
+    rewardLog = new ReferralRewardLog({
+      referral: referral._id,
+      rewardType: 'customerreferral',
+      recipient: referrer._id,
+      recipientModel: referrer.role === 'provider' ? 'Provider' : 'User',
+      recipientType: referrer.role === 'provider' ? 'provider' : 'customer',
+      amount: finalReward,
+      details: {
+        bookingId: booking?._id
+      },
+      status: 'released'
+    });
+    await rewardLog.save({ session });
+  }
+
+  // Update referrer wallet balance
   if (!referrer.wallet) {
     referrer.wallet = { availableBalance: 0, totalRefunded: 0, walletTransactions: [], lastUpdated: new Date() };
   }
-  referrer.wallet.availableBalance += rewardAmount;
+  
+  const originalBalance = referrer.wallet.availableBalance || 0;
+  referrer.wallet.availableBalance = parseFloat((originalBalance + finalReward).toFixed(2));
 
   const reasonText = type === 'customer'
-    ? `Referral Reward: Friend booking completed (${booking.bookingId || booking._id})`
+    ? `Referral Reward: Friend booking completed (${booking?.bookingId || booking?._id})`
     : `Provider referral milestone reward`;
 
   referrer.wallet.walletTransactions.push({
     type: 'credit',
-    amount: rewardAmount,
+    amount: finalReward,
     reason: reasonText,
     status: 'success',
     booking: booking?._id,
     createdAt: new Date()
   });
   referrer.wallet.lastUpdated = new Date();
-  await referrer.save();
+  
+  // Save referrer using the session
+  if (referrer.save) {
+    await referrer.save({ session });
+  } else {
+    const RefModel = referrer.role === 'provider' ? mongoose.model('Provider') : mongoose.model('User');
+    await RefModel.updateOne(
+      { _id: referrer._id },
+      { 
+        $set: { wallet: referrer.wallet } 
+      },
+      { session }
+    );
+  }
 
+  // Create Ledger Transaction
   const transaction = new Transaction({
     booking: booking?._id,
     bookingId: booking?.bookingId || booking?._id?.toString(),
     user: referrer._id,
     [referrer.role === 'provider' ? 'provider' : 'customer']: referrer._id,
     [referrer.role === 'provider' ? 'providerId' : 'customerId']: referrer._id.toString(),
-    amount: rewardAmount,
+    amount: finalReward,
     paymentStatus: 'completed',
     paymentMethod: 'wallet',
-    type: 'referral_reward',
-    description: reasonText
+    type: 'referralreward', // Normalized (no underscore)
+    description: reasonText,
+    balanceBefore: originalBalance,
+    balanceAfter: referrer.wallet.availableBalance
   });
-  await transaction.save();
-
-  try {
-    const rewardLog = new ReferralRewardLog({
-      referral: referral._id,
-      rewardType: type === 'customer' ? 'customerreferral' : 'providermilestone',
-      recipient: referrer._id,
-      recipientModel: referrer.role === 'provider' ? 'Provider' : 'User',
-      recipientType: referrer.role === 'provider' ? 'provider' : 'customer',
-      amount: rewardAmount,
-      details: {
-        bookingId: booking?._id
-      },
-      status: 'released'
-    });
-    await rewardLog.save();
-    console.log(`[ReferralRewardLog] Created reward log for ${referrer._id}`);
-  } catch (logErr) {
-    console.error('Error saving ReferralRewardLog:', logErr);
-  }
+  await transaction.save({ session });
 
   return transaction;
 };
@@ -317,10 +381,14 @@ const releaseReferralReward = async (referral, referrer, rewardAmount, booking, 
  */
 const applyProviderReferralBenefit = async (provider, settings) => {
   provider.referralBenefit = {
-    commissionDiscountPercent: settings.commissionPercentage,
-    validTill: new Date(Date.now() + settings.expiryDays * 24 * 60 * 60 * 1000)
+    commissionDiscountPercent: settings.providerCommissionDiscountPercent ?? settings.commissionPercentage ?? 10,
+    validTill: new Date(Date.now() + (settings.expiryDays || 30) * 24 * 60 * 60 * 1000),
+    bookingsLimit: settings.providerCommissionDiscountLimitBookings || 5,
+    bookingsCount: 0,
+    maxMonetaryBenefit: settings.providerCommissionDiscountMaxBenefit || 1000,
+    currentMonetaryBenefit: 0
   };
-  provider.onboardingPriorityExpiresAt = new Date(Date.now() + settings.expiryDays * 24 * 60 * 60 * 1000);
+  provider.onboardingPriorityExpiresAt = new Date(Date.now() + (settings.expiryDays || 30) * 24 * 60 * 60 * 1000);
   await provider.save();
 };
 
@@ -339,6 +407,136 @@ const checkQualifiedReferralLimit = async (referrer, settings) => {
   return dailyCount >= settings.dailyQualifiedReferralLimit || monthlyCount >= settings.monthlyQualifiedReferralLimit;
 };
 
+/**
+ * 13. getReferralCommissionDiscount()
+ * Pure read-only helper checking if referralBenefit is valid and within limits.
+ */
+const getReferralCommissionDiscount = (providerDoc, rule, baseForCommission) => {
+  if (!providerDoc || !providerDoc.referralBenefit) return rule ? rule.value : 0;
+  const benefit = providerDoc.referralBenefit;
+  if (!benefit.validTill || new Date(benefit.validTill) < new Date()) return rule ? rule.value : 0;
+
+  // Check booking limit
+  if (benefit.bookingsLimit && benefit.bookingsCount >= benefit.bookingsLimit) return rule ? rule.value : 0;
+
+  // Check monetary benefit cap
+  if (benefit.maxMonetaryBenefit && benefit.currentMonetaryBenefit >= benefit.maxMonetaryBenefit) return rule ? rule.value : 0;
+
+  const ruleValue = rule ? rule.value : 0;
+  const discountPercent = benefit.commissionDiscountPercent || 0;
+  if (discountPercent <= 0) return ruleValue;
+
+  const normalCommission = parseFloat(((baseForCommission * ruleValue) / 100).toFixed(2));
+  const proposedRate = Math.max(0, ruleValue - discountPercent);
+  const proposedCommission = parseFloat(((baseForCommission * proposedRate) / 100).toFixed(2));
+  const savedAmount = parseFloat((normalCommission - proposedCommission).toFixed(2));
+
+  const remainingCap = Math.max(0, (benefit.maxMonetaryBenefit || 1000) - (benefit.currentMonetaryBenefit || 0));
+  if (savedAmount > remainingCap) {
+    const adjustedCommission = Math.max(0, normalCommission - remainingCap);
+    const adjustedRate = baseForCommission > 0 ? parseFloat(((adjustedCommission * 100) / baseForCommission).toFixed(4)) : 0;
+    return adjustedRate;
+  }
+
+  return proposedRate;
+};
+
+/**
+ * 14. incrementReferralBenefitUsage()
+ * Performs atomic conditional update on Booking to guarantee exact idempotency.
+ */
+const incrementReferralBenefitUsage = async (bookingId, session) => {
+  if (!bookingId) return;
+  const Booking = mongoose.model('Booking');
+  const Provider = mongoose.model('Provider');
+
+  // Atomically update Booking referralBenefitCounted from false/undefined to true
+  const bookingDoc = await Booking.findOneAndUpdate(
+    {
+      _id: bookingId,
+      referralDiscountApplied: true,
+      referralBenefitCounted: { $ne: true }
+    },
+    { $set: { referralBenefitCounted: true } },
+    { session, new: true }
+  );
+
+  if (!bookingDoc || !bookingDoc.provider) {
+    return;
+  }
+
+  const provider = await Provider.findById(bookingDoc.provider).session(session);
+  if (!provider || !provider.referralBenefit) return;
+
+  const benefit = provider.referralBenefit;
+  if (!benefit.validTill || new Date(benefit.validTill) < new Date()) return;
+  if (benefit.bookingsLimit && benefit.bookingsCount >= benefit.bookingsLimit) return;
+  if (benefit.maxMonetaryBenefit && benefit.currentMonetaryBenefit >= benefit.maxMonetaryBenefit) return;
+
+  // Fetch standard rule
+  const CommissionRule = mongoose.model('CommissionRule');
+  const firstService = bookingDoc.services && bookingDoc.services[0];
+  const serviceId = firstService ? firstService.service : null;
+  const originalRule = await CommissionRule.getCommissionForProvider(provider._id, bookingDoc.zoneId, 'standard', serviceId);
+  if (!originalRule) return;
+
+  const baseForCommission = Math.max(0, (bookingDoc.subtotal || 0) - (bookingDoc.totalDiscount || 0));
+  const normalCommission = parseFloat(((baseForCommission * originalRule.value) / 100).toFixed(2));
+  const actualCommission = bookingDoc.commissionAmount || 0;
+  const savedAmount = Math.max(0, parseFloat((normalCommission - actualCommission).toFixed(2)));
+
+  if (savedAmount > 0 || benefit.commissionDiscountPercent > 0) {
+    const updatedBookingsCount = (benefit.bookingsCount || 0) + 1;
+    const updatedMonetaryBenefit = parseFloat(((benefit.currentMonetaryBenefit || 0) + savedAmount).toFixed(2));
+
+    await Provider.updateOne(
+      { _id: provider._id },
+      {
+        $set: {
+          'referralBenefit.bookingsCount': updatedBookingsCount,
+          'referralBenefit.currentMonetaryBenefit': updatedMonetaryBenefit,
+          ...( (updatedBookingsCount >= benefit.bookingsLimit || updatedMonetaryBenefit >= benefit.maxMonetaryBenefit) ? { 'referralBenefit.validTill': new Date() } : {} )
+        }
+      },
+      { session }
+    );
+    console.log(`[ReferralBenefit] Atomically incremented usage for provider ${provider._id} in session: Bookings: ${updatedBookingsCount}, Benefit: ₹${updatedMonetaryBenefit}`);
+  }
+};
+
+/**
+ * 15. isBookingSettled()
+ * Checks if a referred provider's booking is fully settled financially.
+ */
+const isBookingSettled = async (bookingId, providerId, session) => {
+  const Booking = mongoose.model('Booking');
+  const ProviderEarning = mongoose.model('ProviderEarning');
+
+  const booking = await Booking.findById(bookingId).session(session).lean();
+  if (!booking) return false;
+
+  // Must be completed
+  if (booking.status !== 'completed') return false;
+
+  // Payment status must be paid or settled
+  if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'settled') return false;
+
+  // No dispute active
+  if (booking.disputeRaised || ['pending', 'underreview'].includes(booking.disputeStatus)) return false;
+
+  // No refund approved/processed
+  if (booking.adminRefundDecision === 'approved' || ['refundpending', 'refundapproved', 'refunded'].includes(booking.paymentStatus)) return false;
+
+  // ProviderEarning check
+  const earning = await ProviderEarning.findOne({ booking: bookingId, provider: providerId }).session(session).lean();
+  if (!earning) return false;
+
+  // Earning must be available or paid
+  if (earning.status !== 'available' && earning.status !== 'paid') return false;
+
+  return true;
+};
+
 module.exports = {
   generateReferralCode,
   validateReferralEligibility,
@@ -351,5 +549,8 @@ module.exports = {
   createReferralCoupon,
   releaseReferralReward,
   applyProviderReferralBenefit,
-  checkQualifiedReferralLimit
+  checkQualifiedReferralLimit,
+  getReferralCommissionDiscount,
+  incrementReferralBenefitUsage,
+  isBookingSettled
 };

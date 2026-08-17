@@ -74,7 +74,8 @@ class PricingService {
           code: coupon.code,
           discountType: coupon.discountType,
           discountValue: coupon.discountValue,
-          appliedZone: coupon.matchedZoneId || detectedZoneId || null
+          appliedZone: coupon.matchedZoneId || detectedZoneId || null,
+          isReferralCoupon: !!coupon.isReferralCoupon
         };
       } catch (err) {
         // Log coupon validation error, but do not block estimation if coupon is invalid

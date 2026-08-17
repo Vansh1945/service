@@ -184,16 +184,16 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
 
   // ── Navigation callbacks ─────────────────────────────────────────────────
   const nav = {
-    booking:       () => navigate('/admin/bookings'),
-    payment:       () => navigate('/admin/payments'),
-    refund:        () => navigate('/admin/refunds'),
-    settlement:    () => navigate('/admin/settlements'),
-    customer:      () => navigate('/admin/customers'),
-    provider:      () => navigate('/admin/providers'),
-    custWallet:    () => navigate('/admin/customer-wallets'),
-    provWallet:    () => navigate('/admin/provider-wallets'),
+    booking:       (id) => navigate(`/admin/bookings?search=${encodeURIComponent(id || d.booking?.bookingId || '')}&openDetail=true`),
+    payment:       (id) => navigate(`/admin/payments?search=${encodeURIComponent(id || d.razorpayPaymentId || d.transactionId || '')}&openDetail=true`),
+    refund:        (id) => navigate(`/admin/refunds?search=${encodeURIComponent(id || d.refundId || '')}&openDetail=true`),
+    settlement:    (id) => navigate(`/admin/settlements?search=${encodeURIComponent(id || d.settlementId || d.razorpaySettlementId || '')}&openDetail=true`),
+    customer:      (id) => navigate(`/admin/customers?search=${encodeURIComponent(id || d.customer?.customerId || d.customer?._id || '')}&openDetail=true`),
+    provider:      (id) => navigate(`/admin/approve-providers?search=${encodeURIComponent(id || d.provider?.providerId || d.provider?._id || '')}&openDetail=true`),
+    custWallet:    (id) => navigate(`/admin/customer-wallets?search=${encodeURIComponent(id || d.walletTransactionId || '')}&openDetail=true`),
+    provWallet:    (id) => navigate(`/admin/provider-wallets?search=${encodeURIComponent(id || d.walletTransactionId || '')}&openDetail=true`),
     provEarnings:  () => navigate('/admin/provider-earnings'),
-    payout:        () => navigate('/admin/payout'),
+    payout:        (id) => navigate(`/admin/payout?search=${encodeURIComponent(id || d.paymentRecord?.transactionReference || d.bookingId || '')}&openDetail=true`),
   };
 
   // ── Type badge styling ───────────────────────────────────────────────────
@@ -227,6 +227,8 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
     return <StatusChip label={s || 'Unknown'} />;
   };
 
+  const isWithdrawal = d.type === 'withdrawal' || d.ledgerType === 'withdrawal' || (d.bookingId && d.bookingId.startsWith('WDL-'));
+
   // ─────────────────────────────────────────────────────────────────────────
   // Tab renderers
   // ─────────────────────────────────────────────────────────────────────────
@@ -236,15 +238,15 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
       {/* Transaction Summary */}
       <SectionCard title="Transaction Summary" icon={DollarSign} iconColor="text-indigo-600">
         <InfoRow label="Transaction ID" value={d.transactionId || d._id} mono />
-        <InfoRow label="Reference No." value={d.referenceNumber} mono />
+        {d.referenceNumber && d.referenceNumber !== d.transactionId && (
+          <InfoRow label="Reference No." value={d.referenceNumber} mono />
+        )}
         <InfoRow label="Type" badge={getTxnTypeChip(d.type)} />
         <InfoRow label="Ledger" value={d.ledgerType} />
         <InfoRow label="Entry" badge={
-          d.entryType === 'credit'
+          d.entryType === 'credit' || ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(d.type)
             ? <StatusChip label="Credit (Cr)" type="success" />
-            : d.entryType === 'debit'
-            ? <StatusChip label="Debit (Dr)" type="danger" />
-            : <StatusChip label="N/A" />
+            : <StatusChip label="Debit (Dr)" type="danger" />
         } />
         <InfoRow label="Status" badge={getStatusChip(d.paymentStatus)} />
         <InfoRow label="Currency" value={d.currency || 'INR'} />
@@ -305,19 +307,27 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
 
       {/* Entities */}
       <SectionCard title="Parties" icon={User} iconColor="text-sky-600">
-        {d.customer && <>
-          <InfoRow label="Customer" badge={
-            <button onClick={nav.customer} className="text-blue-600 hover:underline font-bold text-xs">{d.customer.name}</button>
-          } />
-          <InfoRow label="Customer Email" value={d.customer.email} />
-          <InfoRow label="Customer Phone" value={d.customer.phone} />
-        </>}
-        {d.provider && <>
-          <InfoRow label="Provider" badge={
-            <button onClick={nav.provider} className="text-blue-600 hover:underline font-bold text-xs">{d.provider.name}</button>
-          } />
-          <InfoRow label="Provider Email" value={d.provider.email} />
-        </>}
+        {d.customer ? (
+          <>
+            <InfoRow label="Customer" badge={
+              <button onClick={() => nav.customer(d.customer._id || d.customer.customerId)} className="text-blue-600 hover:underline font-bold text-xs cursor-pointer">{d.customer.name}</button>
+            } />
+            <InfoRow label="Customer Email" value={d.customer.email} />
+            <InfoRow label="Customer Phone" value={d.customer.phone} />
+          </>
+        ) : isWithdrawal ? (
+          <InfoRow label="Customer" value="Not applicable (Provider Withdrawal)" />
+        ) : null}
+
+        {d.provider ? (
+          <>
+            <InfoRow label="Provider" badge={
+              <button onClick={() => nav.provider(d.provider._id || d.provider.providerId)} className="text-blue-600 hover:underline font-bold text-xs cursor-pointer">{d.provider.name}</button>
+            } />
+            <InfoRow label="Provider Email" value={d.provider.email} />
+          </>
+        ) : null}
+
         <InfoRow label="Created By" value={d.audit?.createdBy || '—'} />
         <InfoRow label="Created At" value={fmtDateTime(d.createdAt)} />
         <InfoRow label="Updated At" value={fmtDateTime(d.updatedAt)} />
@@ -326,7 +336,34 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
   );
 
   const renderBreakdown = () => {
-    const booking = d.booking || {};
+    if (isWithdrawal) {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SectionCard title="Withdrawal Outflow Breakdown" icon={CreditCard} iconColor="text-indigo-600">
+            <div className="divide-y divide-slate-50">
+              <AmtRow label="Withdrawal Requested Amount" amount={d.amount || 0} bold />
+              <AmtRow label="Platform Commission" amount={0} colorClass="text-emerald-600" indent />
+              <AmtRow label="Wallet Debit (Outflow)" amount={d.amount || 0} bold colorClass="text-rose-600" indent />
+              <div className="pt-2 mt-1">
+                <InfoRow label="Remaining Wallet Balance" badge={<span className="font-mono font-bold text-indigo-700"><PriceDisplay amount={d.balanceAfter ?? d.provider?.wallet?.availableBalance ?? 0} /></span>} />
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Payout Settlement Status" icon={Banknote} iconColor="text-sky-600">
+            <InfoRow label="Payout Status" badge={
+              <StatusChip
+                label={d.paymentStatus || 'completed'}
+                type={['completed', 'transferred', 'success'].includes(d.paymentStatus) ? 'success' : 'warning'}
+              />
+            } />
+            <AmtRow label="Transferred Amount" amount={d.amount || 0} bold colorClass="text-sky-700" />
+            <InfoRow label="Reference / UTR" value={d.referenceNumber || d.paymentRecord?.utrNo || '—'} mono />
+          </SectionCard>
+        </div>
+      );
+    }
+
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Payment Split */}
@@ -336,7 +373,7 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
             {(d.discount || 0) > 0 && <AmtRow label="Discount Applied" amount={d.discount} colorClass="text-amber-600" indent />}
             {(d.subtotal || 0) > 0 && <AmtRow label="Subtotal" amount={d.subtotal} indent />}
             <div className="pt-2 mt-1">
-              {(d.onlinePaid || 0) > 0 && <AmtRow label="Online (Razorpay)" amount={d.onlinePaid} colorClass="text-blue-700" indent />}
+              {(d.onlinePaid || 0) > 0 && <AmtRow label="Online (Razorpay / UPI)" amount={d.onlinePaid} colorClass="text-blue-700" indent />}
               {(d.walletPaid || 0) > 0 && <AmtRow label="Wallet Used" amount={d.walletPaid} colorClass="text-amber-700" indent />}
               {(d.cashPaid || 0) > 0 && <AmtRow label="Cash Paid" amount={d.cashPaid} colorClass="text-lime-700" indent />}
             </div>
@@ -368,7 +405,7 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
 
         {/* Gateway & Settlement */}
         <SectionCard title="Gateway & Settlement" icon={Banknote} iconColor="text-sky-600">
-          <InfoRow label="Gateway" value={d.razorpayPaymentId ? 'Razorpay' : 'N/A'} />
+          <InfoRow label="Gateway" value={d.razorpayPaymentId ? 'Razorpay' : d.paymentMethod === 'cash' ? 'Cash' : 'N/A'} />
           <InfoRow label="Settlement Status" badge={
             <StatusChip
               label={d.settlement?.settlementStatus || 'pending'}
@@ -455,47 +492,54 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
 
   const renderConnected = () => {
     const booking = d.booking || {};
-    const bookingIdStr = booking.bookingId || (booking._id ? `#${String(booking._id).slice(-6).toUpperCase()}` : null);
+    const bookingIdStr = booking.bookingId || (d.bookingId && !d.bookingId.startsWith('WDL-') ? d.bookingId : null);
+    const wdlRefStr = isWithdrawal ? (d.bookingId || d.referenceNumber || null) : null;
+
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SectionCard title="Primary Records" icon={FileText} iconColor="text-indigo-600">
           <ConnectedRecordRow icon={Briefcase} iconColor="text-blue-700" label="Booking"
             value={bookingIdStr}
-            onClick={bookingIdStr ? nav.booking : null}
+            onClick={bookingIdStr ? () => nav.booking(bookingIdStr) : null}
             empty={!bookingIdStr}
           />
           <ConnectedRecordRow icon={CreditCard} iconColor="text-emerald-600" label="Payment"
             value={d.razorpayPaymentId || d.transactionId}
-            onClick={nav.payment}
+            onClick={() => nav.payment(d.razorpayPaymentId || d.transactionId)}
             empty={!d.razorpayPaymentId && !d.transactionId}
           />
           <ConnectedRecordRow icon={RefreshCw} iconColor="text-rose-600" label="Refund"
             value={d.refundId}
-            onClick={d.refundId ? nav.refund : null}
+            onClick={d.refundId ? () => nav.refund(d.refundId) : null}
             empty={!d.refundId}
           />
           <ConnectedRecordRow icon={Wallet} iconColor="text-amber-600" label="Wallet TXN"
             value={d.walletTransactionId}
-            onClick={d.walletTransactionId ? (d.provider ? nav.provWallet : nav.custWallet) : null}
+            onClick={d.walletTransactionId ? () => (d.provider ? nav.provWallet(d.walletTransactionId) : nav.custWallet(d.walletTransactionId)) : null}
             empty={!d.walletTransactionId}
           />
           <ConnectedRecordRow icon={TrendingUp} iconColor="text-sky-600" label="Settlement"
             value={d.settlementId || d.razorpaySettlementId}
-            onClick={nav.settlement}
+            onClick={() => nav.settlement(d.settlementId || d.razorpaySettlementId)}
             empty={!d.settlementId && !d.razorpaySettlementId}
           />
         </SectionCard>
 
         <SectionCard title="Provider & Earnings" icon={TrendingUp} iconColor="text-emerald-600">
-          <ConnectedRecordRow icon={User} iconColor="text-indigo-600" label="Provider Earnings"
+          <ConnectedRecordRow icon={User} iconColor="text-indigo-600" label="Provider"
+            value={d.provider?.name ? `${d.provider.name} (${d.provider.providerId || d.provider.email || ''})` : null}
+            onClick={d.provider ? () => nav.provider(d.provider.providerId || d.provider._id) : null}
+            empty={!d.provider}
+          />
+          <ConnectedRecordRow icon={TrendingUp} iconColor="text-emerald-600" label="Provider Earnings"
             value={d.providerEarningRecord ? `₹${d.providerEarnings || 0} (${d.providerEarningRecord.status || 'held'})` : null}
             onClick={d.providerEarningRecord ? nav.provEarnings : null}
             empty={!d.providerEarningRecord}
           />
           <ConnectedRecordRow icon={Banknote} iconColor="text-violet-600" label="Payout / Withdrawal"
-            value={d.paymentRecord ? `₹${d.paymentRecord.amount || 0} — ${d.paymentRecord.status || 'pending'}` : null}
-            onClick={d.paymentRecord ? nav.payout : null}
-            empty={!d.paymentRecord}
+            value={wdlRefStr ? `${wdlRefStr} (₹${d.amount || 0})` : d.paymentRecord ? `₹${d.paymentRecord.amount || 0} — ${d.paymentRecord.status || 'pending'}` : null}
+            onClick={wdlRefStr ? () => nav.payout(wdlRefStr) : d.paymentRecord ? () => nav.payout(d.paymentRecord.transactionReference) : null}
+            empty={!wdlRefStr && !d.paymentRecord}
           />
           <ConnectedRecordRow icon={AlertTriangle} iconColor="text-orange-600" label="Complaint"
             value={d.complaint ? `${d.complaint.complaintId || '#'} (${d.complaint.status || 'open'})` : null}
@@ -615,7 +659,7 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
           <InfoRow label="Role"        value={audit.createdByRole || '—'} />
           <InfoRow label="Updated By"  value={audit.updatedBy || '—'} />
           <InfoRow label="Reason / Description" value={audit.reason || '—'} />
-          <InfoRow label="Idempotency Key" value={audit.idempotencyKey || '—'} mono />
+          <InfoRow label="Idempotency Key" value={audit.idempotencyKey || (d.type === 'payment' ? 'Standard Checkout (Signature Verified)' : '—')} mono />
           <InfoRow label="Created At"  value={fmtDateTime(audit.createdAt)} />
           <InfoRow label="Updated At"  value={fmtDateTime(audit.updatedAt)} />
         </SectionCard>

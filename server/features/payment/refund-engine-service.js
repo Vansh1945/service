@@ -373,14 +373,16 @@ class RefundEngineService {
             amount: walletCreditAmt,
             source: 'refund',
             description: `Refund credited for Booking #${booking.bookingId || booking._id}`,
-            bookingId: booking._id,
+            booking: booking._id,
+            bookingId: booking.bookingId || null,
             createdAt: new Date(),
           });
 
           await user.save();
 
           const transaction = new Transaction({
-            bookingId: booking._id,
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id.toString(),
             user: customerId,
             provider: booking.provider?._id || booking.provider || null,
             amount: walletCreditAmt,
@@ -537,12 +539,16 @@ class RefundEngineService {
       const ProviderEarning = mongoose.models.ProviderEarning;
       if (ProviderEarning) {
         const earning = await ProviderEarning.findOne({ booking: booking._id });
-        if (earning && (earning.status === 'pending' || earning.status === 'on_hold')) {
+        if (earning && ['held', 'available', 'underreview', 'pendingrelease'].includes(earning.status)) {
           earning.status = 'cancelled';
           earning.cancelledAt = new Date();
           earning.cancellationReason = `Customer refund processed (${refundDoc.refundId})`;
           await earning.save();
           console.log(`Cancelled provider earning ${earning._id} due to refund ${refundDoc.refundId}`);
+
+          // Sync provider wallet balance immediately to reflect cancelled earning
+          const PaymentService = require('./payment-service');
+          await PaymentService.syncProviderEarnings(booking.provider._id || booking.provider);
         }
       }
     } catch (err) {

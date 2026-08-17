@@ -229,8 +229,10 @@ const enrichBookingData = (booking, transaction = null) => {
     (b.demandSurge || 0) +
     (b.customCharges || 0) +
     (b.platformFee || 0);
-  const discount = b.totalDiscount || 0;
-  const baseForComm = Math.max(0, servicePrice - discount);
+  const isReferralDiscount = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
+  const referralDiscountAmount = isReferralDiscount ? (b.totalDiscount || 0) : 0;
+  const providerApplicableDiscount = Math.max(0, (b.totalDiscount || 0) - referralDiscountAmount);
+  const baseForComm = Math.max(0, servicePrice - providerApplicableDiscount);
   const platformCommission = b.commissionAmount || parseFloat(((baseForComm * 10) / 100).toFixed(2));
   const providerEarnings = b.providerEarnings || parseFloat((baseForComm - platformCommission + (b.providerEmergencyShare || 0) + (b.providerVisitingShare || 0) + (b.providerRainShare || 0) + (b.providerTrafficShare || 0) + (b.providerNightShare || 0) + (b.providerDemandShare || 0)).toFixed(2));
   const platformEarnings = parseFloat((platformCommission + (b.companySurgeShare || 0)).toFixed(2));

@@ -578,9 +578,13 @@ const systemConfigSchema = new mongoose.Schema(
       monthlyCapPerUser: { type: Number, default: 5000 },
       dailyCapPerUser: { type: Number, default: 500 },
       expiryDays: { type: Number, default: 30 },
+      maxRewardPerReferral: { type: Number, default: 1000 },
+      providerCommissionDiscountPercent: { type: Number, default: 10 },
+      providerCommissionDiscountLimitBookings: { type: Number, default: 5 },
+      providerCommissionDiscountMaxBenefit: { type: Number, default: 1000 },
       fraudScoreThreshold: { type: Number, default: 50 },
       programVersion: { type: Number, default: 1 },
-      rewardCalculationMode: { type: String, enum: ['commission', 'conditional', 'fixed'], default: 'commission' },
+      rewardCalculationMode: { type: String, enum: ['commission', 'conditional', 'fixed', 'commissionshare', 'cashincentive'], default: 'commission' },
       rewardThresholdAmount: { type: Number, default: 1000 },
       fixedRewardAmount: { type: Number, default: 50 },
       customerReferralEligibilityBookings: { type: Number, default: 1 },
@@ -588,6 +592,38 @@ const systemConfigSchema = new mongoose.Schema(
       dailyReferralLimitPerUser: { type: Number, default: 5 },
       monthlyReferralLimitPerUser: { type: Number, default: 20 },
       systemReferralOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+      // Customer Referral Specific Fields
+      customerReferralEnabled: { type: Boolean, default: true },
+      customerReferralPaused: { type: Boolean, default: false },
+      customerReferrerRewardType: { type: String, enum: ['CASH', 'COUPON'], default: 'CASH' },
+      customerReferrerRewardAmount: { type: Number, default: 100 },
+      customerReferrerCouponConfig: {
+        discountType: { type: String, enum: ['percentage', 'flat', 'fixed'], default: 'flat' },
+        discountValue: { type: Number, default: 100 },
+        maxDiscount: { type: Number, default: 100 },
+        minBookingAmount: { type: Number, default: 300 },
+        validityDays: { type: Number, default: 30 },
+        usageLimit: { type: Number, default: 1 }
+      },
+      newCustomerRewardEnabled: { type: Boolean, default: true },
+      newCustomerRewardTrigger: { type: String, enum: ['REGISTRATION', 'FIRST_COMPLETED_BOOKING'], default: 'FIRST_COMPLETED_BOOKING' },
+      newCustomerRewardType: { type: String, enum: ['CASH', 'COUPON'], default: 'CASH' },
+      newCustomerRewardAmount: { type: Number, default: 50 },
+      newCustomerCouponConfig: {
+        discountType: { type: String, enum: ['percentage', 'flat', 'fixed'], default: 'flat' },
+        discountValue: { type: Number, default: 50 },
+        maxDiscount: { type: Number, default: 100 },
+        minBookingAmount: { type: Number, default: 200 },
+        validityDays: { type: Number, default: 30 },
+        usageLimit: { type: Number, default: 1 }
+      },
+      firstBookingRequired: { type: Boolean, default: true },
+      customerMinimumBookingAmount: { type: Number, default: 100 },
+      customerRewardValidityDays: { type: Number, default: 30 },
+      customerMaxRewardPerReferral: { type: Number, default: 500 },
+      customerDailyRewardCap: { type: Number, default: 500 },
+      customerMonthlyRewardCap: { type: Number, default: 3000 },
+      customerMonthlyBudget: { type: Number, default: 20000 },
       providerMilestones: {
         type: [
           {

@@ -87,9 +87,18 @@ const ReferProviders = () => {
     );
   }
 
+  const isFixed = details?.programRules?.rewardCalculationMode === 'fixed';
+  const commShare = details?.programRules?.commissionPercentage || 10;
+  const fixedCash = details?.programRules?.fixedRewardAmount || 50;
+  const discPercent = details?.programRules?.providerCommissionDiscountPercent || 10;
+  const discJobsLimit = details?.programRules?.providerCommissionDiscountLimitBookings || 5;
+  const discMaxCap = details?.programRules?.providerCommissionDiscountMaxBenefit || 1000;
+
+  const rewardModeText = isFixed ? `₹${fixedCash} Cash Payout / Job` : `${commShare}% Commission Share`;
+
   const rules = [
-    { title: 'Referral Benefit', desc: `Earn up to ₹${totalRewardAmount} total milestone payouts as referred partner completes jobs.` },
-    { title: 'Onboarding Discount', desc: `${details?.programRules?.commissionPercentage || 10}% commission discount valid for their first ${details?.programRules?.expiryDays || 30} days.` },
+    { title: 'Referral Benefit', desc: `Earn ${rewardModeText} (up to ₹${totalRewardAmount} total milestone rewards) as referred partner completes jobs.` },
+    { title: 'New Provider Benefit', desc: `Referred partner gets ${discPercent}% platform commission discount on their first ${discJobsLimit} jobs (Max benefit ₹${discMaxCap}).` },
     { title: 'Referral Validity', desc: `Invitees must register and complete milestones within ${details?.programRules?.referralExpiryDays || 90} days from signup.` },
     { title: 'Code Validity', desc: `Referral code is active and valid for new partner electrician signups.` }
   ];
@@ -109,9 +118,8 @@ const ReferProviders = () => {
                 Invite Electricians & Earn <span className="text-primary font-black">₹{totalRewardAmount}</span>
               </h1>
               <p className="text-neutral-400 text-xs mt-2 leading-relaxed max-w-xl font-medium">
-                Invite professional electricians to join {companyName} as partners. You will earn milestone payouts (up to ₹{totalRewardAmount}) credited directly to your wallet as they complete jobs!
-                {details?.programRules?.commissionPercentage > 0 && 
-                  ` Plus, your referred partner gets a ${details.programRules.commissionPercentage}% commission discount for their first ${details.programRules.expiryDays || 30} days!`}
+                Invite professional electricians to join {companyName} as partners. You will earn <span className="text-white font-bold">{rewardModeText}</span> (milestones up to ₹{totalRewardAmount}) credited directly to your wallet as they complete jobs!
+                Plus, your referred partner gets a <span className="text-white font-bold">{discPercent}% Commission Discount</span> on their first {discJobsLimit} jobs (Max benefit ₹{discMaxCap})!
               </p>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:max-w-md mt-2">
@@ -137,7 +145,7 @@ const ReferProviders = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { title: 'Released Rewards', value: `₹${details?.totalEarnings ?? 0}`, sub: 'Credited to Wallet', icon: <FiGift className="w-4.5 h-4.5" />, colorBg: 'bg-success/10', colorText: 'text-success' },
-            { title: 'Pending Milestones', value: `${pendingCount}`, sub: 'Awaiting jobs', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' },
+            { title: 'Pending/Held Rewards', value: `₹${details?.pendingEarnings ?? 0}`, sub: 'Awaiting Settlement', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' },
             { title: 'Partners Referred', value: `${details?.referralsCount ?? 0}`, sub: 'Signed up providers', icon: <FiUsers className="w-4.5 h-4.5" />, colorBg: 'bg-info/10', colorText: 'text-info' },
             { title: 'Maximum Reward', value: `₹${totalRewardAmount}`, sub: 'Per referral limit', icon: <FiAward className="w-4.5 h-4.5" />, colorBg: 'bg-primary/10', colorText: 'text-primary' }
           ].map((stat, i) => (
@@ -266,6 +274,18 @@ const ReferProviders = () => {
                               </div>
                               <span className="text-[10px] text-neutral-500 font-bold shrink-0">{ref.completedBookingsCount}/{maxMilestoneBookings} Jobs</span>
                             </div>
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {ref.milestones?.map((m, idx) => (
+                                <span key={idx} className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                                  m.rewardStatus === 'released' ? 'bg-success text-white' :
+                                  m.rewardStatus === 'held' ? 'bg-amber-500 text-white' :
+                                  m.rewardStatus === 'pending_settlement' ? 'bg-blue-500 text-white' :
+                                  'bg-neutral-100 text-neutral-400'
+                                }`} title={m.description}>
+                                  {m.bookingsCount}J: {m.rewardStatus === 'released' ? 'Released' : m.rewardStatus === 'held' ? 'Held' : m.rewardStatus === 'pending_settlement' ? 'Awaiting' : 'Locked'}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                           <td className="py-3.5 px-4">
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
@@ -323,6 +343,18 @@ const ReferProviders = () => {
                         </div>
                         <div className="w-full bg-neutral-200 rounded-full h-1.5 overflow-hidden">
                           <div className="bg-primary h-1.5 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {ref.milestones?.map((m, idx) => (
+                            <span key={idx} className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                              m.rewardStatus === 'released' ? 'bg-success text-white' :
+                              m.rewardStatus === 'held' ? 'bg-amber-500 text-white' :
+                              m.rewardStatus === 'pending_settlement' ? 'bg-blue-500 text-white' :
+                              'bg-neutral-100 text-neutral-400'
+                            }`} title={m.description}>
+                              {m.bookingsCount}J: {m.rewardStatus === 'released' ? 'Released' : m.rewardStatus === 'held' ? 'Held' : m.rewardStatus === 'pending_settlement' ? 'Awaiting' : 'Locked'}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>

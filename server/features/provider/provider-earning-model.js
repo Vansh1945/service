@@ -82,10 +82,17 @@ providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
     throw new Error('Earnings can only be created for completed bookings.');
   }
 
+  // grossAmount = service base / commission base = subtotal - discount
+  // NOT booking.totalAmount (which includes all customer-facing surcharges)
+  const grossAmount = Math.max(
+    0,
+    (bookingDoc.subtotal || 0) - (bookingDoc.totalDiscount || 0)
+  );
+
   return this.create({
     provider: bookingDoc.provider,
     booking: bookingDoc._id,
-    grossAmount: bookingDoc.totalAmount,
+    grossAmount,
     commissionRate: bookingDoc.commissionRule ? bookingDoc.commissionRule.rate : 0,
     commissionAmount: bookingDoc.commissionAmount,
     netAmount: bookingDoc.providerEarnings,
@@ -93,6 +100,90 @@ providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
     status: bookingDoc.paymentMethod === 'cash' ? 'paid' : 'held',
     availableAfter: bookingDoc.payoutHoldUntil
   });
+};
+
+/**
+ * Safe, idempotent backfill: correct historical ProviderEarning records where
+ * grossAmount was stored as booking.totalAmount (customer's full payment) instead of
+ * baseForCommission (subtotal - totalDiscount = service base / commission base).
+ *
+ * This method:
+ *  - Joins each ProviderEarning with its Booking to derive the correct grossAmount.
+ *  - Only updates records where the stored grossAmount does NOT match the correct value.
+ *  - Does NOT touch netAmount, commissionAmount, status, wallet, withdrawals, or any
+ *    payment/payout field. It is purely a reporting-data correction.
+ *  - Is idempotent: calling it multiple times produces the same result.
+ *  - Returns a summary of how many records were inspected and corrected.
+ *
+ * @param {import('mongoose').ClientSession} [session] - Optional Mongoose session.
+ * @returns {Promise<{ inspected: number, corrected: number }>}
+ */
+providerEarningSchema.statics.backfillGrossAmount = async function (session) {
+  const Booking = mongoose.model('Booking');
+  const BATCH = 500;
+  let skip = 0;
+  let inspected = 0;
+  let corrected = 0;
+
+  while (true) {
+    // Fetch a batch of earnings joined with their booking
+    const batch = await this.aggregate([
+      { $skip: skip },
+      { $limit: BATCH },
+      {
+        $lookup: {
+          from: 'bookings',
+          localField: 'booking',
+          foreignField: '_id',
+          as: 'bookingDoc'
+        }
+      },
+      { $unwind: '$bookingDoc' },
+      {
+        $project: {
+          _id: 1,
+          grossAmount: 1,
+          correctGross: {
+            $max: [
+              0,
+              {
+                $subtract: [
+                  { $ifNull: ['$bookingDoc.subtotal', 0] },
+                  { $ifNull: ['$bookingDoc.totalDiscount', 0] }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      // Only keep records where stored value doesn't match correct value
+      {
+        $match: {
+          $expr: { $ne: ['$grossAmount', '$correctGross'] }
+        }
+      }
+    ]);
+
+    if (batch.length === 0 && skip === 0) break; // no mismatched records at all
+    if (batch.length === 0) break;                // exhausted all records
+
+    inspected += BATCH;
+
+    if (batch.length > 0) {
+      const bulkOps = batch.map(doc => ({
+        updateOne: {
+          filter: { _id: doc._id },
+          update: { $set: { grossAmount: doc.correctGross } }
+        }
+      }));
+      const result = await this.bulkWrite(bulkOps, session ? { session } : {});
+      corrected += result.modifiedCount;
+    }
+
+    skip += BATCH;
+  }
+
+  return { inspected, corrected };
 };
 
 /**

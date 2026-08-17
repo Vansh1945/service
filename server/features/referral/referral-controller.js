@@ -80,7 +80,8 @@ const {
   createReferralCoupon,
   releaseReferralReward,
   applyProviderReferralBenefit,
-  checkQualifiedReferralLimit
+  checkQualifiedReferralLimit,
+  isBookingSettled
 } = require('./referral-helpers');
 
 
@@ -233,8 +234,14 @@ const processReferralRegistration = async (referredUser, referredUserType, refer
 const triggerCustomerReferralReward = async (booking) => {
   try {
     const rules = await bootstrapReferralSettings();
-    if (rules.referralProgramPaused) {
-      console.log('Customer referral reward blocked: program is paused.');
+    
+    // Check separate customer program enable/pause controls
+    if (rules.customerReferralEnabled === false || rules.customerProgramEnabled === false) {
+      console.log('Customer referral reward blocked: customerReferralEnabled is disabled.');
+      return;
+    }
+    if (rules.customerReferralPaused || rules.referralProgramPaused) {
+      console.log('Customer referral reward blocked: customer referral is paused.');
       return;
     }
 
@@ -255,9 +262,9 @@ const triggerCustomerReferralReward = async (booking) => {
       return;
     }
 
-    const minAmount = rules.minBookingAmount;
+    const minAmount = rules.customerMinimumBookingAmount ?? rules.minBookingAmount ?? 0;
     if (booking.totalAmount < minAmount) {
-      console.log(`Booking amount ${booking.totalAmount} is below min required ${minAmount}`);
+      console.log(`Booking amount ${booking.totalAmount} is below min customer required ${minAmount}`);
       return;
     }
 
@@ -265,7 +272,7 @@ const triggerCustomerReferralReward = async (booking) => {
       customer: customerId,
       status: 'completed'
     });
-    if (completedCount > 1) {
+    if (rules.firstBookingRequired !== false && completedCount > 1) {
       console.log(`Not first completed booking (count: ${completedCount})`);
       return;
     }
@@ -324,27 +331,29 @@ const triggerCustomerReferralReward = async (booking) => {
     const rewardAmount = calculateCustomerReward(booking, rules);
     if (rewardAmount <= 0) return;
 
-    // Platform Monthly Budget Check
+    // Platform Customer Monthly Budget Check
+    const effectiveMonthlyBudget = rules.customerMonthlyBudget ?? rules.monthlyBudget;
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const monthlySpendRes = await ReferralRewardLog.aggregate([
       { $match: { status: 'released', createdAt: { $gte: startOfMonth } } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
     const monthlySpend = monthlySpendRes[0]?.total || 0;
-    if (rules.monthlyBudget && (monthlySpend + rewardAmount) > rules.monthlyBudget) {
+    if (effectiveMonthlyBudget && (monthlySpend + rewardAmount) > effectiveMonthlyBudget) {
       referral.status = 'fraud_flagged';
       referral.abuseFlags.push('platform_monthly_budget_exceeded');
       await referral.save();
       await notifyAdmins(
         'Platform Referral Monthly Budget Exceeded',
-        `Referral reward for booking ${booking.bookingId || booking._id} rejected: Monthly budget of ₹${rules.monthlyBudget} reached. Current spend: ₹${monthlySpend}.`,
+        `Customer referral reward for booking ${booking.bookingId || booking._id} rejected: Monthly budget of ₹${effectiveMonthlyBudget} reached.`,
         'critical',
         booking._id
       );
       return;
     }
 
-    // Referrer Daily Cap Check
+    // Referrer Customer Daily Cap Check
+    const effectiveDailyCap = rules.customerDailyRewardCap ?? rules.dailyCapPerUser;
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const dailyEarningsRes = await ReferralRewardLog.aggregate([
@@ -352,32 +361,33 @@ const triggerCustomerReferralReward = async (booking) => {
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
     const dailyEarnings = dailyEarningsRes[0]?.total || 0;
-    if (rules.dailyCapPerUser && (dailyEarnings + rewardAmount) > rules.dailyCapPerUser) {
+    if (effectiveDailyCap && (dailyEarnings + rewardAmount) > effectiveDailyCap) {
       referral.status = 'fraud_flagged';
       referral.abuseFlags.push('user_daily_cap_exceeded');
       await referral.save();
       await notifyAdmins(
-        'User Referral Daily Cap Exceeded',
-        `Referrer ${referrer.name} hit daily cap of ₹${rules.dailyCapPerUser}. Held for review.`,
+        'User Customer Referral Daily Cap Exceeded',
+        `Referrer ${referrer.name} hit daily cap of ₹${effectiveDailyCap}. Held for review.`,
         'warning',
         booking._id
       );
       return;
     }
 
-    // Referrer Monthly Cap Check
+    // Referrer Customer Monthly Cap Check
+    const effectiveMonthlyCap = rules.customerMonthlyRewardCap ?? rules.monthlyCapPerUser;
     const monthlyEarningsRes = await ReferralRewardLog.aggregate([
       { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfMonth } } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
     const monthlyEarnings = monthlyEarningsRes[0]?.total || 0;
-    if (rules.monthlyCapPerUser && (monthlyEarnings + rewardAmount) > rules.monthlyCapPerUser) {
+    if (effectiveMonthlyCap && (monthlyEarnings + rewardAmount) > effectiveMonthlyCap) {
       referral.status = 'fraud_flagged';
       referral.abuseFlags.push('user_monthly_cap_exceeded');
       await referral.save();
       await notifyAdmins(
-        'User Referral Monthly Cap Exceeded',
-        `Referrer ${referrer.name} hit monthly cap of ₹${rules.monthlyCapPerUser}. Held for review.`,
+        'User Customer Referral Monthly Cap Exceeded',
+        `Referrer ${referrer.name} hit monthly cap of ₹${effectiveMonthlyCap}. Held for review.`,
         'warning',
         booking._id
       );
@@ -389,22 +399,48 @@ const triggerCustomerReferralReward = async (booking) => {
     referral.completedAt = new Date();
     await referral.save();
 
-    await releaseReferralReward(referral, referrer, rewardAmount, booking, 'customer');
+    // Deliver Referrer Reward (CASH vs COUPON)
+    const rewardTypeSelection = rules.customerReferrerRewardType || 'CASH';
+    if (rewardTypeSelection === 'COUPON') {
+      const couponCfg = rules.customerReferrerCouponConfig || {};
+      const couponCode = `REF_CUST_${referrer._id.toString().slice(-6).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
+      await createReferralCoupon(
+        couponCode,
+        couponCfg.discountValue || rewardAmount,
+        couponCfg.minBookingAmount || 0,
+        couponCfg.validityDays || 30,
+        referrer._id,
+        rules.systemReferralOwner || referrer._id,
+        {
+          discountType: couponCfg.discountType || 'flat',
+          maxDiscount: couponCfg.maxDiscount || couponCfg.discountValue || rewardAmount,
+          usageLimit: couponCfg.usageLimit || 1
+        }
+      );
+      console.log(`[ReferralController] Referrer customer coupon ${couponCode} issued to ${referrer._id}`);
+    } else {
+      // CASH Reward to Referrer Wallet
+      await releaseReferralReward(referral, referrer, rewardAmount, booking, 'customer');
+    }
 
-    if (rules.welcomeRewardEnabled && rules.welcomeRewardValue > 0) {
-      const welcomeRewardValue = rules.welcomeRewardValue;
-      const maxWelcomeVal = rules.maxWelcomeRewardValue;
+    // Deliver New Customer Reward (if triggered on FIRST_COMPLETED_BOOKING)
+    if (
+      rules.newCustomerRewardEnabled !== false &&
+      (rules.newCustomerRewardTrigger || 'FIRST_COMPLETED_BOOKING') === 'FIRST_COMPLETED_BOOKING'
+    ) {
+      const newCustRewardVal = rules.newCustomerRewardAmount ?? rules.welcomeRewardValue ?? 50;
+      const newCustRewardType = rules.newCustomerRewardType || 'CASH';
 
-      if (welcomeRewardValue <= maxWelcomeVal && welcomeRewardValue <= (booking.commissionAmount || 0)) {
-        if (rules.welcomeRewardType === 'wallet' || rules.welcomeRewardType === 'both') {
+      if (newCustRewardVal > 0) {
+        if (newCustRewardType === 'CASH') {
           if (!referredUser.wallet) {
             referredUser.wallet = { availableBalance: 0, totalRefunded: 0, walletTransactions: [], lastUpdated: new Date() };
           }
-          referredUser.wallet.availableBalance += welcomeRewardValue;
+          referredUser.wallet.availableBalance += newCustRewardVal;
           referredUser.wallet.walletTransactions.push({
             type: 'credit',
-            amount: welcomeRewardValue,
-            reason: 'Referred Welcome Reward Credit',
+            amount: newCustRewardVal,
+            reason: 'New Customer Referral Welcome Reward',
             status: 'success',
             booking: booking._id,
             createdAt: new Date()
@@ -412,42 +448,33 @@ const triggerCustomerReferralReward = async (booking) => {
           referredUser.wallet.lastUpdated = new Date();
           await referredUser.save();
 
-          try {
-            await sendNotification(
-              referredUser._id,
-              'customer',
-              'Welcome Reward Credited!',
-              `Welcome to Raj Electrical Services! You received a welcome reward of ₹${welcomeRewardValue} in your wallet.`,
-              'wallet',
-              booking._id
-            );
-          } catch (notificationErr) {
-            global.logger.error('Error sending welcome reward notification: ' + notificationErr.message, notificationErr);
-          }
-
           const welcomeTx = new Transaction({
             booking: booking._id,
             bookingId: booking.bookingId || booking._id.toString(),
             user: customerId,
             customerId: customerId.toString(),
-            amount: welcomeRewardValue,
+            amount: newCustRewardVal,
             paymentStatus: 'completed',
             paymentMethod: 'wallet',
             type: 'referral_reward',
-            description: 'Referred Customer Welcome Reward'
+            description: 'New Customer Referral Welcome Reward'
           });
           await welcomeTx.save();
-        }
-
-        if (rules.welcomeRewardType === 'coupon' || rules.welcomeRewardType === 'both') {
-          const welcomeCode = `WELCOME_${customerId.toString().substring(18).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
+        } else if (newCustRewardType === 'COUPON') {
+          const newCustCfg = rules.newCustomerCouponConfig || {};
+          const welcomeCode = `WELCOME_${customerId.toString().slice(-6).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
           await createReferralCoupon(
             welcomeCode,
-            welcomeRewardValue,
-            0,
-            30,
+            newCustCfg.discountValue || newCustRewardVal,
+            newCustCfg.minBookingAmount || 0,
+            newCustCfg.validityDays || 30,
             customerId,
-            rules.systemReferralOwner || referrer._id
+            rules.systemReferralOwner || referrer._id,
+            {
+              discountType: newCustCfg.discountType || 'flat',
+              maxDiscount: newCustCfg.maxDiscount || newCustCfg.discountValue || newCustRewardVal,
+              usageLimit: newCustCfg.usageLimit || 1
+            }
           );
         }
       }
@@ -458,12 +485,12 @@ const triggerCustomerReferralReward = async (booking) => {
         referrer._id,
         'customer',
         'Referral Reward Released!',
-        `Congratulations! You earned ₹${rewardAmount} because your friend completed their first booking.`,
+        `Congratulations! You earned your referral reward because your friend completed their first booking.`,
         'wallet',
         booking._id
       );
     } catch (e) {
-      global.logger.error('Error sending referral notification: ' + e.message, e);
+      global.logger.error('Error sending customer referral notification: ' + e.message, e);
     }
   } catch (err) {
     global.logger.error('Error handling customer referral reward transaction: ' + err.message, err);
@@ -474,10 +501,22 @@ const triggerCustomerReferralReward = async (booking) => {
  * Process provider milestone reward checks using commission windows.
  */
 const triggerProviderReferralReward = async (referredProviderId) => {
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    session = null;
+  }
+
   try {
     const sysSettings = await bootstrapReferralSettings();
     if (sysSettings.referralProgramPaused) {
       console.log('Provider referral reward blocked: program is paused.');
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
       return;
     }
 
@@ -485,126 +524,214 @@ const triggerProviderReferralReward = async (referredProviderId) => {
       referredUser: referredProviderId,
       referredUserType: 'provider',
       status: { $nin: ['fraud_flagged', 'expired', 'rejected'] }
-    });
+    }).session(session);
 
-    if (!referral) return;
+    if (!referral) {
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      return;
+    }
 
     const isExpired = await checkReferralExpiry(referral);
-    if (isExpired) return;
+    if (isExpired) {
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      return;
+    }
 
     const milestones = sysSettings.providerMilestones || [];
-    if (milestones.length === 0) return;
+    if (milestones.length === 0) {
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      return;
+    }
 
-    const completedCount = await Booking.countDocuments({
+    // Get all completed, paid, non-cancelled/refunded bookings for the referee provider
+    // Sorted deterministically by completion date, then _id
+    const eligibleBookings = await Booking.find({
       provider: referredProviderId,
-      status: 'completed'
-    });
-    if (completedCount === 0) return;
+      status: 'completed',
+      paymentStatus: { $in: ['paid', 'settled'] }
+    }).sort({ completedAt: 1, _id: 1 }).session(session).lean();
 
-    const referrer = await Provider.findById(referral.referrer);
-    if (!referrer || referrer.isDeleted || referrer.isSuspended) return;
+    if (eligibleBookings.length === 0) {
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      return;
+    }
+
+    const referrer = await Provider.findById(referral.referrer).session(session);
+    if (!referrer || referrer.isDeleted || referrer.isSuspended) {
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      return;
+    }
 
     const sortedMilestones = [...milestones].sort((a, b) => a.bookingsCount - b.bookingsCount);
 
     for (let i = 0; i < sortedMilestones.length; i++) {
       const milestone = sortedMilestones[i];
-      if (completedCount < milestone.bookingsCount) continue;
+      if (eligibleBookings.length < milestone.bookingsCount) continue;
 
-      if (referral.providerRewardMilestonesReleased.includes(milestone.bookingsCount)) continue;
-
+      // 1. Identify the exact bookings contributing to this milestone window
       const prevBookingsCount = i > 0 ? sortedMilestones[i - 1].bookingsCount : 0;
-      const bookings = await Booking.find({
-        provider: referredProviderId,
-        status: 'completed'
-      }).sort({ completedAt: 1 }).select('commissionAmount').lean();
+      const windowBookings = eligibleBookings.slice(prevBookingsCount, milestone.bookingsCount);
+      const lastBooking = windowBookings[windowBookings.length - 1];
 
-      const windowBookings = bookings.slice(prevBookingsCount, milestone.bookingsCount);
-      const commissionGenerated = windowBookings.reduce((sum, b) => sum + (b.commissionAmount || 0), 0);
+      // Check if we already created a log for this milestone (released or held)
+      let rewardLog = await ReferralRewardLog.findOne({
+        referral: referral._id,
+        rewardType: 'providermilestone',
+        'details.milestoneBookingsCount': milestone.bookingsCount
+      }).session(session);
 
-      const rewardAmount = calculateProviderReward(commissionGenerated, sysSettings);
+      if (rewardLog && rewardLog.status === 'released') {
+        continue;
+      }
+
+      // Calculate reward amount
+      let rewardAmount = 0;
+      if (sysSettings.rewardCalculationMode === 'fixed' || sysSettings.rewardCalculationMode === 'cashincentive') {
+        rewardAmount = milestone.rewardAmount || 0;
+      } else {
+        // commission or commissionshare mode
+        // Calculate based strictly on platform commission (commissionAmount) of bookings in this milestone window
+        const commissionGenerated = windowBookings.reduce((sum, b) => sum + (b.commissionAmount || 0), 0);
+        rewardAmount = calculateProviderReward(commissionGenerated, sysSettings);
+      }
+
       if (rewardAmount <= 0) continue;
 
-      // Platform Monthly Budget Check
-      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const monthlySpendRes = await ReferralRewardLog.aggregate([
-        { $match: { status: 'released', createdAt: { $gte: startOfMonth } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      const monthlySpend = monthlySpendRes[0]?.total || 0;
-      if (sysSettings.monthlyBudget && (monthlySpend + rewardAmount) > sysSettings.monthlyBudget) {
-        referral.status = 'fraud_flagged';
-        referral.abuseFlags.push('platform_monthly_budget_exceeded');
-        await referral.save();
-        await notifyAdmins(
-          'Platform Referral Monthly Budget Exceeded',
-          `Provider referral milestone reward for provider ${referrer.name} rejected: Monthly budget of ₹${sysSettings.monthlyBudget} reached.`,
-          'critical',
-          null
-        );
-        continue;
+      if (!rewardLog) {
+        // Budget & cap checks before creating log or releasing
+        const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const monthlySpendRes = await ReferralRewardLog.aggregate([
+          { $match: { status: 'released', createdAt: { $gte: startOfMonth } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]).session(session);
+        const monthlySpend = monthlySpendRes[0]?.total || 0;
+        if (sysSettings.monthlyBudget && (monthlySpend + rewardAmount) > sysSettings.monthlyBudget) {
+          referral.status = 'fraud_flagged';
+          referral.abuseFlags.push('platform_monthly_budget_exceeded');
+          await referral.save({ session });
+          await notifyAdmins(
+            'Platform Referral Monthly Budget Exceeded',
+            `Provider referral milestone reward for provider ${referrer.name} rejected: Monthly budget of ₹${sysSettings.monthlyBudget} reached.`,
+            'critical',
+            null
+          );
+          continue;
+        }
+
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const dailyEarningsRes = await ReferralRewardLog.aggregate([
+          { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfDay } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]).session(session);
+        const dailyEarnings = dailyEarningsRes[0]?.total || 0;
+        if (sysSettings.dailyCapPerUser && (dailyEarnings + rewardAmount) > sysSettings.dailyCapPerUser) {
+          referral.status = 'fraud_flagged';
+          referral.abuseFlags.push('user_daily_cap_exceeded');
+          await referral.save({ session });
+          await notifyAdmins(
+            'User Referral Daily Cap Exceeded',
+            `Referrer ${referrer.name} hit daily cap of ₹${sysSettings.dailyCapPerUser} during milestone reward. Held for review.`,
+            'warning',
+            null
+          );
+          continue;
+        }
+
+        const monthlyEarningsRes = await ReferralRewardLog.aggregate([
+          { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfMonth } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]).session(session);
+        const monthlyEarnings = monthlyEarningsRes[0]?.total || 0;
+        if (sysSettings.monthlyCapPerUser && (monthlyEarnings + rewardAmount) > sysSettings.monthlyCapPerUser) {
+          referral.status = 'fraud_flagged';
+          referral.abuseFlags.push('user_monthly_cap_exceeded');
+          await referral.save({ session });
+          await notifyAdmins(
+            'User Referral Monthly Cap Exceeded',
+            `Referrer ${referrer.name} hit monthly cap of ₹${sysSettings.monthlyCapPerUser} during milestone reward. Held for review.`,
+            'warning',
+            null
+          );
+          continue;
+        }
+
+        rewardLog = new ReferralRewardLog({
+          referral: referral._id,
+          rewardType: 'providermilestone',
+          recipient: referrer._id,
+          recipientModel: 'Provider',
+          recipientType: 'provider',
+          amount: rewardAmount,
+          details: {
+            bookingId: lastBooking?._id,
+            milestoneBookingsCount: milestone.bookingsCount
+          },
+          status: 'held'
+        });
+        await rewardLog.save({ session });
+        console.log(`[ReferralRewardLog] Created held reward log for provider milestone ${milestone.bookingsCount}`);
       }
 
-      // Referrer Daily Cap Check
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const dailyEarningsRes = await ReferralRewardLog.aggregate([
-        { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfDay } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      const dailyEarnings = dailyEarningsRes[0]?.total || 0;
-      if (sysSettings.dailyCapPerUser && (dailyEarnings + rewardAmount) > sysSettings.dailyCapPerUser) {
-        referral.status = 'fraud_flagged';
-        referral.abuseFlags.push('user_daily_cap_exceeded');
-        await referral.save();
-        await notifyAdmins(
-          'User Referral Daily Cap Exceeded',
-          `Referrer ${referrer.name} hit daily cap of ₹${sysSettings.dailyCapPerUser} during milestone reward. Held for review.`,
-          'warning',
-          null
-        );
-        continue;
+      // Check if all bookings in the milestone window are settled
+      let allSettled = true;
+      for (const b of windowBookings) {
+        const settled = await isBookingSettled(b._id, referredProviderId, session);
+        if (!settled) {
+          allSettled = false;
+          break;
+        }
       }
 
-      // Referrer Monthly Cap Check
-      const monthlyEarningsRes = await ReferralRewardLog.aggregate([
-        { $match: { recipient: referrer._id, status: 'released', createdAt: { $gte: startOfMonth } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      const monthlyEarnings = monthlyEarningsRes[0]?.total || 0;
-      if (sysSettings.monthlyCapPerUser && (monthlyEarnings + rewardAmount) > sysSettings.monthlyCapPerUser) {
-        referral.status = 'fraud_flagged';
-        referral.abuseFlags.push('user_monthly_cap_exceeded');
-        await referral.save();
-        await notifyAdmins(
-          'User Referral Monthly Cap Exceeded',
-          `Referrer ${referrer.name} hit monthly cap of ₹${sysSettings.monthlyCapPerUser} during milestone reward. Held for review.`,
-          'warning',
-          null
-        );
-        continue;
-      }
+      if (allSettled) {
+        if (!referral.providerRewardMilestonesReleased.includes(milestone.bookingsCount)) {
+          referral.providerRewardMilestonesReleased.push(milestone.bookingsCount);
+          referral.status = 'released';
+          referral.completedAt = new Date();
+          await referral.save({ session });
+        }
 
-      referral.providerRewardMilestonesReleased.push(milestone.bookingsCount);
-      referral.status = 'released';
-      referral.completedAt = new Date();
-      await referral.save();
+        await releaseReferralReward(referral, referrer, rewardAmount, lastBooking, 'provider', milestone.bookingsCount, session);
 
-      await releaseReferralReward(referral, referrer, rewardAmount, bookings[bookings.length - 1], 'provider');
-
-      try {
-        await sendNotification(
-          referrer._id,
-          'provider',
-          'Electrician Milestone Unlocked!',
-          `You earned ₹${rewardAmount} as your referred partner completed ${milestone.bookingsCount} jobs!`,
-          'wallet',
-          null
-        );
-      } catch (e) {
-        global.logger.error('Error sending milestone notification: ' + e.message, e);
+        try {
+          await sendNotification(
+            referrer._id,
+            'provider',
+            'Electrician Milestone Unlocked!',
+            `You earned ₹${rewardAmount} as your referred partner completed ${milestone.bookingsCount} jobs!`,
+            'wallet',
+            null
+          );
+        } catch (e) {
+          global.logger.error('Error sending milestone notification: ' + e.message, e);
+        }
       }
     }
+
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
   } catch (err) {
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
     global.logger.error('Error handling provider referral reward: ' + err.message, err);
   }
 };
@@ -621,8 +748,8 @@ const getCustomerReferralDetails = async (req, res, next) => {
     }
 
     const refConfig = await bootstrapReferralSettings();
-    if (refConfig.referralProgramPaused) {
-      return res.status(200).json({ success: true, paused: true, message: 'Referral program is temporarily unavailable.' });
+    if (refConfig.customerReferralPaused || refConfig.customerReferralEnabled === false) {
+      return res.status(200).json({ success: true, paused: true, message: 'Customer Referral program is temporarily unavailable.' });
     }
 
     const eligibility = await validateReferralEligibility(customer, 'customer', refConfig);
@@ -650,14 +777,16 @@ const getCustomerReferralDetails = async (req, res, next) => {
         referralsCount: referrals.length,
         eligibility,
         programRules: {
-          commissionPercentage: refConfig.commissionPercentage,
-          fixedRewardAmount: refConfig.fixedRewardAmount,
-          rewardCalculationMode: refConfig.rewardCalculationMode,
-          welcomeRewardEnabled: refConfig.welcomeRewardEnabled,
-          welcomeRewardValue: refConfig.welcomeRewardValue,
-          minBookingAmount: refConfig.minBookingAmount,
-          referralExpiryDays: refConfig.referralExpiryDays,
-          expiryDays: refConfig.expiryDays
+          customerReferrerRewardType: refConfig.customerReferrerRewardType || 'CASH',
+          customerReferrerRewardAmount: refConfig.customerReferrerRewardAmount || 100,
+          customerReferrerCouponConfig: refConfig.customerReferrerCouponConfig || { discountType: 'flat', discountValue: 100, minBookingAmount: 300 },
+          newCustomerRewardEnabled: refConfig.newCustomerRewardEnabled ?? true,
+          newCustomerRewardType: refConfig.newCustomerRewardType || 'CASH',
+          newCustomerRewardAmount: refConfig.newCustomerRewardAmount || 50,
+          newCustomerCouponConfig: refConfig.newCustomerCouponConfig || { discountType: 'flat', discountValue: 50, minBookingAmount: 200 },
+          minBookingAmount: refConfig.customerMinimumBookingAmount || refConfig.minBookingAmount || 100,
+          referralExpiryDays: refConfig.customerRewardValidityDays || refConfig.referralExpiryDays || 30,
+          expiryDays: refConfig.expiryDays || 30
         },
         referrals: referrals.map(ref => ({
           _id: ref._id,
@@ -687,8 +816,8 @@ const getProviderReferralDetails = async (req, res, next) => {
     }
 
     const refConfig = await bootstrapReferralSettings();
-    if (refConfig.referralProgramPaused) {
-      return res.status(200).json({ success: true, paused: true, message: 'Referral program is temporarily unavailable.' });
+    if (refConfig.referralProgramPaused || refConfig.providerProgramEnabled === false) {
+      return res.status(200).json({ success: true, paused: true, message: 'Provider Referral program is temporarily unavailable.' });
     }
 
     const eligibility = await validateReferralEligibility(provider, 'provider', refConfig);
@@ -697,14 +826,16 @@ const getProviderReferralDetails = async (req, res, next) => {
       await provider.save();
     }
 
-    const [referrals, rewardLogs] = await Promise.all([
+    const [referrals, releasedLogs, heldLogs] = await Promise.all([
       Referral.find({ referrer: providerId, referrerType: 'provider' })
         .populate('referredUser', 'name email createdAt')
         .lean(),
-      ReferralRewardLog.find({ recipient: providerId, status: 'released' }).select('amount').lean()
+      ReferralRewardLog.find({ recipient: providerId, status: 'released' }).select('amount referral rewardType details status').lean(),
+      ReferralRewardLog.find({ recipient: providerId, status: 'held' }).select('amount referral rewardType details status').lean()
     ]);
 
-    const totalEarnings = rewardLogs.reduce((sum, log) => sum + log.amount, 0);
+    const totalEarnings = releasedLogs.reduce((sum, log) => sum + log.amount, 0);
+    const pendingEarnings = heldLogs.reduce((sum, log) => sum + log.amount, 0);
 
     const milestones = refConfig.providerMilestones || [];
     const referralsWithProgress = [];
@@ -718,7 +849,7 @@ const getProviderReferralDetails = async (req, res, next) => {
       {
         $match: {
           provider: { $in: referredUserIds },
-          status: 'Completed'
+          status: 'completed'
         }
       },
       {
@@ -739,13 +870,23 @@ const getProviderReferralDetails = async (req, res, next) => {
 
       const compCount = countMap[ref.referredUser._id.toString()] || 0;
 
-      const milestonesProgress = milestones.map(m => ({
-        bookingsCount: m.bookingsCount,
-        rewardAmount: m.rewardAmount,
-        description: m.description,
-        isUnlocked: compCount >= m.bookingsCount,
-        currentValue: Math.min(compCount, m.bookingsCount)
-      }));
+      const milestonesProgress = milestones.map(m => {
+        const isUnlocked = compCount >= m.bookingsCount;
+        const rewardLog = [...releasedLogs, ...heldLogs].find(
+          log => log.referral?.toString() === ref._id.toString() &&
+                 log.rewardType === 'providermilestone' &&
+                 log.details?.milestoneBookingsCount === m.bookingsCount
+        );
+        const rewardStatus = rewardLog ? rewardLog.status : (isUnlocked ? 'pending_settlement' : 'locked');
+        return {
+          bookingsCount: m.bookingsCount,
+          rewardAmount: rewardLog?.amount ?? m.rewardAmount,
+          description: m.description,
+          isUnlocked,
+          rewardStatus,
+          currentValue: Math.min(compCount, m.bookingsCount)
+        };
+      });
 
       referralsWithProgress.push({
         _id: ref._id,
@@ -764,18 +905,20 @@ const getProviderReferralDetails = async (req, res, next) => {
         referralCode: provider.referralCode || null,
         referredBy: provider.referredBy || null,
         totalEarnings,
+        pendingEarnings,
         referralsCount: referralsWithProgress.length,
         eligibility,
         milestones,
         programRules: {
-          commissionPercentage: refConfig.commissionPercentage,
-          fixedRewardAmount: refConfig.fixedRewardAmount,
-          rewardCalculationMode: refConfig.rewardCalculationMode,
-          welcomeRewardEnabled: refConfig.welcomeRewardEnabled,
-          welcomeRewardValue: refConfig.welcomeRewardValue,
-          minBookingAmount: refConfig.minBookingAmount,
-          referralExpiryDays: refConfig.referralExpiryDays,
-          expiryDays: refConfig.expiryDays
+          commissionPercentage: refConfig.commissionPercentage || 10,
+          fixedRewardAmount: refConfig.fixedRewardAmount || 50,
+          rewardCalculationMode: refConfig.rewardCalculationMode || 'commission',
+          providerCommissionDiscountPercent: refConfig.providerCommissionDiscountPercent || 10,
+          providerCommissionDiscountLimitBookings: refConfig.providerCommissionDiscountLimitBookings || 5,
+          providerCommissionDiscountMaxBenefit: refConfig.providerCommissionDiscountMaxBenefit || 1000,
+          minBookingAmount: refConfig.minBookingAmount || 100,
+          referralExpiryDays: refConfig.referralExpiryDays || 90,
+          expiryDays: refConfig.expiryDays || 90
         },
         referrals: referralsWithProgress
       }
@@ -859,8 +1002,57 @@ const getAdminDashboard = async (req, res, next) => {
     const totalReferrals = await Referral.countDocuments();
     const customerReferrals = await Referral.countDocuments({ referrerType: 'customer' });
     const providerReferrals = await Referral.countDocuments({ referrerType: 'provider' });
+
     const completedReferrals = await Referral.countDocuments({ status: 'released' });
+    const providerCompletedReferrals = await Referral.countDocuments({ status: 'released', referrerType: 'provider' });
+    const customerCompletedReferrals = await Referral.countDocuments({ status: 'released', referrerType: 'customer' });
+
     const flaggedReferrals = await Referral.countDocuments({ status: 'fraud_flagged' });
+    const providerFlaggedReferrals = await Referral.countDocuments({ status: 'fraud_flagged', referrerType: 'provider' });
+    const customerFlaggedReferrals = await Referral.countDocuments({ status: 'fraud_flagged', referrerType: 'customer' });
+
+    const pendingReferrals = await Referral.countDocuments({ status: 'pending' });
+    const providerPendingReferrals = await Referral.countDocuments({ status: 'pending', referrerType: 'provider' });
+    const customerPendingReferrals = await Referral.countDocuments({ status: 'pending', referrerType: 'customer' });
+
+    const rewardLogsReleased = await ReferralRewardLog.aggregate([
+      { $match: { status: 'released' } },
+      { $group: { _id: '$recipientType', total: { $sum: '$amount' } } }
+    ]);
+    const providerReleasedRewards = rewardLogsReleased.find(r => r._id === 'provider')?.total || 0;
+    const customerReleasedRewards = rewardLogsReleased.find(r => r._id === 'customer')?.total || 0;
+
+    const rewardLogsHeld = await ReferralRewardLog.aggregate([
+      { $match: { status: 'held' } },
+      { $group: { _id: '$recipientType', total: { $sum: '$amount' } } }
+    ]);
+    const providerPendingRewards = rewardLogsHeld.find(r => r._id === 'provider')?.total || 0;
+    const customerPendingRewards = rewardLogsHeld.find(r => r._id === 'customer')?.total || 0;
+
+    const providerQualifiedRefs = await Referral.find({ status: 'released', referrerType: 'provider' }).distinct('referredUser');
+    const customerQualifiedRefs = await Referral.find({ status: 'released', referrerType: 'customer' }).distinct('referredUser');
+
+    const providerBookings = await Booking.find({ provider: { $in: providerQualifiedRefs }, status: 'completed' }).select('totalAmount commissionAmount').lean();
+    const customerBookings = await Booking.find({ customer: { $in: customerQualifiedRefs }, status: 'completed' }).select('totalAmount commissionAmount').lean();
+
+    const providerReferredRevenue = providerBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    const customerReferredRevenue = customerBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    const providerCommissionCollected = providerBookings.reduce((sum, b) => sum + (b.commissionAmount || 0), 0);
+
+    const providerFinancialSummary = {
+      platformCommissionGenerated: providerCommissionCollected,
+      referralRewardsReleased: providerReleasedRewards,
+      companyRetainedCommission: providerCommissionCollected - providerReleasedRewards,
+      referredRevenue: providerReferredRevenue
+    };
+
+    const customerFinancialSummary = {
+      customerReferralMarketingSpend: customerReleasedRewards,
+      cashRewards: customerReleasedRewards,
+      couponRewards: 0,
+      totalCustomerReferralCost: customerReleasedRewards,
+      referredRevenue: customerReferredRevenue
+    };
 
     res.status(200).json({
       success: true,
@@ -870,7 +1062,22 @@ const getAdminDashboard = async (req, res, next) => {
           customerReferrals,
           providerReferrals,
           completedReferrals,
+          providerCompletedReferrals,
+          customerCompletedReferrals,
           flaggedReferrals,
+          providerFlaggedReferrals,
+          customerFlaggedReferrals,
+          pendingReferrals,
+          providerPendingReferrals,
+          customerPendingReferrals,
+          providerReleasedRewards,
+          customerReleasedRewards,
+          providerPendingRewards,
+          customerPendingRewards,
+          providerReferredRevenue,
+          customerReferredRevenue,
+          providerFinancialSummary,
+          customerFinancialSummary,
           analytics
         },
         config
@@ -997,11 +1204,112 @@ const deleteMilestone = async (req, res, next) => {
 };
 
 /**
+ * API: Get admin referrals list with filtering
+ */
+const getAdminReferralsList = async (req, res, next) => {
+  try {
+    const { type, status } = req.query;
+    const filter = {};
+    if (type && type !== 'all') filter.referrerType = type;
+    if (status && status !== 'all') filter.status = status;
+
+    const refSettings = await bootstrapReferralSettings();
+
+    const rawList = await Referral.find(filter)
+      .populate('referrer', 'name email phone referralCode providerReferralCode customerReferralCode')
+      .populate('referredUser', 'name email phone createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const referralIds = rawList.map(r => r._id);
+    const rewardLogs = referralIds.length > 0 ? await ReferralRewardLog.find({ referral: { $in: referralIds } }).lean() : [];
+
+    const rewardLogMap = {};
+    rewardLogs.forEach(log => {
+      if (log.status === 'released') {
+        rewardLogMap[log.referral.toString()] = log;
+      }
+    });
+
+    const enrichedList = rawList.map(r => {
+      const isCustomer = r.referrerType === 'customer';
+      const snap = r.rulesSnapshot || refSettings;
+      const referralCode = r.referralCodeUsed || r.referralCode || (isCustomer ? r.referrer?.customerReferralCode : r.referrer?.providerReferralCode) || r.referrer?.referralCode || 'N/A';
+      
+      let rewardType = 'CASH';
+      let referrerBenefit = '';
+      let referredUserBenefit = '';
+
+      if (isCustomer) {
+        rewardType = r.rewardType || snap?.customerReferrerRewardType || 'CASH';
+        const isCoupon = rewardType === 'COUPON';
+        const referrerVal = r.rewardAmount || snap?.customerReferrerRewardAmount || 100;
+        const newCustVal = snap?.newCustomerRewardAmount || 50;
+        const refCouponCfg = snap?.customerReferrerCouponConfig;
+        const newCustCouponCfg = snap?.newCustomerCouponConfig;
+
+        if (isCoupon) {
+          const couponValStr = refCouponCfg?.discountType === 'percentage' 
+            ? `${refCouponCfg.discountValue}%` 
+            : `₹${refCouponCfg?.discountValue || referrerVal}`;
+          const minBk = refCouponCfg?.minBookingAmount || snap?.customerMinimumBookingAmount || 100;
+          referrerBenefit = `₹${referrerVal} Coupon (${couponValStr} Off, Min ₹${minBk})`;
+        } else {
+          referrerBenefit = `₹${referrerVal} Wallet Cash`;
+        }
+
+        if (snap?.newCustomerRewardType === 'COUPON') {
+          const newCouponValStr = newCustCouponCfg?.discountType === 'percentage'
+            ? `${newCustCouponCfg.discountValue}%`
+            : `₹${newCustCouponCfg?.discountValue || newCustVal}`;
+          const newMinBk = newCustCouponCfg?.minBookingAmount || 100;
+          referredUserBenefit = `Discount Coupon (${newCouponValStr} Off, Min ₹${newMinBk})`;
+        } else {
+          referredUserBenefit = `₹${newCustVal} Welcome Cash Credit`;
+        }
+      } else {
+        const isFixed = (snap?.rewardCalculationMode || 'commission') === 'fixed';
+        rewardType = isFixed ? 'FIXED CASH' : 'COMMISSION SHARE';
+        const commPercent = snap?.commissionPercentage || 10;
+        const fixedAmt = snap?.fixedRewardAmount || 50;
+        const discPercent = snap?.providerCommissionDiscountPercent || 10;
+        const discLimit = snap?.providerCommissionDiscountLimitBookings || 5;
+        const discCap = snap?.providerCommissionDiscountMaxBenefit || 1000;
+
+        referrerBenefit = isFixed ? `₹${fixedAmt} Cash Reward / Job` : `${commPercent}% Platform Commission Share`;
+        referredUserBenefit = `${discPercent}% Comm Discount (First ${discLimit} Jobs, Max ₹${discCap})`;
+      }
+
+      const releasedLog = rewardLogMap[r._id.toString()];
+
+      return {
+        ...r,
+        referralCode,
+        rewardType,
+        referrerBenefit,
+        referredUserBenefit,
+        actualPaidAmount: releasedLog ? releasedLog.amount : (r.status === 'released' ? (r.rewardAmount || 0) : 0)
+      };
+    });
+
+    res.status(200).json({ success: true, data: enrichedList });
+  } catch (err) {
+    global.logger.error(`[ReferralController.getAdminReferralsList] Error: ${err.message}`, err);
+    next(err);
+  }
+};
+
+/**
  * API: Get flagged fraud referrals
  */
 const getFraudReferrals = async (req, res, next) => {
   try {
-    const fraudList = await Referral.find({ status: 'fraud_flagged' })
+    const { program, role } = req.query;
+    const filter = { status: 'fraud_flagged' };
+    if (program && program !== 'all') filter.referrerType = program;
+    if (role && role !== 'all') filter.referredUserType = role;
+
+    const fraudList = await Referral.find(filter)
       .populate('referrer', 'name email phone')
       .populate('referredUser', 'name email phone')
       .sort({ createdAt: -1 })
@@ -1018,7 +1326,12 @@ const getFraudReferrals = async (req, res, next) => {
  */
 const getRewardLogs = async (req, res, next) => {
   try {
-    const logs = await ReferralRewardLog.find()
+    const { program, status, recipientType } = req.query;
+    const filter = {};
+    if (status && status !== 'all') filter.status = status;
+    if (recipientType && recipientType !== 'all') filter.recipientType = recipientType;
+
+    const logs = await ReferralRewardLog.find(filter)
       .populate('recipient')
       .populate({
         path: 'referral',
@@ -1029,7 +1342,13 @@ const getRewardLogs = async (req, res, next) => {
       })
       .sort({ createdAt: -1 })
       .lean();
-    res.status(200).json({ success: true, data: logs });
+
+    let filteredLogs = logs;
+    if (program && program !== 'all') {
+      filteredLogs = logs.filter(l => l.referral?.referrerType === program || l.recipientType === program);
+    }
+
+    res.status(200).json({ success: true, data: filteredLogs });
   } catch (err) {
     global.logger.error(`[ReferralController.getRewardLogs] Route: ${req.originalUrl || req.url} - getRewardLogs error: ${err.message}`, err);
     next(err);
@@ -1106,6 +1425,114 @@ const getProviderEligibility = async (req, res, next) => {
   }
 };
 
+const releaseSettledReferralRewards = async () => {
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    session = null;
+  }
+
+  try {
+    // Find all held provider milestone reward logs
+    const heldLogs = await ReferralRewardLog.find({
+      rewardType: 'providermilestone',
+      status: 'held'
+    }).populate('referral').session(session);
+
+    if (heldLogs.length === 0) {
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      return;
+    }
+
+    console.log(`[ReferralController] releaseSettledReferralRewards: checking ${heldLogs.length} held logs...`);
+
+    for (const log of heldLogs) {
+      const referral = log.referral;
+      if (!referral || ['fraud_flagged', 'expired', 'rejected'].includes(referral.status)) continue;
+
+      const referredProviderId = referral.referredUser;
+      const milestoneCount = log.details?.milestoneBookingsCount;
+      if (!milestoneCount) continue;
+
+      // Find the milestone configuration to find previous milestones
+      const sysSettings = await bootstrapReferralSettings();
+      const milestones = sysSettings.providerMilestones || [];
+      const sortedMilestones = [...milestones].sort((a, b) => a.bookingsCount - b.bookingsCount);
+      const milestoneIndex = sortedMilestones.findIndex(m => m.bookingsCount === milestoneCount);
+      if (milestoneIndex === -1) continue;
+
+      const prevBookingsCount = milestoneIndex > 0 ? sortedMilestones[milestoneIndex - 1].bookingsCount : 0;
+
+      // Fetch all eligible bookings up to this milestone
+      const eligibleBookings = await Booking.find({
+        provider: referredProviderId,
+        status: 'completed',
+        paymentStatus: { $in: ['paid', 'settled'] }
+      }).sort({ completedAt: 1, _id: 1 }).session(session).lean();
+
+      if (eligibleBookings.length < milestoneCount) {
+        console.log(`[ReferralController] Milestone ${milestoneCount} bookings count dropped to ${eligibleBookings.length} below required.`);
+        continue;
+      }
+
+      // Check the exact booking window for this milestone
+      const windowBookings = eligibleBookings.slice(prevBookingsCount, milestoneCount);
+      let allSettled = true;
+      for (const b of windowBookings) {
+        const settled = await isBookingSettled(b._id, referredProviderId, session);
+        if (!settled) {
+          allSettled = false;
+          break;
+        }
+      }
+
+      if (allSettled) {
+        const referrer = await Provider.findById(referral.referrer).session(session);
+        if (!referrer || referrer.isDeleted || referrer.isSuspended) continue;
+
+        if (!referral.providerRewardMilestonesReleased.includes(milestoneCount)) {
+          referral.providerRewardMilestonesReleased.push(milestoneCount);
+          referral.status = 'released';
+          referral.completedAt = new Date();
+          await referral.save({ session });
+        }
+
+        const lastBooking = windowBookings[windowBookings.length - 1];
+        await releaseReferralReward(referral, referrer, log.amount, lastBooking, 'provider', milestoneCount, session);
+
+        try {
+          await sendNotification(
+            referrer._id,
+            'provider',
+            'Electrician Milestone Unlocked!',
+            `You earned ₹${log.amount} as your referred partner completed ${milestoneCount} jobs!`,
+            'wallet',
+            null
+          );
+        } catch (e) {
+          global.logger.error('Error sending milestone notification: ' + e.message, e);
+        }
+      }
+    }
+
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+  } catch (err) {
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    global.logger.error('Error releasing settled referral rewards: ' + err.message, err);
+  }
+};
+
 module.exports = {
   // Reusable helpers exported for access
   generateReferralCode,
@@ -1120,6 +1547,8 @@ module.exports = {
   releaseReferralReward,
   applyProviderReferralBenefit,
   checkQualifiedReferralLimit,
+  isBookingSettled,
+  releaseSettledReferralRewards,
 
   // Route handler controllers
   verifyReferralCode,
@@ -1137,6 +1566,7 @@ module.exports = {
   getFraudReferrals,
   getRewardLogs,
   releaseHeldReward,
+  getAdminReferralsList,
   getCustomerEligibility,
   getProviderEligibility
 };

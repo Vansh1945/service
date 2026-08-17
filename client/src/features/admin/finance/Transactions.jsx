@@ -227,6 +227,7 @@ const AdminTransactions = () => {
   const goToProvider = (providerId) => navigate(`/admin/approve-providers?search=${encodeURIComponent(providerId || '')}&openDetail=true`);
   const goToCustomerWallet = (walletId) => navigate(`/admin/customer-wallets?search=${encodeURIComponent(walletId || '')}&openDetail=true`);
   const goToProviderWallet = (walletId) => navigate(`/admin/provider-wallets?search=${encodeURIComponent(walletId || '')}&openDetail=true`);
+  const goToPayout = (payoutId) => navigate(`/admin/payout?search=${encodeURIComponent(payoutId || '')}&openDetail=true`);
 
   // ── Summary stats ──────────────────────────────────────────────────────────
   const totalCredit = transactions.reduce((s, t) => s + (t.creditAmount || 0), 0);
@@ -314,7 +315,7 @@ const AdminTransactions = () => {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
 
         {loading ? (
-          <TableSkeleton rows={8} columns={12} standalone />
+          <TableSkeleton rows={8} columns={11} standalone />
         ) : error ? (
           <div className="p-12 text-center">
             <AlertCircle className="w-10 h-10 text-rose-400 mx-auto mb-3" />
@@ -330,74 +331,53 @@ const AdminTransactions = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-gray-700 whitespace-nowrap min-w-[2000px]">
+            <table className="w-full text-left text-xs text-gray-700 whitespace-nowrap min-w-[1100px]">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                 <tr>
-                  {/* Entry direction icon */}
-                  <th className="p-3 w-8"></th>
                   {/* 1 */}
                   <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Transaction ID</th>
                   {/* 2 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Booking ID</th>
+                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Booking / Reference</th>
                   {/* 3 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Payment ID</th>
+                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Party</th>
                   {/* 4 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Refund ID</th>
-                  {/* 5 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Wallet TXN</th>
-                  {/* 6 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Settlement ID</th>
-                  {/* 7 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Customer</th>
-                  {/* 8 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Provider</th>
-                  {/* 9 */}
                   <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Type</th>
-                  {/* 10 */}
+                  {/* 5 */}
                   <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Method</th>
-                  {/* 11 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-right">Debit (Dr)</th>
-                  {/* 12 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-right">Credit (Cr)</th>
-                  {/* 13 */}
+                  {/* 6 */}
+                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-right">Amount</th>
+                  {/* 7 */}
+                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-center">Entry</th>
+                  {/* 8 */}
                   <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-right">Running Balance</th>
-                  {/* 14 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Reference No.</th>
-                  {/* 15 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Gateway Ref</th>
-                  {/* 16 */}
+                  {/* 9 */}
                   <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Status</th>
-                  {/* 17 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Created By</th>
-                  {/* 18 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Created At</th>
-                  {/* 19 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Last Updated</th>
-                  {/* 20 */}
-                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-center">Actions</th>
+                  {/* 10 */}
+                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider">Date</th>
+                  {/* 11 */}
+                  <th className="p-3 text-[10px] font-extrabold text-gray-600 uppercase tracking-wider text-center">Action</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-gray-50">
                 {transactions.map((txn, idx) => {
                   const booking = txn.booking || {};
-                  const bookingIdStr = booking.bookingId || (booking._id ? `#${String(booking._id).slice(-6).toUpperCase()}` : null);
-                  const paymentIdStr = txn.razorpayPaymentId || txn.transactionId || `TXN-${String(txn._id).slice(-8).toUpperCase()}`;
+                  const bookingIdStr = booking.bookingId || (txn.bookingId && !txn.bookingId.startsWith('WDL-') ? txn.bookingId : null);
+                  const isWithdrawal = txn.type === 'withdrawal' || txn.ledgerType === 'withdrawal' || (txn.bookingId && txn.bookingId.startsWith('WDL-'));
+                  const wdlRefStr = isWithdrawal ? (txn.bookingId || txn.referenceNumber || null) : null;
+                  const refundIdStr = txn.refundId || (txn.type === 'refund' ? txn.referenceNumber : null);
                   const txnIdStr = txn.transactionId || txn.razorpayPaymentId || `#${String(txn._id).slice(-8).toUpperCase()}`;
-                  const refundIdStr = txn.refundId || null;
-                  const walletTxnStr = txn.walletTransactionId || null;
-                  const settlementStr = txn.settlementId || null;
-                  const customerName = txn.user?.name || '—';
-                  const providerName = txn.provider?.name || '—';
-                  const createdBy = txn.createdBy || '—';
-                  const refNum = txn.referenceNumber || txnIdStr;
-                  const gatewayRef = txn.gatewayReference || txn.razorpayOrderId || null;
 
-                  // Amounts — ALL COME FROM BACKEND, no React calculation
-                  const debitAmt = txn.debitAmount || 0;
-                  const creditAmt = txn.creditAmount || 0;
+                  // Party resolution based on transaction type
+                  const isProviderPrimary = isWithdrawal || txn.type === 'commissiondeduction' || txn.type === 'settlement' || (!txn.user && txn.provider);
+                  const primaryParty = isProviderPrimary
+                    ? { name: txn.provider?.name || 'Provider', sub: txn.provider?.email || txn.provider?.phone || 'Provider', onClick: () => goToProvider(txn.provider?.providerId || txn.provider?._id) }
+                    : { name: txn.user?.name || 'Customer', sub: txn.user?.email || txn.user?.phone || 'Customer', onClick: () => goToCustomer(txn.user?.customerId || txn.user?._id) };
+
+                  // Entry type: Credit / Debit
+                  const isDebit = txn.entryType === 'debit' || ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+                  const isCredit = !isDebit;
                   const runBalance = txn.runningBalance;
-
                   const isEven = idx % 2 === 0;
 
                   return (
@@ -405,11 +385,6 @@ const AdminTransactions = () => {
                       key={txn._id}
                       className={`hover:bg-indigo-50/40 transition-colors group ${isEven ? 'bg-white' : 'bg-gray-50/30'}`}
                     >
-                      {/* Entry direction icon */}
-                      <td className="p-3 text-center">
-                        <EntryIcon entryType={txn.entryType} type={txn.type} />
-                      </td>
-
                       {/* 1. Transaction ID */}
                       <td className="p-3">
                         <span className="font-mono font-bold text-gray-800 text-[11px]" title={txnIdStr}>
@@ -417,7 +392,7 @@ const AdminTransactions = () => {
                         </span>
                       </td>
 
-                      {/* 2. Booking ID → open Bookings */}
+                      {/* 2. Booking / Reference */}
                       <td className="p-3">
                         {bookingIdStr ? (
                           <EntityLink
@@ -426,117 +401,73 @@ const AdminTransactions = () => {
                             onClick={() => goToBooking(bookingIdStr)}
                             mono
                           />
-                        ) : <span className="text-gray-300">—</span>}
-                      </td>
-
-                      {/* 3. Payment ID → open Payment Management */}
-                      <td className="p-3">
-                        {txn.razorpayPaymentId ? (
+                        ) : wdlRefStr ? (
                           <EntityLink
-                            label={truncateId(txn.razorpayPaymentId, 16)}
-                            title={`Go to Payment: ${txn.razorpayPaymentId}`}
-                            onClick={() => goToPayment(txn.razorpayPaymentId)}
+                            label={wdlRefStr}
+                            title={`Go to Payout / Withdrawal ${wdlRefStr}`}
+                            onClick={() => goToPayout(wdlRefStr)}
                             mono
                           />
-                        ) : <span className="text-gray-300 font-mono text-[11px]">—</span>}
-                      </td>
-
-                      {/* 4. Refund ID → open Refund Management */}
-                      <td className="p-3">
-                        {refundIdStr ? (
+                        ) : refundIdStr ? (
                           <EntityLink
-                            label={truncateId(refundIdStr, 16)}
-                            title={`Refund: ${refundIdStr}`}
-                            onClick={goToRefund}
+                            label={refundIdStr}
+                            title={`Go to Refund ${refundIdStr}`}
+                            onClick={() => goToRefund(refundIdStr)}
                             mono
                           />
-                        ) : <span className="text-gray-300 font-mono text-[11px]">—</span>}
-                      </td>
-
-                      {/* 5. Wallet Transaction ID → open Wallet */}
-                      <td className="p-3">
-                        {walletTxnStr ? (
-                          <EntityLink
-                            label={truncateId(walletTxnStr, 16)}
-                            title={`Wallet TXN: ${walletTxnStr}`}
-                            onClick={txn.provider ? goToProviderWallet : goToCustomerWallet}
-                            mono
-                          />
-                        ) : <span className="text-gray-300 font-mono text-[11px]">—</span>}
-                      </td>
-
-                      {/* 6. Settlement ID → open Settlements */}
-                      <td className="p-3">
-                        {settlementStr ? (
-                          <EntityLink
-                            label={truncateId(settlementStr, 16)}
-                            title={`Settlement: ${settlementStr}`}
-                            onClick={goToSettlement}
-                            mono
-                          />
-                        ) : <span className="text-gray-300 font-mono text-[11px]">—</span>}
-                      </td>
-
-                      {/* 7. Customer → open Customer Profile */}
-                      <td className="p-3 max-w-[130px]">
-                        <EntityLink
-                          label={customerName}
-                          title={`Customer: ${txn.user?.email || customerName}`}
-                          onClick={goToCustomer}
-                          truncate
-                        />
-                        {txn.user?.email && (
-                          <span className="text-[10px] text-gray-400 block truncate max-w-[120px]">{txn.user.email}</span>
+                        ) : txn.referenceNumber ? (
+                          <span className="font-mono text-[11px] text-gray-600">{truncateId(txn.referenceNumber, 16)}</span>
+                        ) : (
+                          <span className="text-gray-300 font-mono text-[11px]">—</span>
                         )}
                       </td>
 
-                      {/* 8. Provider → open Provider Profile */}
-                      <td className="p-3 max-w-[120px]">
-                        {txn.provider ? (
-                          <EntityLink
-                            label={providerName}
-                            title={`Provider: ${txn.provider?.email || providerName}`}
-                            onClick={goToProvider}
-                            truncate
-                          />
-                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      {/* 3. Party */}
+                      <td className="p-3 max-w-[140px]">
+                        <EntityLink
+                          label={primaryParty.name}
+                          title={`${primaryParty.name} (${primaryParty.sub})`}
+                          onClick={primaryParty.onClick}
+                          truncate
+                        />
+                        {primaryParty.sub && (
+                          <span className="text-[10px] text-gray-400 block truncate max-w-[130px]">{primaryParty.sub}</span>
+                        )}
                       </td>
 
-                      {/* 9. Transaction Type */}
+                      {/* 4. Type */}
                       <td className="p-3">
                         <TypeBadge type={txn.type} paymentMethod={txn.paymentMethod} />
                       </td>
 
-                      {/* 10. Payment Method */}
+                      {/* 5. Method */}
                       <td className="p-3">
                         <MethodBadge method={txn.paymentMethod} />
                       </td>
 
-                      {/* 11. Debit (Dr) */}
+                      {/* 6. Amount */}
                       <td className="p-3 text-right">
-                        {debitAmt > 0 ? (
-                          <span className="font-black text-rose-600 text-xs flex items-center justify-end gap-1">
-                            <TrendingDown className="w-3 h-3" />
-                            <PriceDisplay amount={debitAmt} />
+                        <span className="font-black text-gray-900 text-xs">
+                          <PriceDisplay amount={txn.amount || 0} />
+                        </span>
+                      </td>
+
+                      {/* 7. Entry (CREDIT / DEBIT) */}
+                      <td className="p-3 text-center">
+                        {isCredit ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-extrabold uppercase tracking-wider">
+                            <ArrowUpRight className="w-3 h-3" />
+                            Credit
                           </span>
                         ) : (
-                          <span className="text-gray-300 text-xs">₹0</span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-[10px] font-extrabold uppercase tracking-wider">
+                            <ArrowDownLeft className="w-3 h-3" />
+                            Debit
+                          </span>
                         )}
                       </td>
 
-                      {/* 12. Credit (Cr) */}
-                      <td className="p-3 text-right">
-                        {creditAmt > 0 ? (
-                          <span className="font-black text-emerald-600 text-xs flex items-center justify-end gap-1">
-                            <TrendingUp className="w-3 h-3" />
-                            <PriceDisplay amount={creditAmt} />
-                          </span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">₹0</span>
-                        )}
-                      </td>
-
-                      {/* 13. Running Balance */}
+                      {/* 8. Running Balance */}
                       <td className="p-3 text-right">
                         {runBalance !== null && runBalance !== undefined ? (
                           <span className={`font-black text-xs ${runBalance >= 0 ? 'text-indigo-700' : 'text-rose-600'}`}>
@@ -548,48 +479,22 @@ const AdminTransactions = () => {
                         )}
                       </td>
 
-                      {/* 14. Reference Number */}
-                      <td className="p-3">
-                        <span className="font-mono text-[11px] text-gray-700 font-semibold" title={refNum}>
-                          {truncateId(refNum, 18)}
-                        </span>
-                      </td>
-
-                      {/* 15. Gateway Reference */}
-                      <td className="p-3">
-                        {gatewayRef ? (
-                          <span className="font-mono text-[11px] text-indigo-700 font-semibold" title={gatewayRef}>
-                            {truncateId(gatewayRef, 16)}
-                          </span>
-                        ) : <span className="text-gray-300 text-[11px]">—</span>}
-                      </td>
-
-                      {/* 16. Status */}
+                      {/* 9. Status */}
                       <td className="p-3">
                         <StatusBadge status={txn.paymentStatus} />
                       </td>
 
-                      {/* 17. Created By */}
-                      <td className="p-3 text-xs text-gray-600 font-medium max-w-[110px]">
-                        <span className="block truncate" title={createdBy}>{createdBy}</span>
-                      </td>
-
-                      {/* 18. Created At */}
+                      {/* 10. Date */}
                       <td className="p-3 text-[11px] text-gray-500 font-medium">
                         {fmtDateTime(txn.createdAt)}
                       </td>
 
-                      {/* 19. Last Updated */}
-                      <td className="p-3 text-[11px] text-gray-500 font-medium">
-                        {fmtDate(txn.updatedAt)}
-                      </td>
-
-                      {/* 20. Actions */}
+                      {/* 11. Action */}
                       <td className="p-3 text-center">
                         <button
                           id={`view-ledger-${txn._id}`}
                           onClick={() => handleViewDetail(txn)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-indigo-600 text-white rounded-lg text-[11px] font-extrabold transition-all shadow-sm"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-indigo-600 text-white rounded-lg text-[11px] font-extrabold transition-all shadow-sm cursor-pointer"
                           title="View Ledger Detail"
                         >
                           <DollarSign className="w-3 h-3" />

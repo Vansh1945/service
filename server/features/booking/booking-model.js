@@ -391,7 +391,8 @@ const bookingSchema = new Schema({
     discountType: { type: String, trim: true },
     discountValue: { type: Number, min: [0, 'Discount cannot be negative'] },
     maxDiscount: { type: Number, min: [0, 'Max discount cannot be negative'], default: null },
-    appliedZone: { type: Schema.Types.ObjectId, ref: 'Zone', default: null }
+    appliedZone: { type: Schema.Types.ObjectId, ref: 'Zone', default: null },
+    isReferralCoupon: { type: Boolean, default: false }
   },
   // Optional customer notes for the booking
   notes: {
@@ -509,6 +510,14 @@ const bookingSchema = new Schema({
     default: false
   },
   commissionProcessed: {
+    type: Boolean,
+    default: false
+  },
+  referralDiscountApplied: {
+    type: Boolean,
+    default: false
+  },
+  referralBenefitCounted: {
     type: Boolean,
     default: false
   },
@@ -900,7 +909,6 @@ bookingSchema.pre('save', async function (next) {
       updatedBy: 'system'
     });
   }
-
   // Commission calculation (runs on new bookings with provider, or when provider/pricing changes on existing bookings)
   if (this.provider && (
     this.isNew ||
@@ -913,82 +921,7 @@ bookingSchema.pre('save', async function (next) {
     this.isModified('nightCharge') ||
     this.isModified('demandSurge')
   )) {
-    try {
-      const CommissionRule = mongoose.model('CommissionRule');
-      const firstService = this.services && this.services[0];
-      const serviceId = firstService ? firstService.service : null;
-
-      const commissionRule = await CommissionRule.getCommissionForProvider(
-        this.provider,
-        this.zoneId,
-        'standard',
-        serviceId
-      );
-
-      const baseForCommission = Math.max(0, this.subtotal - this.totalDiscount);
-
-      // Load settings for surge splits
-      const { SystemConfig } = require('../system-setting/system-setting-model');
-      let settings = await SystemConfig.findOne();
-      if (!settings) {
-        settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
-        await settings.save();
-      }
-
-      const splits = settings.surgeSplitSettings || {};
-      const splitVisiting = typeof splits.visiting === 'number' && !isNaN(splits.visiting) ? splits.visiting : 60;
-      const splitRain = typeof splits.rain === 'number' && !isNaN(splits.rain) ? splits.rain : 70;
-      const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
-      const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
-      const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
-      const splitEmergency = typeof splits.emergency === 'number' && !isNaN(splits.emergency) ? splits.emergency : 85;
-      this.surgeSplitSettings = splits;
-
-      // Surcharge amounts on this booking
-      const visiting = typeof this.visitingCharge === 'number' && !isNaN(this.visitingCharge) ? this.visitingCharge : 0;
-      const rain = typeof this.rainCharge === 'number' && !isNaN(this.rainCharge) ? this.rainCharge : 0;
-      const traffic = typeof this.trafficCharge === 'number' && !isNaN(this.trafficCharge) ? this.trafficCharge : 0;
-      const night = typeof this.nightCharge === 'number' && !isNaN(this.nightCharge) ? this.nightCharge : 0;
-      const demand = typeof this.demandSurge === 'number' && !isNaN(this.demandSurge) ? this.demandSurge : 0;
-      const emergency = typeof this.emergencySurge === 'number' && !isNaN(this.emergencySurge) ? this.emergencySurge : 0;
-      const custom = typeof this.customCharges === 'number' && !isNaN(this.customCharges) ? this.customCharges : 0;
-      const platformFee = typeof this.platformFee === 'number' && !isNaN(this.platformFee) ? this.platformFee : 0;
-
-      // Provider splits
-      const provVisitingShare = parseFloat((visiting * (splitVisiting / 100)).toFixed(2)) || 0;
-      const provRainShare = parseFloat((rain * (splitRain / 100)).toFixed(2)) || 0;
-      const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
-      const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
-      const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
-      const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
-
-      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provEmergencyShare).toFixed(2)) || 0;
-      const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom + platformFee;
-      const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
-
-      this.providerSurgeShare = providerSurgeShare;
-      this.companySurgeShare = companySurgeShare;
-
-      if (commissionRule) {
-        const { commission, netAmount } = CommissionRule.calculateCommission(baseForCommission, commissionRule);
-        this.commissionAmount = commission || 0;
-        this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
-        this.commissionRule = commissionRule._id;
-      } else {
-        const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? parseFloat(process.env.DEFAULT_COMMISSION || 10);
-        const commission = parseFloat(((baseForCommission * defaultCommPercent) / 100).toFixed(2));
-        const netAmount = parseFloat((baseForCommission - commission).toFixed(2));
-
-        this.commissionAmount = commission || 0;
-        this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
-        this.commissionRule = null;
-      }
-    } catch (error) {
-      console.error('Error calculating commission:', error);
-      this.commissionAmount = 0;
-      this.providerEarnings = this.totalAmount;
-      this.commissionRule = null;
-    }
+    await this.recalculateFinancials();
   }
 
   next();
@@ -1169,6 +1102,103 @@ bookingSchema.index(
   }
 );
 
+
+bookingSchema.methods.recalculateFinancials = async function() {
+  try {
+    const CommissionRule = mongoose.model('CommissionRule');
+    const firstService = this.services && this.services[0];
+    const serviceId = firstService ? firstService.service : null;
+
+    const commissionRule = await CommissionRule.getCommissionForProvider(
+      this.provider,
+      this.zoneId,
+      'standard',
+      serviceId
+    );
+
+    const isReferralDiscount = (this.couponApplied && this.couponApplied.isReferralCoupon) || this.isReferralDiscount;
+    const referralDiscountAmount = isReferralDiscount ? (this.totalDiscount || 0) : 0;
+    const providerApplicableDiscount = Math.max(0, (this.totalDiscount || 0) - referralDiscountAmount);
+    const baseForCommission = Math.max(0, this.subtotal - providerApplicableDiscount);
+
+    // Load settings for surge splits
+    const { SystemConfig } = require('../system-setting/system-setting-model');
+    let settings = await SystemConfig.findOne();
+    if (!settings) {
+      settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
+      await settings.save();
+    }
+
+    const splits = settings.surgeSplitSettings || {};
+    const splitVisiting = typeof splits.visiting === 'number' && !isNaN(splits.visiting) ? splits.visiting : 60;
+    const splitRain = typeof splits.rain === 'number' && !isNaN(splits.rain) ? splits.rain : 70;
+    const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
+    const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
+    const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
+    const splitEmergency = typeof splits.emergency === 'number' && !isNaN(splits.emergency) ? splits.emergency : 85;
+    this.surgeSplitSettings = splits;
+
+    // Surcharge amounts on this booking
+    const visiting = typeof this.visitingCharge === 'number' && !isNaN(this.visitingCharge) ? this.visitingCharge : 0;
+    const rain = typeof this.rainCharge === 'number' && !isNaN(this.rainCharge) ? this.rainCharge : 0;
+    const traffic = typeof this.trafficCharge === 'number' && !isNaN(this.trafficCharge) ? this.trafficCharge : 0;
+    const night = typeof this.nightCharge === 'number' && !isNaN(this.nightCharge) ? this.nightCharge : 0;
+    const demand = typeof this.demandSurge === 'number' && !isNaN(this.demandSurge) ? this.demandSurge : 0;
+    const emergency = typeof this.emergencySurge === 'number' && !isNaN(this.emergencySurge) ? this.emergencySurge : 0;
+    const custom = typeof this.customCharges === 'number' && !isNaN(this.customCharges) ? this.customCharges : 0;
+    const platformFee = typeof this.platformFee === 'number' && !isNaN(this.platformFee) ? this.platformFee : 0;
+
+    // Provider splits
+    const provVisitingShare = parseFloat((visiting * (splitVisiting / 100)).toFixed(2)) || 0;
+    const provRainShare = parseFloat((rain * (splitRain / 100)).toFixed(2)) || 0;
+    const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
+    const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
+    const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
+    const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
+
+    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provEmergencyShare).toFixed(2)) || 0;
+    const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom + platformFee;
+    const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
+
+    this.providerSurgeShare = providerSurgeShare;
+    this.companySurgeShare = companySurgeShare;
+
+    let activeCommissionRule = commissionRule;
+    if (this.provider) {
+      const Provider = mongoose.model('Provider');
+      const providerDoc = await Provider.findById(this.provider);
+      if (providerDoc && providerDoc.referralBenefit) {
+        const { getReferralCommissionDiscount } = require('../referral/referral-helpers');
+        const discountedRate = getReferralCommissionDiscount(providerDoc, commissionRule, baseForCommission);
+        if (discountedRate !== (commissionRule ? commissionRule.value : 0)) {
+          activeCommissionRule = commissionRule.toObject ? commissionRule.toObject() : { ...commissionRule };
+          activeCommissionRule.value = discountedRate;
+          this.referralDiscountApplied = true;
+        }
+      }
+    }
+
+    if (activeCommissionRule) {
+      const { commission, netAmount } = CommissionRule.calculateCommission(baseForCommission, activeCommissionRule);
+      this.commissionAmount = commission || 0;
+      this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
+      this.commissionRule = activeCommissionRule._id || null;
+    } else {
+      const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? parseFloat(process.env.DEFAULT_COMMISSION || 10);
+      const commission = parseFloat(((baseForCommission * defaultCommPercent) / 100).toFixed(2));
+      const netAmount = parseFloat((baseForCommission - commission).toFixed(2));
+
+      this.commissionAmount = commission || 0;
+      this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
+      this.commissionRule = null;
+    }
+  } catch (error) {
+    console.error('Error in recalculateFinancials:', error);
+    this.commissionAmount = 0;
+    this.providerEarnings = this.totalAmount;
+    this.commissionRule = null;
+  }
+};
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

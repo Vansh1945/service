@@ -55,3 +55,15 @@ export const getRewardLogs = () => {
 export const releaseHeldReward = (referralId) => {
     return axiosInstance.post("/referral/admin/release", { referralId });
 };
+
+export const getAdminReferralsList = (type, status) => {
+    return axiosInstance.get("/referral/admin/referrals", { params: { type, status } });
+};
+
+export const getFraudReferralsFiltered = (program, role) => {
+    return axiosInstance.get("/referral/admin/fraud", { params: { program, role } });
+};
+
+export const getRewardLogsFiltered = (program, status, recipientType) => {
+    return axiosInstance.get("/referral/admin/logs", { params: { program, status, recipientType } });
+};

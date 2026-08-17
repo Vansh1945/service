@@ -721,7 +721,9 @@ const BookingConfirmation = () => {
 
                   {discount > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Coupon Discount</span>
+                      <span className="text-gray-500">
+                        {bookingDetails.couponApplied?.isReferralCoupon ? 'Referral Coupon Discount (Company Funded)' : 'Coupon Discount'}
+                      </span>
                       <PriceDisplay amount={discount} type="discount" prefix="-" />
                     </div>
                   )}

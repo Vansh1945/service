@@ -22,7 +22,6 @@ import { isChatVisible, formatAddress, calculateNetAmount } from '../../../utils
 import * as ComplaintService from '../../../services/ComplaintService';
 import L from 'leaflet';
 import ChatModal from '../../../components/chat/ChatModal';
-import QrPreviewModal from '../../../components/modals/QrPreviewModal';
 
 
 
@@ -361,7 +360,6 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
   const [qrData, setQrData] = useState(null);
   const [timeLeft, setTimeLeft] = useState(600);
   const [verificationStatus, setVerificationStatus] = useState('pending');
-  const [showQrPreviewModal, setShowQrPreviewModal] = useState(false);
 
   useEffect(() => {
     if (isOpen && booking) {
@@ -428,7 +426,10 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
   const totalAmount = booking.totalAmount || 0;
 
   const handleGenerateQR = async () => {
-    if (qrData?.imageUrl && verificationStatus !== 'expired') {
+    if (loading) return;
+    if (verificationStatus === 'expired') {
+      setQrData(null);
+    } else if (qrData?.imageUrl) {
       setActiveTab('qr');
       return;
     }
@@ -450,6 +451,7 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
   };
 
   const handleConfirmCash = async () => {
+    if (loading) return;
     setLoading(true);
     setError(null);
     try {
@@ -504,22 +506,24 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
             <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => { setActiveTab('cash'); setError(null); }}
                 className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === 'cash' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'
-                  }`}
+                  } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <Banknote className="w-3.5 h-3.5" />
                 <span>Cash Payment</span>
               </button>
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => {
                   setActiveTab('qr');
                   setError(null);
                   if (!qrData) handleGenerateQR();
                 }}
                 className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === 'qr' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'
-                  }`}
+                  } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <Zap className="w-3.5 h-3.5 text-primary" />
                 <span>Dynamic QR</span>
@@ -615,7 +619,7 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
               Cancel
             </button>
 
-            {activeTab === 'cash' ? (
+            {activeTab === 'cash' && (
               <button
                 disabled={loading}
                 onClick={handleConfirmCash}
@@ -624,28 +628,10 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
                 {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
                 <span>{loading ? 'Verifying...' : 'Collect Payment'}</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowQrPreviewModal(true)}
-                disabled={!qrData?.imageUrl}
-                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Show QR Code</span>
-              </button>
             )}
           </div>
         </div>
       </div>
-
-      <QrPreviewModal
-        isOpen={showQrPreviewModal}
-        onClose={() => setShowQrPreviewModal(false)}
-        title={`Payment QR - Booking #${booking?.bookingId || booking?._id?.slice(-6)}`}
-        qrCodeUrl={qrData?.imageUrl}
-        value={`Amount: ₹${totalAmount} | ID: ${qrData?.qrCodeId || ''}`}
-      />
     </>
   );
 };

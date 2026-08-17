@@ -96,9 +96,8 @@ const ProviderEarningDetailModal = ({ isOpen, onClose, entityData, earningId }) 
   const settlement = data.settlement || {};
   const paymentRecord = data.paymentRecord || {};
 
-  const customerPaid = data.amount || booking.totalAmount || 0;
-  const commission = data.commissionAmount || data.commission || (customerPaid * 0.1);
-  const providerShare = data.providerEarnings || data.providerEarning || (customerPaid - commission);
+  const serviceBase = data.grossAmount || booking.subtotal || customerPaid;
+  const providerShare = data.providerEarnings || data.providerEarning || data.netAmount || (serviceBase - commission);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" onClick={onClose}>

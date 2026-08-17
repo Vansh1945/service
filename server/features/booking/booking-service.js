@@ -2022,7 +2022,8 @@ class BookingService {
           type: 'debit',
           amount: booking.totalAmount,
           reason: 'Booking Payment',
-          booking: booking._id
+          booking: booking._id,
+          bookingId: booking.bookingId
         });
         userWallet.wallet.lastUpdated = new Date();
         await userWallet.save({ session });
@@ -2065,7 +2066,8 @@ class BookingService {
             type: 'debit',
             amount: walletDeduction,
             reason: 'Booking Payment',
-            booking: booking._id
+            booking: booking._id,
+            bookingId: booking.bookingId
           });
           userMixed.wallet.lastUpdated = new Date();
           await userMixed.save({ session });
@@ -2453,7 +2455,7 @@ class BookingService {
           await pendingTxn.save({ session });
         }
 
-         if ((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold') && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
+        if ((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrowhold') && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
           const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
           const platformFee = booking.platformFee || 0;
           const refundAmount = Math.max(0, booking.totalAmount - platformFee - previouslyRefunded);
@@ -2721,7 +2723,10 @@ class BookingService {
         Transaction.find({ booking: id }).sort({ createdAt: -1 }).lean()
       ]);
 
-      const baseForCommission = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
+      const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
+      const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
+      const provDiscount = Math.max(0, (booking.totalDiscount || 0) - refAmount);
+      const baseForCommission = Math.max(0, booking.subtotal - provDiscount);
       const { commission, netAmount } = CommissionRule.calculateCommission(
         baseForCommission,
         commissionRule
@@ -2955,7 +2960,10 @@ class BookingService {
           )
         ]);
 
-        const baseForCommission = Math.max(0, cleanBooking.subtotal - (cleanBooking.totalDiscount || 0));
+        const isRefDisc = (cleanBooking.couponApplied && cleanBooking.couponApplied.isReferralCoupon) || cleanBooking.isReferralDiscount;
+        const refAmount = isRefDisc ? (cleanBooking.totalDiscount || 0) : 0;
+        const provDiscount = Math.max(0, (cleanBooking.totalDiscount || 0) - refAmount);
+        const baseForCommission = Math.max(0, cleanBooking.subtotal - provDiscount);
         const { commission, netAmount } = CommissionRule.calculateCommission(
           baseForCommission,
           bookingCommissionRule
@@ -4005,17 +4013,12 @@ class BookingService {
         uploadedAt: new Date()
       }));
 
-      // Commission & Surcharge Splits Calculation
-      const baseForCommission = Math.max(0, booking.subtotal - booking.totalDiscount);
-      let activeCommissionRule = commissionRule;
-      if (provider.referralBenefit && provider.referralBenefit.validTill > new Date() && provider.referralBenefit.commissionDiscountPercent > 0) {
-        activeCommissionRule = commissionRule.toObject ? commissionRule.toObject() : { ...commissionRule };
-        activeCommissionRule.value = Math.max(0, activeCommissionRule.value - provider.referralBenefit.commissionDiscountPercent);
-      }
-      const { commission, netAmount } = CommissionRule.calculateCommission(
-        baseForCommission,
-        activeCommissionRule
-      );
+      await booking.recalculateFinancials();
+      const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
+      const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
+      const provDiscount = Math.max(0, (booking.totalDiscount || 0) - refAmount);
+      const baseForCommission = Math.max(0, booking.subtotal - provDiscount);
+      const commission = booking.commissionAmount;
 
       let settings = await SystemConfig.findOne();
       if (!settings) {
@@ -4023,33 +4026,6 @@ class BookingService {
         await settings.save(session ? { session } : {});
       }
       const splits = settings.surgeSplitSettings || {};
-      const splitVisiting = typeof splits.visiting === 'number' && !isNaN(splits.visiting) ? splits.visiting : 60;
-      const splitRain = typeof splits.rain === 'number' && !isNaN(splits.rain) ? splits.rain : 70;
-      const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
-      const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
-      const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
-      const splitEmergency = typeof splits.emergency === 'number' && !isNaN(splits.emergency) ? splits.emergency : 85;
-
-      // Surcharge amounts on this booking
-      const visiting = typeof booking.visitingCharge === 'number' && !isNaN(booking.visitingCharge) ? booking.visitingCharge : 0;
-      const rain = typeof booking.rainCharge === 'number' && !isNaN(booking.rainCharge) ? booking.rainCharge : 0;
-      const traffic = typeof booking.trafficCharge === 'number' && !isNaN(booking.trafficCharge) ? booking.trafficCharge : 0;
-      const night = typeof booking.nightCharge === 'number' && !isNaN(booking.nightCharge) ? booking.nightCharge : 0;
-      const demand = typeof booking.demandSurge === 'number' && !isNaN(booking.demandSurge) ? booking.demandSurge : 0;
-      const emergency = typeof booking.emergencySurge === 'number' && !isNaN(booking.emergencySurge) ? booking.emergencySurge : 0;
-      const custom = typeof booking.customCharges === 'number' && !isNaN(booking.customCharges) ? booking.customCharges : 0;
-
-      // Provider splits
-      const provVisitingShare = parseFloat((visiting * (splitVisiting / 100)).toFixed(2)) || 0;
-      const provRainShare = parseFloat((rain * (splitRain / 100)).toFixed(2)) || 0;
-      const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
-      const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
-      const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
-      const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
-
-      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provEmergencyShare).toFixed(2)) || 0;
-      const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom;
-      const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
       booking.providerWorkProof = {
         ...booking.providerWorkProof,
@@ -4062,12 +4038,6 @@ class BookingService {
       booking.completedAt = new Date();
       booking.paymentStatus = 'paid';
       booking.commissionProcessed = true;
-
-      booking.commissionAmount = commission || 0;
-      booking.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
-      booking.providerSurgeShare = providerSurgeShare;
-      booking.companySurgeShare = companySurgeShare;
-      booking.surgeSplitSettings = splits;
 
       // Fraud score checking for Hold extension
       let fraudScore = 0;
@@ -4117,6 +4087,7 @@ class BookingService {
         let cashTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
         if (cashTransaction) {
           cashTransaction.amount = booking.totalAmount;
+          cashTransaction.paymentMethod = 'cash';
           cashTransaction.paymentStatus = 'completed';
           cashTransaction.provider = booking.provider;
           cashTransaction.providerId = booking.provider?.toString();
@@ -4161,28 +4132,37 @@ class BookingService {
         availableAfter = holdPeriodHours === 0 ? new Date() : booking.payoutHoldUntil;
       }
 
-      const providerEarningResult = await ProviderEarning.findOneAndUpdate(
-        { booking: booking._id, provider: providerId },
-        {
-          $setOnInsert: {
-            grossAmount: booking.totalAmount,
-            commissionRate: commissionRule ? commissionRule.value : 0,
-            commissionAmount: commission,
-            netAmount: booking.providerEarnings,
-            status: earningStatus,
-            availableAfter
-          }
-        },
-        { session, upsert: true, new: true, rawResult: true }
-      );
+      const { getReferralCommissionDiscount } = require('../referral/referral-helpers');
+      const effectiveRate = commissionRule ? getReferralCommissionDiscount(provider, commissionRule, baseForCommission) : 0;
+      if (effectiveRate !== (commissionRule ? commissionRule.value : 0)) {
+        booking.referralDiscountApplied = true;
+      }
 
-      if (providerEarningResult.lastErrorObject && providerEarningResult.lastErrorObject.updatedExisting) {
-        await safeAbort(session);
-        safeEnd(session);
-        return res.status(409).json({
-          success: false,
-          message: 'Earning already recorded for this booking!'
+      let earning = await ProviderEarning.findOne({ booking: booking._id, provider: providerId }).session(session);
+      if (earning) {
+        if (!earning.paymentRecord && !['withdrawn', 'cancelled'].includes(earning.status)) {
+          earning.grossAmount = baseForCommission;
+          earning.commissionRate = effectiveRate;
+          earning.commissionAmount = commission;
+          earning.netAmount = booking.providerEarnings;
+          earning.status = earningStatus;
+          earning.availableAfter = availableAfter;
+          await earning.save({ session });
+        } else {
+          console.warn(`[reconciliation] Cannot automatically overwrite settled/withdrawn earning ${earning._id} for booking ${booking._id}`);
+        }
+      } else {
+        earning = new ProviderEarning({
+          provider: providerId,
+          booking: booking._id,
+          grossAmount: baseForCommission,
+          commissionRate: effectiveRate,
+          commissionAmount: commission,
+          netAmount: booking.providerEarnings,
+          status: earningStatus,
+          availableAfter
         });
+        await earning.save({ session });
       }
 
       // ------------------------------
@@ -4193,42 +4173,76 @@ class BookingService {
       // ------------------------------
       if (booking.paymentMethod === "cash") {
         // Cash Booking Commission Logic
-        const updatedProvider = await Provider.findOneAndUpdate(
-          { _id: providerId, 'wallet.availableBalance': { $gte: commission } },
-          {
-            $inc: { 'wallet.availableBalance': -commission, completedBookings: 1 },
-            $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
-          },
-          { session, new: true }
-        );
-        if (!updatedProvider) {
-          await safeAbort(session);
-          safeEnd(session);
-          return res.status(400).json({
-            success: false,
-            message: "Insufficient wallet balance to cover commission for this cash booking. Please recharge your wallet."
-          });
-        }
+        if (!booking.commissionProcessed) {
+          const cashRecovery = parseFloat((booking.totalAmount - booking.providerEarnings).toFixed(2));
+          const netDeduction = cashRecovery > 0 ? cashRecovery : 0;
+          const updatedProvider = await Provider.findOneAndUpdate(
+            { _id: providerId, 'wallet.availableBalance': { $gte: netDeduction } },
+            {
+              $inc: { 'wallet.availableBalance': -cashRecovery, completedBookings: 1 },
+              $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+            },
+            { session, new: true }
+          );
+          if (!updatedProvider && netDeduction > 0) {
+            await safeAbort(session);
+            safeEnd(session);
+            return res.status(400).json({
+              success: false,
+              message: "Insufficient wallet balance for cash recovery. Please recharge via UPI/online payment."
+            });
+          }
 
-        // Log dedicated commission deduction transaction for provider wallet audit
-        if (commission > 0) {
-          const balanceAfter = updatedProvider.wallet?.availableBalance || 0;
-          const balanceBefore = balanceAfter + commission;
-          const commissionTx = new Transaction({
-            booking: booking._id,
-            bookingId: booking.bookingId || booking._id,
-            user: booking.customer,
-            provider: providerId,
-            amount: commission,
-            paymentStatus: 'completed',
-            paymentMethod: 'wallet',
-            type: 'commissiondeduction',
-            balanceBefore: balanceBefore,
-            balanceAfter: balanceAfter,
-            deductionType: 'cash_booking_commission',
-            description: `Commission fee of ₹${commission} deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
-          });
-          await commissionTx.save({ session });
+          // Log dedicated commission deduction transaction or subsidy credit transaction for provider wallet audit
+          if (cashRecovery > 0) {
+            const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
+            const balanceBefore = balanceAfter + cashRecovery;
+            const commissionTx = new Transaction({
+              booking: booking._id,
+              bookingId: booking.bookingId || booking._id,
+              user: booking.customer,
+              provider: providerId,
+              amount: cashRecovery,
+              paymentStatus: 'completed',
+              paymentMethod: 'wallet',
+              type: 'commissiondeduction',
+              balanceBefore: balanceBefore,
+              balanceAfter: balanceAfter,
+              deductionType: 'cash_booking_commission',
+              description: `Cash recovery fee of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${booking.companySurgeShare || 0}) deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
+            });
+            await commissionTx.save({ session });
+          } else if (cashRecovery < 0) {
+            const creditAmount = Math.abs(cashRecovery);
+            const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
+            const balanceBefore = balanceAfter - creditAmount;
+            const subsidyTx = new Transaction({
+              booking: booking._id,
+              bookingId: booking.bookingId || booking._id,
+              user: booking.customer,
+              provider: providerId,
+              amount: creditAmount,
+              paymentStatus: 'completed',
+              paymentMethod: 'wallet',
+              type: 'referral_coupon_subsidy',
+              balanceBefore: balanceBefore,
+              balanceAfter: balanceAfter,
+              description: `Company-funded referral coupon subsidy of ₹${creditAmount} credited to wallet for Cash Booking #${booking.bookingId || booking._id}`
+            });
+            await subsidyTx.save({ session });
+          }
+          booking.commissionProcessed = true;
+        } else {
+          // Commission was already processed/deducted during payment verification (verifyCashReceived).
+          // We only need to increment completedBookings count and clear activeBooking status.
+          await Provider.findByIdAndUpdate(
+            providerId,
+            {
+              $inc: { completedBookings: 1 },
+              $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+            },
+            { session }
+          );
         }
       } else {
         const providerUpdate = {
@@ -4253,7 +4267,7 @@ class BookingService {
               providerId,
               'provider',
               'Payout Ready',
-              `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is ready for withdrawal.`,
+              `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${booking.providerEarnings} is ready for withdrawal.`,
               'payoutready',
               booking._id
             );
@@ -4262,12 +4276,19 @@ class BookingService {
               providerId,
               'provider',
               'Payout Under Review',
-              `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for ${holdPeriodHours} hours.`,
+              `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${booking.providerEarnings} is under review for ${holdPeriodHours} hours.`,
               'payouthold',
               booking._id
             );
           }
         } catch (err) { console.error("Error sending payout hold notification:", err); }
+      }
+      try {
+        const { incrementReferralBenefitUsage } = require('../referral/referral-helpers');
+        await incrementReferralBenefitUsage(booking._id, session);
+      } catch (err) {
+        console.error('Error incrementing referral benefit usage:', err);
+        throw err;
       }
 
       await safeCommit(session);

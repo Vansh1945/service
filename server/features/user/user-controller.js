@@ -839,10 +839,55 @@ const getWalletHistory = async (req, res, next) => {
 
     const transactions = user.wallet?.walletTransactions || [];
 
+    // Retrieve raw transactions to access original booking ObjectIds if populate returned null
+    const rawUser = await User.findById(req.user._id).select('wallet').lean();
+    const rawTxns = rawUser?.wallet?.walletTransactions || [];
+
+    const mappedTxns = transactions.map((txn, idx) => {
+      const rawTxn = rawTxns.find(rt => rt._id && txn._id && rt._id.toString() === txn._id.toString()) || rawTxns[idx];
+      const rawBookingId = rawTxn?.booking;
+      const storedBookingId = rawTxn?.bookingId || txn.bookingId;
+      
+      let bookingData = txn.booking;
+      let reasonText = txn.reason;
+
+      // Extract booking ID from reason description if present (e.g. for referrals)
+      const reasonMatch = txn.reason?.match(/(BK-[A-Z0-9-]+)/i)?.[0];
+      if (reasonMatch) {
+        reasonText = txn.reason.replace(new RegExp(`\\s*\\(${reasonMatch}\\)|\\s*${reasonMatch}`, 'i'), '');
+      }
+
+      const finalBookingId = (bookingData && bookingData.bookingId) || storedBookingId || reasonMatch;
+
+      if (!bookingData) {
+        if (finalBookingId) {
+          bookingData = {
+            _id: rawBookingId || null,
+            bookingId: finalBookingId,
+            status: 'deleted'
+          };
+        } else if (rawBookingId) {
+          const hex = rawBookingId.toString();
+          const suffix = hex.substring(hex.length - 6).toUpperCase();
+          bookingData = {
+            _id: rawBookingId,
+            bookingId: `BK-DEL-${suffix}`,
+            status: 'deleted'
+          };
+        }
+      }
+
+      return {
+        ...txn,
+        reason: reasonText,
+        booking: bookingData
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: transactions.length,
-      data: transactions.sort(
+      count: mappedTxns.length,
+      data: mappedTxns.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       )
     });

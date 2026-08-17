@@ -120,6 +120,7 @@ const ProviderFeedback = () => {
         currentPage,
         setCurrentPage,
         limit: itemsPerPage,
+        totalItems,
         totalPages,
         setTotalItems,
         onPageChange

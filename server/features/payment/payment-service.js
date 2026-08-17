@@ -71,7 +71,14 @@ const safeEnd = (session) => {
 
 const syncEarningsStatus = async (providerId) => {
   try {
-    const [earningsStats, withdrawalsStats, deductionsStats] = await Promise.all([
+    // ── Four parallel aggregations as single source of truth ─────────────────
+    // 1. ProviderEarning: earning lifecycle (held, available, paid, withdrawn…)
+    // 2. PaymentRecord:   actual provider payout lifecycle (requested → completed)
+    // 3. Deductions:      penalty / refundrecovery / commissiondeduction Transactions
+    // 4. OtherCredits:    non-earning wallet credits (topup, referral, cashback,
+    //                     adjustment-credit) that are NOT tracked in ProviderEarning.
+    //                     These MUST be included or they get silently erased on every sync.
+    const [earningsStats, withdrawalsStats, deductionsStats, otherCreditsStats] = await Promise.all([
       ProviderEarning.aggregate([
         { $match: { provider: providerId } },
         {
@@ -94,6 +101,10 @@ const syncEarningsStatus = async (providerId) => {
         {
           $match: {
             provider: providerId,
+            // Debit-side mutations already applied to wallet during the event.
+            // Sync re-derives them from the ledger to remain idempotent.
+            // NOTE: 'withdrawal' type is intentionally excluded here because
+            // payout amounts are already covered by the PaymentRecord aggregation.
             type: { $in: ['penalty', 'refundrecovery', 'commissiondeduction'] },
             paymentStatus: 'completed'
           }
@@ -104,28 +115,58 @@ const syncEarningsStatus = async (providerId) => {
             totalDeducted: { $sum: { $ifNull: ['$amount', 0] } }
           }
         }
+      ]),
+      Transaction.aggregate([
+        {
+          $match: {
+            provider: providerId,
+            // Credit-side wallet events that are NOT part of ProviderEarning lifecycle.
+            // 'withdrawalrejection' is intentionally excluded: a rejected PaymentRecord
+            // is automatically dropped from totalPendingWithdrawals, so no separate
+            // credit is needed — including it here would double-count the refund.
+            type: { $in: ['wallet_topup', 'referralreward', 'cashback'] },
+            paymentStatus: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalCredits: { $sum: { $ifNull: ['$amount', 0] } }
+          }
+        }
       ])
     ]);
 
-    let totalEarning = 0;
-    let pendingWithdrawal = 0;
-    let totalWithdrawn = 0;
-    let heldBalance = 0;
-    const totalDeductions = deductionsStats.length > 0 ? deductionsStats[0].totalDeducted : 0;
+    // ── Process ProviderEarning lifecycle ────────────────────────────────────
+    // ACCOUNTING RULE #1: ProviderEarning.status = 'paid' means a CASH booking
+    // where the customer paid the provider directly in cash. It is NOT a platform
+    // withdrawal. Do NOT count 'paid' earnings toward the available balance or
+    // toward totalWithdrawn. Only online/QR earnings that have been released to
+    // 'available' status contribute to the derived wallet credit.
+    let totalOnlineEarning = 0; // sum of netAmount for 'available' (online/QR released)
+    let heldBalance = 0;        // sum of netAmount for 'held'|'underreview'|'pendingrelease'
 
     earningsStats.forEach((stat) => {
       const amount = stat.totalNet || 0;
-      if (stat._id === 'paid' || stat._id === 'withdrawn') {
-        totalWithdrawn += amount;
+      if (stat._id === 'available') {
+        // Released online/QR earnings — provider can withdraw this
+        totalOnlineEarning += amount;
+      } else if (stat._id === 'withdrawn') {
+        // Legacy status (same semantics as 'available' for online earnings)
+        totalOnlineEarning += amount;
       } else if (stat._id === 'held' || stat._id === 'underreview' || stat._id === 'pendingrelease') {
         heldBalance += amount;
-      } else if (stat._id === 'pending_withdrawal') {
-        pendingWithdrawal += amount;
-      } else if (stat._id === 'available') {
-        totalEarning += amount;
       }
+      // 'paid'    → cash booking (provider received cash directly, NOT a platform credit)
+      // 'cancelled' → earning voided (refund/dispute). No wallet impact.
+      // Both are intentionally excluded from totalOnlineEarning.
     });
 
+    // ── Process PaymentRecord (actual payout) lifecycle ──────────────────────
+    // ACCOUNTING RULE #3 / #5: The withdrawal request immediately debits
+    // wallet.availableBalance (mutable event). The sync re-derives this by
+    // subtracting totalPendingWithdrawals from the base earning.
+    // totalWithdrawn = ONLY successfully completed/transferred payouts.
     let totalCompletedWithdrawals = 0;
     let totalPendingWithdrawals = 0;
 
@@ -136,12 +177,29 @@ const syncEarningsStatus = async (providerId) => {
       } else if (['requested', 'processing', 'under_review', 'underreview', 'approved'].includes(stat._id)) {
         totalPendingWithdrawals += amount;
       }
+      // 'rejected' / 'failed' → PaymentRecord removed from pending; wallet refunded
+      // separately. No subtraction needed here.
     });
 
+    const totalDeductions = deductionsStats.length > 0 ? deductionsStats[0].totalDeducted : 0;
+    const totalOtherCredits = otherCreditsStats.length > 0 ? otherCreditsStats[0].totalCredits : 0;
+
+    // ── Derive wallet fields ──────────────────────────────────────────────────
+    // Available Balance =
+    //   (released online/QR earnings)
+    //   + (topups / referral rewards / cashbacks — non-earning credits)
+    //   − (completed payouts)
+    //   − (pending/reserved payouts)
+    //   − (penalties + refund-recoveries + cash-commission deductions)
+    //
+    // Running this formula 1, 10 or 100 times with no new events produces the
+    // same result → fully idempotent.
     const provider = await Provider.findById(providerId);
     if (provider) {
       provider.wallet = provider.wallet || {};
-      const newAvailable = parseFloat((totalEarning - totalCompletedWithdrawals - totalPendingWithdrawals - totalDeductions).toFixed(2));
+      const newAvailable = parseFloat(
+        (totalOnlineEarning + totalOtherCredits - totalCompletedWithdrawals - totalPendingWithdrawals - totalDeductions).toFixed(2)
+      );
       const newPending = parseFloat(totalPendingWithdrawals.toFixed(2));
       const newWithdrawn = parseFloat(totalCompletedWithdrawals.toFixed(2));
       const newHeld = parseFloat(heldBalance.toFixed(2));
@@ -414,6 +472,7 @@ const executeRazorpayXPayout = async (paymentRecord, provider, accountNumber) =>
     provider.wallet.totalWithdrawn += paymentRecord.amount;
     provider.wallet.lastUpdated = new Date();
     await provider.save();
+    await syncEarningsStatus(provider._id);
   }
   await paymentRecord.save();
   return payoutData;
@@ -454,6 +513,7 @@ const handlePayoutWebhook = async (event, payoutEntity) => {
         provider.wallet.totalWithdrawn += paymentRecord.amount;
         provider.wallet.lastUpdated = new Date();
         await provider.save();
+        await syncEarningsStatus(provider._id);
 
         sendNotification(
           provider._id,
@@ -479,6 +539,7 @@ const handlePayoutWebhook = async (event, payoutEntity) => {
         const balanceAfter = provider.wallet.availableBalance;
         provider.wallet.lastUpdated = new Date();
         await provider.save();
+        await syncEarningsStatus(provider._id);
 
         await Transaction.create({
           booking: paymentRecord._id,
@@ -488,7 +549,7 @@ const handlePayoutWebhook = async (event, payoutEntity) => {
           amount: paymentRecord.amount,
           paymentStatus: 'completed',
           paymentMethod: 'wallet',
-          type: 'withdrawal_rejection',
+          type: 'withdrawalrejection',
           balanceBefore: balanceBefore,
           balanceAfter: balanceAfter,
           description: `RazorpayX Payout reversed/failed (${payoutId}). ₹${paymentRecord.amount} refunded to wallet.`
@@ -509,6 +570,10 @@ const handlePayoutWebhook = async (event, payoutEntity) => {
 
 
 class PaymentService {
+
+  static async syncProviderEarnings(providerId) {
+    await syncEarningsStatus(providerId);
+  }
 
   static async handleWebhook(req, res) {
     try {
@@ -595,7 +660,7 @@ class PaymentService {
       const { startDate, endDate } = req.query;
 
       // Get provider wallet info
-      const provider = await Provider.findById(providerId).select('wallet');
+      const provider = await Provider.findById(providerId).select('wallet withdrawalSecurity');
       const availableBalance = provider?.wallet?.availableBalance || 0;
       const totalWithdrawn = provider?.wallet?.totalWithdrawn || 0;
 
@@ -605,20 +670,23 @@ class PaymentService {
         isVisibleToProvider: true
       };
 
-      // Get lifetime earnings
-      const lifetimeEarnings = await ProviderEarning.aggregate([
+      // ── Lifetime aggregation: both grossBilled and totalEarnings in one pass ──
+      const lifetimeResult = await ProviderEarning.aggregate([
         { $match: baseMatchConditions },
         {
           $group: {
             _id: null,
-            totalEarnings: { $sum: '$netAmount' }
+            totalGross: { $sum: '$grossAmount' }, // SUM(grossAmount) — service base billed
+            totalNet: { $sum: '$netAmount' }    // SUM(netAmount)   — net provider earnings
           }
         }
       ]);
+      const lifetimeGross = lifetimeResult.length > 0 ? lifetimeResult[0].totalGross : 0;
+      const lifetimeEarnings = lifetimeResult.length > 0 ? lifetimeResult[0].totalNet : 0;
 
-      const totalEarnings = lifetimeEarnings.length > 0 ? lifetimeEarnings[0].totalEarnings : 0;
-
-      let periodEarnings = totalEarnings;
+      // Default period values equal lifetime values (overridden below if period filter given)
+      let periodGrossBilled = lifetimeGross;
+      let periodEarnings = lifetimeEarnings;
       let periodWithdrawn = totalWithdrawn;
 
       if (startDate && endDate) {
@@ -626,38 +694,36 @@ class PaymentService {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        // Period Earnings
+        // Period conditions — same boundary applied to BOTH gross and net
         const periodConditions = {
           ...baseMatchConditions,
           createdAt: { $gte: start, $lte: end }
         };
 
-        const periodEarningsResult = await ProviderEarning.aggregate([
+        // Period gross + net in a single pass — guarantees same period boundary
+        const periodResult = await ProviderEarning.aggregate([
           { $match: periodConditions },
           {
             $group: {
               _id: null,
-              totalEarnings: { $sum: '$netAmount' }
+              totalGross: { $sum: '$grossAmount' },
+              totalNet: { $sum: '$netAmount' }
             }
           }
         ]);
-        periodEarnings = periodEarningsResult.length > 0 ? periodEarningsResult[0].totalEarnings : 0;
+        periodGrossBilled = periodResult.length > 0 ? periodResult[0].totalGross : 0;
+        periodEarnings = periodResult.length > 0 ? periodResult[0].totalNet : 0;
 
         // Period Withdrawals
-        const withdrawalConditions = {
-          provider: providerId,
-          status: 'completed',
-          createdAt: { $gte: start, $lte: end }
-        };
-
         const withdrawalResult = await PaymentRecord.aggregate([
-          { $match: withdrawalConditions },
           {
-            $group: {
-              _id: null,
-              totalWithdrawn: { $sum: '$amount' }
+            $match: {
+              provider: providerId,
+              status: { $in: ['completed', 'transferred'] },
+              createdAt: { $gte: start, $lte: end }
             }
-          }
+          },
+          { $group: { _id: null, totalWithdrawn: { $sum: '$amount' } } }
         ]);
         periodWithdrawn = withdrawalResult.length > 0 ? withdrawalResult[0].totalWithdrawn : 0;
       }
@@ -670,19 +736,13 @@ class PaymentService {
             status: { $in: ['requested', 'processing', 'underreview', 'under_review', 'approved'] }
           }
         },
-        {
-          $group: {
-            _id: null,
-            totalPendingWithdrawals: { $sum: '$amount' }
-          }
-        }
+        { $group: { _id: null, totalPendingWithdrawals: { $sum: '$amount' } } }
       ]);
-
       const totalPendingWithdrawals = pendingWithdrawals.length > 0
         ? pendingWithdrawals[0].totalPendingWithdrawals
         : 0;
 
-      // Get held earnings
+      // Get held earnings (netAmount — money still locked)
       const heldEarningsResult = await ProviderEarning.aggregate([
         {
           $match: {
@@ -690,12 +750,7 @@ class PaymentService {
             status: { $in: ['held', 'underreview', 'under_review', 'pendingrelease', 'pending_release'] }
           }
         },
-        {
-          $group: {
-            _id: null,
-            totalHeld: { $sum: '$netAmount' }
-          }
-        }
+        { $group: { _id: null, totalHeld: { $sum: '$netAmount' } } }
       ]);
       const totalHeldEarnings = heldEarningsResult.length > 0 ? heldEarningsResult[0].totalHeld : 0;
 
@@ -706,7 +761,7 @@ class PaymentService {
         status: { $ne: 'cancelled' }
       });
 
-      // Get today's earnings
+      // Get today's earnings (netAmount — always fixed to today regardless of period filter)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -719,12 +774,7 @@ class PaymentService {
             createdAt: { $gte: today, $lt: tomorrow }
           }
         },
-        {
-          $group: {
-            _id: null,
-            totalEarnings: { $sum: '$netAmount' }
-          }
-        }
+        { $group: { _id: null, totalEarnings: { $sum: '$netAmount' } } }
       ]);
       const todayEarnings = todayEarningsResult.length > 0 ? todayEarningsResult[0].totalEarnings : 0;
 
@@ -734,15 +784,22 @@ class PaymentService {
 
       res.json({
         success: true,
+        // ── Gross Billed: SUM(grossAmount) = service base billed for the period ──
+        // NEVER derived from netAmount. Separate backend aggregation.
+        grossBilled: periodGrossBilled,
+        lifetimeGross: lifetimeGross,
+        // ── Net Earnings: SUM(netAmount) = provider's take-home for the period ──
         totalEarnings: periodEarnings,
-        lifetimeEarnings: totalEarnings,
+        lifetimeEarnings: lifetimeEarnings,
+        // ── Fixed-window today earnings ──
         todayEarnings: todayEarnings,
+        // ── Wallet / withdrawal fields (from syncEarningsStatus + PaymentRecord) ──
         availableBalance: availableBalance,
         heldAmount: totalHeldEarnings,
-        disputeCount: disputeCount,
+        pendingWithdrawals: totalPendingWithdrawals,
         totalWithdrawn: periodWithdrawn,
         lifetimeWithdrawn: totalWithdrawn,
-        pendingWithdrawals: totalPendingWithdrawals,
+        disputeCount: disputeCount,
         minWithdrawalLimit,
         withdrawalSecurity: {
           lastRequestTime: provider.withdrawalSecurity?.lastRequestTime,
@@ -755,6 +812,7 @@ class PaymentService {
       res.status(500).json({ success: false, error: 'Server error', details: err.message });
     }
   }
+
 
   static async getWeeklyMonthlyStats(req, res) {
     try {
@@ -849,6 +907,9 @@ class PaymentService {
 
     try {
       const { amount } = req.body;
+
+      // Recalculate/sync balance before validation to prevent stale checks
+      await syncEarningsStatus(providerId);
 
       // Fetch minimum withdrawal from system settings
       const { SystemConfig } = require('../system-setting/system-setting-model');
@@ -1099,6 +1160,7 @@ class PaymentService {
     const session = await safeStartSession();
     try {
       const providerId = req.provider._id;
+      await syncEarningsStatus(providerId);
       const { otp } = req.body;
 
       if (!otp) return res.status(400).json({ success: false, error: "OTP is required" });
@@ -1430,17 +1492,19 @@ class PaymentService {
             disputeStatus: 1,
             holdReason: 1,
             isWithdrawable: 1,
+            // Backend-authoritative breakdown fields — frontend uses these directly, no recalculation
+            baseAmount: "$grossAmount",                         // service price = commission base
+            providerSurgeShare: "$bookingInfo.providerSurgeShare",     // provider's surcharge/bonus share
+            subtotal: "$bookingInfo.subtotal",
+            totalDiscount: "$bookingInfo.totalDiscount",
+            // Raw surcharge fields retained for reference/download only — NOT for frontend recalculation
             visitingCharge: "$bookingInfo.visitingCharge",
             rainCharge: "$bookingInfo.rainCharge",
             trafficCharge: "$bookingInfo.trafficCharge",
             nightCharge: "$bookingInfo.nightCharge",
             demandSurge: "$bookingInfo.demandSurge",
             customCharges: "$bookingInfo.customCharges",
-            platformFee: "$bookingInfo.platformFee",
-            surgeSplitSettings: 1,
-            subtotal: "$bookingInfo.subtotal",
-            totalDiscount: "$bookingInfo.totalDiscount",
-            price: "$bookingInfo.subtotal"
+            platformFee: "$bookingInfo.platformFee"
           },
         },
       ]);
@@ -1534,7 +1598,7 @@ class PaymentService {
           { header: "Demand Surge Surcharge (₹)", key: "demandSurge", width: 20 },
           { header: "Platform Fee Surcharge (₹)", key: "platformFee", width: 20 },
           { header: "Final Provider Receivable (₹)", key: "providerEarnings", width: 25 },
-          { header: "Final Platform Revenue (₹)", key: "platformRevenue", width: 25 },
+          { header: "Total Surcharge (₹)", key: "totalSurcharge", width: 25 },
           { header: "Payment Method", key: "paymentMethod", width: 15 },
           { header: "Status", key: "status", width: 20 },
           { header: "Created At", key: "createdAt", width: 25 },
@@ -1554,9 +1618,10 @@ class PaymentService {
           const night = earning.nightCharge || 0;
           const demand = earning.demandSurge || 0;
           const platform = earning.platformFee || 0;
+          const custom = earning.customCharges || 0;
 
           const providerReceivable = earning.providerEarnings ?? earning.netAmount ?? 0;
-          const platformRevenue = parseFloat((commAmt + (earning.companySurgeShare || 0)).toFixed(2));
+          const totalSurcharge = parseFloat((visiting + rain + traffic + night + demand + platform + custom).toFixed(2));
 
           worksheet.addRow({
             bookingId: earning.bookingId || earning.booking?.toString() || "N/A",
@@ -1572,7 +1637,7 @@ class PaymentService {
             demandSurge: demand,
             platformFee: platform,
             providerEarnings: providerReceivable,
-            platformRevenue: platformRevenue,
+            totalSurcharge: totalSurcharge,
             paymentMethod: earning.paymentMethod || "unknown",
             status: earning.status || "N/A",
             createdAt: earning.createdAt
@@ -1995,6 +2060,9 @@ class PaymentService {
       await safeCommit(session);
       safeEnd(session);
 
+      // Recalculate/sync balance immediately
+      await syncEarningsStatus(paymentRecord.provider._id);
+
       try {
         sendNotification(
           paymentRecord.provider._id,
@@ -2226,7 +2294,7 @@ class PaymentService {
         amount: paymentRecord.amount,
         paymentStatus: 'completed',
         paymentMethod: 'wallet',
-        type: 'withdrawal_rejection',
+        type: 'withdrawalrejection',
         balanceBefore: balanceBefore,
         balanceAfter: balanceAfter,
         approvedBy: req.admin ? req.admin._id : null,
@@ -2240,6 +2308,9 @@ class PaymentService {
 
       await safeCommit(session);
       safeEnd(session);
+
+      // Recalculate/sync balance immediately
+      await syncEarningsStatus(provider._id);
 
       // Notify provider about rejection
       try {
@@ -3130,7 +3201,7 @@ class PaymentService {
       const withdrawals = await PaymentRecord.aggregate([
         {
           $match: {
-            status: 'completed',
+            status: { $in: ['completed', 'transferred'] },
             ...dateFilter
           }
         },
@@ -3208,7 +3279,7 @@ class PaymentService {
       }
 
       const filter = {
-        status: 'completed',
+        status: { $in: ['completed', 'transferred'] },
         createdAt: { $gte: start, $lte: end }
       };
       if (req.query.zoneIds) {
@@ -3359,7 +3430,7 @@ class PaymentService {
         // Get last withdrawal date
         const lastWithdrawal = await PaymentRecord.findOne({
           provider: provider._id,
-          status: 'completed'
+          status: { $in: ['completed', 'transferred'] }
         }).sort({ completedAt: -1 }).lean();
 
         const lastWithdrawalDate = lastWithdrawal ? lastWithdrawal.completedAt : null;
@@ -3512,6 +3583,13 @@ class PaymentService {
         });
       } else {
         await executeRelease(null);
+      }
+
+      try {
+        const referralController = require('../referral/referral-controller');
+        await referralController.releaseSettledReferralRewards();
+      } catch (refErr) {
+        console.error('Error releasing settled referral rewards in cron:', refErr);
       }
     } catch (error) {
       console.error('Error in releaseHeldEarnings:', error);
@@ -3801,8 +3879,10 @@ class PaymentService {
         : { accountNumber: bank.accountNo, accountName: bank.accountName || provider.name, ifscCode: bank.ifsc, bankName: bank.bankName || 'N/A' };
 
       // Deduct available balance and increment total withdrawn
+      const balanceBefore = provider.wallet.availableBalance;
       provider.wallet.availableBalance -= amount;
       provider.wallet.totalWithdrawn += amount;
+      const balanceAfter = provider.wallet.availableBalance;
       provider.wallet.lastUpdated = new Date();
 
       if (session) {
@@ -3833,8 +3913,35 @@ class PaymentService {
         await paymentRecord.save();
       }
 
+      // Log direct payout transaction for provider ledger history
+      const payoutTx = new Transaction({
+        booking: paymentRecord._id, // fallback reference to paymentRecord ID
+        bookingId: paymentRecord.transactionReference || `PAYOUT-DIR-${Date.now()}`,
+        user: provider._id,
+        provider: provider._id,
+        amount: amount,
+        paymentStatus: 'completed',
+        paymentMethod: 'wallet',
+        type: 'withdrawal',
+        ledgerType: 'withdrawal',
+        entryType: 'debit',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceAfter,
+        deductionType: 'payout_withdrawal',
+        description: `Direct payout of ₹${amount} processed by Admin (${paymentRecord.transactionReference})`
+      });
+
+      if (session) {
+        await payoutTx.save({ session });
+      } else {
+        await payoutTx.save();
+      }
+
       await safeCommit(session);
       safeEnd(session);
+
+      // Recalculate/sync balance immediately
+      await syncEarningsStatus(provider._id);
 
       // Notify provider about the direct payout
       try {

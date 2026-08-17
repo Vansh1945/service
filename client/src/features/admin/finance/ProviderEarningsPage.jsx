@@ -24,7 +24,7 @@ const ProviderEarningsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch });
+      const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch, type: 'payment' });
       const res = await TransactionService.getAllTransactions(params);
       if (res.data?.success) {
         const list = res.data.data.transactions || res.data.data || [];
@@ -96,9 +96,10 @@ const ProviderEarningsPage = () => {
               </thead>
               <tbody className="divide-y divide-neutral-100 font-medium">
                 {transactions.map((txn) => {
-                  const customerPaid = txn.amount || txn.booking?.totalAmount || 0;
-                  const commission = txn.commission || txn.booking?.commissionAmount || (customerPaid * 0.1);
-                  const providerNetShare = txn.providerEarning || txn.booking?.providerEarnings || (customerPaid - commission);
+                  const isWithdrawal = txn.type === 'withdrawal' || txn.ledgerType === 'withdrawal' || (txn.bookingId && txn.bookingId.startsWith('WDL-'));
+                  const customerPaid = isWithdrawal ? 0 : (txn.amount || txn.booking?.totalAmount || 0);
+                  const commission = isWithdrawal ? 0 : (txn.commission || txn.booking?.commissionAmount || (customerPaid * 0.1));
+                  const providerNetShare = isWithdrawal ? 0 : (txn.providerEarning || txn.booking?.providerEarnings || (customerPaid - commission));
                   const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending');
                   const withdrawalStatus = txn.withdrawalStatus || 'Available';
                   const isCompleted = ['success', 'completed'].includes(txn.paymentStatus);
@@ -106,12 +107,16 @@ const ProviderEarningsPage = () => {
                   return (
                     <tr key={txn._id} className="hover:bg-neutral-50/50 transition-colors">
                       <td className="p-3.5 font-bold text-secondary">
-                        <button
-                          onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking || txn._id)}
-                          className="text-primary font-mono hover:underline"
-                        >
-                          {txn.booking?.bookingId || txn.bookingId || `#${txn._id.slice(-6)}`}
-                        </button>
+                        {isWithdrawal ? (
+                          <span className="font-mono text-neutral-400">Withdrawal</span>
+                        ) : (
+                          <button
+                            onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking || txn._id)}
+                            className="text-primary font-mono hover:underline"
+                          >
+                            {txn.booking?.bookingId || txn.bookingId || `#${txn._id.slice(-6)}`}
+                          </button>
+                        )}
                       </td>
 
                       <td className="p-3.5 font-bold text-secondary text-sm">

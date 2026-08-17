@@ -30,14 +30,8 @@ const Badge = ({ status, className = "" }) => {
 const ProviderEarningsDashboard = () => {
   const { showToast, systemSettings } = useAuth();
   const navigate = useNavigate();
-
-  const fallbackSplits = systemSettings?.surgeSplitSettings || {
-    visiting: 60,
-    rain: 70,
-    traffic: 70,
-    night: 70,
-    demand: 50
-  };
+  // NOTE: No surge-split percentages here — providerSurgeShare is returned
+  // directly by the backend API and must never be recalculated in the frontend.
 
   const tabs = [
     { id: 'dashboard', label: 'Overview', icon: BarChart3 },
@@ -49,7 +43,8 @@ const ProviderEarningsDashboard = () => {
 
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState({
-    totalEarnings: 0,
+    grossBilled: 0,          // SUM(grossAmount) — service base billed; NOT net
+    totalEarnings: 0,        // SUM(netAmount) for period
     todayEarnings: 0,
     totalWithdrawn: 0,
     availableBalance: 0,
@@ -116,13 +111,15 @@ const ProviderEarningsDashboard = () => {
       const data = response.data;
       if (data.success) {
         setSummary({
-          totalEarnings: data.totalEarnings || 0,
-          todayEarnings: data.todayEarnings || 0,
-          availableBalance: data.availableBalance || 0,
-          heldAmount: data.heldAmount || 0,
-          totalWithdrawn: data.totalWithdrawn || 0,
-          totalPendingWithdrawals: data.pendingWithdrawals || 0,
-          minWithdrawalLimit: data.minWithdrawalLimit ?? 500
+          // grossBilled: separate SUM(grossAmount) aggregate from backend — MUST NOT fall back to totalEarnings
+          grossBilled:            data.grossBilled            ?? null,
+          totalEarnings:          data.totalEarnings          ?? 0,
+          todayEarnings:          data.todayEarnings          ?? 0,
+          availableBalance:       data.availableBalance       ?? 0,
+          heldAmount:             data.heldAmount             ?? 0,
+          totalWithdrawn:         data.totalWithdrawn         ?? 0,
+          totalPendingWithdrawals: data.pendingWithdrawals    ?? 0,
+          minWithdrawalLimit:     data.minWithdrawalLimit     ?? 500
         });
       } else {
         setHasError(true);
@@ -505,9 +502,12 @@ const ProviderEarningsDashboard = () => {
                 <div className="bg-white p-4 rounded-xl border border-neutral-100/50 shadow-sm flex-1 flex flex-col justify-between min-h-[105px]">
                   <div>
                     <span className="text-[10px] md:text-xs font-bold text-neutral-500 uppercase tracking-wider">
-                      Gross Billed
+                      Net Earnings
                     </span>
-                    <p className="text-lg md:text-xl font-extrabold text-neutral-800 mt-1">{hasError ? '—' : formatCurrency(summary.totalEarnings)}</p>
+                    {/* totalEarnings = SUM(netAmount) from backend (provider's Net Receivable take-home) */}
+                    <p className="text-lg md:text-xl font-extrabold text-neutral-800 mt-1">
+                      {hasError ? '—' : formatCurrency(summary.totalEarnings)}
+                    </p>
                   </div>
                   <p className="text-[9px] text-neutral-400 font-medium mt-2 pt-1.5 border-t border-neutral-50 leading-tight">
                     Net booking revenue from {periodText}
@@ -631,29 +631,20 @@ const ProviderEarningsDashboard = () => {
                       <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-right pb-3">Surcharge/Bonus</th>
                       <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-right pb-3">Net</th>
                       <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider pb-3">Status</th>
+                      <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider pb-3">Method</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-50">
                     {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
                       earningsReport.filter(e => e.isWithdrawable).map((e, idx) => {
-                        let parsedSplits = e.surgeSplitSettings;
-                        if (typeof parsedSplits === 'string') {
-                          try { parsedSplits = JSON.parse(parsedSplits); } catch { parsedSplits = null; }
-                        }
-                        const splits = {
-                          visiting: parsedSplits?.visiting ?? fallbackSplits.visiting,
-                          rain: parsedSplits?.rain ?? fallbackSplits.rain,
-                          traffic: parsedSplits?.traffic ?? fallbackSplits.traffic,
-                          night: parsedSplits?.night ?? fallbackSplits.night,
-                          demand: parsedSplits?.demand ?? fallbackSplits.demand
-                        };
-                        const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
-                        const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
-                        const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
-                        const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
-                        const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
-                        const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
-                        const servicePriceWithSurge = (e.price || 0) + otherIncome;
+                        // Backend provides all financial values — no recalculation in frontend.
+                        // e.baseAmount        = service price / commission base (grossAmount)
+                        // e.commissionAmount  = platform commission
+                        // e.providerSurgeShare = provider's surcharge/bonus share
+                        // e.netAmount         = final net receivable
+                        const servicePrice   = e.baseAmount;
+                        const commission     = e.commissionAmount;
+                        const surchargeBonus = e.providerSurgeShare;
 
                         return (
                           <tr key={idx} className="hover:bg-neutral-50 transition-colors">
@@ -661,13 +652,18 @@ const ProviderEarningsDashboard = () => {
                               {e.bookingId || `#${e.booking?.slice(-8)}`}
                             </td>
                             <td className="px-4 py-3 text-right text-xs font-medium text-neutral-700">
-                              {formatCurrency(servicePriceWithSurge)}
+                              {servicePrice != null ? formatCurrency(servicePrice) : '—'}
                             </td>
-                            <td className="px-4 py-3 text-right text-xs font-medium text-danger">
-                              -{formatCurrency(e.commissionAmount)}
+                             <td className="px-4 py-3 text-right text-xs font-medium text-danger">
+                              <span>{commission != null ? `-${formatCurrency(commission)}` : '—'}</span>
+                              {e.paymentMethod === 'cash' && commission > 0 && (
+                                <span className="text-[10px] text-danger font-bold ml-1.5 whitespace-nowrap bg-danger/5 px-1.5 py-0.5 rounded">
+                                  (₹{commission} Wallet Debit)
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right text-xs font-bold text-success">
-                              {otherIncome > 0 ? formatCurrency(otherIncome) : '—'}
+                              {surchargeBonus != null && surchargeBonus > 0 ? `+${formatCurrency(surchargeBonus)}` : '—'}
                             </td>
                             <td className="px-4 py-3 text-right text-xs font-bold text-success">
                               {formatCurrency(e.netAmount)}
@@ -675,12 +671,15 @@ const ProviderEarningsDashboard = () => {
                             <td className="px-4 py-3">
                               <Badge status={e.payoutStatus || e.status} />
                             </td>
+                            <td className="px-4 py-3 text-xs text-neutral-550 capitalize font-medium">
+                              {e.paymentMethod || '—'}
+                            </td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
-                        <td colSpan="6" className="py-12 text-center text-neutral-400 text-xs">
+                        <td colSpan="7" className="py-12 text-center text-neutral-400 text-xs">
                           <Wallet className="w-8 h-8 mx-auto text-neutral-350 mb-2" />
                           <p className="font-bold text-neutral-700">No withdrawable earnings records found</p>
                           <p className="text-[10px] text-neutral-400 mt-0.5">Cleared balances ready for payout requests will display here.</p>
@@ -703,23 +702,10 @@ const ProviderEarningsDashboard = () => {
                 {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
                   <>
                     {earningsReport.filter(e => e.isWithdrawable).map((e, idx) => {
-                      let parsedSplits = e.surgeSplitSettings;
-                      if (typeof parsedSplits === 'string') {
-                        try { parsedSplits = JSON.parse(parsedSplits); } catch { parsedSplits = null; }
-                      }
-                      const splits = {
-                        visiting: parsedSplits?.visiting ?? fallbackSplits.visiting,
-                        rain: parsedSplits?.rain ?? fallbackSplits.rain,
-                        traffic: parsedSplits?.traffic ?? fallbackSplits.traffic,
-                        night: parsedSplits?.night ?? fallbackSplits.night,
-                        demand: parsedSplits?.demand ?? fallbackSplits.demand
-                      };
-                      const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
-                      const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
-                      const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
-                      const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
-                      const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
-                      const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
+                      // Backend-authoritative fields — no frontend recalculation.
+                      const servicePrice   = e.baseAmount;
+                      const commission     = e.commissionAmount;
+                      const surchargeBonus = e.providerSurgeShare;
 
                       return (
                         <div key={idx} className="p-3.5 rounded-xl border border-neutral-100 bg-white shadow-sm space-y-2">
@@ -730,21 +716,36 @@ const ProviderEarningsDashboard = () => {
                           <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-neutral-50">
                             <div>
                               <span className="text-neutral-400 block font-medium">Service Price</span>
-                              <span className="font-semibold text-neutral-700">{formatCurrency(e.price)}</span>
+                              <span className="font-semibold text-neutral-700">
+                                {servicePrice != null ? formatCurrency(servicePrice) : '—'}
+                              </span>
                             </div>
                             <div>
                               <span className="text-neutral-400 block font-medium">Commission</span>
-                              <span className="font-semibold text-danger">-{formatCurrency(e.commissionAmount)}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-danger">
+                                  {commission != null ? `-${formatCurrency(commission)}` : '—'}
+                                </span>
+                                {e.paymentMethod === 'cash' && commission > 0 && (
+                                  <span className="text-[9px] text-danger font-bold bg-danger/5 px-1 py-0.5 rounded whitespace-nowrap">
+                                    (₹{commission} Wallet Debit)
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <div>
                               <span className="text-neutral-400 block font-medium">Bonus / Surcharge</span>
                               <span className="font-semibold text-success">
-                                {otherIncome > 0 ? `+${formatCurrency(otherIncome)}` : '—'}
+                                {surchargeBonus != null && surchargeBonus > 0 ? `+${formatCurrency(surchargeBonus)}` : '—'}
                               </span>
                             </div>
                             <div>
                               <span className="text-neutral-400 block font-medium">Net Earnings</span>
                               <span className="font-bold text-success">{formatCurrency(e.netAmount)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-400 block font-medium">Method</span>
+                              <span className="font-semibold text-neutral-700 capitalize">{e.paymentMethod || '—'}</span>
                             </div>
                           </div>
                         </div>

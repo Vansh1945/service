@@ -822,6 +822,8 @@ class ProviderService {
 
     static async getProfile(req, res) {
         try {
+            const PaymentService = require('../payment/payment-service');
+            await PaymentService.syncProviderEarnings(req.providerId);
 
             let providerObj = await Provider.findById(req.providerId);
             if (!providerObj) {
@@ -1884,6 +1886,8 @@ class ProviderService {
     static async getDashboardData(req, res) {
         try {
             const providerId = req.providerId;
+            const PaymentService = require('../payment/payment-service');
+            await PaymentService.syncProviderEarnings(providerId);
             const { startDate, endDate, period = 'daily' } = req.query;
 
             // Default range for analytics (like last 7 days if not provided)

@@ -72,26 +72,34 @@ const ReferEarn = () => {
     );
   }
 
-  const rewardText = details.programRules?.rewardCalculationMode === 'fixed' 
-    ? `₹${details.programRules?.fixedRewardAmount}` 
-    : `${details.programRules?.commissionPercentage}%`;
+  const isCouponReward = details.programRules?.customerReferrerRewardType === 'COUPON';
+  const referrerRewardVal = details.programRules?.customerReferrerRewardAmount || 100;
+  const newCustVal = details.programRules?.newCustomerRewardAmount || 50;
+
+  const rewardText = isCouponReward 
+    ? `₹${referrerRewardVal} Discount Voucher` 
+    : `₹${referrerRewardVal} Wallet Cash`;
+
+  const newCustText = details.programRules?.newCustomerRewardType === 'COUPON'
+    ? `₹${newCustVal} Discount Coupon`
+    : `₹${newCustVal} Welcome Cash`;
 
   const pendingCount = details.referrals?.filter(ref => ref.status === 'pending')?.length || 0;
-  const calculatedPending = details.programRules?.rewardCalculationMode === 'fixed' ? (pendingCount * (details.programRules?.fixedRewardAmount || 0)) : 0;
+  const calculatedPending = !isCouponReward ? (pendingCount * referrerRewardVal) : 0;
   const displayPending = details.pendingRewards || calculatedPending;
 
   const processedReferrals = (details.referrals || []).map(ref => {
     const isCompleted = ['released', 'completed'].includes(ref.status);
     const isExpired = ref.status === 'expired' || (ref.expiryDate && new Date() > new Date(ref.expiryDate) && ref.status === 'pending');
-    const displayAmount = isExpired ? '—' : (details.programRules?.rewardCalculationMode === 'fixed' ? `₹${details.programRules?.fixedRewardAmount || 0}` : `${details.programRules?.commissionPercentage || 0}%`);
+    const displayAmount = isExpired ? '—' : rewardText;
     return { ...ref, isCompleted, isExpired, displayAmount };
   });
 
   const rules = [
-    { title: 'How Referral Works', desc: `1. Share link or code. 2. Friend signs up. 3. Friend completes first booking (min ₹${details.programRules?.minBookingAmount || 0}). 4. You receive wallet reward!` },
-    { title: 'Reward Details', desc: `Earn ${rewardText} on friend's first job. Friend gets ₹${details.programRules?.welcomeRewardValue || 0} welcome cash.` },
-    { title: 'Referral Validity', desc: `Validity duration is ${details.programRules?.referralExpiryDays || 90} days from signup.` },
-    { title: 'Terms & Conditions', desc: `Self-referrals are prohibited. Rewards credited after first job completion.` }
+    { title: 'How Referral Works', desc: `1. Share link or code. 2. Friend signs up using your code. 3. Friend completes first booking (min ₹${details.programRules?.minBookingAmount || 100}). 4. You receive ${rewardText}!` },
+    { title: 'Reward & Benefit Details', desc: `Referrer receives ${rewardText} on friend's first completed job. New friend gets ${newCustText} as welcome bonus.` },
+    { title: 'Referral Validity', desc: `Validity duration is ${details.programRules?.referralExpiryDays || 30} days from signup date.` },
+    { title: 'Terms & Conditions', desc: `Self-referrals are strictly prohibited. Rewards credited automatically after first qualified booking completion.` }
   ];
 
   return (
@@ -103,10 +111,9 @@ const ReferEarn = () => {
           <div className="relative z-10 max-w-2xl flex flex-col items-start gap-3">
             <span className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider font-poppins">Referral Program</span>
             <div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-tight font-poppins">Invite Friends & Earn <span className="text-primary font-black">{rewardText}</span> Reward</h1>
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-tight font-poppins">Invite Friends & Get <span className="text-primary font-black">{rewardText}</span></h1>
               <p className="text-neutral-400 text-xs mt-2 leading-relaxed max-w-xl font-medium">
-                Share the convenience of booking verified electricians. You will get {rewardText} directly credited to your wallet for each friend who completes their first booking!
-                {details.programRules?.welcomeRewardEnabled && ` Friend gets welcome reward of ₹${details.programRules?.welcomeRewardValue} instantly!`}
+                Share {companyName} with your friends! For every friend who signs up and completes their first booking (min ₹{details.programRules?.minBookingAmount || 100}), you receive <span className="text-white font-bold">{rewardText}</span>! Plus, your friend gets <span className="text-white font-bold">{newCustText}</span>!
               </p>
             </div>
             <div className="flex flex-row items-center gap-3 w-full sm:max-w-md mt-2">

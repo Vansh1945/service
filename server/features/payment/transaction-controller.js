@@ -12,6 +12,9 @@ const Razorpay = require('razorpay');
 
 const razorpay = require('./razorpay');
 
+const activeRequests = new Set();
+const activeWebhookProcessings = new Set();
+
 const getBookingIdsForZones = async (zoneIds) => {
   if (!zoneIds) return [];
   const zoneIdsArray = zoneIds.split(',').map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
@@ -35,7 +38,8 @@ const rollbackWalletDeduction = async (transaction, session) => {
             type: 'credit',
             amount: walletDeduction,
             reason: 'Booking Payment Rollback (Failed Payment)',
-            booking: transaction.booking
+            booking: transaction.booking,
+            bookingId: transaction.bookingId || null
           });
           user.wallet.lastUpdated = new Date();
           await user.save({ session });
@@ -170,7 +174,8 @@ const createOrder = async (req, res, next) => {
           type: 'debit',
           amount: walletDeduction,
           reason: 'Booking Payment (Pending Mixed Verification)',
-          booking: booking._id
+          booking: booking._id,
+          bookingId: booking.bookingId || null
         });
         user.wallet.lastUpdated = new Date();
         await user.save({ session });
@@ -251,9 +256,11 @@ const createOrder = async (req, res, next) => {
         const rule = await CommissionRule.getCommissionForProvider(booking.provider || null, booking.zoneId);
 
         if (rule) {
-          const { commission: calculatedComm, netAmount } = CommissionRule.calculateCommission(booking.totalAmount, rule);
+          const baseAmount = Math.max(0, (booking.subtotal || booking.totalAmount) - (booking.totalDiscount || 0));
+          const { commission: calculatedComm } = CommissionRule.calculateCommission(baseAmount, rule);
           commission = calculatedComm || 0;
-          providerEarning = netAmount || booking.totalAmount;
+          // Provider keeps surcharge: net = totalAmount - commission
+          providerEarning = parseFloat((booking.totalAmount - commission).toFixed(2));
           commissionRuleId = rule._id;
         } else {
           const { SystemConfig } = require('../system-setting/system-setting-model');
@@ -263,8 +270,10 @@ const createOrder = async (req, res, next) => {
             await settings.save();
           }
           const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
-          const calculatedComm = parseFloat(((booking.totalAmount * defaultCommPercent) / 100).toFixed(2));
+          const baseAmount = Math.max(0, (booking.subtotal || booking.totalAmount) - (booking.totalDiscount || 0));
+          const calculatedComm = parseFloat(((baseAmount * defaultCommPercent) / 100).toFixed(2));
           commission = calculatedComm || 0;
+          // Provider keeps surcharge: net = totalAmount - commission
           providerEarning = parseFloat((booking.totalAmount - commission).toFixed(2));
         }
       } catch (err) {
@@ -430,6 +439,12 @@ const verifyPayment = async (req, res, next) => {
     if (razorpayResponse) {
       transaction.razorpayResponse = razorpayResponse;
       transaction.paymentMethod = razorpayResponse.method || transaction.paymentMethod;
+      if (razorpayResponse.fee != null) {
+        transaction.gatewayFee = parseFloat((razorpayResponse.fee / 100).toFixed(2));
+      }
+      if (razorpayResponse.tax != null) {
+        transaction.gatewayTax = parseFloat((razorpayResponse.tax / 100).toFixed(2));
+      }
     }
     transaction.paymentStatus = 'success';
     transaction.updatedAt = new Date();
@@ -898,19 +913,53 @@ const getAdminPaymentDetails = async (req, res, next) => {
 
     const booking = txn.booking;
 
-    // ── Payment Breakup (All from Booking fields — no React calculation) ──────────
-    const totalAmount = booking?.totalAmount || 0;
-    const walletPaid = booking?.walletUsed || 0;
-    const onlinePaid = booking?.onlinePaid || txn.amount || 0;
-    const cashPaid = booking?.cashToPay || 0;
-    const finalPaid = walletPaid + onlinePaid + cashPaid;
+    // ── Payment Breakup (All Authoritative from Backend — zero React calculation) ──
+    const totalAmount = booking?.totalAmount || txn.amount || 0;
+    const subtotal = booking?.subtotal || totalAmount;
     const discount = booking?.totalDiscount || 0;
-    const subtotal = booking?.subtotal || 0;
-    const commissionAmount = booking?.commissionAmount || txn.commission || 0;
-    const providerEarnings = booking?.providerEarnings || txn.providerEarning || 0;
+    const walletUsed = booking?.walletUsed || 0;
+
+    let onlinePaid = 0;
+    let cashPaid = 0;
+    let walletPaid = walletUsed;
+    let finalPaid = 0;
+
+    const paymentMethod = (txn.paymentMethod || booking?.paymentMethod || 'online').toLowerCase();
+    const isSuccess = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
+
+    if (txn.type === 'withdrawal') {
+      finalPaid = 0;
+      walletPaid = txn.amount || 0;
+      onlinePaid = 0;
+      cashPaid = 0;
+    } else if (paymentMethod === 'cash' || paymentMethod === 'cod') {
+      cashPaid = Math.max(0, totalAmount - walletUsed);
+      onlinePaid = 0;
+      finalPaid = isSuccess ? totalAmount : (txn.amount || cashPaid);
+    } else if (paymentMethod === 'upi' || paymentMethod === 'qr_code' || txn.razorpayPaymentId) {
+      onlinePaid = Math.max(0, totalAmount - walletUsed);
+      cashPaid = 0;
+      finalPaid = isSuccess ? totalAmount : (txn.amount || onlinePaid);
+    } else if (paymentMethod === 'wallet') {
+      walletPaid = totalAmount;
+      onlinePaid = 0;
+      cashPaid = 0;
+      finalPaid = isSuccess ? totalAmount : (txn.amount || walletPaid);
+    } else if (paymentMethod === 'mixed') {
+      walletPaid = walletUsed;
+      onlinePaid = Math.max(0, totalAmount - walletUsed);
+      cashPaid = 0;
+      finalPaid = isSuccess ? totalAmount : (walletPaid + onlinePaid);
+    } else {
+      onlinePaid = Math.max(0, totalAmount - walletUsed);
+      cashPaid = 0;
+      finalPaid = isSuccess ? totalAmount : (txn.amount || onlinePaid);
+    }
+
+    const commissionAmount = txn.type === 'withdrawal' ? 0 : (booking?.commissionAmount || txn.commission || 0);
+    const providerEarnings = txn.type === 'withdrawal' ? 0 : (booking?.providerEarnings || txn.providerEarning || 0);
 
     // ── Determine payment type ────────────────────────────────────────────────────
-    const paymentMethod = (txn.paymentMethod || booking?.paymentMethod || 'online').toLowerCase();
     let paymentType = 'online';
     if (paymentMethod === 'mixed') paymentType = 'mixed';
     else if (paymentMethod === 'wallet') paymentType = 'wallet';
@@ -954,18 +1003,26 @@ const getAdminPaymentDetails = async (req, res, next) => {
     }
 
     // ── Build settlement info from transaction ─────────────────────────────────────
+    const isTxnCaptured = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
+    const isSettled = Boolean(txn.razorpaySettlementId);
+    const calculatedSettlementStatus = isSettled ? 'settled' : (isTxnCaptured ? 'processing' : 'pending');
+
+    const gatewayFee = txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0);
+    const gatewayTax = txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0);
+    const netSettlementAmount = txn.netSettlementAmount || Math.max(0, parseFloat((txn.amount - gatewayFee - gatewayTax).toFixed(2)));
+
     const settlement = {
-      settlementStatus: txn.settlementStatus || 'settled',
+      settlementStatus: calculatedSettlementStatus,
       settlementAmount: txn.settlementAmount || txn.amount || 0,
-      settlementDate: txn.settlementDate || txn.updatedAt || null,
-      gatewayFee: txn.gatewayFee || 0,
-      gatewayTax: txn.gatewayTax || 0,
-      netSettlementAmount: txn.netSettlementAmount || 0,
+      settlementDate: isSettled ? (txn.settlementDate || txn.updatedAt) : null,
+      gatewayFee,
+      gatewayTax,
+      netSettlementAmount,
       razorpaySettlementId: txn.razorpaySettlementId || null,
       bankReference: txn.bankReference || null,
       commissionAmount,
       providerEarnings,
-      providerPayoutStatus: txn.provider ? 'pending' : null
+      providerPayoutStatus: txn.provider ? (isTxnCaptured ? 'available' : 'pending') : null
     };
 
     // ── Build audit info ──────────────────────────────────────────────────────────
@@ -989,7 +1046,7 @@ const getAdminPaymentDetails = async (req, res, next) => {
         razorpaySignature: txn.razorpaySignature || null,
         paymentStatus: txn.paymentStatus,
         captureStatus: txn.paymentStatus === 'success' || txn.paymentStatus === 'completed' ? 'captured' : txn.paymentStatus === 'failed' ? 'failed' : 'authorized',
-        settlementStatus: txn.settlementStatus || 'settled',
+        settlementStatus: calculatedSettlementStatus,
         paymentMethod: txn.paymentMethod,
         paymentType,
 
@@ -1525,33 +1582,39 @@ const getChartTrends = async (req, res, next) => {
       // 1. Daily revenue + platform earnings from Transactions
       Transaction.aggregate([
         { $match: { paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: since } } },
-        { $group: {
+        {
+          $group: {
             _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
             revenue: { $sum: '$amount' },
             earnings: { $sum: { $ifNull: ['$commission', { $multiply: ['$amount', 0.2] }] } }
-        }},
+          }
+        },
         { $sort: { _id: 1 } }
       ]),
 
       // 2. Daily refunds (completed + pending)
       Refund.aggregate([
         { $match: { createdAt: { $gte: since } } },
-        { $group: {
+        {
+          $group: {
             _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
             completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$amount', 0] } },
             pending: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing']] }, '$amount', 0] } }
-        }},
+          }
+        },
         { $sort: { _id: 1 } }
       ]),
 
       // 3. Daily bookings count + booking revenue
       Booking.aggregate([
         { $match: { createdAt: { $gte: since } } },
-        { $group: {
+        {
+          $group: {
             _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
             bookings: { $sum: 1 },
             revenue: { $sum: { $ifNull: ['$totalAmount', '$amount', 0] } }
-        }},
+          }
+        },
         { $sort: { _id: 1 } }
       ])
     ]);
@@ -3401,9 +3464,9 @@ const getMasterLedger = async (req, res, next) => {
       let cumulative = 0;
       allForBalance.forEach(t => {
         const isCredit = t.entryType === 'credit' ||
-          ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(t.type);
+          ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(t.type);
         const isDebit = t.entryType === 'debit' ||
-          ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(t.type);
+          ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(t.type);
 
         if (isCredit && !isDebit) cumulative += (t.amount || 0);
         else if (isDebit && !isCredit) cumulative -= (t.amount || 0);
@@ -3423,9 +3486,9 @@ const getMasterLedger = async (req, res, next) => {
 
       // Determine debit / credit amounts
       const isCredit = txn.entryType === 'credit' ||
-        ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(txn.type);
+        ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(txn.type);
       const isDebit = txn.entryType === 'debit' ||
-        ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+        ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
 
       const creditAmount = (isCredit && !isDebit) ? (txn.amount || 0) : 0;
       const debitAmount = (isDebit && !isCredit) ? (txn.amount || 0) : 0;
@@ -3510,22 +3573,77 @@ const getLedgerDetail = async (req, res, next) => {
 
     const booking = txn.booking;
 
-    // ── Financial Breakdown — All from backend, never React ──────────────────
-    const totalAmount = booking?.totalAmount || txn.amount || 0;
-    const walletPaid = booking?.walletUsed || 0;
-    const onlinePaid = booking?.onlinePaid || (txn.paymentMethod !== 'wallet' && txn.paymentMethod !== 'cash' ? txn.amount : 0);
-    const cashPaid = booking?.cashToPay || (txn.paymentMethod === 'cash' ? txn.amount : 0);
-    const finalPaid = walletPaid + onlinePaid + cashPaid;
-    const discount = booking?.totalDiscount || 0;
-    const subtotal = booking?.subtotal || 0;
-    const commissionAmount = booking?.commissionAmount || txn.commission || 0;
-    const providerEarnings = booking?.providerEarnings || txn.providerEarning || 0;
+    // ── Financial Breakdown — All from backend, accurate accounting ─────────
+    const isWithdrawalTxn = txn.type === 'withdrawal' || txn.ledgerType === 'withdrawal' || (txn.bookingId && txn.bookingId.startsWith('WDL-'));
+    const isRefundTxn = txn.type === 'refund' || txn.type === 'refundrecovery';
+    const isCommissionTxn = txn.type === 'commissiondeduction' || txn.ledgerType === 'commission';
+
+    let totalAmount = 0;
+    let walletPaid = 0;
+    let onlinePaid = 0;
+    let cashPaid = 0;
+    let finalPaid = 0;
+    let discount = 0;
+    let subtotal = 0;
+    let commissionAmount = 0;
+    let providerEarnings = 0;
+
+    if (isWithdrawalTxn) {
+      totalAmount = txn.amount || 0;
+      walletPaid = txn.amount || 0;
+      finalPaid = 0; // Withdrawals are not customer payments
+      commissionAmount = 0;
+      providerEarnings = 0;
+      subtotal = 0;
+      discount = 0;
+    } else if (booking) {
+      totalAmount = booking.totalAmount || txn.amount || 0;
+      discount = booking.totalDiscount || 0;
+      subtotal = booking.subtotal || (totalAmount + discount);
+      commissionAmount = booking.commissionAmount ?? (txn.commission || 0);
+      providerEarnings = booking.providerEarnings ?? (txn.providerEarning || 0);
+
+      const actualMethod = booking.paymentVerification?.method || booking.paymentMethod || txn.paymentMethod;
+
+      if (booking.paymentMethod === 'mixed') {
+        walletPaid = booking.walletUsed || 0;
+        onlinePaid = booking.onlinePaid || 0;
+        cashPaid = booking.cashToPay || 0;
+        finalPaid = walletPaid + onlinePaid + cashPaid;
+      } else if (actualMethod === 'qr_code' || txn.paymentMethod === 'upi' || ['online', 'razorpay', 'upi', 'card', 'netbanking'].includes(txn.paymentMethod)) {
+        walletPaid = booking.walletUsed || 0;
+        onlinePaid = totalAmount - walletPaid;
+        cashPaid = 0;
+        finalPaid = totalAmount;
+      } else if (actualMethod === 'cash_received' || txn.paymentMethod === 'cash' || booking.paymentMethod === 'cash') {
+        walletPaid = booking.walletUsed || 0;
+        cashPaid = totalAmount - walletPaid;
+        onlinePaid = 0;
+        finalPaid = totalAmount;
+      } else if (txn.paymentMethod === 'wallet' || booking.paymentMethod === 'wallet') {
+        walletPaid = totalAmount;
+        onlinePaid = 0;
+        cashPaid = 0;
+        finalPaid = totalAmount;
+      } else {
+        onlinePaid = txn.amount || totalAmount;
+        finalPaid = totalAmount;
+      }
+    } else {
+      totalAmount = txn.amount || 0;
+      commissionAmount = isCommissionTxn ? txn.amount : (txn.commission || 0);
+      providerEarnings = txn.providerEarning || 0;
+      finalPaid = (txn.type === 'payment') ? (txn.amount || 0) : 0;
+      if (txn.paymentMethod === 'cash') cashPaid = txn.amount || 0;
+      else if (txn.paymentMethod === 'wallet') walletPaid = txn.amount || 0;
+      else onlinePaid = (txn.type === 'payment') ? (txn.amount || 0) : 0;
+    }
 
     // Debit / Credit
     const isCredit = txn.entryType === 'credit' ||
-      ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(txn.type);
+      ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(txn.type);
     const isDebit = txn.entryType === 'debit' ||
-      ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+      ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
 
     const creditAmount = (isCredit && !isDebit) ? (txn.amount || 0) : 0;
     const debitAmount = (isDebit && !isCredit) ? (txn.amount || 0) : 0;
@@ -3577,14 +3695,19 @@ const getLedgerDetail = async (req, res, next) => {
     }
 
     // ── Settlement info ───────────────────────────────────────────────────────
+    const isTxnSettled = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
+    const gatewayFee = txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0);
+    const gatewayTax = txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0);
+    const netSettlementAmount = txn.netSettlementAmount || Math.max(0, parseFloat((txn.amount - gatewayFee - gatewayTax).toFixed(2)));
+
     const settlement = {
       settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
-      settlementStatus: txn.settlementStatus || (txn.paymentStatus === 'success' ? 'settled' : 'pending'),
+      settlementStatus: txn.settlementStatus || (isTxnSettled ? 'settled' : 'pending'),
       settlementAmount: txn.settlementAmount || txn.amount || 0,
-      settlementDate: txn.settlementDate || txn.updatedAt || null,
-      gatewayFee: txn.gatewayFee || 0,
-      gatewayTax: txn.gatewayTax || 0,
-      netSettlementAmount: txn.netSettlementAmount || (txn.amount - (txn.gatewayFee || 0) - (txn.gatewayTax || 0)),
+      settlementDate: txn.settlementDate || (isTxnSettled ? (txn.updatedAt || txn.createdAt) : null),
+      gatewayFee,
+      gatewayTax,
+      netSettlementAmount,
       bankReference: txn.bankReference || null,
     };
 
@@ -3726,186 +3849,236 @@ const handleQRSuccessPayment = async (payment, session, qrCodeId) => {
   const qrId = qrCodeId || payment.notes?.qrCodeId || payment.qr_code_id;
   const bookingId = payment.notes?.bookingId;
 
-  let booking = null;
-  if (bookingId && mongoose.Types.ObjectId.isValid(bookingId)) {
-    booking = await Booking.findById(bookingId).session(session);
-  }
-  if (!booking && qrId) {
-    booking = await Booking.findOne({ 'paymentVerification.qrCodeId': qrId }).session(session);
-  }
-
-  if (!booking) {
-    global.logger.warn(`[handleQRSuccessPayment] No booking found for QR ${qrId} or booking ${bookingId}`);
+  const lockKey = `${bookingId || 'unknown'}-${payment.id || qrId || 'unknown'}`;
+  if (activeWebhookProcessings.has(lockKey)) {
+    global.logger.info(`[handleQRSuccessPayment] Webhook processing for ${lockKey} already in progress.`);
     return;
   }
+  activeWebhookProcessings.add(lockKey);
 
-  // Idempotency: Check if transaction has already been registered for this payment ID
-  if (payment.id) {
-    const existingTx = await Transaction.findOne({
-      $or: [
-        { razorpayPaymentId: payment.id },
-        { transactionId: payment.id }
-      ]
-    }).session(session);
+  try {
+    let booking = null;
+    if (bookingId && mongoose.Types.ObjectId.isValid(bookingId)) {
+      booking = await Booking.findById(bookingId).session(session);
+    }
+    if (!booking && qrId) {
+      booking = await Booking.findOne({ 'paymentVerification.qrCodeId': qrId }).session(session);
+    }
 
-    if (existingTx) {
-      global.logger.info(`[handleQRSuccessPayment] Payment ID ${payment.id} already processed (transaction exists).`);
+    if (!booking) {
+      global.logger.warn(`[handleQRSuccessPayment] No booking found for QR ${qrId} or booking ${bookingId}`);
       return;
     }
-  }
 
-  if (
-    booking.paymentVerification?.status === 'verified' ||
-    booking.paymentStatus === 'paid' ||
-    booking.status === 'completed'
-  ) {
-    global.logger.info(`[handleQRSuccessPayment] Booking ${booking._id} already completed / payment verified.`);
-    return;
-  }
-
-  const providerId = booking.provider;
-  const CommissionRule = require('./commission-rule-model');
-  const ProviderEarning = require('../provider/provider-earning-model');
-
-  let commission = booking.commissionAmount || 0;
-  if (!commission && providerId) {
-    const rule = await CommissionRule.getCommissionForProvider(providerId, booking.zoneId, 'standard', booking.services?.[0]?.service);
-    if (rule) {
-      const baseAmount = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
-      const res = CommissionRule.calculateCommission(baseAmount, rule);
-      commission = res.commission;
+    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+      global.logger.info(`[handleQRSuccessPayment] Booking ${booking._id} already completed / payment verified.`);
+      return;
     }
-  }
 
-  const providerEarnings = parseFloat((booking.totalAmount - commission).toFixed(2));
+    if (payment.id) {
+      const existingTx = await Transaction.findOne({ razorpayPaymentId: payment.id }).session(session);
+      if (existingTx) {
+        global.logger.info(`[handleQRSuccessPayment] Payment ${payment.id} has already been processed.`);
+        return;
+      }
+    }
 
-  booking.paymentVerification = {
-    method: 'qr_code',
-    status: 'verified',
-    qrCodeId: qrId,
-    verifiedAt: new Date()
-  };
-  booking.status = 'completed';
-  booking.paymentStatus = 'paid';
-  booking.paymentMethod = 'online'; // Ensure payment method becomes online
-  booking.completedAt = new Date();
-  booking.commissionProcessed = true;
-  booking.commissionAmount = commission;
-  booking.providerEarnings = providerEarnings;
+    const providerId = booking.provider;
+    const CommissionRule = require('./commission-rule-model');
+    const ProviderEarning = require('../provider/provider-earning-model');
 
-  booking.statusHistory.push({
-    status: 'completed',
-    timestamp: new Date(),
-    note: `Dynamic QR Payment verified via Razorpay webhook. Txn: ${payment.id || 'QR-PAY'}`,
-    updatedBy: 'system'
-  });
+    await booking.recalculateFinancials();
 
-  await booking.save({ session });
+    const commission = booking.commissionAmount || 0;
+    const providerEarnings = booking.providerEarnings || 0;
 
-  const transaction = new Transaction({
-    booking: booking._id,
-    bookingId: booking.bookingId || booking._id.toString(),
-    user: booking.customer,
-    provider: providerId,
-    amount: booking.totalAmount,
-    commission: commission,
-    providerEarning: providerEarnings,
-    paymentMethod: 'upi',
-    paymentStatus: 'completed',
-    type: 'payment',
-    ledgerType: 'payment',
-    razorpayPaymentId: payment.id,
-    razorpayOrderId: payment.order_id,
-    razorpayResponse: payment,
-    description: `QR Code UPI payment received for booking ${booking.bookingId || booking._id}`
-  });
-  await transaction.save({ session });
+    booking.paymentVerification = {
+      method: 'qr_code',
+      status: 'verified',
+      qrCodeId: qrId,
+      verifiedAt: new Date()
+    };
+    booking.status = 'completed';
+    booking.paymentStatus = 'paid';
+    booking.completedAt = new Date();
+    booking.commissionProcessed = true;
 
-  await ProviderEarning.findOneAndUpdate(
-    { booking: booking._id, provider: providerId },
-    {
-      $setOnInsert: {
-        grossAmount: booking.totalAmount,
+    booking.statusHistory.push({
+      status: 'completed',
+      timestamp: new Date(),
+      note: `Dynamic QR Payment verified via Razorpay webhook. Txn: ${payment.id || 'QR-PAY'}`,
+      updatedBy: 'system'
+    });
+
+    await booking.save({ session });
+
+    let transaction = await Transaction.findOne({
+      booking: booking._id,
+      type: 'payment',
+      paymentStatus: 'pending'
+    }).session(session);
+
+    if (transaction) {
+      transaction.paymentMethod = 'upi';
+      transaction.paymentStatus = 'completed';
+      transaction.amount = booking.totalAmount;
+      transaction.commission = commission;
+      transaction.providerEarning = providerEarnings;
+      transaction.razorpayPaymentId = payment.id;
+      transaction.razorpayOrderId = payment.order_id;
+      transaction.razorpayResponse = payment;
+      if (payment.fee != null) {
+        transaction.gatewayFee = parseFloat((payment.fee / 100).toFixed(2));
+      }
+      if (payment.tax != null) {
+        transaction.gatewayTax = parseFloat((payment.tax / 100).toFixed(2));
+      }
+      transaction.description = `QR Code UPI payment received for booking ${booking.bookingId || booking._id}`;
+      transaction.updatedAt = new Date();
+      await transaction.save({ session });
+    } else {
+      transaction = new Transaction({
+        booking: booking._id,
+        bookingId: booking.bookingId || booking._id.toString(),
+        user: booking.customer,
+        provider: providerId,
+        amount: booking.totalAmount,
+        commission: commission,
+        providerEarning: providerEarnings,
+        paymentMethod: 'upi',
+        paymentStatus: 'completed',
+        type: 'payment',
+        ledgerType: 'payment',
+        razorpayPaymentId: payment.id,
+        razorpayOrderId: payment.order_id,
+        razorpayResponse: payment,
+        description: `QR Code UPI payment received for booking ${booking.bookingId || booking._id}`
+      });
+      await transaction.save({ session });
+    }
+
+    const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
+    const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
+    const provDiscount = Math.max(0, (booking.totalDiscount || 0) - refAmount);
+    const baseAmount = Math.max(0, booking.subtotal - provDiscount);
+    let rule = null;
+    if (providerId) {
+      rule = await CommissionRule.getCommissionForProvider(providerId, booking.zoneId, 'standard', booking.services?.[0]?.service);
+    }
+    const providerDoc = providerId ? await Provider.findById(providerId).session(session) : null;
+    const { getReferralCommissionDiscount } = require('../referral/referral-helpers');
+    const effectiveRate = rule ? getReferralCommissionDiscount(providerDoc, rule, baseAmount) : 0;
+    if (effectiveRate !== (rule ? rule.value : 0)) {
+      booking.referralDiscountApplied = true;
+      await booking.save({ session });
+    }
+
+    let earning = await ProviderEarning.findOne({ booking: booking._id, provider: providerId }).session(session);
+    if (earning) {
+      if (!earning.paymentRecord && !['withdrawn', 'cancelled'].includes(earning.status)) {
+        earning.grossAmount = baseAmount;
+        earning.commissionRate = effectiveRate;
+        earning.commissionAmount = commission;
+        earning.netAmount = providerEarnings;
+        earning.status = 'held';
+        earning.availableAfter = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        await earning.save({ session });
+      }
+    } else {
+      earning = new ProviderEarning({
+        provider: providerId,
+        booking: booking._id,
+        grossAmount: baseAmount,
+        commissionRate: effectiveRate,
         commissionAmount: commission,
         netAmount: providerEarnings,
         status: 'held',
         availableAfter: new Date(Date.now() + 48 * 60 * 60 * 1000)
-      }
-    },
-    { session, upsert: true }
-  );
-
-  try {
-    const { getIO } = require('../../shared/socket/socket-server');
-    const io = getIO();
-    if (io) {
-      io.to(`booking_${booking._id}`).emit('payment_verified', {
-        bookingId: booking._id,
-        status: 'completed',
-        paymentMethod: 'qr_code',
-        totalAmount: booking.totalAmount,
-        verifiedAt: new Date()
       });
-      io.to(`booking_${booking._id}`).emit('booking_updated', {
-        bookingId: booking._id,
-        booking: booking
-      });
+      await earning.save({ session });
     }
-  } catch (socketErr) {
-    console.error('[handleQRSuccessPayment] Socket error:', socketErr);
-  }
 
-  try {
-    const { sendNotification } = require('../notification/notification-helper');
-    if (booking.customer) {
-      sendNotification(booking.customer, 'customer', 'Payment Received', `Your payment of ₹${booking.totalAmount} for booking #${booking.bookingId} via QR code was successful.`, 'booking', booking._id);
-    }
     if (providerId) {
-      sendNotification(providerId, 'provider', 'Payment Verified', `Customer paid ₹${booking.totalAmount} via QR Code for booking #${booking.bookingId}. Your earnings: ₹${providerEarnings}.`, 'booking', booking._id);
+      await Provider.findByIdAndUpdate(
+        providerId,
+        {
+          $inc: { completedBookings: 1 },
+          $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+        },
+        { session }
+      );
     }
-  } catch (notifErr) {
-    console.error('[handleQRSuccessPayment] Notification error:', notifErr);
+
+    try {
+      const { getIO } = require('../../shared/socket/socket-server');
+      const io = getIO();
+      if (io) {
+        io.to(`booking_${booking._id}`).emit('payment_verified', {
+          bookingId: booking._id,
+          status: 'completed',
+          paymentMethod: 'qr_code',
+          totalAmount: booking.totalAmount,
+          verifiedAt: new Date()
+        });
+        io.to(`booking_${booking._id}`).emit('booking_updated', {
+          bookingId: booking._id,
+          booking: booking
+        });
+      }
+    } catch (socketErr) {
+      console.error('[handleQRSuccessPayment] Socket error:', socketErr);
+    }
+
+    try {
+      const { sendNotification } = require('../notification/notification-helper');
+      if (booking.customer) {
+        sendNotification(booking.customer, 'customer', 'Payment Received', `Your payment of ₹${booking.totalAmount} for booking #${booking.bookingId} via QR code was successful.`, 'booking', booking._id);
+      }
+      if (providerId) {
+        sendNotification(providerId, 'provider', 'Payment Verified', `Customer paid ₹${booking.totalAmount} via QR Code for booking #${booking.bookingId}. Your earnings: ₹${providerEarnings}.`, 'booking', booking._id);
+      }
+    } catch (notifErr) {
+      console.error('[handleQRSuccessPayment] Notification error:', notifErr);
+    }
+  } catch (error) {
+    throw error;
+  } finally {
+    activeWebhookProcessings.delete(lockKey);
   }
 };
 
 const generateBookingQR = async (req, res, next) => {
+  const { bookingId } = req.body;
+
+  if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
+  }
+
+  if (activeRequests.has(bookingId)) {
+    return res.status(429).json({
+      success: false,
+      message: 'A QR generation request is already in progress for this booking. Please wait.'
+    });
+  }
+
+  activeRequests.add(bookingId);
+
   try {
-    const { bookingId } = req.body;
     const providerId = req.provider?._id || req.user?._id;
 
-    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
-      return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
-    }
-
-    let booking = await Booking.findById(bookingId);
+    const booking = await Booking.findById(bookingId);
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Booking is already completed and verified.' });
     }
 
     const { SystemConfig } = require('../system-setting/system-setting-model');
     let settings = await SystemConfig.findOne().lean();
     const qrExpiryMinutes = settings?.bookingSettings?.qrExpiryMinutes || 10;
     const expiryTimestamp = Math.floor(Date.now() / 1000) + (qrExpiryMinutes * 60);
-
-    // Calculate outstanding amount using only verified successful/completed payments
-    const successfulTxns = await Transaction.find({
-      booking: booking._id,
-      paymentStatus: { $in: ['success', 'completed'] },
-      type: 'payment'
-    });
-    const successfullyPaidAmount = successfulTxns.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-    const outstandingAmount = booking.totalAmount - successfullyPaidAmount;
-
-    if (
-      booking.paymentStatus === 'paid' ||
-      booking.paymentStatus === 'completed' ||
-      booking.paymentStatus === 'captured' ||
-      booking.paymentVerification?.status === 'verified' ||
-      booking.status === 'completed' ||
-      outstandingAmount <= 0
-    ) {
-      return res.status(400).json({ success: false, message: 'Payment already completed for this booking.' });
-    }
 
     // Reuse existing active QR code if still valid
     if (
@@ -3922,78 +4095,15 @@ const generateBookingQR = async (req, res, next) => {
           qrCodeId: booking.paymentVerification.qrCodeId,
           imageUrl: booking.paymentVerification.qrImageUrl,
           expiresAt: booking.paymentVerification.qrExpiresAt,
-          totalAmount: outstandingAmount,
+          totalAmount: booking.totalAmount,
           qrExpiryMinutes
         }
       });
     }
 
-    // Concurrency Lock: Reset expired locks (older than 15 seconds)
-    const lockExpiryMs = 15000;
-    const expiredTime = Date.now() - lockExpiryMs;
-    await Booking.updateOne(
-      {
-        _id: bookingId,
-        'paymentVerification.idempotencyKey': { $regex: /^LOCK_/, $lt: `LOCK_${expiredTime}` }
-      },
-      {
-        $set: { 'paymentVerification.idempotencyKey': null }
-      }
-    );
-
-    // Concurrency Lock: Try to acquire the lock atomically
-    const lockedBooking = await Booking.findOneAndUpdate(
-      {
-        _id: bookingId,
-        status: { $ne: 'completed' },
-        paymentStatus: { $nin: ['paid', 'completed', 'captured', 'escrowhold'] },
-        'paymentVerification.status': { $nin: ['verified'] },
-        $or: [
-          { 'paymentVerification.idempotencyKey': { $exists: false } },
-          { 'paymentVerification.idempotencyKey': null },
-          { 'paymentVerification.idempotencyKey': { $not: /^LOCK_/ } }
-        ]
-      },
-      {
-        $set: {
-          'paymentVerification.idempotencyKey': `LOCK_${Date.now()}`
-        }
-      },
-      { new: true }
-    );
-
-    if (!lockedBooking) {
-      // Re-query to see if the QR was successfully generated by the concurrent request
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const recheck = await Booking.findById(bookingId);
-      if (
-        recheck.paymentVerification?.qrCodeId &&
-        recheck.paymentVerification?.qrImageUrl &&
-        recheck.paymentVerification?.status === 'waiting_payment' &&
-        recheck.paymentVerification?.qrExpiresAt &&
-        new Date(recheck.paymentVerification.qrExpiresAt) > new Date()
-      ) {
-        return res.status(200).json({
-          success: true,
-          message: 'Active QR code reused',
-          data: {
-            qrCodeId: recheck.paymentVerification.qrCodeId,
-            imageUrl: recheck.paymentVerification.qrImageUrl,
-            expiresAt: recheck.paymentVerification.qrExpiresAt,
-            totalAmount: outstandingAmount,
-            qrExpiryMinutes
-          }
-        });
-      }
-      return res.status(409).json({
-        success: false,
-        message: 'Another request is currently generating a QR code. Please refresh or try again.'
-      });
-    }
-
-    if (lockedBooking.paymentVerification?.qrCodeId && lockedBooking.paymentVerification?.status === 'waiting_payment') {
+    if (booking.paymentVerification?.qrCodeId && booking.paymentVerification?.status === 'waiting_payment') {
       try {
-        await razorpay.qrCode.close(lockedBooking.paymentVerification.qrCodeId);
+        await razorpay.qrCode.close(booking.paymentVerification.qrCodeId);
       } catch (err) {
         console.warn(`Non-critical warning closing previous QR: ${err.message}`);
       }
@@ -4003,24 +4113,19 @@ const generateBookingQR = async (req, res, next) => {
     try {
       qrCode = await razorpay.qrCode.create({
         type: 'upi_qr',
-        name: `Booking #${lockedBooking.bookingId || lockedBooking._id.toString().slice(-6)}`,
+        name: `Booking #${booking.bookingId || booking._id.toString().slice(-6)}`,
         usage: 'single_use',
         fixed_amount: true,
-        payment_amount: Math.round(outstandingAmount * 100),
-        description: `Payment for booking ${lockedBooking.bookingId || lockedBooking._id}`,
+        payment_amount: Math.round(booking.totalAmount * 100),
+        description: `Payment for booking ${booking.bookingId || booking._id}`,
         close_by: expiryTimestamp,
         notes: {
-          bookingId: lockedBooking._id.toString(),
+          bookingId: booking._id.toString(),
           providerId: providerId?.toString()
         }
       });
     } catch (razorpayErr) {
       console.error('Razorpay QR API failed:', razorpayErr.message);
-      // Release lock on failure so the user can retry
-      await Booking.updateOne(
-        { _id: bookingId, 'paymentVerification.idempotencyKey': { $regex: /^LOCK_/ } },
-        { $set: { 'paymentVerification.idempotencyKey': null } }
-      );
       return res.status(400).json({
         success: false,
         message: `Failed to generate Razorpay QR code: ${razorpayErr.message || 'Razorpay Gateway Error'}`
@@ -4028,31 +4133,61 @@ const generateBookingQR = async (req, res, next) => {
     }
 
     const qrExpiresAt = new Date(Date.now() + qrExpiryMinutes * 60 * 1000);
-    lockedBooking.paymentVerification = {
+    booking.paymentVerification = {
       method: 'qr_code',
       status: 'waiting_payment',
       qrCodeId: qrCode.id,
       qrImageUrl: qrCode.image_url,
       qrExpiresAt: qrExpiresAt,
-      idempotencyKey: `QR-${qrCode.id}`
+      idempotencyKey: `QR-${Date.now()}`
     };
 
-    lockedBooking.statusHistory.push({
-      status: lockedBooking.status,
+    booking.statusHistory.push({
+      status: booking.status,
       timestamp: new Date(),
-      note: `Dynamic QR Code generated for ₹${outstandingAmount} (Valid for ${qrExpiryMinutes} mins). QR ID: ${qrCode.id}`,
+      note: `Dynamic QR Code generated for ₹${booking.totalAmount} (Valid for ${qrExpiryMinutes} mins). QR ID: ${qrCode.id}`,
       updatedBy: 'provider'
     });
 
-    await lockedBooking.save();
+    await booking.save();
+
+    let qrTx = await Transaction.findOne({
+      booking: booking._id,
+      type: 'payment',
+      paymentStatus: 'pending'
+    });
+
+    if (qrTx) {
+      qrTx.paymentMethod = 'upi';
+      qrTx.amount = booking.totalAmount;
+      qrTx.razorpayResponse = qrCode;
+      qrTx.description = `QR Code generated for booking ${booking.bookingId || booking._id}`;
+      qrTx.updatedAt = new Date();
+      await qrTx.save();
+    } else {
+      qrTx = new Transaction({
+        booking: booking._id,
+        bookingId: booking.bookingId || booking._id.toString(),
+        user: booking.customer,
+        provider: providerId,
+        amount: booking.totalAmount,
+        paymentMethod: 'upi',
+        paymentStatus: 'pending',
+        type: 'payment',
+        ledgerType: 'payment',
+        razorpayResponse: qrCode,
+        description: `QR Code generated for booking ${booking.bookingId || booking._id}`
+      });
+      await qrTx.save();
+    }
 
     try {
       const { getIO } = require('../../shared/socket/socket-server');
       const io = getIO();
       if (io) {
-        io.to(`booking_${lockedBooking._id}`).emit('payment_verification_updated', {
-          bookingId: lockedBooking._id,
-          paymentVerification: lockedBooking.paymentVerification
+        io.to(`booking_${booking._id}`).emit('payment_verification_updated', {
+          bookingId: booking._id,
+          paymentVerification: booking.paymentVerification
         });
       }
     } catch (sErr) { }
@@ -4064,17 +4199,34 @@ const generateBookingQR = async (req, res, next) => {
         qrCodeId: qrCode.id,
         imageUrl: qrCode.image_url,
         expiresAt: qrExpiresAt,
-        totalAmount: outstandingAmount,
+        totalAmount: booking.totalAmount,
         qrExpiryMinutes
       }
     });
   } catch (error) {
     global.logger.error(`[TransactionController.generateBookingQR] Error: ${error.message}`, error);
     next(error);
+  } finally {
+    activeRequests.delete(bookingId);
   }
 };
 
 const verifyCashReceived = async (req, res, next) => {
+  const { bookingId } = req.body;
+
+  if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
+  }
+
+  if (activeRequests.has(bookingId)) {
+    return res.status(429).json({
+      success: false,
+      message: 'A payment verification request is already in progress for this booking. Please wait.'
+    });
+  }
+
+  activeRequests.add(bookingId);
+
   let session = null;
   try {
     session = await mongoose.startSession();
@@ -4084,7 +4236,6 @@ const verifyCashReceived = async (req, res, next) => {
   }
 
   try {
-    const { bookingId } = req.body;
     const providerId = req.provider?._id;
 
     if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
@@ -4119,52 +4270,81 @@ const verifyCashReceived = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'No active commission rule found for provider' });
     }
 
-    const baseAmount = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
-    const { commission, netAmount } = CommissionRule.calculateCommission(baseAmount, rule);
+    // Centered pure financials calculation
+    await booking.recalculateFinancials();
+
+    const commission = booking.commissionAmount || 0;
+    const providerEarnings = booking.providerEarnings || 0;
+    const companySurgeShare = booking.companySurgeShare || 0;
+    
+    // Cash recovery: cash collected physically minus provider net entitlement
+    const cashRecovery = parseFloat((booking.totalAmount - providerEarnings).toFixed(2));
     const providerBalance = provider.wallet?.availableBalance || 0;
 
-    if (commission > 0 && providerBalance < commission) {
+    const netDeduction = cashRecovery > 0 ? cashRecovery : 0;
+    if (cashRecovery > 0 && providerBalance < cashRecovery) {
       if (session) await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: `Insufficient wallet balance. Platform commission of ₹${commission} is required to verify cash payment. Your current wallet balance is ₹${providerBalance}. Please topup your wallet.`
+        message: `Insufficient wallet balance. Platform cash recovery of ₹${cashRecovery} is required to verify cash payment. Your current wallet balance is ₹${providerBalance}. Please topup your wallet.`
       });
     }
 
     const updatedProvider = await Provider.findOneAndUpdate(
-      { _id: providerId, 'wallet.availableBalance': { $gte: commission } },
+      { _id: providerId, 'wallet.availableBalance': { $gte: netDeduction } },
       {
-        $inc: { 'wallet.availableBalance': -commission, completedBookings: 1 },
-        $set: { 'wallet.lastUpdated': new Date(), activeBooking: null }
+        $inc: { 'wallet.availableBalance': -cashRecovery },
+        $set: { 'wallet.lastUpdated': new Date() }
       },
       { session, new: true }
     );
 
-    if (!updatedProvider && commission > 0) {
+    if (!updatedProvider && netDeduction > 0) {
       if (session) await session.abortTransaction();
       return res.status(400).json({ success: false, message: 'Wallet balance check failed during transaction.' });
     }
 
     const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
-    const balanceBefore = balanceAfter + commission;
 
-    const commissionTx = new Transaction({
-      booking: booking._id,
-      bookingId: booking.bookingId || booking._id.toString(),
-      user: booking.customer,
-      provider: providerId,
-      amount: commission,
-      paymentStatus: 'completed',
-      paymentMethod: 'wallet',
-      type: 'commissiondeduction',
-      ledgerType: 'commission',
-      balanceBefore,
-      balanceAfter,
-      deductionType: 'cash_booking_commission',
-      description: `Commission fee of ₹${commission} deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
-    });
-    await commissionTx.save({ session });
+    if (cashRecovery > 0) {
+      const balanceBefore = balanceAfter + cashRecovery;
+      const commissionTx = new Transaction({
+        booking: booking._id,
+        bookingId: booking.bookingId || booking._id.toString(),
+        user: booking.customer,
+        provider: providerId,
+        amount: cashRecovery,
+        paymentStatus: 'completed',
+        paymentMethod: 'wallet',
+        type: 'commissiondeduction',
+        ledgerType: 'commission',
+        balanceBefore,
+        balanceAfter,
+        deductionType: 'cash_booking_commission',
+        description: `Cash recovery fee of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${companySurgeShare}) deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
+      });
+      await commissionTx.save({ session });
+    } else if (cashRecovery < 0) {
+      const creditAmount = Math.abs(cashRecovery);
+      const balanceBefore = balanceAfter - creditAmount;
+      const subsidyTx = new Transaction({
+        booking: booking._id,
+        bookingId: booking.bookingId || booking._id.toString(),
+        user: booking.customer,
+        provider: providerId,
+        amount: creditAmount,
+        paymentStatus: 'completed',
+        paymentMethod: 'wallet',
+        type: 'referral_coupon_subsidy',
+        ledgerType: 'referral',
+        balanceBefore,
+        balanceAfter,
+        description: `Company-funded referral coupon subsidy of ₹${creditAmount} credited to wallet for Cash Booking #${booking.bookingId || booking._id}`
+      });
+      await subsidyTx.save({ session });
+    }
 
+    booking.paymentMethod = 'cash'; // CRITICAL: Transition paymentMethod to cash for QR -> Cash fallback
     booking.paymentVerification = {
       method: 'cash_received',
       status: 'verified',
@@ -4172,36 +4352,67 @@ const verifyCashReceived = async (req, res, next) => {
     };
     booking.paymentStatus = 'paid';
     booking.commissionProcessed = true;
-    booking.commissionAmount = commission;
-    booking.providerEarnings = netAmount;
 
     booking.statusHistory.push({
       status: booking.status || 'workstarted',
       timestamp: new Date(),
-      note: `Cash payment verified by provider. Platform commission of ₹${commission} deducted from wallet.`,
+      note: `Cash payment verified by provider. Cash recovery of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${companySurgeShare}) deducted from wallet.`,
       updatedBy: 'provider'
     });
 
     await booking.save({ session });
 
+    const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
+    const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
+    const provDiscount = Math.max(0, (booking.totalDiscount || 0) - refAmount);
+    const baseAmount = Math.max(0, booking.subtotal - provDiscount);
+    const { getReferralCommissionDiscount } = require('../referral/referral-helpers');
+    const effectiveRate = rule ? getReferralCommissionDiscount(provider, rule, baseAmount) : 0;
+    if (effectiveRate !== (rule ? rule.value : 0)) {
+      booking.referralDiscountApplied = true;
+      await booking.save({ session });
+    }
+
     const ProviderEarning = require('../provider/provider-earning-model');
-    await ProviderEarning.findOneAndUpdate(
-      { booking: booking._id, provider: providerId },
-      {
-        $setOnInsert: {
-          grossAmount: booking.totalAmount,
-          commissionAmount: commission,
-          netAmount: netAmount,
-          status: 'paid',
-          availableAfter: new Date()
-        }
-      },
-      { session, upsert: true }
-    );
+    let earning = await ProviderEarning.findOne({ booking: booking._id, provider: providerId }).session(session);
+    if (earning) {
+      if (!earning.paymentRecord && !['withdrawn', 'cancelled'].includes(earning.status)) {
+        earning.grossAmount = baseAmount;
+        earning.commissionRate = effectiveRate;
+        earning.commissionAmount = commission;
+        earning.netAmount = providerEarnings;
+        earning.status = 'paid';
+        earning.availableAfter = new Date();
+        await earning.save({ session });
+      }
+    } else {
+      earning = new ProviderEarning({
+        provider: providerId,
+        booking: booking._id,
+        grossAmount: baseAmount,
+        commissionRate: effectiveRate,
+        commissionAmount: commission,
+        netAmount: providerEarnings,
+        status: 'paid',
+        availableAfter: new Date()
+      });
+      await earning.save({ session });
+    }
+    const { incrementReferralBenefitUsage } = require('../referral/referral-helpers');
+    await incrementReferralBenefitUsage(booking._id, session);
 
     if (session) {
       await session.commitTransaction();
       session.endSession();
+    }
+
+    try {
+      if (booking.provider) {
+        const referralController = require('../referral/referral-controller');
+        await referralController.triggerProviderReferralReward(booking.provider);
+      }
+    } catch (refRewardErr) {
+      console.error('Error triggering referral rewards on cash verification:', refRewardErr);
     }
 
     try {
@@ -4246,6 +4457,7 @@ const verifyCashReceived = async (req, res, next) => {
     next(error);
   } finally {
     if (session) session.endSession();
+    activeRequests.delete(bookingId);
   }
 };
 

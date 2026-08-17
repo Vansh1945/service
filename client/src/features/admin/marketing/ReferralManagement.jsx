@@ -1,112 +1,80 @@
 import React, { useState, useEffect } from 'react';
-import { FiUsers, FiAward, FiSettings, FiAlertTriangle, FiList, FiTrash2, FiPlus, FiCheck, FiTrendingUp, FiDollarSign, FiPercent } from 'react-icons/fi';
+import { FiUsers, FiAward, FiAlertTriangle, FiList, FiTrash2, FiPlus, FiCheck, FiTrendingUp, FiDollarSign, FiPercent, FiUserCheck, FiFilter } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import {
   getAdminDashboard,
-  getSettings,
-  updateSettings,
   getMilestones,
   addMilestone,
   deleteMilestone,
-  getFraudReferrals,
-  getRewardLogs,
-  releaseHeldReward
+  getFraudReferralsFiltered,
+  getRewardLogsFiltered,
+  releaseHeldReward,
+  getAdminReferralsList,
+  getSettings
 } from '../../../services/referralApi';
 import LoadingSpinner from '../../../components/ui/Loader';
 import StatCard from '../../../components/ui/StatCard';
 import Button from '../../../components/ui/Button';
 
 const ReferralManagement = () => {
-  // Tabs: dashboard, settings, milestones, fraud, logs
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // 5 Top-Level Tabs: overview, provider, customer, fraud, ledger
+  const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
 
-  // Dashboard Stats
-  const [stats, setStats] = useState({
-    stats: {
-      totalReferrals: 0,
-      totalPaidRewards: 0,
-      completedReferrals: 0,
-      flaggedReferrals: 0,
-      customerReferrals: 0,
-      providerReferrals: 0,
-      customerRewardsSum: 0,
-      providerRewardsSum: 0,
-      referralRevenue: 0,
-      totalReferralCommission: 0,
-      netProfit: 0,
-      roiPercentage: 0
-    }
-  });
+  // Overall & Financial Data from Backend
+  const [dashboardData, setDashboardData] = useState(null);
+  const [systemConfig, setSystemConfig] = useState(null);
 
-  // Settings
-  const [settings, setSettings] = useState({
-    customerProgramEnabled: false,
-    providerProgramEnabled: false,
-    minBookingAmount: 0,
-    commissionPercentage: 0,
-    payoutHoldHours: 0,
-    monthlyBudget: 50000,
-    monthlyCapPerUser: 5000,
-    dailyCapPerUser: 500,
-    expiryDays: 30,
-    fraudScoreThreshold: 50,
-    programVersion: 1,
-    rewardCalculationMode: 'commission',
-    rewardThresholdAmount: 1000,
-    fixedRewardAmount: 50
-  });
-
-  // Milestones
+  // Milestones Data
   const [milestones, setMilestones] = useState([]);
   const [newMilestone, setNewMilestone] = useState({ bookingsCount: '', rewardAmount: '', description: '' });
 
-  // Fraud
-  const [fraudList, setFraudList] = useState([]);
+  // Referrals List Data (Provider / Customer)
+  const [referralsList, setReferralsList] = useState([]);
 
-  // Logs
+  // Fraud List Data & Filters
+  const [fraudList, setFraudList] = useState([]);
+  const [fraudProgramFilter, setFraudProgramFilter] = useState('all');
+  const [fraudRoleFilter, setFraudRoleFilter] = useState('all');
+
+  // Reward Ledger Logs & Filters
   const [logs, setLogs] = useState([]);
+  const [ledgerProgramFilter, setLedgerProgramFilter] = useState('all');
+  const [ledgerStatusFilter, setLedgerStatusFilter] = useState('all');
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, fraudProgramFilter, fraudRoleFilter, ledgerProgramFilter, ledgerStatusFilter]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'dashboard') {
+      if (activeTab === 'overview') {
         const res = await getAdminDashboard();
         if (res.data.success) {
-          const dashboardData = res.data.data;
-          const allTime = dashboardData.stats?.analytics?.allTime || {};
-          setStats({
-            stats: {
-              totalReferrals: dashboardData.stats?.totalReferrals || 0,
-              completedReferrals: dashboardData.stats?.completedReferrals || 0,
-              flaggedReferrals: dashboardData.stats?.flaggedReferrals || 0,
-              customerReferrals: dashboardData.stats?.customerReferrals || 0,
-              providerReferrals: dashboardData.stats?.providerReferrals || 0,
-              totalPaidRewards: allTime.totalRewardsPaid || 0,
-              customerRewardsSum: allTime.totalRewardsPaid || 0,
-              providerRewardsSum: allTime.totalWelcomeRewards || 0,
-              referralRevenue: allTime.totalReferralRevenue || 0,
-              totalReferralCommission: allTime.totalReferralCommission || 0,
-              netProfit: allTime.netProfit || 0,
-              roiPercentage: allTime.roiPercentage || 0
-            }
-          });
+          setDashboardData(res.data.data);
         }
-      } else if (activeTab === 'settings') {
-        const res = await getSettings();
-        if (res.data.success) setSettings(res.data.data);
-      } else if (activeTab === 'milestones') {
-        const res = await getMilestones();
-        if (res.data.success) setMilestones(res.data.data);
+      } else if (activeTab === 'provider') {
+        const [mRes, rRes, sRes] = await Promise.all([
+          getMilestones(),
+          getAdminReferralsList('provider', 'all'),
+          getSettings()
+        ]);
+        if (mRes.data.success) setMilestones(mRes.data.data);
+        if (rRes.data.success) setReferralsList(rRes.data.data);
+        if (sRes.data.success) setSystemConfig(sRes.data.data?.referralSettings);
+      } else if (activeTab === 'customer') {
+        const [rRes, sRes] = await Promise.all([
+          getAdminReferralsList('customer', 'all'),
+          getSettings()
+        ]);
+        if (rRes.data.success) setReferralsList(rRes.data.data);
+        if (sRes.data.success) setSystemConfig(sRes.data.data?.referralSettings);
       } else if (activeTab === 'fraud') {
-        const res = await getFraudReferrals();
+        const res = await getFraudReferralsFiltered(fraudProgramFilter, fraudRoleFilter);
         if (res.data.success) setFraudList(res.data.data);
-      } else if (activeTab === 'logs') {
-        const res = await getRewardLogs();
+      } else if (activeTab === 'ledger') {
+        const res = await getRewardLogsFiltered(ledgerProgramFilter, ledgerStatusFilter, 'all');
         if (res.data.success) setLogs(res.data.data);
       }
     } catch (err) {
@@ -117,23 +85,6 @@ const ReferralManagement = () => {
     }
   };
 
-  // Settings Save
-  const handleSaveSettings = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await updateSettings(settings);
-      if (res.data.success) {
-        toast.success(`Configurations saved! Program Version is now ${res.data.data.programVersion}`);
-        setSettings(res.data.data);
-      } else {
-        toast.error(res.data.message || 'Failed to save settings');
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save settings');
-    }
-  };
-
-  // Milestone actions
   const handleAddMilestone = async (e) => {
     e.preventDefault();
     try {
@@ -163,7 +114,6 @@ const ReferralManagement = () => {
     }
   };
 
-  // Override Release held fraud referral
   const handleManualRelease = async (referralId) => {
     if (!window.confirm('Are you sure you want to dismiss the fraud warning and manually release the reward(s)?')) return;
     try {
@@ -179,211 +129,276 @@ const ReferralManagement = () => {
     }
   };
 
+  const stats = dashboardData?.stats || {};
+  const providerFin = stats?.providerFinancialSummary || {};
+  const customerFin = stats?.customerFinancialSummary || {};
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Top Banner */}
+    <div className="w-full px-2 sm:px-4 py-8">
+      {/* Top Banner & Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-200 pb-5 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-secondary tracking-tight">Referral & Rewards</h1>
-          <p className="text-xs text-gray-500 mt-1">Configure program rules, check budgets, audit fraud logs, and monitor ROI.</p>
+          <h1 className="text-2xl font-bold text-secondary tracking-tight font-poppins">Referral &amp; Rewards Management</h1>
+          <p className="text-xs text-gray-500 mt-1 font-inter">Unified Console for Provider Milestones, Customer Sharing, Fraud Audit, and Reward Ledgers.</p>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0 bg-gray-100 p-1.5 rounded-xl">
+        {/* 5 Top-Level Navigation Tabs */}
+        <div className="flex flex-wrap items-center gap-1.5 mt-4 md:mt-0 bg-gray-100 p-1.5 rounded-xl">
           <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'dashboard' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
+            onClick={() => setActiveTab('overview')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'overview' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
-            <FiUsers /> Dashboard
+            <FiTrendingUp className="w-3.5 h-3.5" /> Overview
           </button>
           <button
-            onClick={() => setActiveTab('milestones')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'milestones' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
+            onClick={() => setActiveTab('provider')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'provider' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
-            <FiAward /> Milestones
+            <FiUserCheck className="w-3.5 h-3.5" /> Provider Referral
+          </button>
+          <button
+            onClick={() => setActiveTab('customer')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'customer' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
+          >
+            <FiUsers className="w-3.5 h-3.5" /> Customer Referral
           </button>
           <button
             onClick={() => setActiveTab('fraud')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'fraud' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'fraud' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
-            <FiAlertTriangle /> Fraud Alerts
+            <FiAlertTriangle className="w-3.5 h-3.5" /> Fraud &amp; Risk
           </button>
           <button
-            onClick={() => setActiveTab('logs')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'logs' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
+            onClick={() => setActiveTab('ledger')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'ledger' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500 hover:text-secondary'}`}
           >
-            <FiList /> Reward Logs
+            <FiList className="w-3.5 h-3.5" /> Reward Ledger
           </button>
         </div>
       </div>
 
-      {/* Main Tab Views */}
       {loading ? (
         <LoadingSpinner />
       ) : (
         <>
-          {activeTab === 'dashboard' && stats && (
+          {/* ==================== 1. OVERVIEW TAB ==================== */}
+          {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
-              {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
-                  title="Total Invites"
-                  value={stats.stats.totalReferrals}
+                  title="Total Referrals"
+                  value={stats.totalReferrals || 0}
                   icon={FiUsers}
-                  subtext={`${stats.stats.customerReferrals} Customers | ${stats.stats.providerReferrals} Partners`}
+                  subtext={`${stats.providerReferrals || 0} Provider | ${stats.customerReferrals || 0} Customer`}
                 />
-
                 <StatCard
-                  title="Rewards Distributed"
-                  value={`₹${stats.stats.totalPaidRewards}`}
+                  title="Released Rewards"
+                  value={`₹${(stats.providerReleasedRewards || 0) + (stats.customerReleasedRewards || 0)}`}
                   icon={FiAward}
                   iconColor="text-green-600"
                   iconBg="bg-green-50"
-                  subtext={`₹${stats.stats.customerRewardsSum} Customers | ₹${stats.stats.providerRewardsSum} Partners`}
+                  subtext={`₹${stats.providerReleasedRewards || 0} Provider | ₹${stats.customerReleasedRewards || 0} Customer`}
                 />
-
                 <StatCard
-                  title="Referred Qualified Revenue"
-                  value={`₹${stats.stats.referralRevenue}`}
+                  title="Pending Rewards"
+                  value={`₹${(stats.providerPendingRewards || 0) + (stats.customerPendingRewards || 0)}`}
+                  icon={FiDollarSign}
+                  iconColor="text-amber-600"
+                  iconBg="bg-amber-50"
+                  subtext={`₹${stats.providerPendingRewards || 0} Provider | ₹${stats.customerPendingRewards || 0} Customer`}
+                />
+                <StatCard
+                  title="Referred Revenue"
+                  value={`₹${(stats.providerReferredRevenue || 0) + (stats.customerReferredRevenue || 0)}`}
                   icon={FiTrendingUp}
                   iconColor="text-indigo-600"
                   iconBg="bg-indigo-50"
-                  subtext="Total completed orders from invites"
-                />
-
-                <StatCard
-                  title="Campaign ROI"
-                  value={`${stats.stats.roiPercentage}%`}
-                  icon={FiPercent}
-                  iconColor="text-teal-600"
-                  iconBg="bg-teal-50"
-                  subtext={`Net Profit from campaign: ₹${stats.stats.netProfit}`}
+                  subtext={`₹${stats.providerReferredRevenue || 0} Provider | ₹${stats.customerReferredRevenue || 0} Customer`}
                 />
               </div>
 
-              {/* Breakdown split */}
+              {/* Separate Financial Summaries */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <h3 className="text-base font-bold text-secondary mb-4 flex items-center gap-2">
-                    <FiUsers className="text-primary" /> Referrals Breakdown
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Total Referrals Registered</span>
-                      <span className="font-bold text-secondary">{stats.stats.totalReferrals}</span>
+                {/* Provider Referral Financial Summary */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                    <FiUserCheck className="w-5 h-5 text-primary" />
+                    <h3 className="text-base font-bold text-secondary font-poppins">Provider Referral Financial Summary</h3>
+                  </div>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center text-gray-600">
+                      <span>Platform Commission Generated</span>
+                      <span className="font-bold text-secondary">₹{providerFin.platformCommissionGenerated?.toFixed(2) || '0.00'}</span>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Successful Invites</span>
-                      <span className="font-bold text-green-600">{stats.stats.completedReferrals}</span>
+                    <div className="flex justify-between items-center text-gray-600">
+                      <span>Referral Rewards Released</span>
+                      <span className="font-bold text-red-500">₹{providerFin.referralRewardsReleased || 0}</span>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Fraud Flagged Warning Cases</span>
-                      <span className="font-bold text-red-500">{stats.stats.flaggedReferrals}</span>
+                    <div className="flex justify-between items-center text-gray-600 border-t border-gray-100 pt-2 font-semibold">
+                      <span>Company Retained Commission</span>
+                      <span className="font-bold text-green-600">₹{providerFin.companyRetainedCommission?.toFixed(2) || '0.00'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <span>Referred Booking Revenue</span>
+                      <span>₹{providerFin.referredRevenue || 0}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <h3 className="text-base font-bold text-secondary mb-4 flex items-center gap-2">
-                    <FiTrendingUp className="text-accent" /> Campaign Profitability
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Qualified Commission Collected</span>
-                      <span className="font-bold text-secondary">₹{stats.stats.totalReferralCommission.toFixed(2)}</span>
+                {/* Customer Referral Financial Summary */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                    <FiUsers className="w-5 h-5 text-accent" />
+                    <h3 className="text-base font-bold text-secondary font-poppins">Customer Referral Financial Summary</h3>
+                  </div>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center text-gray-600">
+                      <span>Customer Marketing Spend</span>
+                      <span className="font-bold text-secondary">₹{customerFin.customerReferralMarketingSpend || 0}</span>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Total Reward Payout Cost</span>
-                      <span className="font-bold text-red-500">₹{stats.stats.totalPaidRewards}</span>
+                    <div className="flex justify-between items-center text-gray-600">
+                      <span>Cash Rewards Released</span>
+                      <span className="font-bold text-secondary">₹{customerFin.cashRewards || 0}</span>
                     </div>
-                    <div className="flex justify-between items-center text-sm border-t border-gray-100 pt-3">
-                      <span className="font-bold text-secondary">Campaign Net Profit</span>
-                      <span className={`font-black text-base ${stats.stats.netProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                        ₹{stats.stats.netProfit.toFixed(2)}
-                      </span>
+                    <div className="flex justify-between items-center text-gray-600 border-t border-gray-100 pt-2 font-semibold">
+                      <span>Total Customer Referral Cost</span>
+                      <span className="font-bold text-red-500">₹{customerFin.totalCustomerReferralCost || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <span>Referred Booking Revenue</span>
+                      <span>₹{customerFin.referredRevenue || 0}</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          )
+          )}
 
-          }
+          {/* ==================== 2. PROVIDER REFERRAL TAB ==================== */}
+          {activeTab === 'provider' && (
+            <div className="space-y-8 animate-fade-in">
+              {/* Sub-section: Milestones */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                  <h3 className="text-base font-bold text-secondary mb-4 font-poppins">Add Provider Milestone Rule</h3>
+                  <form onSubmit={handleAddMilestone} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Bookings Count Target</label>
+                      <input
+                        type="number"
+                        value={newMilestone.bookingsCount}
+                        onChange={(e) => setNewMilestone({ ...newMilestone, bookingsCount: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Reward Amount (₹)</label>
+                      <input
+                        type="number"
+                        value={newMilestone.rewardAmount}
+                        onChange={(e) => setNewMilestone({ ...newMilestone, rewardAmount: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Description</label>
+                      <input
+                        type="text"
+                        value={newMilestone.description}
+                        onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none mt-1"
+                        placeholder="e.g. 5 Bookings Milestone"
+                        required
+                      />
+                    </div>
+                    <Button type="submit" variant="secondary" size="lg" className="w-full font-bold" leftIcon={<FiPlus />}>
+                      Add Milestone
+                    </Button>
+                  </form>
+                </div>
 
-          {activeTab === 'milestones' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-              {/* Form */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-secondary mb-4">Add Milestone Reward</h3>
-                <form onSubmit={handleAddMilestone} className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Bookings Count Target</label>
-                    <input
-                      type="number"
-                      value={newMilestone.bookingsCount}
-                      onChange={(e) => setNewMilestone({ ...newMilestone, bookingsCount: e.target.value })}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                      required
-                    />
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                  <h3 className="text-base font-bold text-secondary mb-4 font-poppins">Provider Milestone Performance Rules</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-100 font-bold text-gray-500 uppercase">
+                          <th className="py-3 px-3">Jobs Target</th>
+                          <th className="py-3 px-3">Reward Value</th>
+                          <th className="py-3 px-3">Description</th>
+                          <th className="py-3 px-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {milestones.length === 0 ? (
+                          <tr><td colSpan="4" className="text-center py-6 text-gray-400">No milestones set up yet</td></tr>
+                        ) : (
+                          milestones.map((m) => (
+                            <tr key={m._id} className="hover:bg-gray-50">
+                              <td className="py-3 px-3 font-bold text-secondary">{m.bookingsCount} Jobs</td>
+                              <td className="py-3 px-3 text-green-600 font-bold">₹{m.rewardAmount}</td>
+                              <td className="py-3 px-3 text-gray-500">{m.description}</td>
+                              <td className="py-3 px-3">
+                                <button onClick={() => handleDeleteMilestone(m._id)} className="text-red-500 hover:text-red-700 p-1">
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Reward Amount (₹)</label>
-                    <input
-                      type="number"
-                      value={newMilestone.rewardAmount}
-                      onChange={(e) => setNewMilestone({ ...newMilestone, rewardAmount: e.target.value })}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Description</label>
-                    <input
-                      type="text"
-                      value={newMilestone.description}
-                      onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                      placeholder="e.g. 5 Bookings Milestone"
-                      required
-                    />
-                  </div>
-
-                  <Button type="submit" variant="secondary" size="lg" className="w-full font-bold" leftIcon={<FiPlus />}>
-                    Add Campaign Milestone
-                  </Button>
-                </form>
+                </div>
               </div>
 
-              {/* Milestones List */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-secondary mb-4">Milestone Campaigns</h3>
+              {/* Sub-section: Provider Referrals Table */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                <h3 className="text-base font-bold text-secondary font-poppins">Referred Providers List</h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs font-bold text-gray-500 uppercase">
-                        <th className="py-3 px-2">Bookings Count</th>
-                        <th className="py-3 px-2">Reward Amount</th>
-                        <th className="py-3 px-2">Description</th>
-                        <th className="py-3 px-2">Action</th>
+                      <tr className="border-b border-gray-100 font-bold text-gray-500 uppercase">
+                        <th className="py-3 px-3">Referrer Partner</th>
+                        <th className="py-3 px-3">Referred Provider</th>
+                        <th className="py-3 px-3">Referral Code</th>
+                        <th className="py-3 px-3">Reg Date</th>
+                        <th className="py-3 px-3">Reward Type</th>
+                        <th className="py-3 px-3">Benefit Received</th>
+                        <th className="py-3 px-3">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {milestones.length === 0 ? (
-                        <tr>
-                          <td colSpan="4" className="text-center py-6 text-gray-400">No milestones set up yet</td>
-                        </tr>
+                    <tbody className="divide-y divide-gray-100">
+                      {referralsList.length === 0 ? (
+                        <tr><td colSpan="7" className="text-center py-6 text-gray-400">No provider referrals recorded</td></tr>
                       ) : (
-                        milestones.map((m) => (
-                          <tr key={m._id} className="hover:bg-gray-50">
-                            <td className="py-3 px-2 font-bold text-secondary">{m.bookingsCount}</td>
-                            <td className="py-3 px-2 text-green-600 font-bold">₹{m.rewardAmount}</td>
-                            <td className="py-3 px-2 text-gray-500">{m.description}</td>
-                            <td className="py-3 px-2">
-                              <button onClick={() => handleDeleteMilestone(m._id)} className="text-red-500 hover:text-red-700 p-1.5">
-                                <FiTrash2 />
-                              </button>
+                        referralsList.map((r) => (
+                          <tr key={r._id} className="hover:bg-gray-50">
+                            <td className="py-3 px-3 font-bold text-secondary">{r.referrer?.name || 'N/A'}</td>
+                            <td className="py-3 px-3 text-gray-600">{r.referredUser?.name || 'N/A'}</td>
+                            <td className="py-3 px-3 font-mono text-primary font-bold">{r.referralCode || 'N/A'}</td>
+                            <td className="py-3 px-3 text-gray-400">{new Date(r.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 px-3 font-semibold text-secondary uppercase">
+                              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${r.rewardType === 'FIXED CASH' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {r.rewardType || 'COMMISSION SHARE'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-gray-900 text-xs">
+                                  Referrer: {r.referrerBenefit}
+                                </span>
+                                <span className="text-[10px] text-emerald-600 font-medium">
+                                  Referred Provider: {r.referredUserBenefit}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : r.status === 'fraud_flagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {r.status}
+                              </span>
                             </td>
                           </tr>
                         ))
@@ -395,26 +410,121 @@ const ReferralManagement = () => {
             </div>
           )}
 
+          {/* ==================== 3. CUSTOMER REFERRAL TAB ==================== */}
+          {activeTab === 'customer' && (
+            <div className="space-y-8 animate-fade-in">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                <h3 className="text-base font-bold text-secondary font-poppins">Customer Referrals List</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100 font-bold text-gray-500 uppercase">
+                        <th className="py-3 px-3">Referrer Customer</th>
+                        <th className="py-3 px-3">Referred Customer</th>
+                        <th className="py-3 px-3">Referral Code</th>
+                        <th className="py-3 px-3">Reg Date</th>
+                        <th className="py-3 px-3">Reward Type</th>
+                        <th className="py-3 px-3">Benefit Received</th>
+                        <th className="py-3 px-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {referralsList.length === 0 ? (
+                        <tr><td colSpan="7" className="text-center py-6 text-gray-400">No customer referrals recorded</td></tr>
+                      ) : (
+                        referralsList.map((r) => {
+                          const isCoupon = r.rewardType === 'COUPON';
+
+                          return (
+                            <tr key={r._id} className="hover:bg-gray-50">
+                              <td className="py-3 px-3 font-bold text-secondary">{r.referrer?.name || 'N/A'}</td>
+                              <td className="py-3 px-3 text-gray-600">{r.referredUser?.name || 'N/A'}</td>
+                              <td className="py-3 px-3 font-mono text-accent font-bold">{r.referralCode || 'N/A'}</td>
+                              <td className="py-3 px-3 text-gray-400">{new Date(r.createdAt).toLocaleDateString()}</td>
+                              <td className="py-3 px-3 font-semibold text-secondary uppercase">
+                                <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${isCoupon ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  {r.rewardType || 'CASH'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-bold text-gray-900 text-xs">
+                                    Referrer: {r.referrerBenefit}
+                                  </span>
+                                  <span className="text-[10px] text-accent font-medium">
+                                    New Customer: {r.referredUserBenefit}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3">
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : r.status === 'fraud_flagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {r.status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== 4. FRAUD & RISK TAB ==================== */}
           {activeTab === 'fraud' && (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in">
-              <h3 className="text-lg font-bold text-secondary mb-4">Fraud Flags & Suspicious Signup Referrals</h3>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <h3 className="text-base font-bold text-secondary font-poppins flex items-center gap-2">
+                  <FiAlertTriangle className="text-red-500" /> Fraud Flags &amp; Suspicious Referrals
+                </h3>
+
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <FiFilter className="text-gray-400" />
+                    <span className="font-semibold text-gray-500">Program:</span>
+                    <select
+                      value={fraudProgramFilter}
+                      onChange={(e) => setFraudProgramFilter(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                    >
+                      <option value="all">All Programs</option>
+                      <option value="provider">Provider Referral</option>
+                      <option value="customer">Customer Referral</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-gray-500">Role:</span>
+                    <select
+                      value={fraudRoleFilter}
+                      onChange={(e) => setFraudRoleFilter(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                    >
+                      <option value="all">All Roles</option>
+                      <option value="provider">Provider</option>
+                      <option value="customer">Customer</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-gray-100 text-xs font-bold text-gray-500 uppercase">
+                    <tr className="border-b border-gray-100 font-bold text-gray-500 uppercase">
                       <th className="py-3 px-2">Referrer</th>
                       <th className="py-3 px-2">Referred Signup</th>
                       <th className="py-3 px-2">Abuse Flags</th>
                       <th className="py-3 px-2">Score</th>
-                      <th className="py-3 px-2">IP & Device ID</th>
+                      <th className="py-3 px-2">IP &amp; Device ID</th>
                       <th className="py-3 px-2">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 text-sm">
+                  <tbody className="divide-y divide-gray-100">
                     {fraudList.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="text-center py-8 text-gray-400">No flagged transactions found</td>
-                      </tr>
+                      <tr><td colSpan="6" className="text-center py-8 text-gray-400">No flagged fraud transactions found</td></tr>
                     ) : (
                       fraudList.map((f) => (
                         <tr key={f._id} className="hover:bg-gray-50 transition">
@@ -435,10 +545,8 @@ const ReferralManagement = () => {
                               ))}
                             </div>
                           </td>
-                          <td className="py-3 px-2 text-center font-bold text-red-600">
-                            {f.fraudScore}
-                          </td>
-                          <td className="py-3 px-2 text-xs font-mono text-gray-500">
+                          <td className="py-3 px-2 font-bold text-red-600">{f.fraudScore}</td>
+                          <td className="py-3 px-2 font-mono text-gray-500">
                             <p>{f.deviceInfo?.ip || 'N/A'}</p>
                             <p className="text-[9px] truncate max-w-[120px]">{f.deviceInfo?.deviceId || 'N/A'}</p>
                           </td>
@@ -447,7 +555,7 @@ const ReferralManagement = () => {
                               onClick={() => handleManualRelease(f._id)}
                               variant="success"
                               size="sm"
-                              className="font-bold"
+                              className="font-bold text-[11px]"
                               leftIcon={<FiCheck />}
                             >
                               Approve Override
@@ -462,51 +570,83 @@ const ReferralManagement = () => {
             </div>
           )}
 
-          {activeTab === 'logs' && (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in">
-              <h3 className="text-lg font-bold text-secondary mb-4">Referral Reward Release Logs</h3>
+          {/* ==================== 5. REWARD LEDGER TAB ==================== */}
+          {activeTab === 'ledger' && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <h3 className="text-base font-bold text-secondary font-poppins flex items-center gap-2">
+                  <FiList className="text-primary" /> Reward Release Ledger &amp; Audit Logs
+                </h3>
+
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <FiFilter className="text-gray-400" />
+                    <span className="font-semibold text-gray-500">Program:</span>
+                    <select
+                      value={ledgerProgramFilter}
+                      onChange={(e) => setLedgerProgramFilter(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                    >
+                      <option value="all">All Programs</option>
+                      <option value="provider">Provider Referral</option>
+                      <option value="customer">Customer Referral</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-gray-500">Status:</span>
+                    <select
+                      value={ledgerStatusFilter}
+                      onChange={(e) => setLedgerStatusFilter(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white font-medium"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="released">Released</option>
+                      <option value="held">Held</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-gray-100 text-xs font-bold text-gray-500 uppercase">
-                      <th className="py-3 px-2">Recipient</th>
-                      <th className="py-3 px-2">Relationship</th>
-                      <th className="py-3 px-2">Program Type</th>
-                      <th className="py-3 px-2">Paid Amount</th>
-                      <th className="py-3 px-2">Release Date</th>
-                      <th className="py-3 px-2">Status</th>
+                    <tr className="border-b border-gray-100 font-bold text-gray-500 uppercase">
+                      <th className="py-3 px-3">Recipient</th>
+                      <th className="py-3 px-3">Program Type</th>
+                      <th className="py-3 px-3">Paid Amount</th>
+                      <th className="py-3 px-3">Funding Source</th>
+                      <th className="py-3 px-3">Release Date</th>
+                      <th className="py-3 px-3">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 text-sm">
+                  <tbody className="divide-y divide-gray-100">
                     {logs.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="text-center py-6 text-gray-400">No rewards paid out yet</td>
-                      </tr>
+                      <tr><td colSpan="6" className="text-center py-6 text-gray-400">No reward logs recorded</td></tr>
                     ) : (
-                      logs.map((l) => (
-                        <tr key={l._id} className="hover:bg-gray-50">
-                          <td className="py-3 px-2">
-                            <p className="font-semibold text-secondary">{l.recipient?.name || 'N/A'}</p>
-                            <p className="text-[10px] text-gray-400 uppercase">{l.recipientType}</p>
-                          </td>
-                          <td className="py-3 px-2 text-xs text-gray-600">
-                            <p>Referrer: {l.referral?.referrer?.name || 'N/A'}</p>
-                            <p>Referred: {l.referral?.referredUser?.name || 'N/A'}</p>
-                          </td>
-                          <td className="py-3 px-2 text-xs font-semibold text-secondary capitalize">
-                            {l.rewardType === 'customer_referral' || l.rewardType === 'customerreferral' ? 'Customer Promo' : 'Partner Milestone'}
-                          </td>
-                          <td className="py-3 px-2 text-green-600 font-bold">₹{l.amount}</td>
-                          <td className="py-3 px-2 text-gray-500 text-xs">
-                            {new Date(l.createdAt).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full ${l.status === 'released' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {l.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                      logs.map((l) => {
+                        const isCustomer = l.recipientType === 'customer' || l.rewardType === 'customerreferral';
+                        const fundingSource = isCustomer ? 'Marketing / Referral Budget' : 'Platform Commission';
+                        return (
+                          <tr key={l._id} className="hover:bg-gray-50">
+                            <td className="py-3 px-3">
+                              <p className="font-semibold text-secondary">{l.recipient?.name || 'N/A'}</p>
+                              <p className="text-[10px] text-gray-400 uppercase">{l.recipientType}</p>
+                            </td>
+                            <td className="py-3 px-3 font-semibold text-secondary capitalize">
+                              {isCustomer ? 'Customer Promo' : 'Provider Milestone'}
+                            </td>
+                            <td className="py-3 px-3 text-green-600 font-bold">₹{l.amount}</td>
+                            <td className="py-3 px-3 font-medium text-gray-600">{fundingSource}</td>
+                            <td className="py-3 px-3 text-gray-400">{new Date(l.createdAt).toLocaleString()}</td>
+                            <td className="py-3 px-3">
+                              <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full ${l.status === 'released' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {l.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

@@ -120,6 +120,10 @@ const SystemSetting = () => {
       dailyCapPerUser: 500,
       expiryDays: 30,
       referralExpiryDays: 90,
+      maxRewardPerReferral: 1000,
+      providerCommissionDiscountPercent: 10,
+      providerCommissionDiscountLimitBookings: 5,
+      providerCommissionDiscountMaxBenefit: 1000,
       fraudScoreThreshold: 50,
       rewardCalculationMode: 'commission',
       rewardThresholdAmount: 1000,
@@ -129,6 +133,23 @@ const SystemSetting = () => {
       dailyReferralLimitPerUser: 5,
       monthlyReferralLimitPerUser: 20,
       systemReferralOwner: '',
+      customerReferralEnabled: true,
+      customerReferralPaused: false,
+      customerReferrerRewardType: 'CASH',
+      customerReferrerRewardAmount: 100,
+      customerReferrerCouponConfig: { discountType: 'flat', discountValue: 100, maxDiscount: 100, minBookingAmount: 300, validityDays: 30, usageLimit: 1 },
+      newCustomerRewardEnabled: true,
+      newCustomerRewardTrigger: 'FIRST_COMPLETED_BOOKING',
+      newCustomerRewardType: 'CASH',
+      newCustomerRewardAmount: 50,
+      newCustomerCouponConfig: { discountType: 'flat', discountValue: 50, maxDiscount: 100, minBookingAmount: 200, validityDays: 30, usageLimit: 1 },
+      firstBookingRequired: true,
+      customerMinimumBookingAmount: 100,
+      customerRewardValidityDays: 30,
+      customerMaxRewardPerReferral: 500,
+      customerDailyRewardCap: 500,
+      customerMonthlyRewardCap: 3000,
+      customerMonthlyBudget: 20000,
       providerMilestones: []
     }
   });
@@ -334,14 +355,14 @@ const SystemSetting = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="w-full px-2 sm:px-4">
         <FormSkeleton fields={6} />
       </div>
     );
   }
 
   return (
-    <div className="font-roboto max-w-7xl mx-auto">
+    <div className="font-roboto w-full px-2 sm:px-4">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-poppins">System Configuration</h1>

@@ -186,6 +186,10 @@ const userSchema = new mongoose.Schema({
           ref: 'Booking',
           default: null
         },
+        bookingId: {
+          type: String,
+          default: null
+        },
         createdAt: {
           type: Date,
           default: Date.now

@@ -1034,3 +1034,57 @@ export const buildStreetAddress = (houseNumber, road) => {
   const rd = (road || '').trim();
   return houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
 };
+
+const BANK_NAMES = {
+  PUNB: 'Punjab National Bank',
+  HDFC: 'HDFC Bank',
+  SBIN: 'State Bank of India',
+  ICIC: 'ICICI Bank',
+  UTIB: 'Axis Bank',
+  AXIS: 'Axis Bank',
+  KKBK: 'Kotak Mahindra Bank',
+  BARB: 'Bank of Baroda',
+  CNRB: 'Canara Bank',
+  UBIN: 'Union Bank of India',
+  IDIB: 'Indian Bank',
+  BKID: 'Bank of India',
+  IOBA: 'Indian Overseas Bank',
+  MAHB: 'Bank of Maharashtra',
+  PSIB: 'Punjab & Sind Bank',
+  UCOB: 'UCO Bank',
+  CUB: 'City Union Bank',
+  CSB: 'CSB Bank',
+  DCB: 'DCB Bank',
+  DLXB: 'Dhanlaxmi Bank',
+  FDRL: 'Federal Bank',
+  IDFB: 'IDFC First Bank',
+  INDB: 'IndusInd Bank',
+  INDUS: 'IndusInd Bank',
+  JAKA: 'Jammu & Kashmir Bank',
+  KARB: 'Karnataka Bank',
+  KVBL: 'Karur Vysya Bank',
+  KVB: 'Karur Vysya Bank',
+  NAIN: 'Nainital Bank',
+  RBL: 'RBL Bank',
+  SIBL: 'South Indian Bank',
+  TMBL: 'Tamilnad Mercantile Bank',
+  YESB: 'YES Bank',
+  BDBL: 'Bandhan Bank',
+  AUBL: 'AU Small Finance Bank',
+  ESFB: 'Equitas Small Finance Bank',
+  USFB: 'Ujjivan Small Finance Bank',
+  AIRP: 'Airtel Payments Bank',
+  IPPB: 'India Post Payments Bank',
+  PYTM: 'Paytm Payments Bank',
+};
+
+export const formatBankName = (code) => {
+  if (!code) return 'N/A';
+  const cleanCode = String(code).trim().toUpperCase();
+  const baseCode = cleanCode.replace(/_[A-Z0-9]+$/, '');
+  const bankName = BANK_NAMES[cleanCode] || BANK_NAMES[baseCode];
+  if (bankName) {
+    return `${bankName} (${cleanCode})`;
+  }
+  return cleanCode;
+};

@@ -56,6 +56,22 @@ const providerSchema = new mongoose.Schema({
         validTill: {
             type: Date,
             default: null
+        },
+        bookingsLimit: {
+            type: Number,
+            default: 5
+        },
+        bookingsCount: {
+            type: Number,
+            default: 0
+        },
+        maxMonetaryBenefit: {
+            type: Number,
+            default: 1000
+        },
+        currentMonetaryBenefit: {
+            type: Number,
+            default: 0
         }
     },
     onboardingPriorityExpiresAt: {

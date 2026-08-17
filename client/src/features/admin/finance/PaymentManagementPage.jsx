@@ -283,40 +283,6 @@ const PaymentManagementPage = () => {
         </div>
       </div>
 
-      {/* ── Section Navigation Tabs ──────────────────────────────────────── */}
-      <div className="flex border-b border-gray-200 bg-white rounded-xl p-1.5 border shadow-xs gap-2">
-        <button
-          onClick={() => setActiveSection('all')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeSection === 'all'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <FiCreditCard className="w-4 h-4" />
-          All Payments Ledger
-        </button>
-
-        <button
-          onClick={() => setActiveSection('verification')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeSection === 'verification'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <FiCheckCircle className="w-4 h-4" />
-          Payment Verification Console
-          <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] rounded-full font-black">
-            {payments.filter(p => {
-              const pv = p.paymentVerification || p.booking?.paymentVerification || {};
-              const st = (pv.status || p.paymentStatus || '').toLowerCase();
-              return ['pending', 'waiting_payment'].includes(st);
-            }).length} Pending
-          </span>
-        </button>
-      </div>
-
       {/* ── Pre-filtered Banner from Finance Dashboard ──────────────────── */}
       {(urlMethod || urlStatus || urlType) && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 flex items-center justify-between">
@@ -335,94 +301,6 @@ const PaymentManagementPage = () => {
           </button>
         </div>
       )}
-
-      {/* ── Verification Console Specific Header & KPI Cards ─────────────── */}
-      {activeSection === 'verification' && (() => {
-        const pendingCash = payments.filter(p => {
-          const m = (p.paymentMethod || '').toLowerCase();
-          const st = (p.paymentVerification?.status || p.paymentStatus || '').toLowerCase();
-          return (m === 'cash' || m === 'cod') && ['pending', 'processing'].includes(st);
-        });
-        const pendingQR = payments.filter(p => {
-          const pv = p.paymentVerification || p.booking?.paymentVerification || {};
-          const st = (pv.status || p.paymentStatus || '').toLowerCase();
-          return Boolean(pv.qrCodeId) || st === 'waiting_payment';
-        });
-        const verifiedCash = payments.filter(p => {
-          const m = (p.paymentMethod || '').toLowerCase();
-          const st = (p.paymentStatus || '').toLowerCase();
-          return (m === 'cash' || m === 'cod') && ['paid', 'success', 'completed'].includes(st);
-        });
-        const verifiedQR = payments.filter(p => {
-          const pv = p.paymentVerification || p.booking?.paymentVerification || {};
-          const st = (pv.status || p.paymentStatus || '').toLowerCase();
-          return (pv.method === 'qr_code' || Boolean(pv.qrCodeId)) && ['verified', 'paid', 'success'].includes(st);
-        });
-        const expiredQR = payments.filter(p => {
-          const pv = p.paymentVerification || p.booking?.paymentVerification || {};
-          return pv.status === 'expired' || (pv.qrExpiresAt && new Date(pv.qrExpiresAt) < new Date() && pv.status !== 'verified');
-        });
-        const failedQR = payments.filter(p => {
-          const st = (p.paymentStatus || p.paymentVerification?.status || '').toLowerCase();
-          return st === 'failed';
-        });
-
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/80">
-                <p className="text-[10px] font-bold text-amber-700 uppercase">Pending Cash</p>
-                <p className="text-xl font-black text-amber-900 mt-1">{pendingCash.length}</p>
-              </div>
-              <div className="p-3.5 bg-indigo-50 rounded-xl border border-indigo-200/80">
-                <p className="text-[10px] font-bold text-indigo-700 uppercase">Pending QR</p>
-                <p className="text-xl font-black text-indigo-900 mt-1">{pendingQR.length}</p>
-              </div>
-              <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200/80">
-                <p className="text-[10px] font-bold text-emerald-700 uppercase">Verified Cash</p>
-                <p className="text-xl font-black text-emerald-900 mt-1">{verifiedCash.length}</p>
-              </div>
-              <div className="p-3.5 bg-blue-50 rounded-xl border border-blue-200/80">
-                <p className="text-[10px] font-bold text-blue-700 uppercase">Verified QR</p>
-                <p className="text-xl font-black text-blue-900 mt-1">{verifiedQR.length}</p>
-              </div>
-              <div className="p-3.5 bg-rose-50 rounded-xl border border-rose-200/80">
-                <p className="text-[10px] font-bold text-rose-700 uppercase">Expired QR</p>
-                <p className="text-xl font-black text-rose-900 mt-1">{expiredQR.length}</p>
-              </div>
-              <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200">
-                <p className="text-[10px] font-bold text-slate-600 uppercase">Failed QR</p>
-                <p className="text-xl font-black text-slate-800 mt-1">{failedQR.length}</p>
-              </div>
-            </div>
-
-            {/* Verification Filter Pills */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide text-xs">
-              {[
-                { id: 'all', label: 'All Verification Records' },
-                { id: 'pending_cash', label: 'Pending Cash' },
-                { id: 'pending_qr', label: 'Pending QR' },
-                { id: 'verified_cash', label: 'Verified Cash' },
-                { id: 'verified_qr', label: 'Verified QR' },
-                { id: 'expired_qr', label: 'Expired QR' },
-                { id: 'failed_qr', label: 'Failed QR' },
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setVerificationFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg font-extrabold whitespace-nowrap transition-all border cursor-pointer ${
-                    verificationFilter === f.id
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Payment Records Table ───────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -447,192 +325,151 @@ const PaymentManagementPage = () => {
           />
         ) : (
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
-            <table className="w-full text-left text-xs text-gray-600 min-w-[1400px]">
+            <table className="w-full text-left text-xs text-gray-600 min-w-[1200px]">
               <thead className="bg-gray-50 text-gray-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-gray-200 sticky top-0">
                 <tr>
-                  <th className="p-3.5 whitespace-nowrap">Booking ID</th>
+                  <th className="p-3.5 whitespace-nowrap">Booking / Reference</th>
                   <th className="p-3.5 whitespace-nowrap">Payment ID</th>
-                  <th className="p-3.5 whitespace-nowrap">Order ID</th>
                   <th className="p-3.5 whitespace-nowrap">Customer</th>
                   <th className="p-3.5 whitespace-nowrap">Provider</th>
                   <th className="p-3.5 whitespace-nowrap">Type</th>
                   <th className="p-3.5 whitespace-nowrap">Method</th>
                   <th className="p-3.5 whitespace-nowrap">Gateway</th>
-                  <th className="p-3.5 whitespace-nowrap text-right">Total</th>
-                  <th className="p-3.5 whitespace-nowrap text-right">Online</th>
-                  <th className="p-3.5 whitespace-nowrap text-right">Wallet</th>
-                  <th className="p-3.5 whitespace-nowrap text-right">Cash</th>
-                  <th className="p-3.5 whitespace-nowrap text-right">Final Paid</th>
+                  <th className="p-3.5 whitespace-nowrap text-right">Amount</th>
                   <th className="p-3.5 whitespace-nowrap">Status</th>
                   <th className="p-3.5 whitespace-nowrap">Capture</th>
                   <th className="p-3.5 whitespace-nowrap">Settlement</th>
-                  <th className="p-3.5 whitespace-nowrap">Created</th>
-                  <th className="p-3.5 whitespace-nowrap">Updated</th>
+                  <th className="p-3.5 whitespace-nowrap">Date</th>
                   <th className="p-3.5 whitespace-nowrap text-center">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {payments.map((txn) => {
                   const booking = txn.booking || {};
-
-                  // ── All amounts from booking fields — ZERO React calculation ──
-                  const totalAmt  = booking.totalAmount || 0;
-                  const onlineAmt = booking.onlinePaid || (txn.paymentMethod === 'online' || txn.paymentMethod === 'mixed' ? txn.amount : 0);
-                  const walletAmt = booking.walletUsed || 0;
-                  const cashAmt   = booking.cashToPay || (txn.paymentMethod === 'cash' ? txn.amount : 0);
-                  const finalAmt  = onlineAmt + walletAmt + cashAmt;
-
-                  const bookingIdStr = booking.bookingId || (booking._id ? `#${String(booking._id).slice(-6).toUpperCase()}` : '—');
+                  const bookingIdStr = booking.bookingId || (txn.bookingId && !txn.bookingId.startsWith('WDL-') ? txn.bookingId : null);
                   const paymentIdStr = txn.razorpayPaymentId || txn.transactionId || `TXN-${String(txn._id).slice(-8).toUpperCase()}`;
-                  const orderIdStr   = txn.razorpayOrderId || '—';
-                  const customerName = txn.user?.name || '—';
-                  const providerName = txn.provider?.name || '—';
+                  const customerName = txn.user?.name || (typeof txn.user === 'string' ? txn.user : '—');
+                  const providerName = txn.provider?.name || (typeof txn.provider === 'string' ? txn.provider : null);
 
                   return (
                     <tr key={txn._id} className="hover:bg-slate-50/60 transition-colors group">
 
-                      {/* 1. Booking ID */}
+                      {/* 1. Booking / Reference */}
                       <td className="p-3.5 whitespace-nowrap">
-                        <button
-                          onClick={() => navigate('/admin/bookings')}
-                          className="font-mono font-bold text-blue-600 text-xs hover:underline flex items-center gap-1 group/link"
-                          title="Go to Bookings"
-                        >
-                          {bookingIdStr}
-                          <FiExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
-                        </button>
+                        {bookingIdStr ? (
+                          <button
+                            onClick={() => navigate(`/admin/bookings?search=${encodeURIComponent(bookingIdStr)}&openDetail=true`)}
+                            className="font-mono font-bold text-blue-600 text-xs hover:underline flex items-center gap-1 group/link cursor-pointer"
+                            title={`View Booking ${bookingIdStr}`}
+                          >
+                            {bookingIdStr}
+                            <FiExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                          </button>
+                        ) : txn.referenceNumber ? (
+                          <span className="font-mono text-xs text-slate-500 font-semibold">{txn.referenceNumber}</span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">N/A</span>
+                        )}
                       </td>
 
                       {/* 2. Payment ID */}
                       <td className="p-3.5 whitespace-nowrap">
-                        <span className="font-mono text-xs font-bold text-gray-800 max-w-[130px] block truncate" title={paymentIdStr}>
+                        <button
+                          onClick={() => handleOpenDetail(txn)}
+                          className="font-mono text-xs font-bold text-gray-800 hover:text-blue-600 max-w-[130px] block truncate cursor-pointer text-left"
+                          title={paymentIdStr}
+                        >
                           {paymentIdStr}
-                        </span>
+                        </button>
                       </td>
 
-                      {/* 3. Razorpay Order ID */}
-                      <td className="p-3.5 whitespace-nowrap">
-                        {orderIdStr !== '—' ? (
-                          <span className="font-mono text-[11px] font-semibold text-indigo-700 max-w-[130px] block truncate" title={orderIdStr}>
-                            {orderIdStr}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-[11px]">—</span>
-                        )}
-                      </td>
-
-                      {/* 4. Customer */}
+                      {/* 3. Customer */}
                       <td className="p-3.5 max-w-[140px]">
-                        <button
-                          onClick={() => navigate('/admin/users')}
-                          className="text-left font-bold text-gray-900 text-xs hover:text-blue-600 transition-colors truncate block"
-                          title={customerName}
-                        >
-                          {customerName}
-                        </button>
-                        {txn.user?.email && (
-                          <span className="text-[10px] text-gray-400 truncate block">{txn.user.email}</span>
+                        {customerName !== '—' ? (
+                          <>
+                            <button
+                              onClick={() => navigate(`/admin/customers?search=${encodeURIComponent(customerName)}&openDetail=true`)}
+                              className="text-left font-bold text-gray-900 text-xs hover:text-blue-600 transition-colors truncate block cursor-pointer"
+                              title={customerName}
+                            >
+                              {customerName}
+                            </button>
+                            {txn.user?.email && (
+                              <span className="text-[10px] text-gray-400 truncate block">{txn.user.email}</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-400 text-xs">N/A</span>
                         )}
                       </td>
 
-                      {/* 5. Provider */}
+                      {/* 4. Provider */}
                       <td className="p-3.5 max-w-[130px]">
-                        <button
-                          onClick={() => navigate('/admin/providers')}
-                          className="text-left font-semibold text-gray-800 text-xs hover:text-blue-600 transition-colors truncate block"
-                          title={providerName}
-                        >
-                          {providerName}
-                        </button>
+                        {providerName ? (
+                          <button
+                            onClick={() => navigate(`/admin/approve-providers?search=${encodeURIComponent(providerName)}&openDetail=true`)}
+                            className="text-left font-semibold text-gray-800 text-xs hover:text-blue-600 transition-colors truncate block cursor-pointer"
+                            title={providerName}
+                          >
+                            {providerName}
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">Not Assigned</span>
+                        )}
                       </td>
 
-                      {/* 6. Payment Type */}
+                      {/* 5. Payment Type */}
                       <td className="p-3.5 whitespace-nowrap">
                         {getPaymentTypeBadge(txn)}
                       </td>
 
-                      {/* 7. Payment Method */}
+                      {/* 6. Payment Method */}
                       <td className="p-3.5 whitespace-nowrap">
                         {getPaymentMethodBadge(txn)}
                       </td>
 
-                      {/* 8. Gateway */}
+                      {/* 7. Gateway */}
                       <td className="p-3.5 text-xs font-medium text-gray-600 whitespace-nowrap">
                         {getGatewayLabel(txn)}
                       </td>
 
-                      {/* 9. Total Booking Amount */}
+                      {/* 8. Amount (Authoritative from Backend) */}
                       <td className="p-3.5 whitespace-nowrap text-right">
-                        <span className="font-black text-gray-900 text-xs">{formatAmount(totalAmt)}</span>
+                        <span className="font-black text-gray-900 text-xs">
+                          <PriceDisplay amount={txn.amount || booking.totalAmount || 0} />
+                        </span>
                       </td>
 
-                      {/* 10. Online Paid Amount */}
-                      <td className="p-3.5 whitespace-nowrap text-right">
-                        {onlineAmt > 0 ? (
-                          <span className="font-bold text-blue-700 text-xs">{formatAmount(onlineAmt)}</span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">₹0</span>
-                        )}
-                      </td>
-
-                      {/* 11. Wallet Paid Amount */}
-                      <td className="p-3.5 whitespace-nowrap text-right">
-                        {walletAmt > 0 ? (
-                          <span className="font-bold text-amber-700 text-xs">{formatAmount(walletAmt)}</span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">₹0</span>
-                        )}
-                      </td>
-
-                      {/* 12. Cash Paid Amount */}
-                      <td className="p-3.5 whitespace-nowrap text-right">
-                        {cashAmt > 0 ? (
-                          <span className="font-bold text-emerald-700 text-xs">{formatAmount(cashAmt)}</span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">₹0</span>
-                        )}
-                      </td>
-
-                      {/* 13. Final Paid Amount */}
-                      <td className="p-3.5 whitespace-nowrap text-right">
-                        <span className="font-black text-gray-900 text-xs">{formatAmount(finalAmt || totalAmt)}</span>
-                      </td>
-
-                      {/* 14. Payment Status */}
+                      {/* 9. Payment Status */}
                       <td className="p-3.5 whitespace-nowrap">
                         {getPaymentStatusBadge(txn)}
                       </td>
 
-                      {/* 15. Capture Status */}
+                      {/* 10. Capture Status */}
                       <td className="p-3.5 whitespace-nowrap">
                         {getCaptureStatusBadge(txn)}
                       </td>
 
-                      {/* 16. Settlement Status */}
+                      {/* 11. Settlement Status */}
                       <td className="p-3.5 whitespace-nowrap">
                         {getSettlementStatusBadge(txn)}
                       </td>
 
-                      {/* 17. Created Date */}
+                      {/* 12. Date */}
                       <td className="p-3.5 text-xs text-gray-500 font-medium whitespace-nowrap">
                         {fmtDateTime(txn.createdAt)}
                       </td>
 
-                      {/* 18. Updated Date */}
-                      <td className="p-3.5 text-xs text-gray-500 font-medium whitespace-nowrap">
-                        {fmtDate(txn.updatedAt)}
-                      </td>
-
-                      {/* 19. View Details */}
+                      {/* 13. Details */}
                       <td className="p-3.5 text-center whitespace-nowrap">
                         <button
                           onClick={() => handleOpenDetail(txn)}
                           id={`view-payment-${txn._id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-blue-600 text-white rounded-lg text-[11px] font-extrabold transition-all shadow-sm cursor-pointer group/btn"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-blue-600 text-white rounded-lg text-[11px] font-extrabold transition-all shadow-xs cursor-pointer group/btn"
                           title="View Payment Details"
                         >
                           <FiEye className="w-3.5 h-3.5 group-hover/btn:scale-110 transition-transform" />
-                          View
+                          Detail
                         </button>
                       </td>
                     </tr>
