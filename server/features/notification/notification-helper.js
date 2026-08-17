@@ -349,79 +349,116 @@ const triggerEventNotification = async (eventId, context = {}, overrideTargetUse
 /**
  * Create a notification in DB and emit it via Socket.io and FCM
  */
-const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null, url = '/', eventId = null) => {
+const sendNotification = async (userIdOrOpts, role, title, message, type = 'system', referenceId = null, url = '/', eventId = null, idempotencyKey = null) => {
     try {
+        let uId = userIdOrOpts;
+        let uRole = role;
+        let uTitle = title;
+        let uMessage = message;
+        let uType = type;
+        let uRefId = referenceId;
+        let uUrl = url;
+        let uEventId = eventId;
+        let uIdempotencyKey = idempotencyKey;
+
+        if (typeof userIdOrOpts === 'object' && userIdOrOpts !== null && !userIdOrOpts._bsontype && !userIdOrOpts.toHexString && typeof userIdOrOpts.then !== 'function') {
+            const opts = userIdOrOpts;
+            uId = opts.userId || opts.user;
+            uRole = opts.role || 'customer';
+            uTitle = opts.title || '';
+            uMessage = opts.message || '';
+            uType = opts.type || 'system';
+            uRefId = opts.referenceId || opts.metadata?.bookingId || opts.metadata?.refundId || null;
+            uUrl = opts.url || '/';
+            uEventId = opts.eventId || opts.eventKey || null;
+            uIdempotencyKey = opts.idempotencyKey || null;
+        }
+
         const mongoose = require('mongoose');
         const NotificationTemplate = mongoose.model('NotificationTemplate');
 
-        let finalTitle = title;
-        let finalMessage = message;
-        let finalUrl = url;
+        let finalTitle = uTitle;
+        let finalMessage = uMessage;
+        let finalUrl = uUrl;
 
-        if (typeof message === 'object' && message !== null) {
-            const template = await NotificationTemplate.findOne({ eventId: title, isActive: true });
+        const lookupKey = uEventId || uTitle;
+        if (lookupKey) {
+            const template = await NotificationTemplate.findOne({ eventId: lookupKey, isActive: true });
             if (template) {
-                finalTitle = renderTemplateString(template.title, message);
-                finalMessage = renderTemplateString(template.message, message);
-                if (template.ctaUrl) finalUrl = template.ctaUrl;
-            } else {
-                finalMessage = JSON.stringify(message);
-            }
-        } else {
-            const template = await NotificationTemplate.findOne({ eventId: title, isActive: true });
-            if (template) {
-                const context = { title, message, role, type, referenceId, url };
+                const context = typeof uMessage === 'object' ? uMessage : { title: uTitle, message: uMessage, role: uRole, type: uType, referenceId: uRefId, url: uUrl };
                 finalTitle = renderTemplateString(template.title, context);
                 finalMessage = renderTemplateString(template.message, context);
                 if (template.ctaUrl) finalUrl = template.ctaUrl;
+            } else if (typeof uMessage === 'object' && uMessage !== null) {
+                finalMessage = JSON.stringify(uMessage);
+            }
+        }
+
+        // Fast DB query check if idempotencyKey is supplied
+        if (uIdempotencyKey) {
+            const NotificationModel = mongoose.model('Notification');
+            const existingNotif = await NotificationModel.findOne({ idempotencyKey: uIdempotencyKey });
+            if (existingNotif) {
+                console.log(`[NotificationHelper] Idempotent duplicate suppressed via key: ${uIdempotencyKey}`);
+                return existingNotif;
             }
         }
 
         const { SystemConfig } = require('../system-setting/system-setting-model');
         const config = await SystemConfig.findOne();
         if (config && config.notificationSettings) {
-            if (role === 'provider' && config.notificationSettings.providerAlerts === false) {
+            if (uRole === 'provider' && config.notificationSettings.providerAlerts === false) {
                 console.log(`[NotificationHelper] Suppressing notification for provider: providerAlerts is globally disabled.`);
                 return null;
             }
-            if (role === 'customer' && config.notificationSettings.customerAlerts === false) {
+            if (uRole === 'customer' && config.notificationSettings.customerAlerts === false) {
                 console.log(`[NotificationHelper] Suppressing notification for customer: customerAlerts is globally disabled.`);
                 return null;
             }
         }
 
-        const resolvedEventId = eventId || titleToEventIdMap[title] || title || null;
-        const generatedUrl = finalUrl !== '/' ? finalUrl : computeNotificationUrl(role, type, finalTitle, finalMessage, resolvedEventId, referenceId);
+        const resolvedEventId = uEventId || titleToEventIdMap[uTitle] || uTitle || null;
+        const generatedUrl = finalUrl !== '/' ? finalUrl : computeNotificationUrl(uRole, uType, finalTitle, finalMessage, resolvedEventId, uRefId);
 
-        if (userId) {
+        if (uId) {
             let Model;
-            if (role === 'admin') Model = Admin;
-            else if (role === 'provider') Model = Provider;
+            if (uRole === 'admin') Model = Admin;
+            else if (uRole === 'provider') Model = Provider;
             else Model = User;
 
-            const recipient = await Model.findById(userId).select('notificationPreferences fcmDevices');
+            const recipient = await Model.findById(uId).select('notificationPreferences fcmDevices');
             if (!recipient) {
-                console.warn(`[Security Alert] Suppressed notification dispatch: User ${userId} is not a valid ${role}`);
+                console.warn(`[Security Alert] Suppressed notification dispatch: User ${uId} is not a valid ${uRole}`);
                 return null;
             }
 
-            const prefKey = typeToPreferenceMap[type];
+            const prefKey = typeToPreferenceMap[uType];
             if (recipient.notificationPreferences && prefKey) {
                 if (recipient.notificationPreferences[prefKey] === false) {
-                    console.log(`[NotificationHelper] Suppressing notification: User ${userId} has disabled ${prefKey} notifications`);
+                    console.log(`[NotificationHelper] Suppressing notification: User ${uId} has disabled ${prefKey} notifications`);
                     return null;
                 }
             }
 
-            notification = await Notification.create({
-                userId,
-                role,
-                title: finalTitle,
-                message: finalMessage,
-                type,
-                referenceId,
-                url: generatedUrl
-            });
+            try {
+                notification = await Notification.create({
+                    userId: uId,
+                    role: uRole,
+                    title: finalTitle,
+                    message: finalMessage,
+                    type: uType,
+                    referenceId: uRefId,
+                    url: generatedUrl,
+                    idempotencyKey: uIdempotencyKey || null
+                });
+            } catch (createErr) {
+                if ((createErr.code === 11000 || createErr.message?.includes('E11000')) && uIdempotencyKey) {
+                    console.log(`[NotificationHelper] Database-level idempotency caught duplicate key: ${uIdempotencyKey}`);
+                    const existing = await Notification.findOne({ idempotencyKey: uIdempotencyKey });
+                    if (existing) return existing;
+                }
+                throw createErr;
+            }
 
             // Resolve emergency booking check
             let isEmergency = false;

@@ -13,6 +13,7 @@ import {
   getSettings
 } from '../../../services/referralApi';
 import LoadingSpinner from '../../../components/ui/Loader';
+import { normalizeStatus } from '../../../utils/status';
 import StatCard from '../../../components/ui/StatCard';
 import Button from '../../../components/ui/Button';
 
@@ -396,7 +397,7 @@ const ReferralManagement = () => {
                               </div>
                             </td>
                             <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : r.status === 'fraud_flagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : normalizeStatus(r.status) === 'fraudflagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {r.status}
                               </span>
                             </td>
@@ -457,7 +458,7 @@ const ReferralManagement = () => {
                                 </div>
                               </td>
                               <td className="py-3 px-3">
-                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : r.status === 'fraud_flagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : normalizeStatus(r.status) === 'fraudflagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                   {r.status}
                                 </span>
                               </td>

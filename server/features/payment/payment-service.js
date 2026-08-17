@@ -105,8 +105,11 @@ const syncEarningsStatus = async (providerId) => {
             // Sync re-derives them from the ledger to remain idempotent.
             // NOTE: 'withdrawal' type is intentionally excluded here because
             // payout amounts are already covered by the PaymentRecord aggregation.
-            type: { $in: ['penalty', 'refundrecovery', 'commissiondeduction'] },
-            paymentStatus: 'completed'
+            $or: [
+              { type: { $in: ['penalty', 'refundrecovery', 'commissiondeduction'] } },
+              { type: 'adjustment', entryType: 'debit' }
+            ],
+            paymentStatus: { $in: ['completed', 'success', 'paid'] }
           }
         },
         {
@@ -124,8 +127,11 @@ const syncEarningsStatus = async (providerId) => {
             // 'withdrawalrejection' is intentionally excluded: a rejected PaymentRecord
             // is automatically dropped from totalPendingWithdrawals, so no separate
             // credit is needed — including it here would double-count the refund.
-            type: { $in: ['wallet_topup', 'referralreward', 'cashback'] },
-            paymentStatus: 'completed'
+            $or: [
+              { type: { $in: ['wallet_topup', 'referralreward', 'cashback', 'referral_coupon_subsidy'] } },
+              { type: 'adjustment', entryType: 'credit' }
+            ],
+            paymentStatus: { $in: ['completed', 'success', 'paid'] }
           }
         },
         {
@@ -270,6 +276,10 @@ const executePaymentCapturedOperations = async (payment, session) => {
 
   const booking = await Booking.findById(transaction.booking).session(session);
   if (booking) {
+    if (booking.paymentMethod === 'cash' || booking.paymentVerification?.status === 'verified') {
+      console.log(`[Webhook Guard] Booking ${booking._id} already settled via cash. Late QR webhook ignored.`);
+      return;
+    }
     booking.paymentStatus = 'paid';
     booking.status = booking.provider ? 'accepted' : 'pending';
     booking.confirmedBooking = true;
@@ -289,24 +299,28 @@ const executePaymentCapturedOperations = async (payment, session) => {
         lastUpdated: new Date()
       }).session(session);
 
-      sendNotification(
-        booking.provider,
-        'provider',
-        'Booking Confirmed',
-        `A booking (ID: ${booking.bookingId}) has been paid and assigned to you.`,
-        'booking',
-        booking._id
-      );
+      sendNotification({
+        userId: booking.provider,
+        role: 'provider',
+        title: 'Booking Confirmed',
+        message: `A booking (ID: ${booking.bookingId}) has been paid and assigned to you.`,
+        type: 'booking',
+        referenceId: booking._id,
+        eventId: 'provider_assigned',
+        idempotencyKey: `provider_assigned:${booking.provider}:${booking._id}`
+      });
     }
 
-    sendNotification(
-      booking.customer,
-      'customer',
-      'Payment Successful',
-      `Your payment of ${booking.totalAmount} for booking ${booking.bookingId} was successful.`,
-      'booking',
-      booking._id
-    );
+    sendNotification({
+      userId: booking.customer,
+      role: 'customer',
+      title: 'Payment Successful',
+      message: `Your payment of ₹${booking.totalAmount} for booking #${booking.bookingId} was successful.`,
+      type: 'booking',
+      referenceId: booking._id,
+      eventId: 'payment_success',
+      idempotencyKey: `payment_success:${booking.customer}:${booking._id}`
+    });
 
     notifyAdmins(
       'New Paid Booking',
@@ -515,14 +529,16 @@ const handlePayoutWebhook = async (event, payoutEntity) => {
         await provider.save();
         await syncEarningsStatus(provider._id);
 
-        sendNotification(
-          provider._id,
-          'provider',
-          'Payout Transferred',
-          `Your payout of ₹${paymentRecord.amount} has been successfully transferred. UTR: ${utr}`,
-          'payout',
-          paymentRecord._id
-        );
+        sendNotification({
+          userId: provider._id,
+          role: 'provider',
+          title: 'Payout Transferred',
+          message: `Your payout of ₹${paymentRecord.amount} has been successfully transferred. UTR: ${utr}`,
+          type: 'payout',
+          referenceId: paymentRecord._id,
+          eventId: 'payout_processed',
+          idempotencyKey: `payout_processed:${provider._id}:${paymentRecord._id}:${utr || ''}`
+        });
       }
     }
   } else if (['payout.reversed', 'payout.failed', 'payout.rejected'].includes(event) || (event === 'payout.updated' && ['reversed', 'failed', 'rejected'].includes(payoutEntity.status))) {
@@ -555,14 +571,16 @@ const handlePayoutWebhook = async (event, payoutEntity) => {
           description: `RazorpayX Payout reversed/failed (${payoutId}). ₹${paymentRecord.amount} refunded to wallet.`
         });
 
-        sendNotification(
-          provider._id,
-          'provider',
-          'Payout Failed / Reversed',
-          `Your payout of ₹${paymentRecord.amount} failed and has been refunded to your wallet.`,
-          'payout',
-          paymentRecord._id
-        );
+        sendNotification({
+          userId: provider._id,
+          role: 'provider',
+          title: 'Payout Failed / Reversed',
+          message: `Your payout of ₹${paymentRecord.amount} failed and has been refunded to your wallet.`,
+          type: 'payout',
+          referenceId: paymentRecord._id,
+          eventId: 'payout_failed',
+          idempotencyKey: `payout_failed:${provider._id}:${paymentRecord._id}`
+        });
       }
     }
   }
@@ -2003,6 +2021,9 @@ class PaymentService {
           paymentRecord.lastError = payoutErr.message;
           paymentRecord.status = 'failed';
           await paymentRecord.save();
+          if (paymentRecord.provider?._id) {
+            await syncEarningsStatus(paymentRecord.provider._id);
+          }
           return res.status(500).json({
             success: false,
             message: `RazorpayX payout failed: ${payoutErr.message}`
@@ -3563,14 +3584,16 @@ class PaymentService {
           if (updatedProvider) {
             // Notify provider
             try {
-              sendNotification(
-                providerId,
-                'provider',
-                'Earnings Released',
-                `Your earning of ₹${netAmount} for booking ${earning.booking?.bookingId || earning.booking?._id} has been released and is now available in your wallet.`,
-                'earningreleased',
-                earning.booking?._id
-              );
+              sendNotification({
+                userId: providerId,
+                role: 'provider',
+                title: 'Earnings Released',
+                message: `Your earning of ₹${netAmount} for booking ${earning.booking?.bookingId || earning.booking?._id} has been released and is now available in your wallet.`,
+                type: 'earningreleased',
+                referenceId: earning.booking?._id,
+                eventId: 'earning_released',
+                idempotencyKey: `earning_released:${providerId}:${earning._id}`
+              });
             } catch (err) { /* ignore */ }
           }
           console.log(`Released earning ${earning._id} to provider ${earning.provider}`);
@@ -4302,6 +4325,564 @@ class PaymentService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * READ-ONLY Enterprise Financial Report Center Data & Reconciliation Engine
+   */
+  static async getFinancialReportCenterData(req, res) {
+    try {
+      const {
+        reportType = 'summary',
+        startDate,
+        endDate,
+        fromDate,
+        toDate,
+        providerId,
+        customerId,
+        bookingId,
+        transactionId,
+        paymentMethod,
+        paymentStatus,
+        bookingStatus,
+        reconciliationStatus,
+        page = 1,
+        limit = 50,
+        exportFormat
+      } = req.query;
+
+      const sDate = startDate || fromDate ? new Date(startDate || fromDate) : new Date(Date.now() - 30 * 86400000);
+      const eDate = endDate || toDate ? new Date(new Date(endDate || toDate).setHours(23, 59, 59, 999)) : new Date();
+
+      const dateMatch = { createdAt: { $gte: sDate, $lte: eDate } };
+
+      // Models
+      const Booking = mongoose.model('Booking');
+      const Transaction = mongoose.model('Transaction');
+      const ProviderEarning = mongoose.model('ProviderEarning');
+      const PaymentRecord = mongoose.model('PaymentRecord');
+      const Refund = mongoose.model('Refund');
+      const Complaint = mongoose.model('Complaint');
+      const Coupon = mongoose.model('Coupon');
+      const { Referral, ReferralRewardLog } = require('../referral/referral-model');
+      const User = mongoose.model('User');
+      const Provider = mongoose.model('Provider');
+
+      // ── 1. GLOBAL FINANCIAL SUMMARY METRICS (Authoritative Backend Read) ──
+      const [
+        bookingStats,
+        txnStats,
+        earningStats,
+        payoutStats,
+        refundStats,
+        referralStats
+      ] = await Promise.all([
+        Booking.aggregate([
+          { $match: { createdAt: { $gte: sDate, $lte: eDate } } },
+          {
+            $group: {
+              _id: null,
+              totalBookingValue: { $sum: '$totalAmount' },
+              totalSubtotal: { $sum: '$subtotal' },
+              totalDiscount: { $sum: '$totalDiscount' },
+              totalCashToPay: { $sum: '$cashToPay' },
+              totalOnlinePaid: { $sum: '$onlinePaid' },
+              totalWalletUsed: { $sum: '$walletUsed' },
+              count: { $sum: 1 }
+            }
+          }
+        ]),
+        Transaction.aggregate([
+          { $match: { createdAt: { $gte: sDate, $lte: eDate } } },
+          {
+            $group: {
+              _id: '$type',
+              totalAmount: { $sum: '$amount' },
+              count: { $sum: 1 }
+            }
+          }
+        ]),
+        ProviderEarning.aggregate([
+          { $match: { createdAt: { $gte: sDate, $lte: eDate } } },
+          {
+            $group: {
+              _id: null,
+              grossAmount: { $sum: '$grossAmount' },
+              commissionAmount: { $sum: '$commissionAmount' },
+              netAmount: { $sum: '$netAmount' }
+            }
+          }
+        ]),
+        PaymentRecord.aggregate([
+          { $match: { createdAt: { $gte: sDate, $lte: eDate }, status: { $in: ['completed', 'transferred'] } } },
+          { $group: { _id: null, totalPayouts: { $sum: '$amount' } } }
+        ]),
+        Refund.aggregate([
+          { $match: { createdAt: { $gte: sDate, $lte: eDate }, refundStatus: 'completed' } },
+          { $group: { _id: null, totalRefunds: { $sum: '$refundAmount' } } }
+        ]),
+        ReferralRewardLog.aggregate([
+          { $match: { createdAt: { $gte: sDate, $lte: eDate }, status: 'released' } },
+          { $group: { _id: null, totalReferralRewards: { $sum: '$amount' } } }
+        ])
+      ]);
+
+      const bStat = bookingStats[0] || {};
+      const eStat = earningStats[0] || {};
+      const pStat = payoutStats[0] || {};
+      const rStat = refundStats[0] || {};
+      const refStat = referralStats[0] || {};
+
+      let customerPayments = 0;
+      let couponSubsidy = 0;
+      txnStats.forEach(t => {
+        if (['payment', 'wallet_topup'].includes(t._id)) customerPayments += t.totalAmount;
+        if (t._id === 'referral_coupon_subsidy') couponSubsidy += t.totalAmount;
+      });
+
+      const platformCommission = eStat.commissionAmount || 0;
+      const providerEarnings = eStat.netAmount || 0;
+      const totalRefunds = rStat.totalRefunds || 0;
+      const totalPayouts = pStat.totalPayouts || 0;
+      const referralRewards = refStat.totalReferralRewards || 0;
+      const cashRecovery = bStat.totalCashToPay || 0;
+      const netPlatformRevenue = parseFloat((platformCommission - referralRewards - couponSubsidy - totalRefunds).toFixed(2));
+
+      const summaryCards = {
+        totalBookingValue: bStat.totalBookingValue || 0,
+        totalCustomerPayments: customerPayments || (bStat.totalOnlinePaid || 0) + (bStat.totalWalletUsed || 0),
+        platformCommission,
+        providerEarnings,
+        totalRefunds,
+        totalPayouts,
+        referralRewards,
+        couponSubsidy,
+        cashRecovery,
+        netPlatformRevenue
+      };
+
+      // ── 2. REPORT TYPE SPECIFIC DATASETS ──
+      let reportData = [];
+      let totalRecords = 0;
+
+      const pNum = Math.max(1, parseInt(page, 10));
+      const pLimit = Math.max(1, Math.min(1000, parseInt(limit, 10)));
+      const skip = (pNum - 1) * pLimit;
+
+      switch (reportType) {
+        case 'booking_revenue': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (bookingStatus) filter.status = bookingStatus;
+          if (paymentStatus) filter.paymentStatus = paymentStatus;
+          if (paymentMethod) filter.paymentMethod = paymentMethod;
+
+          totalRecords = await Booking.countDocuments(filter);
+          const bookings = await Booking.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customer', 'name email phone')
+            .populate('provider', 'name phone providerId')
+            .populate('services.service', 'title category')
+            .lean();
+
+          reportData = bookings.map(b => ({
+            bookingId: b.bookingId || b._id,
+            bookingDate: b.createdAt,
+            completionDate: b.completedAt || b.serviceCompletedAt || null,
+            customer: b.customer?.name || 'N/A',
+            provider: b.provider?.name || 'Unassigned',
+            service: b.services?.[0]?.service?.title || 'Service',
+            subtotal: b.subtotal || 0,
+            normalDiscount: b.totalDiscount || 0,
+            surcharges: (b.demandSurge || 0) + (b.nightCharge || 0) + (b.visitingCharge || 0),
+            totalAmount: b.totalAmount || 0,
+            paymentMethod: b.paymentMethod,
+            paymentStatus: b.paymentStatus,
+            bookingStatus: b.status,
+            platformCommission: b.commissionAmount || 0,
+            providerEarnings: b.providerEarnings || 0
+          }));
+          break;
+        }
+
+        case 'commission': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (providerId && mongoose.Types.ObjectId.isValid(providerId)) filter.provider = providerId;
+
+          totalRecords = await ProviderEarning.countDocuments(filter);
+          const earnings = await ProviderEarning.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('provider', 'name providerId')
+            .populate('booking')
+            .lean();
+
+          reportData = earnings.map(e => ({
+            earningId: e._id,
+            bookingId: e.booking?.bookingId || e.booking?._id || 'N/A',
+            provider: e.provider?.name || 'N/A',
+            bookingDate: e.createdAt,
+            commissionRate: e.commissionRate || 0,
+            grossAmount: e.grossAmount || 0,
+            platformCommission: e.commissionAmount || 0,
+            providerNetAmount: e.netAmount || 0,
+            earningStatus: e.status
+          }));
+          break;
+        }
+
+        case 'provider_earnings': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (providerId && mongoose.Types.ObjectId.isValid(providerId)) filter.provider = providerId;
+
+          totalRecords = await ProviderEarning.countDocuments(filter);
+          const earnings = await ProviderEarning.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('provider', 'name providerId phone')
+            .populate('booking')
+            .lean();
+
+          reportData = earnings.map(e => ({
+            earningId: e._id,
+            provider: e.provider?.name || 'N/A',
+            bookingId: e.booking?.bookingId || e.booking?._id || 'N/A',
+            bookingDate: e.createdAt,
+            grossAmount: e.grossAmount || 0,
+            commissionRate: e.commissionRate || 0,
+            commissionAmount: e.commissionAmount || 0,
+            netAmount: e.netAmount || 0,
+            earningStatus: e.status,
+            availableAfter: e.availableAfter || null
+          }));
+          break;
+        }
+
+        case 'customer_payment': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (paymentMethod) filter.paymentMethod = paymentMethod;
+          if (paymentStatus) filter.paymentStatus = paymentStatus;
+
+          totalRecords = await Transaction.countDocuments(filter);
+          const txns = await Transaction.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('user', 'name email')
+            .populate('booking')
+            .lean();
+
+          reportData = txns.map(t => ({
+            transactionId: t.transactionId || t._id,
+            bookingId: t.bookingId || t.booking?.bookingId || 'N/A',
+            customer: t.user?.name || 'N/A',
+            amount: t.amount || 0,
+            paymentMethod: t.paymentMethod,
+            paymentStatus: t.paymentStatus,
+            transactionType: t.type,
+            razorpayOrderId: t.razorpayOrderId || 'N/A',
+            razorpayPaymentId: t.razorpayPaymentId || 'N/A',
+            createdAt: t.createdAt
+          }));
+          break;
+        }
+
+        case 'razorpay_reconcile': {
+          const filter = { razorpayPaymentId: { $ne: null }, createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Transaction.countDocuments(filter);
+          const txns = await Transaction.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('booking')
+            .lean();
+
+          reportData = txns.map(t => {
+            const b = t.booking || {};
+            const rzpAmt = t.razorpayResponse?.amount ? t.razorpayResponse.amount / 100 : t.amount;
+            const amtMatch = Math.abs(rzpAmt - t.amount) < 0.01;
+            const statusMatch = ['success', 'completed'].includes(t.paymentStatus) && ['captured', 'paid', 'escrowhold'].includes(b.paymentStatus || 'escrowhold');
+
+            let reconStatus = 'MATCHED';
+            if (!amtMatch) reconStatus = 'AMOUNT_MISMATCH';
+            else if (!statusMatch) reconStatus = 'STATUS_MISMATCH';
+
+            return {
+              transactionId: t.transactionId || t._id,
+              bookingId: b.bookingId || b._id || 'N/A',
+              razorpayOrderId: t.razorpayOrderId || 'N/A',
+              razorpayPaymentId: t.razorpayPaymentId || 'N/A',
+              razorpayAmount: rzpAmt,
+              transactionAmount: t.amount,
+              bookingAmount: b.totalAmount || t.amount,
+              razorpayGatewayStatus: t.razorpayResponse?.status || 'captured',
+              transactionPaymentStatus: t.paymentStatus,
+              bookingPaymentStatus: b.paymentStatus || 'escrowhold',
+              reconciliationStatus: reconStatus
+            };
+          });
+          break;
+        }
+
+        case 'refund': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Refund.countDocuments(filter);
+          const refunds = await Refund.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customerId', 'name email')
+            .populate('bookingId')
+            .lean();
+
+          reportData = refunds.map(r => ({
+            refundId: r.refundId || r._id,
+            bookingId: r.bookingId?.bookingId || r.bookingId?._id || 'N/A',
+            customer: r.customerId?.name || 'N/A',
+            requestedAmount: r.requestedAmount || 0,
+            refundAmount: r.refundAmount || 0,
+            walletRefundAmount: r.walletRefundAmount || 0,
+            gatewayRefundAmount: r.gatewayRefundAmount || 0,
+            gatewayRefundId: r.gatewayRefundId || 'N/A',
+            refundStatus: r.refundStatus,
+            refundReason: r.refundReason || r.cancellationReason || 'N/A',
+            createdAt: r.createdAt
+          }));
+          break;
+        }
+
+        case 'payout': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await PaymentRecord.countDocuments(filter);
+          const records = await PaymentRecord.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('provider', 'name providerId phone')
+            .lean();
+
+          reportData = records.map(p => ({
+            paymentRecordId: p._id,
+            transactionReference: p.transactionReference || 'N/A',
+            provider: p.provider?.name || 'N/A',
+            amount: p.amount || 0,
+            netAmount: p.netAmount || 0,
+            withdrawalType: p.withdrawalType || 'manual',
+            status: p.status,
+            razorpayPayoutId: p.razorpayPayoutId || 'N/A',
+            utrNo: p.utrNo || 'N/A',
+            requestedAt: p.createdAt,
+            completedAt: p.completedAt || null
+          }));
+          break;
+        }
+
+        case 'wallet_ledger': {
+          const filter = { ledgerType: 'wallet', createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Transaction.countDocuments(filter);
+          const txns = await Transaction.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('user', 'name role')
+            .populate('provider', 'name')
+            .lean();
+
+          reportData = txns.map(t => ({
+            transactionId: t.transactionId || t._id,
+            walletOwner: t.provider?.name || t.user?.name || 'N/A',
+            role: t.provider ? 'provider' : (t.user?.role || 'customer'),
+            entryType: t.entryType,
+            amount: t.amount,
+            balanceBefore: t.balanceBefore ?? 'N/A',
+            balanceAfter: t.balanceAfter ?? 'N/A',
+            type: t.type,
+            description: t.description || 'Wallet transaction',
+            createdAt: t.createdAt
+          }));
+          break;
+        }
+
+        case 'cash_recovery': {
+          const filter = { paymentMethod: 'cash', createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Booking.countDocuments(filter);
+          const cashBookings = await Booking.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customer', 'name')
+            .populate('provider', 'name providerId')
+            .lean();
+
+          reportData = cashBookings.map(b => ({
+            bookingId: b.bookingId || b._id,
+            customer: b.customer?.name || 'N/A',
+            provider: b.provider?.name || 'N/A',
+            totalAmount: b.totalAmount || 0,
+            cashCollected: b.cashToPay || b.totalAmount || 0,
+            platformCommission: b.commissionAmount || 0,
+            providerEarnings: b.providerEarnings || 0,
+            paymentStatus: b.paymentStatus,
+            verificationStatus: b.paymentVerification?.status || 'pending',
+            verifiedAt: b.paymentVerification?.verifiedAt || null
+          }));
+          break;
+        }
+
+        case 'coupon': {
+          const filter = { 'couponApplied.code': { $exists: true, $ne: null }, createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Booking.countDocuments(filter);
+          const couponBookings = await Booking.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customer', 'name')
+            .lean();
+
+          reportData = couponBookings.map(b => ({
+            bookingId: b.bookingId || b._id,
+            customer: b.customer?.name || 'N/A',
+            couponCode: b.couponApplied?.code || 'N/A',
+            discountType: b.couponApplied?.discountType || 'flat',
+            discountValue: b.couponApplied?.discountValue || 0,
+            totalDiscount: b.totalDiscount || 0,
+            subtotal: b.subtotal || 0,
+            finalCustomerPaid: b.totalAmount || 0,
+            isReferralCoupon: b.couponApplied?.isReferralCoupon || false,
+            usageDate: b.createdAt
+          }));
+          break;
+        }
+
+        case 'referral': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await ReferralRewardLog.countDocuments(filter);
+          const logs = await ReferralRewardLog.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('recipient', 'name')
+            .lean();
+
+          reportData = logs.map(l => ({
+            rewardLogId: l._id,
+            recipient: l.recipient?.name || 'N/A',
+            recipientType: l.recipientType,
+            rewardType: l.rewardType,
+            amount: l.amount || 0,
+            status: l.status,
+            createdAt: l.createdAt
+          }));
+          break;
+        }
+
+        case 'complaint': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Complaint.countDocuments(filter);
+          const complaints = await Complaint.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customer', 'name')
+            .populate('provider', 'name')
+            .populate('booking')
+            .lean();
+
+          reportData = complaints.map(c => ({
+            complaintId: c.complaintId || c._id,
+            bookingId: c.booking?.bookingId || c.booking?._id || 'N/A',
+            customer: c.customer?.name || 'N/A',
+            provider: c.provider?.name || 'N/A',
+            title: c.title,
+            category: c.category,
+            status: c.status,
+            createdAt: c.createdAt
+          }));
+          break;
+        }
+
+        case 'master_reconcile':
+        default: {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Booking.countDocuments(filter);
+          const bookings = await Booking.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customer', 'name')
+            .populate('provider', 'name')
+            .lean();
+
+          const bookingIds = bookings.map(b => b._id);
+          const [txns, earnings, refunds, payouts] = await Promise.all([
+            Transaction.find({ booking: { $in: bookingIds } }).lean(),
+            ProviderEarning.find({ booking: { $in: bookingIds } }).lean(),
+            Refund.find({ bookingId: { $in: bookingIds } }).lean(),
+            PaymentRecord.find({ booking: { $in: bookingIds } }).lean()
+          ]);
+
+          const txnMap = {};
+          txns.forEach(t => { txnMap[t.booking.toString()] = t; });
+          const earningMap = {};
+          earnings.forEach(e => { earningMap[e.booking.toString()] = e; });
+          const refundMap = {};
+          refunds.forEach(r => { refundMap[r.bookingId.toString()] = r; });
+          const payoutMap = {};
+          payouts.forEach(p => { if (p.booking) payoutMap[p.booking.toString()] = p; });
+
+          reportData = bookings.map(b => {
+            const bId = b._id.toString();
+            const t = txnMap[bId] || {};
+            const e = earningMap[bId] || {};
+            const r = refundMap[bId] || {};
+            const p = payoutMap[bId] || {};
+
+            let reconStatus = 'MATCHED';
+            if (t.razorpayPaymentId && Math.abs((t.amount || 0) - (b.totalAmount || 0)) > 0.01) reconStatus = 'PAYMENT_MISMATCH';
+            else if (r.refundAmount > b.totalAmount) reconStatus = 'REFUND_MISMATCH';
+
+            return {
+              bookingId: b.bookingId || b._id,
+              bookingTotal: b.totalAmount || 0,
+              customerPaid: t.amount || b.onlinePaid + b.walletUsed || 0,
+              platformCommission: b.commissionAmount || 0,
+              providerEarning: b.providerEarnings || 0,
+              walletAmount: b.walletUsed || 0,
+              refundAmount: r.refundAmount || 0,
+              payoutAmount: p.amount || 0,
+              paymentMethod: b.paymentMethod,
+              bookingStatus: b.status,
+              paymentStatus: b.paymentStatus,
+              reconciliationStatus: reconStatus
+            };
+          });
+          break;
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        reportType,
+        summaryCards,
+        dateRange: { startDate: sDate, endDate: eDate },
+        pagination: {
+          totalRecords,
+          page: pNum,
+          limit: pLimit,
+          totalPages: Math.ceil(totalRecords / pLimit) || 1
+        },
+        data: reportData
+      });
+
+    } catch (error) {
+      console.error('[PaymentService.getFinancialReportCenterData] Error:', error);
+      res.status(500).json({ success: false, message: 'Server Error generating financial report center data' });
+    }
+  }
+
+
 
 }
 

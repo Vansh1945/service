@@ -7,6 +7,7 @@ import * as BookingService from '../../../services/BookingService';
 import * as ComplaintService from '../../../services/ComplaintService';
 
 import Loader from '../../../components/ui/Loader';
+import { normalizeStatus } from '../../../utils/status';
 import TimelineSkeleton from '../../../components/ui-skeletons/TimelineSkeleton';
 import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon, ZoomControl, LayersControl, Circle, FeatureGroup } from 'react-leaflet';
 import L from 'leaflet';
@@ -428,15 +429,17 @@ const LiveTrackingPage = () => {
     let shadow = 'rgba(34, 197, 94, 0.2)';
     let pulseClass = 'animate-pulse';
 
-    if (status === 'ON_THE_WAY') {
+    const s = normalizeStatus(status);
+
+    if (['ontheway', 'on_the_way'].includes(s) || status === 'ON_THE_WAY') {
       color = '#eab308'; // 🟡 On the way
       shadow = 'rgba(234, 179, 8, 0.2)';
       pulseClass = '';
-    } else if (status === 'WORKING') {
+    } else if (['workstarted', 'working'].includes(s) || status === 'WORKING') {
       color = '#3b82f6'; // 🔵 Working
       shadow = 'rgba(59, 130, 246, 0.2)';
       pulseClass = '';
-    } else if (status === 'OFFLINE') {
+    } else if (s === 'offline' || status === 'OFFLINE') {
       color = '#ef4444'; // 🔴 Offline
       shadow = 'rgba(239, 68, 68, 0.15)';
       pulseClass = '';

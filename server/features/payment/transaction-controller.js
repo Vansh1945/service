@@ -399,6 +399,25 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
+    // Check if razorpayOrderId already has a completed settlement (IDEMPOTENCY)
+    const existingOrderSettled = await Transaction.findOne({
+      razorpayOrderId: razorpay_order_id,
+      paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }
+    }).session(session);
+    if (existingOrderSettled && existingOrderSettled._id.toString() !== transactionId) {
+      await session.commitTransaction();
+      return res.status(200).json({
+        success: true,
+        message: 'Payment for this order has already been verified and settled.',
+        data: {
+          transactionId: existingOrderSettled._id,
+          bookingId: bookingId,
+          paymentStatus: existingOrderSettled.paymentStatus,
+          isDuplicate: true
+        }
+      });
+    }
+
     // Check if razorpayPaymentId already exists globally (IDEMPOTENCY)
     const duplicatePayment = await Transaction.findOne({ razorpayPaymentId: razorpay_payment_id }).session(session);
     if (duplicatePayment && duplicatePayment._id.toString() !== transactionId) {
@@ -552,8 +571,25 @@ const handleWebhook = async (req, res, next) => {
   const event = payload.event;
   const payment = payload.payload.payment?.entity;
 
-  if (!payment) {
+  if (!payment && !payload.payload?.qr_code?.entity && !payload.payload?.refund?.entity) {
     return res.status(400).send('Invalid webhook payload');
+  }
+
+  // Enforce Webhook Idempotency
+  const entityId = payment?.id || payload.payload?.qr_code?.entity?.id || payload.payload?.refund?.entity?.id;
+  const eventId = payload.id || `${event}:${entityId}`;
+  try {
+    const WebhookIdempotency = mongoose.models.WebhookIdempotency || mongoose.model('WebhookIdempotency', new mongoose.Schema({
+      eventId: { type: String, required: true, unique: true },
+      processedAt: { type: Date, default: Date.now, expires: 604800 } // TTL: 7 days
+    }));
+    await WebhookIdempotency.create({ eventId });
+  } catch (idempErr) {
+    if (idempErr.code === 11000) {
+      global.logger.info(`[Webhook Duplicate] Webhook event ${eventId} already processed in transaction-controller. Skipping.`);
+      return res.status(200).json({ status: 'success', duplicate: true });
+    }
+    global.logger.error(`Webhook idempotency recording error: ${idempErr.message}`);
   }
 
   const session = await mongoose.startSession();
@@ -649,6 +685,12 @@ const handleSuccessfulPayment = async (payment, session) => {
 
   if (!booking) {
     throw new Error('Booking not found');
+  }
+
+  // Terminal Cash Guard: If booking was settled/paid via Cash, do not allow late online webhooks to override
+  if (booking.paymentMethod === 'cash' && (booking.paymentStatus === 'paid' || booking.paymentStatus === 'settled')) {
+    global.logger.info(`[handleSuccessfulPayment] Booking ${booking._id} already settled via Cash. Skipping online payment status override.`);
+    return;
   }
 
   // Handle Wallet Deduction for Mixed Payments (Webhook Path)
@@ -1436,24 +1478,33 @@ const getFinanceOverview = async (req, res, next) => {
       monthlyTxns,
       refunds,
       providers,
-      failedTxns
+      failedTxns,
+      completedBookings
     ] = await Promise.all([
-      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] } }).lean(),
-      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfToday } }).lean(),
-      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfWeek } }).lean(),
-      Transaction.find({ paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfMonth } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfToday } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfWeek } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfMonth } }).lean(),
       Refund.find({}).lean(),
       Provider.find({}).select('wallet pendingPayout earnings').lean(),
-      Transaction.find({ paymentStatus: 'failed' }).lean()
+      Transaction.find({ type: 'payment', paymentStatus: 'failed' }).lean(),
+      Booking.find({
+        status: 'completed',
+        paymentStatus: { $in: ['paid', 'settled'] },
+        'cancellationProgress.status': { $ne: 'cancelled' },
+        refundProcessed: { $ne: true }
+      }).select('commissionAmount companySurgeShare platformFee totalAmount providerEarnings subtotal totalDiscount couponApplied isReferralDiscount').lean()
     ]);
 
     let totalRevenue = 0, onlineCollection = 0, cashCollection = 0, walletCollection = 0, mixedCollection = 0;
-    let platformEarnings = 0;
+    let gatewayFees = 0, gatewayTax = 0;
 
     allSuccessful.forEach(t => {
       const amt = t.amount || 0;
       totalRevenue += amt;
-      platformEarnings += (t.commission || (amt * 0.2));
+
+      if (t.gatewayFee) gatewayFees += t.gatewayFee;
+      if (t.gatewayTax) gatewayTax += t.gatewayTax;
 
       const method = t.paymentMethod?.toLowerCase();
       if (method === 'razorpay' || method === 'online') onlineCollection += amt;
@@ -1463,15 +1514,27 @@ const getFinanceOverview = async (req, res, next) => {
       else onlineCollection += amt;
     });
 
+    let platformEarnings = 0;
+    let totalProviderEarnings = 0;
+    completedBookings.forEach(b => {
+      const isRefDisc = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
+      const refSubsidy = isRefDisc ? (b.totalDiscount || 0) : 0;
+      const netPlatformContribution = (b.commissionAmount || 0) + (b.companySurgeShare || 0) + (b.platformFee || 0) - refSubsidy;
+
+      platformEarnings += netPlatformContribution;
+      totalProviderEarnings += (b.providerEarnings || 0);
+    });
+
     const todayRevenue = todayTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
     const weeklyRevenue = weeklyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
     const monthlyRevenue = monthlyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
 
     let pendingRefunds = 0, completedRefunds = 0;
     refunds.forEach(r => {
-      const amt = r.amount || 0;
-      if (r.status === 'completed') completedRefunds += amt;
-      else if (r.status === 'pending' || r.status === 'processing') pendingRefunds += amt;
+      const amt = r.refundAmount || r.requestedAmount || 0;
+      const status = r.refundStatus || r.status;
+      if (status === 'completed') completedRefunds += amt;
+      else if (status === 'pending' || status === 'processing' || status === 'approved') pendingRefunds += amt;
     });
 
     let providerPendingPayout = 0, completedPayout = 0;
@@ -1488,8 +1551,6 @@ const getFinanceOverview = async (req, res, next) => {
       .lean();
 
     const totalCaptured = onlineCollection + mixedCollection;
-    const gatewayFees = Math.round(totalCaptured * 0.02);
-    const gatewayTax = Math.round(gatewayFees * 0.18);
     const totalSettled = Math.max(0, totalCaptured);
     const bankReceived = Math.max(0, totalSettled - gatewayFees - gatewayTax);
     const pendingSettlement = 0;
@@ -1500,9 +1561,6 @@ const getFinanceOverview = async (req, res, next) => {
     const paymentSuccessRate = totalTxnsCount > 0 ? parseFloat(((allSuccessful.length / totalTxnsCount) * 100).toFixed(1)) : 100;
     const totalRefundsAmount = completedRefunds + pendingRefunds;
     const refundRate = totalRevenue > 0 ? parseFloat(((totalRefundsAmount / totalRevenue) * 100).toFixed(1)) : 0;
-
-    // Total Provider Earnings (Total Gross Revenue minus Platform Commission)
-    const totalProviderEarnings = Math.max(0, totalRevenue - platformEarnings);
 
     // Cash Pending Verification
     const pendingCashTxns = await Transaction.find({ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending' }).lean();
@@ -3870,8 +3928,8 @@ const handleQRSuccessPayment = async (payment, session, qrCodeId) => {
       return;
     }
 
-    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
-      global.logger.info(`[handleQRSuccessPayment] Booking ${booking._id} already completed / payment verified.`);
+    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed' || (booking.paymentMethod === 'cash' && (booking.paymentStatus === 'paid' || booking.paymentStatus === 'settled'))) {
+      global.logger.info(`[handleQRSuccessPayment] Booking ${booking._id} already completed / payment verified / settled via cash.`);
       return;
     }
 
@@ -4249,9 +4307,17 @@ const verifyCashReceived = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    if (booking.paymentVerification?.status === 'verified' || booking.status === 'completed') {
+    if (
+      booking.commissionProcessed ||
+      booking.paymentVerification?.status === 'verified' ||
+      booking.status === 'completed' ||
+      booking.paymentStatus === 'paid' ||
+      booking.paymentStatus === 'settled' ||
+      booking.paymentStatus === 'escrowhold' ||
+      booking.confirmedBooking
+    ) {
       if (session) await session.abortTransaction();
-      return res.status(409).json({ success: false, message: 'Cash payment already verified for this booking.' });
+      return res.status(409).json({ success: false, message: 'Payment already completed/settled for this booking.' });
     }
 
     const provider = await Provider.findById(providerId).session(session);
@@ -4276,75 +4342,93 @@ const verifyCashReceived = async (req, res, next) => {
     const commission = booking.commissionAmount || 0;
     const providerEarnings = booking.providerEarnings || 0;
     const companySurgeShare = booking.companySurgeShare || 0;
-    
-    // Cash recovery: cash collected physically minus provider net entitlement
-    const cashRecovery = parseFloat((booking.totalAmount - providerEarnings).toFixed(2));
-    const providerBalance = provider.wallet?.availableBalance || 0;
 
-    const netDeduction = cashRecovery > 0 ? cashRecovery : 0;
-    if (cashRecovery > 0 && providerBalance < cashRecovery) {
-      if (session) await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient wallet balance. Platform cash recovery of ₹${cashRecovery} is required to verify cash payment. Your current wallet balance is ₹${providerBalance}. Please topup your wallet.`
-      });
-    }
+    const isCompanyReferral = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
+    const subsidyAmount = parseFloat((providerEarnings - booking.totalAmount).toFixed(2));
 
-    const updatedProvider = await Provider.findOneAndUpdate(
-      { _id: providerId, 'wallet.availableBalance': { $gte: netDeduction } },
-      {
-        $inc: { 'wallet.availableBalance': -cashRecovery },
-        $set: { 'wallet.lastUpdated': new Date() }
-      },
-      { session, new: true }
-    );
+    let cashRecovery = 0;
 
-    if (!updatedProvider && netDeduction > 0) {
-      if (session) await session.abortTransaction();
-      return res.status(400).json({ success: false, message: 'Wallet balance check failed during transaction.' });
-    }
+    if (isCompanyReferral && subsidyAmount > 0) {
+      // Rule 4: Company-funded referral coupon cash rule
+      // Do not debit provider for subsidy. Credit provider with exact subsidy amount.
+      const updatedProvider = await Provider.findByIdAndUpdate(
+        providerId,
+        {
+          $inc: { 'wallet.availableBalance': subsidyAmount },
+          $set: { 'wallet.lastUpdated': new Date() }
+        },
+        { session, new: true }
+      );
+      const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
+      const balanceBefore = balanceAfter - subsidyAmount;
 
-    const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
-
-    if (cashRecovery > 0) {
-      const balanceBefore = balanceAfter + cashRecovery;
-      const commissionTx = new Transaction({
-        booking: booking._id,
-        bookingId: booking.bookingId || booking._id.toString(),
-        user: booking.customer,
-        provider: providerId,
-        amount: cashRecovery,
-        paymentStatus: 'completed',
-        paymentMethod: 'wallet',
-        type: 'commissiondeduction',
-        ledgerType: 'commission',
-        balanceBefore,
-        balanceAfter,
-        deductionType: 'cash_booking_commission',
-        description: `Cash recovery fee of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${companySurgeShare}) deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
-      });
-      await commissionTx.save({ session });
-    } else if (cashRecovery < 0) {
-      const creditAmount = Math.abs(cashRecovery);
-      const balanceBefore = balanceAfter - creditAmount;
       const subsidyTx = new Transaction({
         booking: booking._id,
         bookingId: booking.bookingId || booking._id.toString(),
         user: booking.customer,
         provider: providerId,
-        amount: creditAmount,
+        amount: subsidyAmount,
         paymentStatus: 'completed',
         paymentMethod: 'wallet',
         type: 'referral_coupon_subsidy',
         ledgerType: 'referral',
+        entryType: 'credit',
         balanceBefore,
         balanceAfter,
-        description: `Company-funded referral coupon subsidy of ₹${creditAmount} credited to wallet for Cash Booking #${booking.bookingId || booking._id}`
+        description: `Company-funded referral coupon subsidy of ₹${subsidyAmount} credited to wallet for Cash Booking #${booking.bookingId || booking._id}`
       });
       await subsidyTx.save({ session });
+    } else {
+      // Rule 5: Normal Cash Booking
+      cashRecovery = parseFloat((booking.totalAmount - providerEarnings).toFixed(2));
+      if (cashRecovery > 0) {
+        const providerBalance = provider.wallet?.availableBalance || 0;
+        if (providerBalance < cashRecovery) {
+          if (session) await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient wallet balance. Platform cash recovery of ₹${cashRecovery} is required to verify cash payment. Your current wallet balance is ₹${providerBalance}. Please topup your wallet.`
+          });
+        }
+
+        const updatedProvider = await Provider.findOneAndUpdate(
+          { _id: providerId, 'wallet.availableBalance': { $gte: cashRecovery } },
+          {
+            $inc: { 'wallet.availableBalance': -cashRecovery },
+            $set: { 'wallet.lastUpdated': new Date() }
+          },
+          { session, new: true }
+        );
+
+        if (!updatedProvider) {
+          if (session) await session.abortTransaction();
+          return res.status(400).json({ success: false, message: 'Wallet balance check failed during transaction.' });
+        }
+
+        const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
+        const balanceBefore = balanceAfter + cashRecovery;
+
+        const commissionTx = new Transaction({
+          booking: booking._id,
+          bookingId: booking.bookingId || booking._id.toString(),
+          user: booking.customer,
+          provider: providerId,
+          amount: cashRecovery,
+          paymentStatus: 'completed',
+          paymentMethod: 'wallet',
+          type: 'commissiondeduction',
+          ledgerType: 'commission',
+          entryType: 'debit',
+          balanceBefore,
+          balanceAfter,
+          deductionType: 'cash_booking_commission',
+          description: `Cash recovery fee of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${companySurgeShare}) deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
+        });
+        await commissionTx.save({ session });
+      }
     }
 
-    booking.paymentMethod = 'cash'; // CRITICAL: Transition paymentMethod to cash for QR -> Cash fallback
+    booking.paymentMethod = 'cash'; // Transition paymentMethod to cash for QR -> Cash fallback
     booking.paymentVerification = {
       method: 'cash_received',
       status: 'verified',
@@ -4356,7 +4440,7 @@ const verifyCashReceived = async (req, res, next) => {
     booking.statusHistory.push({
       status: booking.status || 'workstarted',
       timestamp: new Date(),
-      note: `Cash payment verified by provider. Cash recovery of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${companySurgeShare}) deducted from wallet.`,
+      note: `Cash payment verified by provider. ${cashRecovery > 0 ? `Cash recovery of ₹${cashRecovery} deducted from wallet.` : (isCompanyReferral && subsidyAmount > 0 ? `Company referral subsidy of ₹${subsidyAmount} credited to wallet.` : 'Payment settled.')}`,
       updatedBy: 'provider'
     });
 

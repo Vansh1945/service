@@ -183,6 +183,61 @@ const startCronJobs = () => {
             } catch (autoWdlErr) {
                 console.error('[CronScheduler] Error running Auto Withdrawal Scheduler:', autoWdlErr);
             }
+
+            // 6. Abandoned Mixed Payment Checkout Auto-Rollback
+            try {
+                const Transaction = mongoose.model('Transaction');
+                const { rollbackWalletDeduction } = require('../../features/payment/transaction-controller');
+
+                const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+                const abandonedMixedTxns = await Transaction.find({
+                    paymentMethod: 'mixed',
+                    type: 'payment',
+                    paymentStatus: 'pending',
+                    createdAt: { $lte: thirtyMinsAgo }
+                });
+
+                for (const txn of abandonedMixedTxns) {
+                    // Check 1 & 6 & 7: Verify transaction still pending and rollback not already performed
+                    if (txn.paymentStatus !== 'pending' || (txn.description && txn.description.includes('Rolled Back'))) {
+                        continue;
+                    }
+
+                    // Check 2: Verify Razorpay payment not captured
+                    if (txn.razorpayPaymentId) {
+                        try {
+                            const razorpay = require('../../features/payment/razorpay');
+                            if (razorpay) {
+                                const livePayment = await razorpay.payments.fetch(txn.razorpayPaymentId);
+                                if (livePayment && livePayment.status === 'captured') {
+                                    console.log(`[CronScheduler] Mixed payment ${txn._id} payment ID ${txn.razorpayPaymentId} is captured at Razorpay. Skipping rollback.`);
+                                    continue;
+                                }
+                            }
+                        } catch (rzpErr) {
+                            // Proceed cautiously if Razorpay check fails or payment is uncaptured
+                        }
+                    }
+
+                    // Check 3, 4, 5: Verify booking not paid, not completed, and no successful transaction exists
+                    if (txn.booking) {
+                        const b = await Booking.findById(txn.booking).lean();
+                        if (b && (b.paymentStatus === 'paid' || b.paymentStatus === 'settled' || b.status === 'completed')) {
+                            continue;
+                        }
+                        const existingSuccessTx = await Transaction.findOne({
+                            booking: txn.booking,
+                            paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }
+                        }).lean();
+                        if (existingSuccessTx) continue;
+                    }
+
+                    console.log(`[CronScheduler] Safely rolling back abandoned mixed checkout transaction ${txn._id}`);
+                    await rollbackWalletDeduction(txn, null);
+                }
+            } catch (abandonedErr) {
+                console.error('[CronScheduler] Error in abandoned mixed checkout cron rollback:', abandonedErr);
+            }
         } catch (error) {
             console.error('[CronScheduler] Error in cron job:', error);
         }

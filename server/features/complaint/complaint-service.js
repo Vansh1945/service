@@ -442,14 +442,16 @@ class ComplaintService {
           if (provider) {
             try {
               const { sendNotification } = require('../notification/notification-helper');
-              sendNotification(
-                provider,
-                'provider',
-                'Dispute Raised ⚠️',
-                `A dispute has been raised for booking #${bookingId.toString().slice(-6)}. Your payout is held.`,
-                'dispute_raised',
-                bookingId
-              );
+              sendNotification({
+                userId: provider,
+                role: 'provider',
+                title: 'Dispute Raised ⚠️',
+                message: `A dispute has been raised for booking #${bookingId.toString().slice(-6)}. Your payout is held.`,
+                type: 'dispute_raised',
+                referenceId: bookingId,
+                eventId: 'dispute_created',
+                idempotencyKey: `dispute_created:provider:${provider}:${bookingId}`
+              });
             } catch (e) { }
           }
         }

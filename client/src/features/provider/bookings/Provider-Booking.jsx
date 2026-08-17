@@ -16,7 +16,7 @@ import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSke
 import * as BookingService from '../../../services/BookingService';
 import Pagination from '../../../components/ui/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../../utils/format';
-import { getStatusColor as getStatusColorUtil } from '../../../utils/status';
+import { getStatusColor as getStatusColorUtil, normalizeStatus } from '../../../utils/status';
 import PriceDisplay from '../../../components/PriceDisplay';
 import { isChatVisible, formatAddress, calculateNetAmount } from '../../../utils/providerHelpers';
 import * as ComplaintService from '../../../services/ComplaintService';
@@ -731,7 +731,7 @@ const ProviderBooking = () => {
         if (isActive) {
           return true;
         }
-        return ["paid", "escrow_hold"].includes(b.paymentStatus);
+        return ["paid", "escrowhold"].includes(normalizeStatus(b.paymentStatus));
       });
     } catch (err) {
       console.error(err);
@@ -1949,9 +1949,9 @@ const ProviderBooking = () => {
                       </div>
                       <div className="flex justify-between">
                         <span>Settlement Status</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${(selectedBooking.status === 'completed' && ['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)) ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700'
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${(selectedBooking.status === 'completed' && ['paid', 'escrowhold'].includes(normalizeStatus(selectedBooking.paymentStatus))) ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700'
                           }`}>
-                          {(selectedBooking.status === 'completed' && ['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)) ? 'Settled' : 'Pending Settlement'}
+                          {(selectedBooking.status === 'completed' && ['paid', 'escrowhold'].includes(normalizeStatus(selectedBooking.paymentStatus))) ? 'Settled' : 'Pending Settlement'}
                         </span>
                       </div>
                     </div>

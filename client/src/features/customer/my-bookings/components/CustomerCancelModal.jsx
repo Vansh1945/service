@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle, Wallet, CreditCard, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { normalizeStatus } from '../../../../utils/status';
 
 const CANCELLATION_REASONS = [
   'Change of plans / Schedule conflict',
@@ -19,7 +20,7 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
 
   const totalAmount = booking.totalAmount || 0;
   const platformFee = booking.platformFee || 0;
-  const isPaid = booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold';
+  const isPaid = ['paid', 'escrowhold'].includes(normalizeStatus(booking.paymentStatus));
   const isOnlinePayment = booking.paymentMethod === 'online' || booking.paymentMethod === 'mixed' || (booking.onlinePaid && booking.onlinePaid > 0);
   const isPureWallet = booking.paymentMethod === 'wallet' && (!booking.onlinePaid || booking.onlinePaid === 0);
 

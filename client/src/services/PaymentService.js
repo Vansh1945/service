@@ -94,6 +94,10 @@ export const generateRefundReport = (params, config) => {
     return axiosInstance.get("/payment/admin/refund-report", { params, ...config });
 };
 
+export const getFinancialReportCenterData = (params) => {
+    return axiosInstance.get("/payment/admin/report-center-data", { params });
+};
+
 export const adminDirectPayout = (data) => {
     return axiosInstance.post("/payment/admin/payout/direct", data);
 };

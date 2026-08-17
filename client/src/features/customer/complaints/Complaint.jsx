@@ -14,6 +14,7 @@ import { getSystemSetting } from '../../../services/SystemService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../../services/ComplaintService';
 
 import { formatDate, formatTime, formatDateTime, compressImage } from '../../../utils/format';
+import { normalizeStatus } from '../../../utils/status';
 import CDNImage from '../../../components/CDNImage';
 import LoadingSpinner from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
@@ -1074,7 +1075,7 @@ const ComplaintsPage = () => {
               )}
 
               {/* ── Reopen ── */}
-              {selectedComplaint.status === 'Solved' && (
+              {['resolved', 'solved'].includes(normalizeStatus(selectedComplaint.status)) && (
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
                   <p className="text-xs font-bold text-orange-700 mb-1">Not satisfied with the resolution?</p>
                   <p className="text-[10px] text-orange-500 mb-3">You can reopen this ticket within 7 days.</p>

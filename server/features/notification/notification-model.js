@@ -127,6 +127,12 @@ const notificationSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    idempotencyKey: {
+        type: String,
+        default: null,
+        sparse: true,
+        index: true
+    },
     expiresAt: {
         type: Date,
         default: function () {
@@ -144,6 +150,7 @@ notificationSchema.index({ userId: 1, isRead: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 }); // Fast query for broadcast history
 notificationSchema.index({ status: 1, scheduledFor: 1 }); // Fast query for CRON scheduler
+notificationSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true }); // Database-level idempotency
 notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // MongoDB TTL index for automatic cleanup
 
 const notificationTemplateSchema = new mongoose.Schema({

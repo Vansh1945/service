@@ -8,6 +8,14 @@ const walletSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    heldBalance: {
+        type: Number,
+        default: 0
+    },
+    pendingWithdrawal: {
+        type: Number,
+        default: 0
+    },
     totalWithdrawn: {
         type: Number,
         default: 0

@@ -11,6 +11,7 @@ import {
 import { getBookingsByStatus } from '../../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, replyToComplaint } from '../../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../../utils/format';
+import { normalizeStatus } from '../../../utils/status';
 import CDNImage from '../../../components/CDNImage';
 import ChatModal from '../../../components/chat/ChatModal';
 import LoadingSpinner from '../../../components/ui/Loader';
@@ -578,7 +579,7 @@ const ProviderSupportPage = () => {
               )}
 
               {/* Reply Form (Only if ticket is not closed) */}
-              {!['Solved', 'Closed'].includes(selectedComplaint.status) && (
+              {!['resolved', 'closed', 'solved'].includes(normalizeStatus(selectedComplaint.status)) && (
                 <div className="border-t border-neutral-100 pt-5 mt-5">
                   <h4 className="text-[10px] font-bold uppercase tracking-wider text-primary mb-3">Submit Your Response</h4>
                   <div className="space-y-3">

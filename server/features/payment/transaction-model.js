@@ -76,17 +76,18 @@ const transactionSchema = new Schema({
     enum: [
       'payment', 'refund', 'referralreward', 'penalty', 'commissiondeduction',
       'withdrawal', 'withdrawalrejection', 'refundrecovery', 'wallet_topup',
-      'settlement', 'cashback', 'adjustment', 'escrow_hold', 'escrow_release'
+      'settlement', 'cashback', 'adjustment', 'escrow_hold', 'escrow_release',
+      'referral_coupon_subsidy'
     ],
     default: 'payment',
     set: function (v) {
       if (!v) return v;
-      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return v.toLowerCase().replace(/[^a-z0-9_]/g, '');
     }
   },
   ledgerType: {
     type: String,
-    enum: ['payment', 'wallet', 'refund', 'withdrawal', 'commission', 'settlement', 'adjustment'],
+    enum: ['payment', 'wallet', 'refund', 'withdrawal', 'commission', 'settlement', 'adjustment', 'referral'],
     default: 'payment'
   },
   entryType: {

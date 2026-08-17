@@ -481,14 +481,16 @@ const triggerCustomerReferralReward = async (booking) => {
     }
 
     try {
-      await sendNotification(
-        referrer._id,
-        'customer',
-        'Referral Reward Released!',
-        `Congratulations! You earned your referral reward because your friend completed their first booking.`,
-        'wallet',
-        booking._id
-      );
+      await sendNotification({
+        userId: referrer._id,
+        role: 'customer',
+        title: 'Referral Reward Released!',
+        message: `Congratulations! You earned your referral reward because your friend completed their first booking.`,
+        type: 'wallet',
+        referenceId: booking._id,
+        eventId: 'referral_reward_released',
+        idempotencyKey: `referral_reward_released:${referrer._id}:${booking._id}`
+      });
     } catch (e) {
       global.logger.error('Error sending customer referral notification: ' + e.message, e);
     }
@@ -709,14 +711,16 @@ const triggerProviderReferralReward = async (referredProviderId) => {
         await releaseReferralReward(referral, referrer, rewardAmount, lastBooking, 'provider', milestone.bookingsCount, session);
 
         try {
-          await sendNotification(
-            referrer._id,
-            'provider',
-            'Electrician Milestone Unlocked!',
-            `You earned ₹${rewardAmount} as your referred partner completed ${milestone.bookingsCount} jobs!`,
-            'wallet',
-            null
-          );
+          await sendNotification({
+            userId: referrer._id,
+            role: 'provider',
+            title: 'Electrician Milestone Unlocked!',
+            message: `You earned ₹${rewardAmount} as your referred partner completed ${milestone.bookingsCount} jobs!`,
+            type: 'wallet',
+            referenceId: referral._id,
+            eventId: 'referral_milestone_achieved',
+            idempotencyKey: `referral_milestone_achieved:${referrer._id}:${referral._id}:${milestone.bookingsCount}`
+          });
         } catch (e) {
           global.logger.error('Error sending milestone notification: ' + e.message, e);
         }

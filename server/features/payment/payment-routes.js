@@ -41,5 +41,6 @@ router.get('/admin/payout-history-report', adminAuthMiddleware, paymentControlle
 router.get('/admin/outstanding-balance-report', adminAuthMiddleware, paymentController.outstandingBalanceReport);
 router.get('/admin/complaint-report', adminAuthMiddleware, paymentController.generateComplaintReport);
 router.get('/admin/refund-report', adminAuthMiddleware, paymentController.generateRefundReport);
+router.get('/admin/report-center-data', adminAuthMiddleware, paymentController.getFinancialReportCenterData);
 
 module.exports = router;

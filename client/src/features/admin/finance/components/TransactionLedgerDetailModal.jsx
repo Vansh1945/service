@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import PriceDisplay from '../../../../components/PriceDisplay';
 import * as TransactionService from '../../../../services/TransactionService';
+import { normalizeStatus } from '../../../../utils/status';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility helpers
@@ -592,7 +593,7 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
             <InfoRow label="Payment Status" badge={
               <StatusChip
                 label={d.booking.paymentStatus || '—'}
-                type={['paid', 'escrow_hold'].includes(d.booking.paymentStatus) ? 'success' : 'warning'}
+                type={['paid', 'escrowhold'].includes(normalizeStatus(d.booking.paymentStatus)) ? 'success' : 'warning'}
               />
             } />
             <InfoRow label="Total Amount" badge={<span className="font-black text-slate-800"><PriceDisplay amount={d.booking.totalAmount || 0} /></span>} />

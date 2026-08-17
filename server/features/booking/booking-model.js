@@ -405,6 +405,14 @@ const bookingSchema = new Schema({
     default: 0,
     min: [0, 'Discount cannot be negative']
   },
+  referralDiscountAmount: {
+    type: Number,
+    default: 0
+  },
+  providerApplicableDiscount: {
+    type: Number,
+    default: 0
+  },
   subtotal: {
     type: Number,
     required: true,
@@ -1120,6 +1128,9 @@ bookingSchema.methods.recalculateFinancials = async function() {
     const referralDiscountAmount = isReferralDiscount ? (this.totalDiscount || 0) : 0;
     const providerApplicableDiscount = Math.max(0, (this.totalDiscount || 0) - referralDiscountAmount);
     const baseForCommission = Math.max(0, this.subtotal - providerApplicableDiscount);
+
+    this.referralDiscountAmount = referralDiscountAmount;
+    this.providerApplicableDiscount = providerApplicableDiscount;
 
     // Load settings for surge splits
     const { SystemConfig } = require('../system-setting/system-setting-model');

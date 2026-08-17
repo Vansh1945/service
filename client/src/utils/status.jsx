@@ -24,6 +24,21 @@ export const formatStatus = (status) => {
   return titleCase(status);
 };
 
+/**
+ * Normalize status string by lowercasing and stripping non-alphanumeric characters.
+ * Does NOT alter financial or backend state meanings.
+ * @param {*} status 
+ * @returns {string}
+ */
+export function normalizeStatus(status) {
+  if (status == null) return '';
+  return String(status)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+
 /* =========================================================
    STATUS COLOR & BADGE CONFIGURATIONS
    ========================================================= */

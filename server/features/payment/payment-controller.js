@@ -244,6 +244,15 @@ const reconcileStuckPayouts = async (req, res, next) => {
 };
 
 
+const getFinancialReportCenterData = async (req, res, next) => {
+  try {
+    await PaymentService.getFinancialReportCenterData(req, res, next);
+  } catch (error) {
+    global.logger.error(`[paymentController.getFinancialReportCenterData] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   handleWebhook,
   getEarningsSummary,
@@ -270,5 +279,7 @@ module.exports = {
   retryFailedPayout,
   holdPayout,
   releasePayout,
-  reconcileStuckPayouts
+  reconcileStuckPayouts,
+  getFinancialReportCenterData
 };
+

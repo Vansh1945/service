@@ -4,6 +4,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../context/auth';
 import { getProviderReferralDetails } from '../../../services/referralApi';
 import LoadingSpinner from '../../../components/ui/Loader';
+import { normalizeStatus } from '../../../utils/status';
 
 const ReferProviders = () => {
   const [details, setDetails] = useState(null);
@@ -290,11 +291,11 @@ const ReferProviders = () => {
                           <td className="py-3.5 px-4">
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                               isExpired ? 'bg-danger/10 text-danger' :
-                              ref.status === 'fraud_flagged' ? 'bg-danger/10 text-danger' :
+                              normalizeStatus(ref.status) === 'fraudflagged' ? 'bg-danger/10 text-danger' :
                               ref.status === 'released' ? 'bg-success/10 text-success' :
                               'bg-warning/10 text-warning'
                             }`}>
-                              {isExpired ? 'Expired' : ref.status === 'fraud_flagged' ? 'Held' : ref.status === 'released' ? 'Active' : 'Pending'}
+                              {isExpired ? 'Expired' : normalizeStatus(ref.status) === 'fraudflagged' ? 'Held' : ref.status === 'released' ? 'Active' : 'Pending'}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right font-black text-neutral-850">₹{unlockedEarnings}</td>
@@ -323,11 +324,11 @@ const ReferProviders = () => {
                             <h4 className="text-xs font-bold text-neutral-800 truncate">{ref.referredName}</h4>
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                               isExpired ? 'bg-danger/10 text-danger' :
-                              ref.status === 'fraud_flagged' ? 'bg-danger/10 text-danger' :
+                              normalizeStatus(ref.status) === 'fraudflagged' ? 'bg-danger/10 text-danger' :
                               ref.status === 'released' ? 'bg-success/10 text-success' :
                               'bg-warning/10 text-warning'
                             }`}>
-                              {isExpired ? 'Expired' : ref.status === 'fraud_flagged' ? 'Held' : ref.status === 'released' ? 'Active' : 'Pending'}
+                              {isExpired ? 'Expired' : normalizeStatus(ref.status) === 'fraudflagged' ? 'Held' : ref.status === 'released' ? 'Active' : 'Pending'}
                             </span>
                           </div>
                           <div className="flex justify-between items-center mt-1 text-[10px] text-neutral-500 font-medium">

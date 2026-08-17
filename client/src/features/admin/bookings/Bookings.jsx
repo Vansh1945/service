@@ -6,7 +6,7 @@ import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import useDebounce from '../../../hooks/useDebounce';
-import { getStatusColor } from '../../../utils/status';
+import { getStatusColor, normalizeStatus } from '../../../utils/status';
 import axiosInstance from '../../../api/axiosInstance';
 import AdminSearchBar from '../../../components/AdminSearchBar';
 
@@ -1901,8 +1901,8 @@ const AdminBookingsView = () => {
                                             <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-[10px] text-gray-500">Payment Status</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrow_hold'].includes(pay.status) ? 'bg-green-100 text-green-700' : pay.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                        {pay.status === 'escrow_hold' ? 'Escrow Hold' : (pay.status || '—')}
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrowhold'].includes(normalizeStatus(pay.status)) ? 'bg-green-100 text-green-700' : normalizeStatus(pay.status) === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {['escrowhold', 'escrow_hold'].includes(normalizeStatus(pay.status)) ? 'Escrow Hold' : (pay.status || '—')}
                                                     </span>
                                                 </div>
                                                 {selectedBooking.refundData?.decision && (
@@ -1928,7 +1928,7 @@ const AdminBookingsView = () => {
                                                         </button>
                                                     </div>
                                                 ) : null}
-                                                {!pay.details?.transactionId && ['paid', 'escrow_hold'].includes(bk.paymentStatus) && (
+                                                {!pay.details?.transactionId && ['paid', 'escrowhold'].includes(normalizeStatus(bk.paymentStatus)) && (
                                                     <div className="flex justify-end pt-0.5">
                                                         <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
                                                             View Transaction <ExternalLink className="w-2.5 h-2.5" />

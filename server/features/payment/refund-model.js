@@ -59,6 +59,8 @@ const refundSchema = new mongoose.Schema(
     },
     gatewayRefundId: {
       type: String,
+      unique: true,
+      sparse: true,
     },
     walletTransactionId: {
       type: String,

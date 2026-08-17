@@ -5,6 +5,7 @@ import { getCustomerReferralDetails } from '../../../services/referralApi';
 import { getProfile as getCustomerProfile } from '../../../services/CustomerService';
 import LoadingSpinner from '../../../components/ui/Loader';
 import { useAuth } from '../../../context/auth';
+import { normalizeStatus } from '../../../utils/status';
 
 const ReferEarn = () => {
   const [details, setDetails] = useState(null);
@@ -272,10 +273,10 @@ const ReferEarn = () => {
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                             ref.isCompleted ? 'bg-success/10 text-success' :
                             ref.isExpired ? 'bg-danger/10 text-danger' :
-                            ref.status === 'fraud_flagged' ? 'bg-danger/10 text-danger' :
+                            normalizeStatus(ref.status) === 'fraudflagged' ? 'bg-danger/10 text-danger' :
                             'bg-warning/10 text-warning'
                           }`}>
-                            {ref.isCompleted ? 'Credited' : ref.isExpired ? 'Expired' : ref.status === 'fraud_flagged' ? 'Held' : 'Pending'}
+                            {ref.isCompleted ? 'Credited' : ref.isExpired ? 'Expired' : normalizeStatus(ref.status) === 'fraudflagged' ? 'Held' : 'Pending'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right font-black text-neutral-850">{ref.displayAmount}</td>
@@ -299,10 +300,10 @@ const ReferEarn = () => {
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                               ref.isCompleted ? 'bg-success/10 text-success' :
                               ref.isExpired ? 'bg-danger/10 text-danger' :
-                              ref.status === 'fraud_flagged' ? 'bg-danger/10 text-danger' :
+                              normalizeStatus(ref.status) === 'fraudflagged' ? 'bg-danger/10 text-danger' :
                               'bg-warning/10 text-warning'
                             }`}>
-                              {ref.isCompleted ? 'Credited' : ref.isExpired ? 'Expired' : ref.status === 'fraud_flagged' ? 'Held' : 'Pending'}
+                              {ref.isCompleted ? 'Credited' : ref.isExpired ? 'Expired' : normalizeStatus(ref.status) === 'fraudflagged' ? 'Held' : 'Pending'}
                             </span>
                           </div>
                           <div className="flex justify-between items-center mt-1 text-[10px] text-neutral-500 font-medium">

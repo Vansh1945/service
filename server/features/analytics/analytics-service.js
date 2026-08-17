@@ -21,28 +21,71 @@ const refreshAnalytics = async () => {
             totalProviders,
             complaintCounts,
             revenueStats,
-            adminEarningsStats
+            adminEarningsStats,
+            paymentMethodStats,
+            withdrawalStats,
+            heldPayoutsStats
         ] = await Promise.all([
             Booking.countDocuments(),
             Booking.countDocuments({ createdAt: { $gte: today } }),
-            // PRODUCTION FIX
             Provider.countDocuments({ approved: false, isDeleted: false }),
             User.countDocuments({ role: 'customer' }),
             Provider.countDocuments({ approved: true, isDeleted: false }),
             Complaint.aggregate([
                 { $group: { _id: "$status", count: { $sum: 1 } } }
             ]),
-            // Existing revenueStats aggregation
             Booking.aggregate([
-                { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-                { $group: { _id: null, monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } } } }
+                { $match: { status: 'completed' } },
+                {
+                    $group: {
+                        _id: null,
+                        grossRevenue: { $sum: "$totalAmount" },
+                        monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
+                        netRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
+                        netEarnings: { $sum: "$commissionAmount" },
+                        platformFeeRevenue: { $sum: { $ifNull: ["$platformFee", 0] } },
+                        providerEarnings: { $sum: { $ifNull: ["$providerEarnings", 0] } },
+                        refundAmount: { $sum: { $ifNull: ["$cancellationProgress.refundAmount", 0] } },
+                        visitingRevenue: { $sum: { $ifNull: ["$visitingCharge", 0] } },
+                        rainRevenue: { $sum: { $ifNull: ["$rainCharge", 0] } },
+                        trafficRevenue: { $sum: { $ifNull: ["$trafficCharge", 0] } },
+                        nightRevenue: { $sum: { $ifNull: ["$nightCharge", 0] } },
+                        demandRevenue: { $sum: { $ifNull: ["$demandSurge", 0] } },
+                        customRevenue: { $sum: { $ifNull: ["$customCharges", 0] } },
+                        providerSurgeShare: { $sum: { $ifNull: ["$providerSurgeShare", 0] } },
+                        companySurgeShare: { $sum: { $ifNull: ["$companySurgeShare", 0] } }
+                    }
+                }
             ]),
-            // New admin earnings aggregation (commission + companySurgeShare)
             Booking.aggregate([
                 { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
                 { $group: { _id: null, totalAdminEarnings: { $sum: { $add: ["$commissionAmount", { $ifNull: ["$companySurgeShare", 0] }] } } } }
+            ]),
+            Transaction.aggregate([
+                { $match: { paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
+                { $group: { _id: '$paymentMethod', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
+                { $project: { paymentMethod: '$_id', count: 1, totalAmount: 1, _id: 0 } }
+            ]),
+            Transaction.aggregate([
+                { $match: { type: 'withdrawal', paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
+                { $group: { _id: null, totalWithdrawals: { $sum: '$amount' }, withdrawalCount: { $sum: 1 } } }
+            ]),
+            ProviderEarning.aggregate([
+                { $match: { status: 'held' } },
+                { $group: { _id: null, totalHeld: { $sum: '$netAmount' }, count: { $sum: 1 } } }
             ])
         ]);
+
+        const rStats = revenueStats[0] || {};
+        const visitingRevenue = rStats.visitingRevenue || 0;
+        const rainRevenue = rStats.rainRevenue || 0;
+        const trafficRevenue = rStats.trafficRevenue || 0;
+        const nightRevenue = rStats.nightRevenue || 0;
+        const demandRevenue = rStats.demandRevenue || 0;
+        const customRevenue = rStats.customRevenue || 0;
+        const platformFeeRevenue = rStats.platformFeeRevenue || 0;
+
+        const surgeRevenue = visitingRevenue + rainRevenue + trafficRevenue + nightRevenue + demandRevenue + customRevenue + platformFeeRevenue;
 
         const analytics = {
             totalBookings,
@@ -50,11 +93,37 @@ const refreshAnalytics = async () => {
             pendingProviders,
             totalUsers,
             totalProviders,
+            grossRevenue: rStats.grossRevenue || 0,
+            monthlyRevenue: rStats.monthlyRevenue || 0,
+            totalRevenue: rStats.netRevenue || 0,
+            netRevenue: rStats.netRevenue || 0,
+            netEarnings: rStats.netEarnings || 0,
+            platformFeeRevenue,
+            providerEarnings: rStats.providerEarnings || 0,
+            refundAmount: rStats.refundAmount || 0,
+            surgeRevenue,
+            surgeBreakdown: {
+                visitingRevenue,
+                rainRevenue,
+                trafficRevenue,
+                nightRevenue,
+                demandRevenue,
+                customRevenue,
+                platformFeeRevenue
+            },
+            surgeSplits: {
+                providerSurgeShare: rStats.providerSurgeShare || 0,
+                companySurgeShare: rStats.companySurgeShare || 0
+            },
+            totalWithdrawals: withdrawalStats[0]?.totalWithdrawals || 0,
+            withdrawalCount: withdrawalStats[0]?.withdrawalCount || 0,
+            totalHeldPayouts: heldPayoutsStats[0]?.totalHeld || 0,
+            heldPayoutsCount: heldPayoutsStats[0]?.count || 0,
+            paymentMethods: paymentMethodStats,
             complaintCounts: complaintCounts.reduce((acc, curr) => {
                 acc[curr._id] = curr.count;
                 return acc;
             }, {}),
-            monthlyRevenue: revenueStats[0]?.monthlyRevenue || 0,
             totalAdminEarnings: adminEarningsStats[0]?.totalAdminEarnings || 0,
             lastRefreshed: new Date()
         };

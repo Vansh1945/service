@@ -172,7 +172,7 @@ class RefundEngineService {
       customerChoice = customerChoice === 'none' ? 'wallet' : customerChoice;
       walletRefundAmount = calculatedRefundAmount;
       gatewayRefundAmount = 0;
-    } 
+    }
     // Enforce Admin Restriction: Wallet Only Policy
     else if (settings.allowedDestinations === 'wallet_only' || settings.refundToWalletOnly || !settings.allowOriginalPaymentRefund) {
       destination = 'wallet';
@@ -236,8 +236,23 @@ class RefundEngineService {
 
     // 6. Extract Original Payment Identifiers
     const originalPaymentMethod = booking.paymentMethod || 'online';
-    const razorpayPaymentId = booking.razorpayPaymentId || booking.paymentDetails?.razorpay_payment_id || null;
-    const razorpayOrderId = booking.razorpayOrderId || booking.paymentDetails?.razorpay_order_id || null;
+    let razorpayPaymentId = booking.razorpayPaymentId || booking.paymentDetails?.razorpay_payment_id || null;
+    let razorpayOrderId = booking.razorpayOrderId || booking.paymentDetails?.razorpay_order_id || null;
+
+    if ((!razorpayPaymentId || !razorpayOrderId) && booking._id) {
+      try {
+        const completedTx = await Transaction.findOne({
+          booking: booking._id,
+          paymentStatus: { $in: ['completed', 'paid', 'success'] }
+        });
+        if (completedTx) {
+          razorpayPaymentId = razorpayPaymentId || completedTx.razorpayPaymentId || null;
+          razorpayOrderId = razorpayOrderId || completedTx.razorpayOrderId || null;
+        }
+      } catch (txErr) {
+        console.warn('Transaction lookup fallback error during refund processing:', txErr.message);
+      }
+    }
 
     // 7. Create or Update Refund Document
     let refundDoc = existingPendingRefund;
@@ -347,7 +362,7 @@ class RefundEngineService {
       // A. Process Wallet Credit Portion
       if (refundDoc.walletRefundAmount > 0 || refundDoc.actualRefundDestination === 'wallet' || refundDoc.refundDestination === 'wallet') {
         const walletCreditAmt = refundDoc.walletRefundAmount || (refundDoc.actualRefundDestination === 'wallet' ? totalRefund : 0);
-        
+
         if (walletCreditAmt > 0) {
           const user = await User.findById(customerId);
           if (!user) {
@@ -428,7 +443,7 @@ class RefundEngineService {
             refundDoc.addAuditLog('GATEWAY_REFUND_COMPLETED', refundDoc.approvedBy || customerId, 'gateway', { razorpayRefundId: razorpayResponse.id, gatewayAmt, response: razorpayResponse }, ip);
           } catch (rzpErr) {
             console.error('Razorpay API refund error:', rzpErr);
-            
+
             // Rule 5: Fallback handling
             if (settings.allowWalletFallback !== false) {
               console.warn('Gateway error fallback: Crediting remaining refund portion to Customer Wallet (Rule 5)');
@@ -488,16 +503,42 @@ class RefundEngineService {
       // 11. Re-align Provider Earnings & Escrow
       await this.realignProviderEarningsAndEscrow(booking, refundDoc);
 
-      // 12. Send Customer Notifications
+      // 12. Send Customer Notifications & Email (Resolves Admin Rule-Based Templates)
       const customer = await User.findById(customerId);
       if (customer) {
+        const refundContext = {
+          bookingId: booking.bookingId || booking._id?.toString(),
+          amount: totalRefund,
+          refundId: refundDoc.refundId,
+          walletRefundAmount: refundDoc.walletRefundAmount || 0,
+          gatewayRefundAmount: refundDoc.gatewayRefundAmount || 0,
+          refundDestination: refundDoc.walletRefundAmount > 0 && refundDoc.gatewayRefundAmount > 0
+            ? 'Wallet & Gateway'
+            : (refundDoc.walletRefundAmount > 0 ? 'Customer Wallet' : 'Original Payment Method'),
+          customerName: customer.name || 'Customer'
+        };
+
         notificationHelper.sendNotification({
           userId: customerId,
+          role: 'customer',
           title: 'Refund Processed',
-          message: `Your refund of ₹${totalRefund} for Booking #${booking.bookingId || booking._id} has been processed (${refundDoc.walletRefundAmount > 0 ? `₹${refundDoc.walletRefundAmount} Wallet` : ''}${refundDoc.gatewayRefundAmount > 0 ? ` + ₹${refundDoc.gatewayRefundAmount} Gateway` : ''}).`,
+          message: refundContext,
           type: 'refund_completed',
+          eventId: 'refund_completed',
+          idempotencyKey: `refund_completed:${customerId}:${refundDoc._id}`,
           metadata: { refundId: refundDoc.refundId, bookingId: booking._id, amount: totalRefund },
         }).catch(err => console.error('Customer notification error:', err));
+
+        if (customer.email) {
+          try {
+            const { sendMail } = require('../../shared/utils/sendmail');
+            sendMail({
+              to: customer.email,
+              templateType: 'refundCompleted',
+              variables: refundContext
+            }).catch(emailErr => console.error('Customer refund email dispatch error:', emailErr));
+          } catch (mErr) { }
+        }
       }
 
       return {
@@ -537,18 +578,107 @@ class RefundEngineService {
       if (!booking.provider) return;
 
       const ProviderEarning = mongoose.models.ProviderEarning;
+      const Transaction = mongoose.models.Transaction;
+      const Provider = mongoose.models.Provider;
+
       if (ProviderEarning) {
         const earning = await ProviderEarning.findOne({ booking: booking._id });
-        if (earning && ['held', 'available', 'underreview', 'pendingrelease'].includes(earning.status)) {
+        if (earning) {
+          const originalStatus = earning.status;
           earning.status = 'cancelled';
           earning.cancelledAt = new Date();
           earning.cancellationReason = `Customer refund processed (${refundDoc.refundId})`;
           await earning.save();
-          console.log(`Cancelled provider earning ${earning._id} due to refund ${refundDoc.refundId}`);
+          console.log(`Cancelled provider earning ${earning._id} (original status: ${originalStatus}) due to refund ${refundDoc.refundId}`);
 
-          // Sync provider wallet balance immediately to reflect cancelled earning
+          const providerId = booking.provider._id || booking.provider;
+
+          if (['held', 'pendingrelease', 'underreview'].includes(originalStatus)) {
+            // Provider money was never released to available balance. No wallet debit needed.
+            console.log(`[RefundRecovery] Earning was in ${originalStatus} status for booking ${booking._id}. Zero wallet debit needed.`);
+          } else if (originalStatus === 'available') {
+            // Released earnings: recover remaining unrecovered netAmount
+            const previousRecoveries = Transaction ? await Transaction.find({
+              booking: booking._id,
+              type: 'refundrecovery'
+            }) : [];
+            const alreadyRecovered = previousRecoveries.reduce((sum, t) => sum + (t.amount || 0), 0);
+            const remainingRecoverableExposure = Math.max(0, (earning.netAmount || 0) - alreadyRecovered);
+
+            if (remainingRecoverableExposure > 0 && Transaction && Provider) {
+              const tx = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                provider: providerId,
+                amount: remainingRecoverableExposure,
+                type: 'refundrecovery',
+                ledgerType: 'adjustment',
+                entryType: 'debit',
+                paymentStatus: 'completed',
+                description: `Refund recovery (available status) for Booking #${booking.bookingId || booking._id}`
+              });
+              await tx.save();
+            }
+          } else if (originalStatus === 'paid') {
+            // CASH booking: customer paid provider in cash.
+            const existingDeduction = Transaction ? await Transaction.findOne({
+              booking: booking._id,
+              type: 'commissiondeduction'
+            }) : null;
+            const previousRecoveries = Transaction ? await Transaction.find({
+              booking: booking._id,
+              type: 'refundrecovery'
+            }) : [];
+            const alreadyRecovered = previousRecoveries.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+            const cashCollectedByProvider = booking.totalAmount || 0;
+            const cashCommissionPaidByProvider = existingDeduction ? existingDeduction.amount : 0;
+            const netCashKeptByProvider = Math.max(0, cashCollectedByProvider - cashCommissionPaidByProvider);
+
+            const remainingRecoverableExposure = Math.max(0, netCashKeptByProvider - alreadyRecovered);
+
+            if (remainingRecoverableExposure > 0 && Transaction && Provider) {
+              const tx = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                provider: providerId,
+                amount: remainingRecoverableExposure,
+                type: 'refundrecovery',
+                ledgerType: 'adjustment',
+                entryType: 'debit',
+                paymentStatus: 'completed',
+                description: `Refund recovery (cash/paid status) for Booking #${booking.bookingId || booking._id}`
+              });
+              await tx.save();
+            }
+          } else if (originalStatus === 'withdrawn') {
+            // Withdrawn earnings: record remaining recovery exposure using refundrecovery ledger
+            const previousRecoveries = Transaction ? await Transaction.find({
+              booking: booking._id,
+              type: 'refundrecovery'
+            }) : [];
+            const alreadyRecovered = previousRecoveries.reduce((sum, t) => sum + (t.amount || 0), 0);
+            const remainingRecoverableExposure = Math.max(0, (earning.netAmount || 0) - alreadyRecovered);
+
+            if (remainingRecoverableExposure > 0 && Transaction && Provider) {
+              const tx = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                provider: providerId,
+                amount: remainingRecoverableExposure,
+                type: 'refundrecovery',
+                ledgerType: 'adjustment',
+                entryType: 'debit',
+                paymentStatus: 'completed',
+                description: `Refund recovery (withdrawn status) for Booking #${booking.bookingId || booking._id}`
+              });
+              await tx.save();
+            }
+          }
+
+          // Sync provider wallet balance immediately to reflect cancelled earning and recovery
           const PaymentService = require('./payment-service');
-          await PaymentService.syncProviderEarnings(booking.provider._id || booking.provider);
+          await PaymentService.syncProviderEarnings(providerId);
         }
       }
     } catch (err) {

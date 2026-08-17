@@ -1669,14 +1669,30 @@ class AdminService {
                     data: {
                         overview: {
                             totalUsers: precomputed.totalUsers,
-                            totalProviders: precomputed.totalProviders || 0, // Fallback if not in precomputed
+                            totalProviders: precomputed.totalProviders || 0,
                             totalBookings: precomputed.totalBookings,
                             todayBookings: precomputed.todayBookings,
-                            monthlyRevenue: precomputed.monthlyRevenue,
+                            pendingProviders: precomputed.pendingProviders || 0,
+                            grossRevenue: precomputed.grossRevenue || 0,
+                            monthlyRevenue: precomputed.monthlyRevenue || 0,
+                            totalRevenue: precomputed.totalRevenue || 0,
+                            netRevenue: precomputed.netRevenue || 0,
+                            netEarnings: precomputed.netEarnings || 0,
+                            platformFeeRevenue: precomputed.platformFeeRevenue || 0,
+                            providerEarnings: precomputed.providerEarnings || 0,
+                            refundAmount: precomputed.refundAmount || 0,
+                            surgeRevenue: precomputed.surgeRevenue || 0,
+                            surgeBreakdown: precomputed.surgeBreakdown || {},
+                            surgeSplits: precomputed.surgeSplits || {},
+                            totalWithdrawals: precomputed.totalWithdrawals || 0,
+                            withdrawalCount: precomputed.withdrawalCount || 0,
+                            totalHeldPayouts: precomputed.totalHeldPayouts || 0,
+                            heldPayoutsCount: precomputed.heldPayoutsCount || 0,
                             totalAdminEarnings: precomputed.totalAdminEarnings || 0,
-                            complaintCounts: precomputed.complaintCounts,
+                            complaintCounts: precomputed.complaintCounts || {},
                             lastRefreshed: precomputed.lastRefreshed
                         },
+                        paymentMethods: precomputed.paymentMethods || [],
                         isPrecomputed: true
                     }
                 });
@@ -1747,12 +1763,12 @@ class AdminService {
                     }
                 ]),
                 Transaction.aggregate([
-                    { $match: { paymentStatus: 'completed' } },
+                    { $match: { paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
                     { $group: { _id: '$paymentMethod', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
                     { $project: { paymentMethod: '$_id', count: 1, totalAmount: 1, _id: 0 } }
                 ]),
                 Transaction.aggregate([
-                    { $match: { type: 'withdrawal', paymentStatus: 'completed' } },
+                    { $match: { type: 'withdrawal', paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
                     { $group: { _id: null, totalWithdrawals: { $sum: '$amount' }, withdrawalCount: { $sum: 1 } } }
                 ]),
                 Booking.aggregate([
@@ -1766,7 +1782,7 @@ class AdminService {
                 Booking.countDocuments({ disputeRaised: true }),
                 Booking.countDocuments({ adminRefundDecision: { $in: ['approved', 'partial'] } }),
                 Transaction.aggregate([
-                    { $match: { type: 'refund', paymentMethod: 'wallet', paymentStatus: 'completed' } },
+                    { $match: { type: 'refund', paymentMethod: 'wallet', paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
                     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
                 ]),
                 Booking.countDocuments({ $or: [{ paymentStatus: 'refunded' }, { refundProcessed: true }] }),

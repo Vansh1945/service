@@ -163,6 +163,25 @@ const DEFAULT_EMAIL_TEMPLATES = {
 </div>`,
     isActive: true,
     allowedVariables: ["name", "bookingId", "customerName", "cancellationReason", "complaintId"]
+  },
+  refundCompleted: {
+    subject: "Refund Processed for Booking #{{bookingId}}",
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+    <h2 style="color: #0d9488; text-align: center;">Refund Processed</h2>
+    <p>Dear {{customerName}},</p>
+    <p>Your refund for Booking <strong>#{{bookingId}}</strong> has been successfully processed.</p>
+    <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f3f4f6;">
+      <p style="margin: 4px 0;"><strong>Refund ID:</strong> {{refundId}}</p>
+      <p style="margin: 4px 0;"><strong>Total Refund Amount:</strong> ₹{{amount}}</p>
+      {{#if walletRefundAmount}}<p style="margin: 4px 0;"><strong>Wallet Credit:</strong> ₹{{walletRefundAmount}}</p>{{/if}}
+      {{#if gatewayRefundAmount}}<p style="margin: 4px 0;"><strong>Gateway Refund:</strong> ₹{{gatewayRefundAmount}}</p>{{/if}}
+      <p style="margin: 4px 0;"><strong>Refund Destination:</strong> {{refundDestination}}</p>
+    </div>
+    <p style="color: #555;">If credited to your Customer Wallet, the funds are available immediately. If refunded to your original payment method, processing times vary between 2–10 business days depending on your bank.</p>
+    <p>Regards,<br/><strong>Support Team</strong></p>
+</div>`,
+    isActive: true,
+    allowedVariables: ["customerName", "bookingId", "refundId", "amount", "walletRefundAmount", "gatewayRefundAmount", "refundDestination"]
   }
 };
 

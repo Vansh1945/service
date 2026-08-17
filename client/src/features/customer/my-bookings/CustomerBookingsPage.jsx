@@ -20,6 +20,7 @@ import ChatModal from '../../../components/chat/ChatModal';
 import useDebounce from '../../../hooks/useDebounce';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
 import CustomerCancelModal from './components/CustomerCancelModal';
+import { normalizeStatus } from '../../../utils/status';
 
 
 
@@ -57,7 +58,8 @@ const getStatusCfg = getBookingStatusCfg;
 
 
 const needsPayment = (b) => {
-  const isPaid = ['paid', 'escrow_hold'].includes(b.paymentStatus);
+  const pStatus = normalizeStatus(b.paymentStatus);
+  const isPaid = ['paid', 'escrowhold'].includes(pStatus);
   if (isPaid || ['cancelled', 'workstarted', 'completed', 'rejected', 'noshow'].includes(b.status)) return false;
   return !isPaid;
 };
@@ -194,7 +196,8 @@ const PaymentDetails = ({ booking }) => {
     refundAmount > 0 && { label: 'Refund Amount', val: refundAmount, type: 'purple-bold' },
   ].filter(Boolean);
 
-  const isPaid = ['paid', 'escrow_hold'].includes(booking.paymentStatus);
+  const pStatus = normalizeStatus(booking.paymentStatus);
+  const isPaid = ['paid', 'escrowhold'].includes(pStatus);
 
   return (
     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
@@ -480,7 +483,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                 </div>
               )}
 
-              {(booking.paymentStatus === 'refunded' || booking.cancellationProgress?.refundAmount > 0 || booking.paymentStatus === 'refund_pending' || booking.refundStatus === 'pending') && (
+              {(normalizeStatus(booking.paymentStatus) === 'refunded' || booking.cancellationProgress?.refundAmount > 0 || normalizeStatus(booking.paymentStatus) === 'refundpending' || booking.refundStatus === 'pending') && (
                 <div className="bg-purple-50/80 rounded-xl p-4 border border-purple-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -777,17 +780,17 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-secondary"><PriceDisplay amount={booking.totalAmount || 0} type="large-bold-secondary" /></p>
-                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${['paid', 'escrow_hold'].includes(booking.paymentStatus)
+                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${['paid', 'escrowhold'].includes(normalizeStatus(booking.paymentStatus))
                   ? 'bg-green-100 text-green-600'
-                  : booking.paymentStatus === 'refunded'
+                  : normalizeStatus(booking.paymentStatus) === 'refunded'
                     ? 'bg-purple-100 text-purple-600'
                     : (booking.paymentMethod === 'cash'
                       ? 'bg-yellow-100 text-yellow-600'
                       : 'bg-red-50 text-accent')
                   }`}>
-                  {['paid', 'escrow_hold'].includes(booking.paymentStatus)
+                  {['paid', 'escrowhold'].includes(normalizeStatus(booking.paymentStatus))
                     ? `✓ Paid`
-                    : booking.paymentStatus === 'refunded'
+                    : normalizeStatus(booking.paymentStatus) === 'refunded'
                       ? '✓ Refunded'
                       : (booking.paymentMethod === 'cash'
                         ? 'Pay After Service'

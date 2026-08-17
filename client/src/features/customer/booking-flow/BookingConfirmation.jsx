@@ -18,6 +18,7 @@ import ErrorState from '../../../components/ui/Error';
 import { formatDate, formatTime } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
 import PwaInstallBanner from '../../../components/PwaInstallBanner';
+import { normalizeStatus } from '../../../utils/status';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -221,7 +222,8 @@ const BookingConfirmation = () => {
   const getBookingStatusInfo = () => {
     if (!bookingDetails) return { message: 'Loading...', color: 'text-gray-500', canPay: false };
 
-    const isPaid = ['paid', 'escrow_hold'].includes(bookingDetails.paymentStatus);
+    const pStatus = normalizeStatus(bookingDetails.paymentStatus);
+    const isPaid = ['paid', 'escrowhold'].includes(pStatus);
     const currentStatus = (bookingDetails.status || 'Pending').toLowerCase().replace(/[^a-z]/g, '');
 
     // BOOKING STATUS STATE MACHINE UPGRADE

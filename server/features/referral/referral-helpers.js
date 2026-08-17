@@ -303,7 +303,19 @@ const releaseReferralReward = async (referral, referrer, rewardAmount, booking, 
       return;
     }
   } else {
-    // For customer referrals
+    // For customer referrals - check if reward was already released for this booking
+    if (booking?._id) {
+      const existingCustomerLog = await ReferralRewardLog.findOne({
+        referral: referral._id,
+        rewardType: 'customerreferral',
+        'details.bookingId': booking._id
+      }).session(session);
+      if (existingCustomerLog) {
+        console.log(`[ReferralReward] Customer referral reward already released for booking ${booking._id}`);
+        return;
+      }
+    }
+
     rewardLog = new ReferralRewardLog({
       referral: referral._id,
       rewardType: 'customerreferral',

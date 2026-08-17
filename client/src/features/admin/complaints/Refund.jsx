@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Pagination from '../../../components/ui/Pagination';
 import { formatDateTime } from '../../../utils/format';
+import { normalizeStatus } from '../../../utils/status';
 
 // ── Dropdown Configs ────────────────────────
 const refundStatusOptions = [
@@ -299,7 +300,7 @@ const DetailedInspectionModal = ({ data, isLedgerItem, onClose, onActionSuccess,
   const provider = isLedgerItem ? (data.providerId || booking.provider || {}) : (booking.provider || {});
   const totalAmount = booking.totalAmount || data.requestedAmount || data.refundAmount || 0;
   const cancellationReason = data.cancellationReason || data.refundReason || booking.cancellationProgress?.reason || booking.adminRemark || 'Booking Cancellation / Dispute';
-  const isPending = data.refundStatus === 'pending' || booking.paymentStatus === 'refund_pending';
+  const isPending = data.refundStatus === 'pending' || normalizeStatus(booking.paymentStatus) === 'refundpending';
 
   const handleApproveAction = async () => {
     setSubmitting(true);

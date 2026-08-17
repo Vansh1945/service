@@ -376,16 +376,17 @@ const sendMessage = async (req, res) => {
         const otherRole = senderRole === 'customer' ? 'provider' : 'customer';
         const targetUrl = otherRole === 'customer' ? `/messages/${room._id}` : `/provider/messages/${room._id}`;
 
-        await sendNotification(
-          otherPartyId,
-          otherRole,
-          'chat_message',
-          `${senderName}: ${newMessage.content || '[File/Image]'}`,
-          'booking',
-          room.bookingId || null,
-          targetUrl,
-          'chat_message'
-        );
+        await sendNotification({
+          userId: otherPartyId,
+          role: otherRole,
+          title: 'chat_message',
+          message: `${senderName}: ${newMessage.content || '[File/Image]'}`,
+          type: 'booking',
+          referenceId: room.bookingId || null,
+          url: targetUrl,
+          eventId: 'chat_message',
+          idempotencyKey: `chat_message:${otherPartyId}:${room._id}:${room.messages[room.messages.length - 1]._id}`
+        });
       } catch (nErr) {
         global.logger.error('Error triggering chat push notification in sendMessage: ' + nErr.message, nErr);
       }
