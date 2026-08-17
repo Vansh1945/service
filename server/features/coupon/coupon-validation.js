@@ -3,9 +3,9 @@ const { objectIdSchema } = require('../../shared/validation/common-validation');
 
 const createCouponSchema = z.object({
   code: z.string().min(3, "Coupon code must be at least 3 characters").max(20, "Coupon code must not exceed 20 characters").toUpperCase(),
-  discountType: z.enum(['percentage', 'flat'], {
-    errorMap: () => ({ message: "Discount type must be either 'percentage' or 'flat'" })
-  }),
+  discountType: z.enum(['percentage', 'percent', 'flat', 'fixed'], {
+    errorMap: () => ({ message: "Discount type must be either 'percent', 'percentage', 'flat', or 'fixed'" })
+  }).transform(val => (val === 'percentage' ? 'percent' : (val === 'fixed' ? 'flat' : val))),
   discountValue: z.union([z.string(), z.number()]).transform((val) => {
     const num = Number(val);
     if (isNaN(num)) throw new Error("Discount value must be a number");
@@ -39,11 +39,11 @@ const createCouponSchema = z.object({
   applicableZones: z.array(z.string()).optional(),
   scope: z.enum(['global', 'zone']).optional(),
   selectedZones: z.array(z.string()).optional()
-});
+}).passthrough();
 
 const updateCouponSchema = z.object({
   code: z.string().min(3).max(20).toUpperCase().optional(),
-  discountType: z.enum(['percentage', 'flat']).optional(),
+  discountType: z.enum(['percentage', 'percent', 'flat', 'fixed']).transform(val => (val === 'percentage' ? 'percent' : (val === 'fixed' ? 'flat' : val))).optional(),
   discountValue: z.union([z.string(), z.number()]).transform((val) => {
     const num = Number(val);
     if (isNaN(num)) throw new Error("Discount value must be a number");

@@ -158,19 +158,19 @@ const AdminLayout = () => {
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Mobile sidebar overlay */}
       <div
-        className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 z-50 lg:hidden transition-opacity duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
       >
         <div
-          className="fixed inset-0 bg-black bg-opacity-25"
+          className="fixed inset-0 bg-black/50"
           onClick={() => setSidebarOpen(false)}
         />
 
         {/* Mobile sidebar */}
-        <div className={`relative flex flex-col w-80 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        <div className={`relative flex flex-col w-80 max-w-[calc(100vw-3rem)] h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}>
           {/* Mobile header */}
-          <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center flex-1 min-w-0 pr-2">
               {logo && (
                 <img
@@ -197,7 +197,7 @@ const AdminLayout = () => {
           </div>
 
           {/* Mobile navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto">
+          <nav className="flex-1 px-4 py-4 space-y-3 overflow-y-auto min-h-0">
             {menuGroups.map((group) => {
               const isCollapsed = collapsedGroups[group.id];
               return (
@@ -241,23 +241,23 @@ const AdminLayout = () => {
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:flex lg:flex-shrink-0">
-        <div className="flex flex-col w-72 bg-white border-r border-gray-200 shadow-sm">
+      <aside className="hidden lg:flex lg:flex-shrink-0">
+        <div className="flex flex-col w-72 h-full bg-white border-r border-gray-200 shadow-xs">
           {/* Desktop header */}
-          <div className="flex items-center px-6 py-6 border-b border-gray-200">
-            <div className="flex items-center">
+          <div className="flex items-center h-16 px-6 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center min-w-0">
               {logo && (
                 <img
                   src={logo}
                   alt={companyName}
-                  className="h-10 w-auto object-contain mr-3"
+                  className="h-9 w-auto object-contain mr-3 flex-shrink-0"
                 />
               )}
-              <div className="flex flex-col">
-                <span className="text-lg font-bold text-secondary leading-tight">
+              <div className="flex flex-col min-w-0">
+                <span className="text-base font-bold text-secondary truncate leading-tight">
                   {companyName}
                 </span>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary truncate">
                   {appName}
                 </span>
               </div>
@@ -265,7 +265,7 @@ const AdminLayout = () => {
           </div>
 
           {/* Desktop navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto">
+          <nav className="flex-1 px-4 py-4 space-y-3 overflow-y-auto min-h-0">
             {menuGroups.map((group) => {
               const isCollapsed = collapsedGroups[group.id];
               return (
@@ -288,13 +288,13 @@ const AdminLayout = () => {
                           <Link
                             key={item.name}
                             to={item.path}
-                            className={`flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 group ${isActive
-                              ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                            className={`flex items-center px-3.5 py-2 text-sm font-medium rounded-xl transition-all duration-200 group ${isActive
+                              ? 'bg-primary text-white shadow-md shadow-primary/20 font-semibold'
                               : 'text-secondary hover:bg-primary/10 hover:text-primary'
                               }`}
                           >
-                            <span className="mr-3">{item.icon}</span>
-                            {item.name}
+                            <span className="mr-3 flex-shrink-0">{item.icon}</span>
+                            <span className="truncate">{item.name}</span>
                           </Link>
                         );
                       })}
@@ -305,15 +305,15 @@ const AdminLayout = () => {
             })}
           </nav>
         </div>
-      </div>
+      </aside>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top navigation bar */}
-        <header className="bg-white border-b border-gray-200 shadow-sm z-20">
-          <div className="flex items-center justify-between px-4 py-4 lg:px-6">
+        <header className="bg-white border-b border-gray-200 shadow-xs z-30 flex-shrink-0 h-16 flex items-center px-4 lg:px-6">
+          <div className="flex items-center justify-between w-full gap-4">
             {/* Left side - Mobile menu button & Search bar */}
-            <div className="flex items-center flex-1">
+            <div className="flex items-center flex-1 min-w-0 gap-3">
               <button
                 type="button"
                 className="p-2 rounded-lg text-secondary lg:hidden hover:bg-primary/10 hover:text-primary transition-colors flex-shrink-0"
@@ -323,13 +323,13 @@ const AdminLayout = () => {
               </button>
 
               {/* Page title on mobile */}
-              <h1 className="ml-3 text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter lg:hidden flex-shrink-0">
+              <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter lg:hidden truncate flex-shrink-0">
                 {menuGroups.flatMap(g => g.items).find(item => item.path === location.pathname)?.name || 'Dashboard'}
               </h1>
 
               {/* Desktop Global Search Bar & Filters Button */}
-              <div className="hidden lg:flex items-center flex-1 max-w-2xl ml-6 gap-3">
-                <div className="flex-1">
+              <div className="hidden lg:flex items-center flex-1 max-w-xl gap-3">
+                <div className="flex-1 min-w-0">
                   <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search customers, providers, bookings, payments..." />
                 </div>
                 {hasFilterConfig && (
@@ -337,7 +337,7 @@ const AdminLayout = () => {
                     type="button"
                     onClick={() => setShowGlobalFilterBar(!showGlobalFilterBar)}
                     title={showGlobalFilterBar ? "Hide Global Filters" : "Show Global Filters"}
-                    className={`flex items-center gap-2 px-3 py-2.2 rounded-lg border text-xs font-bold transition-all flex-shrink-0 ${showGlobalFilterBar
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-all flex-shrink-0 ${showGlobalFilterBar
                       ? 'bg-primary text-white border-primary shadow-xs hover:bg-teal-700'
                       : 'bg-white border-gray-250 text-gray-600 hover:bg-gray-50 hover:border-gray-350 hover:text-secondary'
                       }`}
@@ -351,49 +351,48 @@ const AdminLayout = () => {
 
             {/* Right side - Actions and profile */}
             <div className="flex items-center space-x-3 flex-shrink-0">
-
               {/* Notifications */}
               <NotificationBell />
 
               {/* Profile dropdown */}
-              <div className="relative z-30">
+              <div className="relative">
                 {profileDropdownOpen && (
-                  <div className="fixed inset-0 z-10" onClick={() => setProfileDropdownOpen(false)} />
+                  <div className="fixed inset-0 z-30" onClick={() => setProfileDropdownOpen(false)} />
                 )}
                 <button
-                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-primary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 relative z-20"
+                  className="flex items-center space-x-2.5 p-1.5 rounded-lg hover:bg-primary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 relative z-40"
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                 >
                   {user?.profilePicUrl ? (
                     <img
                       src={user.profilePicUrl}
                       alt="Profile"
-                      className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20"
+                      className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white font-semibold text-sm">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                       {getUserInitials()}
                     </div>
                   )}
-                  <div className="hidden md:block text-left">
-                    <p className="text-sm font-medium text-secondary font-inter">
+                  <div className="hidden md:block text-left min-w-0 max-w-[150px]">
+                    <p className="text-sm font-medium text-secondary font-inter truncate leading-tight">
                       {user?.name || 'Admin'}
                     </p>
-                    <p className="text-xs text-gray-500 font-inter">
+                    <p className="text-[11px] text-gray-500 font-inter truncate leading-tight">
                       {user?.email || 'admin@example.com'}
                     </p>
                   </div>
                   <FiChevronDown
-                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${profileDropdownOpen ? 'transform rotate-180' : ''
+                    className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform duration-200 ${profileDropdownOpen ? 'transform rotate-180' : ''
                       }`}
                   />
                 </button>
 
                 {/* Dropdown menu */}
                 {profileDropdownOpen && (
-                  <div className="absolute right-0 mt-3 w-56 bg-white rounded-xl shadow-lg py-2 z-20 border border-gray-200 animate-in slide-in-from-top-2 duration-200">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-medium text-secondary font-inter">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl py-2 z-40 border border-gray-200 animate-in slide-in-from-top-2 duration-200">
+                    <div className="px-4 py-2.5 border-b border-gray-100">
+                      <p className="text-sm font-medium text-secondary font-inter truncate">
                         {user?.name || 'Admin'}
                       </p>
                       <p className="text-xs text-gray-500 truncate font-inter">
@@ -403,27 +402,27 @@ const AdminLayout = () => {
 
                     <Link
                       to="/admin/profile"
-                      className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
+                      className="flex items-center px-4 py-2.5 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
                       onClick={() => setProfileDropdownOpen(false)}
                     >
-                      <FiUser className="w-4 h-4 mr-3" />
+                      <FiUser className="w-4 h-4 mr-3 text-gray-500" />
                       <span className="font-inter">Profile Settings</span>
                     </Link>
 
                     <Link
                       to="/admin/settings"
-                      className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
+                      className="flex items-center px-4 py-2.5 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
                       onClick={() => setProfileDropdownOpen(false)}
                     >
-                      <FiSettings className="w-4 h-4 mr-3" />
+                      <FiSettings className="w-4 h-4 mr-3 text-gray-500" />
                       <span className="font-inter">Account Settings</span>
                     </Link>
 
-                    <hr className="my-2 border-gray-100" />
+                    <hr className="my-1 border-gray-100" />
 
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="w-full flex items-center px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <FiLogOut className="w-4 h-4 mr-3" />
                       <span className="font-inter">Sign Out</span>
@@ -436,9 +435,9 @@ const AdminLayout = () => {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 overflow-auto bg-gray-50">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 min-h-0 min-w-0">
           {/* Mobile Global Search Bar */}
-          <div className="block lg:hidden sticky top-0 px-4 py-3 bg-white border-b border-gray-200 shadow-sm z-20">
+          <div className="block lg:hidden sticky top-0 px-4 py-3 bg-white border-b border-gray-200 shadow-xs z-20">
             <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages..." />
           </div>
           <div className="p-4 lg:p-6 xl:p-8 space-y-4">
@@ -446,7 +445,6 @@ const AdminLayout = () => {
             <AdminFilterBar />
             <Outlet />
           </div>
-
         </main>
       </div>
       <FinanceInvestigationDrawer />

@@ -1808,7 +1808,7 @@ class AdminService {
             const providerSurgeShare = rStats.providerSurgeShare || 0;
             const companySurgeShare = rStats.companySurgeShare || 0;
 
-            const surgeRevenue = visitingRevenue + rainRevenue + trafficRevenue + nightRevenue + demandRevenue + customRevenue + platformFeeRevenue;
+            const surgeRevenue = visitingRevenue + rainRevenue + trafficRevenue + nightRevenue + demandRevenue + customRevenue;
 
             const totalWithdrawals = withdrawalStats[0]?.totalWithdrawals || 0;
             const withdrawalCount = withdrawalStats[0]?.withdrawalCount || 0;
@@ -3863,15 +3863,17 @@ class AdminService {
         try {
             const fs = require('fs');
             const path = require('path');
-            const logPath = path.join(__dirname, '../logs/combined.log');
-            if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [], total: 0 });
+            const logPath = path.resolve(__dirname, '../../logs/combined.log');
+            const fallbackPath = path.resolve(process.cwd(), 'logs/combined.log');
+            const targetPath = fs.existsSync(logPath) ? logPath : (fs.existsSync(fallbackPath) ? fallbackPath : null);
+            if (!targetPath) return res.json({ success: true, logs: [], total: 0 });
 
             const { level, page = 1, limit = 50 } = req.query;
             const pageNum = parseInt(page) || 1;
             const limitNum = parseInt(limit) || 50;
             const targetLevel = level && level !== 'ALL' ? level.toUpperCase() : null;
 
-            const fileHandle = await fs.promises.open(logPath, 'r');
+            const fileHandle = await fs.promises.open(targetPath, 'r');
             const stat = await fileHandle.stat();
             let fileOffset = stat.size;
             const bufferSize = 64 * 1024; // 64KB chunk size

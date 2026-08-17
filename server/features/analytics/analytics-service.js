@@ -1,6 +1,7 @@
 const analyticsCache = require('../../shared/utils/cache');
 const Booking = require('../booking/booking-model');
 const Provider = require('../provider/provider-model');
+const ProviderEarning = require('../provider/provider-earning-model');
 const User = require('../user/user-model');
 const Complaint = require('../complaint/complaint-model');
 const Transaction = require('../payment/transaction-model');
@@ -40,7 +41,7 @@ const refreshAnalytics = async () => {
                     $group: {
                         _id: null,
                         grossRevenue: { $sum: "$totalAmount" },
-                        monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
+                        monthlyRevenue: { $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] }, 0] } },
                         netRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
                         netEarnings: { $sum: "$commissionAmount" },
                         platformFeeRevenue: { $sum: { $ifNull: ["$platformFee", 0] } },
@@ -59,7 +60,7 @@ const refreshAnalytics = async () => {
             ]),
             Booking.aggregate([
                 { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-                { $group: { _id: null, totalAdminEarnings: { $sum: { $add: ["$commissionAmount", { $ifNull: ["$companySurgeShare", 0] }] } } } }
+                { $group: { _id: null, totalAdminEarnings: { $sum: { $add: [{ $ifNull: ["$commissionAmount", 0] }, { $ifNull: ["$platformFee", 0] }, { $ifNull: ["$companySurgeShare", 0] }] } } } }
             ]),
             Transaction.aggregate([
                 { $match: { paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
@@ -85,7 +86,7 @@ const refreshAnalytics = async () => {
         const customRevenue = rStats.customRevenue || 0;
         const platformFeeRevenue = rStats.platformFeeRevenue || 0;
 
-        const surgeRevenue = visitingRevenue + rainRevenue + trafficRevenue + nightRevenue + demandRevenue + customRevenue + platformFeeRevenue;
+        const surgeRevenue = visitingRevenue + rainRevenue + trafficRevenue + nightRevenue + demandRevenue + customRevenue;
 
         const analytics = {
             totalBookings,

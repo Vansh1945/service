@@ -148,7 +148,7 @@ const FinanceDashboardPage = () => {
         setSettlementStatusData([
           { status: 'Settled', amount: d.reconciliation?.totalSettled || totalRev, color: '#10B981' },
           { status: 'Pending Settlement', amount: pendingSet, color: '#F59E0B' },
-          { status: 'Processing', amount: Math.round(onlineCol * 0.15), color: '#6366F1' },
+          { status: 'Processing', amount: d.reconciliation?.processingSettlement || d.processingSettlement || 0, color: '#6366F1' },
           { status: 'Failed', amount: d.reconciliation?.failedSettlement || 0, color: '#EF4444' }
         ]);
       }
@@ -692,7 +692,7 @@ const FinanceDashboardPage = () => {
                 <p className="text-xs text-neutral-400 mt-0.5">Gross Revenue vs Platform Commission Trajectory</p>
               </div>
               <span className="px-2.5 py-1 bg-neutral-100 text-neutral-700 font-bold text-[10px] uppercase rounded-lg">
-                Last 7 Days
+                Last 30 Days
               </span>
             </div>
 

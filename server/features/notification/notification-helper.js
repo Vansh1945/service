@@ -68,20 +68,59 @@ const titleToEventIdMap = {
     'Job Started': 'work_started',
     'work_started': 'work_started',
     'Payment Successful': 'payment_success',
+    'Payment Received': 'payment_success',
+    'Payment Verified': 'payment_success',
     'payment_success': 'payment_success',
     'Booking Completed': 'booking_completed',
     'booking_completed': 'booking_completed',
     'New Dispute Registered': 'dispute_created',
     'dispute_created': 'dispute_created',
     'Dispute Created': 'dispute_created',
+    'Dispute Updated': 'complaint_updated',
+    'Complaint Response Update': 'complaint_updated',
+    'complaint_updated': 'complaint_updated',
+    'Dispute Resolved': 'complaint_resolved',
+    'complaint_resolved': 'complaint_resolved',
+    'Dispute Rejected': 'complaint_rejected',
+    'complaint_rejected': 'complaint_rejected',
+    'Refund Processed': 'refund_completed',
+    'refund_completed': 'refund_completed',
+    'Refund Requested': 'refund_requested',
+    'refund_requested': 'refund_requested',
+    'Refund Approved': 'refund_approved',
+    'refund_approved': 'refund_approved',
+    'Withdrawal Approved': 'withdraw_approved',
+    'Withdrawal Request Approved': 'withdraw_approved',
+    'withdraw_approved': 'withdraw_approved',
+    'Withdrawal Rejected': 'withdraw_rejected',
+    'Withdrawal Request Rejected': 'withdraw_rejected',
+    'withdraw_rejected': 'withdraw_rejected',
+    'Withdrawal Requested': 'withdrawal_requested',
+    'withdrawal_requested': 'withdrawal_requested',
+    'Payout Processed': 'payout_success',
+    'payout_success': 'payout_success',
+    'Earnings Released': 'payment_released',
+    'Payment Released': 'payment_released',
+    'payment_released': 'payment_released',
+    'Referral Reward Released': 'referral_reward',
+    'Referral Reward': 'referral_reward',
+    'referral_reward': 'referral_reward',
+    'Milestone Reward Released': 'milestone_released',
+    'milestone_released': 'milestone_released',
+    'Account Approved': 'provider_verification_approved',
+    'Account Active!': 'provider_verification_approved',
+    'Verification Approved': 'provider_verification_approved',
+    'provider_verification_approved': 'provider_verification_approved',
+    'Account Rejected ❌': 'provider_verification_rejected',
+    'Verification Rejected': 'provider_verification_rejected',
+    'provider_verification_rejected': 'provider_verification_rejected',
     'Emergency Booking': 'emergency_booking',
     'emergency_booking': 'emergency_booking',
     'chat_message': 'chat_message',
     'New Message': 'chat_message',
-    'Verification Approved': 'provider_verification_approved',
-    'provider_verification_approved': 'provider_verification_approved',
-    'Verification Rejected': 'provider_verification_rejected',
-    'provider_verification_rejected': 'provider_verification_rejected'
+    'Booking Cancelled By Support Team': 'admin_cancellation',
+    'Assigned Booking Cancelled': 'admin_cancellation',
+    'admin_cancellation': 'admin_cancellation'
 };
 
 /**
@@ -381,7 +420,7 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
         let finalMessage = uMessage;
         let finalUrl = uUrl;
 
-        const lookupKey = uEventId || uTitle;
+        const lookupKey = uEventId || titleToEventIdMap[uTitle] || uTitle;
         if (lookupKey) {
             const template = await NotificationTemplate.findOne({ eventId: lookupKey, isActive: true });
             if (template) {

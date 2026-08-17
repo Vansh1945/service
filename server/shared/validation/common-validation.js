@@ -184,15 +184,18 @@ const resolveZoneByCoordinatesSchema = z.object({
 // Commission Schemas
 const createCommissionRuleSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  type: z.enum(['flat', 'percentage']),
+  description: z.string().optional().nullable(),
+  type: z.enum(['percentage', 'fixed', 'flat']),
   value: z.number().nonnegative(),
-  applyTo: z.enum(['global', 'zone', 'performanceScore', 'specificProvider']),
-  performanceScore: z.number().optional(),
-  specificProvider: z.string().optional(),
+  applyTo: z.enum(['all', 'global', 'zone', 'performanceScore', 'specificProvider', 'specificService', 'specificCategory']),
+  performanceScore: z.union([z.string(), z.number()]).optional().nullable(),
+  specificProvider: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
+  specificService: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
+  specificCategory: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
+  zoneId: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
   effectiveFrom: z.string().datetime().or(z.string()).optional().nullable(),
   effectiveUntil: z.string().datetime().or(z.string()).optional().nullable()
-});
+}).passthrough();
 
 const updateCommissionRuleSchema = createCommissionRuleSchema.partial();
 

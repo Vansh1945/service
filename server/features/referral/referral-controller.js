@@ -1267,7 +1267,7 @@ const getAdminReferralsList = async (req, res, next) => {
             ? `${newCustCouponCfg.discountValue}%`
             : `₹${newCustCouponCfg?.discountValue || newCustVal}`;
           const newMinBk = newCustCouponCfg?.minBookingAmount || 100;
-          referredUserBenefit = `Discount Coupon (${newCouponValStr} Off, Min ₹${newMinBk})`;
+          referredUserBenefit = `₹${newCustVal} Coupon (${newCouponValStr} Off, Min ₹${newMinBk})`;
         } else {
           referredUserBenefit = `₹${newCustVal} Welcome Cash Credit`;
         }

@@ -15,7 +15,7 @@ const couponSchema = new Schema({
   discountType: {
     type: String,
     required: [true, 'Discount type is required'],
-    enum: ['flat', 'percent'],
+    enum: ['flat', 'percent', 'percentage', 'fixed'],
     default: 'flat'
   },
   discountValue: {
@@ -24,7 +24,7 @@ const couponSchema = new Schema({
     min: [1, 'Discount value must be at least 1'],
     validate: {
       validator: function (value) {
-        if (this.discountType === 'percent') {
+        if (this.discountType === 'percent' || this.discountType === 'percentage') {
           return value <= 100;
         }
         return true;

@@ -267,7 +267,7 @@ const enrichBookingData = (booking, transaction = null) => {
     visitingCharges,
     emergencyCharges,
     surgeCharges,
-    discount,
+    discount: b.totalDiscount || 0,
     walletUsed,
     platformCommission,
     providerEarnings,

@@ -1639,12 +1639,12 @@ const getChartTrends = async (req, res, next) => {
     const [revenueDays, refundDays, bookingDays] = await Promise.all([
       // 1. Daily revenue + platform earnings from Transactions
       Transaction.aggregate([
-        { $match: { paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: since } } },
+        { $match: { type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: since } } },
         {
           $group: {
             _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
             revenue: { $sum: '$amount' },
-            earnings: { $sum: { $ifNull: ['$commission', { $multiply: ['$amount', 0.2] }] } }
+            earnings: { $sum: { $ifNull: ['$commission', { $ifNull: ['$commissionAmount', 0] }] } }
           }
         },
         { $sort: { _id: 1 } }

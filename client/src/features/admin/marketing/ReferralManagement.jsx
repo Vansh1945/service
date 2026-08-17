@@ -387,17 +387,27 @@ const ReferralManagement = () => {
                               </span>
                             </td>
                             <td className="py-3 px-3">
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-bold text-gray-900 text-xs">
-                                  Referrer: {r.referrerBenefit}
-                                </span>
-                                <span className="text-[10px] text-emerald-600 font-medium">
-                                  Referred Provider: {r.referredUserBenefit}
-                                </span>
+                              <div className="flex flex-col gap-1.5 py-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-100 text-blue-800 uppercase tracking-wider shrink-0">
+                                    Existing Partner (Referrer)
+                                  </span>
+                                  <span className="font-bold text-gray-900 text-xs">
+                                    {r.referrerBenefit}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase tracking-wider shrink-0">
+                                    New Provider (Referred)
+                                  </span>
+                                  <span className="text-xs font-semibold text-emerald-900">
+                                    {r.referredUserBenefit}
+                                  </span>
+                                </div>
                               </div>
                             </td>
                             <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : normalizeStatus(r.status) === 'fraudflagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] capitalize ${r.status === 'released' ? 'bg-green-100 text-green-700' : normalizeStatus(r.status) === 'fraudflagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {r.status}
                               </span>
                             </td>
@@ -448,17 +458,27 @@ const ReferralManagement = () => {
                                 </span>
                               </td>
                               <td className="py-3 px-3">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-bold text-gray-900 text-xs">
-                                    Referrer: {r.referrerBenefit}
-                                  </span>
-                                  <span className="text-[10px] text-accent font-medium">
-                                    New Customer: {r.referredUserBenefit}
-                                  </span>
+                                <div className="flex flex-col gap-1.5 py-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-100 text-blue-800 uppercase tracking-wider shrink-0">
+                                      Existing Customer (Referrer)
+                                    </span>
+                                    <span className="font-bold text-gray-900 text-xs">
+                                      {r.referrerBenefit}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-100 text-purple-800 uppercase tracking-wider shrink-0">
+                                      New Customer (Referred)
+                                    </span>
+                                    <span className="text-xs font-semibold text-purple-900">
+                                      {r.referredUserBenefit}
+                                    </span>
+                                  </div>
                                 </div>
                               </td>
                               <td className="py-3 px-3">
-                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${r.status === 'released' ? 'bg-green-100 text-green-700' : normalizeStatus(r.status) === 'fraudflagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] capitalize ${r.status === 'released' ? 'bg-green-100 text-green-700' : normalizeStatus(r.status) === 'fraudflagged' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                   {r.status}
                                 </span>
                               </td>
@@ -641,7 +661,7 @@ const ReferralManagement = () => {
                             <td className="py-3 px-3 font-medium text-gray-600">{fundingSource}</td>
                             <td className="py-3 px-3 text-gray-400">{new Date(l.createdAt).toLocaleString()}</td>
                             <td className="py-3 px-3">
-                              <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full ${l.status === 'released' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full capitalize ${l.status === 'released' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {l.status}
                               </span>
                             </td>
