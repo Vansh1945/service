@@ -50,7 +50,33 @@ export const COMPLAINT_STATUS_CONFIG = {
 };
 
 export const getComplaintStatusStyle = (status) => {
-  return COMPLAINT_STATUS_CONFIG[status] || COMPLAINT_STATUS_CONFIG['Open'];
+  if (!status) return COMPLAINT_STATUS_CONFIG['Open'];
+  if (COMPLAINT_STATUS_CONFIG[status]) return COMPLAINT_STATUS_CONFIG[status];
+  
+  // Normalize string for case and separator flexibility
+  const cleanKey = String(status).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  const normalizedMap = {
+    'open': COMPLAINT_STATUS_CONFIG['Open'],
+    'underreview': COMPLAINT_STATUS_CONFIG['Under Review'],
+    'inprogress': COMPLAINT_STATUS_CONFIG['In-Progress'],
+    'waitingforcustomer': COMPLAINT_STATUS_CONFIG['Waiting for Customer'],
+    'waitingforprovider': COMPLAINT_STATUS_CONFIG['Waiting for Provider'],
+    'escalated': COMPLAINT_STATUS_CONFIG['Escalated'],
+    'resolutionproposed': COMPLAINT_STATUS_CONFIG['Resolution Proposed'],
+    'resolved': COMPLAINT_STATUS_CONFIG['Resolved'],
+    'solved': COMPLAINT_STATUS_CONFIG['Solved'],
+    'rejected': COMPLAINT_STATUS_CONFIG['Rejected'],
+    'cancelled': COMPLAINT_STATUS_CONFIG['Cancelled'],
+    'closed': COMPLAINT_STATUS_CONFIG['Closed'],
+    'reopened': COMPLAINT_STATUS_CONFIG['Reopened'],
+    'submitted': COMPLAINT_STATUS_CONFIG['submitted'],
+    'providerresponded': COMPLAINT_STATUS_CONFIG['provider_responded'],
+    'adminreview': COMPLAINT_STATUS_CONFIG['admin_review'],
+    'refunded': COMPLAINT_STATUS_CONFIG['refunded'],
+  };
+
+  return normalizedMap[cleanKey] || { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
 };
 
 export const COMPLAINT_STATUS_LABELS = {
@@ -98,3 +124,4 @@ export const COMPLAINT_STATUS_DETAIL_LABELS = {
   'rejected': 'Rejected',
   'refunded': 'Refunded',
 };
+

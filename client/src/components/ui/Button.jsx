@@ -35,6 +35,8 @@ const Button = ({
       type={type}
       className={`${baseStyles} ${variants[variant] || variants.primary} ${sizes[size] || sizes.md} ${className}`}
       disabled={disabled || isLoading}
+      aria-disabled={disabled || isLoading}
+      aria-busy={isLoading}
       onClick={onClick}
       {...props}
     >

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
@@ -33,11 +33,11 @@ const AdminLayout = () => {
     dashboard: false,
     users: false,
     bookings: false,
-    financials: false,
+    financials: true,
     support: false,
-    notifications: false,
-    system: false,
-    setup: false,
+    notifications: true,
+    system: true,
+    setup: true,
   });
 
   const toggleGroup = (groupId) => {
@@ -46,6 +46,7 @@ const AdminLayout = () => {
       [groupId]: !prev[groupId]
     }));
   };
+
 
   const menuGroups = [
     {
@@ -142,7 +143,21 @@ const AdminLayout = () => {
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';
 
+  // Auto-expand group containing current active route
+  useEffect(() => {
+    menuGroups.forEach((group) => {
+      const hasActiveChild = group.items.some(
+        (item) => location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive)
+      );
+      if (hasActiveChild) {
+        setCollapsedGroups((prev) => ({ ...prev, [group.id]: false }));
+      }
+    });
+  }, [location.pathname]);
+
+
   const handleLogout = () => {
+
     logoutUser();
     setProfileDropdownOpen(false);
     navigate('/login');

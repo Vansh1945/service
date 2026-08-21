@@ -1051,16 +1051,30 @@ class PaymentService {
       const session = await safeStartSession();
       try {
         const executeWithdrawalOps = async (currSession) => {
-          // Final balance check inside transaction
-          if (provider.wallet.availableBalance < amount) {
-            throw new Error("Insufficient balance");
+          // Atomic conditional update to lock pending amount and prevent concurrent double-spending
+          const updateQuery = {
+            _id: providerId,
+            'wallet.availableBalance': { $gte: amount }
+          };
+          const updateOps = {
+            $inc: { 'wallet.availableBalance': -amount },
+            $set: {
+              'wallet.lastUpdated': new Date(),
+              'withdrawalSecurity.lastRequestTime': new Date(),
+              'withdrawalSecurity.attempts': 0,
+              'withdrawalSecurity.pendingAmount': 0
+            }
+          };
+          const updatedProvider = currSession
+            ? await Provider.findOneAndUpdate(updateQuery, updateOps, { new: true, session: currSession })
+            : await Provider.findOneAndUpdate(updateQuery, updateOps, { new: true });
+
+          if (!updatedProvider) {
+            throw new Error("Insufficient available balance or concurrent withdrawal request in progress.");
           }
 
-          // Lock the pending amount immediately to prevent double-spending/withdrawals
-          const balanceBefore = provider.wallet.availableBalance;
-          provider.wallet.availableBalance -= amount;
-          const balanceAfter = provider.wallet.availableBalance;
-          provider.wallet.lastUpdated = new Date();
+          const balanceAfter = updatedProvider.wallet.availableBalance;
+          const balanceBefore = balanceAfter + amount;
 
           const preferred = provider.bankDetails?.preferredMethod || 'bank_account';
           const paymentRecord = new PaymentRecord({
@@ -1110,20 +1124,6 @@ class PaymentService {
             await withdrawalTx.save({ session: currSession });
           } else {
             await withdrawalTx.save();
-          }
-
-          // Update provider security settings (cooldown info)
-          provider.withdrawalSecurity = {
-            lastRequestTime: new Date(),
-            otp: undefined,
-            otpExpires: undefined,
-            attempts: 0,
-            pendingAmount: 0
-          };
-          if (currSession) {
-            await provider.save({ session: currSession });
-          } else {
-            await provider.save();
           }
 
           // Notify Admin
@@ -1214,16 +1214,25 @@ class PaymentService {
       const executeWithdrawalRequest = async (currSession) => {
         const amount = security.pendingAmount;
 
-        // Final balance check
-        if (provider.wallet.availableBalance < amount) {
-          throw new Error("Insufficient balance");
+        // Atomic conditional update to lock pending amount and prevent concurrent double-spending
+        const updateQuery = {
+          _id: providerId,
+          'wallet.availableBalance': { $gte: amount }
+        };
+        const updateOps = {
+          $inc: { 'wallet.availableBalance': -amount },
+          $set: { 'wallet.lastUpdated': new Date() }
+        };
+        const updatedProvider = currSession
+          ? await Provider.findOneAndUpdate(updateQuery, updateOps, { new: true, session: currSession })
+          : await Provider.findOneAndUpdate(updateQuery, updateOps, { new: true });
+
+        if (!updatedProvider) {
+          throw new Error("Insufficient available balance or concurrent withdrawal request in progress.");
         }
 
-        // Lock the pending amount immediately upon OTP verification to prevent double-spending/withdrawals
-        const balanceBefore = provider.wallet.availableBalance;
-        provider.wallet.availableBalance -= amount;
-        const balanceAfter = provider.wallet.availableBalance;
-        provider.wallet.lastUpdated = new Date();
+        const balanceAfter = updatedProvider.wallet.availableBalance;
+        const balanceBefore = balanceAfter + amount;
 
         const paymentRecord = new PaymentRecord({
           provider: providerId,
@@ -2280,19 +2289,27 @@ class PaymentService {
         throw new Error('Provider not found for this payment record.');
       }
 
-      // Refund the locked withdrawal amount back to the provider's wallet available balance
-      if (!provider.wallet) {
-        provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
-      }
-      const balanceBefore = provider.wallet.availableBalance;
-      provider.wallet.availableBalance += paymentRecord.amount;
-      const balanceAfter = provider.wallet.availableBalance;
-      provider.wallet.lastUpdated = new Date();
-      if (session) {
-        await provider.save({ session });
-      } else {
-        await provider.save();
-      }
+      // Refund the locked withdrawal amount back to the provider's wallet available balance atomically
+      const updatedProvider = session
+        ? await Provider.findOneAndUpdate(
+            { _id: provider._id },
+            {
+              $inc: { 'wallet.availableBalance': paymentRecord.amount },
+              $set: { 'wallet.lastUpdated': new Date() }
+            },
+            { new: true, session }
+          )
+        : await Provider.findOneAndUpdate(
+            { _id: provider._id },
+            {
+              $inc: { 'wallet.availableBalance': paymentRecord.amount },
+              $set: { 'wallet.lastUpdated': new Date() }
+            },
+            { new: true }
+          );
+
+      const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
+      const balanceBefore = balanceAfter - paymentRecord.amount;
 
       // Update payment record
       paymentRecord.status = "rejected";
@@ -3874,12 +3891,6 @@ class PaymentService {
         provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
       }
 
-      if (provider.wallet.availableBalance < amount) {
-        await safeAbort(session);
-        safeEnd(session);
-        return res.status(400).json({ success: false, message: `Insufficient provider balance. Available: ₹${provider.wallet.availableBalance}` });
-      }
-
       // Resolve & verify payout details from database authoritative source
       const bank = provider.bankDetails || {};
       const isVerified = bank.bankVerificationStatus === 'verified' && bank.verified && bank.payoutEnabled;
@@ -3901,18 +3912,29 @@ class PaymentService {
         ? { upiId: bank.upiId, accountName: bank.accountName || provider.name }
         : { accountNumber: bank.accountNo, accountName: bank.accountName || provider.name, ifscCode: bank.ifsc, bankName: bank.bankName || 'N/A' };
 
-      // Deduct available balance and increment total withdrawn
-      const balanceBefore = provider.wallet.availableBalance;
-      provider.wallet.availableBalance -= amount;
-      provider.wallet.totalWithdrawn += amount;
-      const balanceAfter = provider.wallet.availableBalance;
-      provider.wallet.lastUpdated = new Date();
+      // Deduct available balance and increment total withdrawn atomically to prevent double payouts
+      const updateQuery = {
+        _id: provider._id,
+        'wallet.availableBalance': { $gte: amount }
+      };
+      const updateOps = {
+        $inc: {
+          'wallet.availableBalance': -amount,
+          'wallet.totalWithdrawn': amount
+        },
+        $set: { 'wallet.lastUpdated': new Date() }
+      };
+      const updatedProvider = session
+        ? await Provider.findOneAndUpdate(updateQuery, updateOps, { new: true, session })
+        : await Provider.findOneAndUpdate(updateQuery, updateOps, { new: true });
 
-      if (session) {
-        await provider.save({ session });
-      } else {
-        await provider.save();
+      if (!updatedProvider) {
+        await safeAbort(session); safeEnd(session);
+        return res.status(400).json({ success: false, message: `Insufficient provider available balance or concurrent payout in progress.` });
       }
+
+      const balanceAfter = updatedProvider.wallet.availableBalance;
+      const balanceBefore = balanceAfter + amount;
 
       const paymentRecord = new PaymentRecord({
         provider: provider._id,

@@ -255,8 +255,12 @@ const createOrder = async (req, res, next) => {
       try {
         const rule = await CommissionRule.getCommissionForProvider(booking.provider || null, booking.zoneId);
 
+        const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
+        const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
+        const provDiscount = Math.max(0, (booking.totalDiscount || 0) - refAmount);
+        const baseAmount = Math.max(0, (booking.subtotal || booking.totalAmount) - provDiscount);
+
         if (rule) {
-          const baseAmount = Math.max(0, (booking.subtotal || booking.totalAmount) - (booking.totalDiscount || 0));
           const { commission: calculatedComm } = CommissionRule.calculateCommission(baseAmount, rule);
           commission = calculatedComm || 0;
           // Provider keeps surcharge: net = totalAmount - commission
@@ -270,7 +274,6 @@ const createOrder = async (req, res, next) => {
             await settings.save();
           }
           const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
-          const baseAmount = Math.max(0, (booking.subtotal || booking.totalAmount) - (booking.totalDiscount || 0));
           const calculatedComm = parseFloat(((baseAmount * defaultCommPercent) / 100).toFixed(2));
           commission = calculatedComm || 0;
           // Provider keeps surcharge: net = totalAmount - commission
@@ -703,7 +706,7 @@ const handleSuccessfulPayment = async (payment, session) => {
 
   booking.paymentStatus = 'escrowhold';
   booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
-  booking.paidAmount = transaction.amount;
+  booking.onlinePaid = transaction.amount;
   booking.paymentDate = new Date();
   booking.confirmedBooking = true;
   if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
@@ -1356,7 +1359,7 @@ const adminRetryVerify = async (req, res, next) => {
     if (booking) {
       booking.paymentStatus = 'paid';
       booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
-      booking.paidAmount = transaction.amount;
+      booking.onlinePaid = transaction.amount;
       booking.paymentDate = new Date();
       booking.confirmedBooking = true;
       if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {

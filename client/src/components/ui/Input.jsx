@@ -24,6 +24,8 @@ const Input = ({
         )}
         <input
           id={id}
+          aria-invalid={!!error}
+          aria-describedby={error && id ? `${id}-error` : undefined}
           className={`w-full ${LeftIcon ? 'pl-9' : 'px-3.5'} ${RightIcon ? 'pr-9' : 'px-3.5'} py-2.5 bg-white border border-neutral-200 rounded-xl text-sm text-secondary placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-neutral-50 disabled:text-neutral-400 transition-all ${error ? 'border-danger focus:ring-danger/20 focus:border-danger' : ''} ${className}`}
           {...props}
         />
@@ -33,7 +35,7 @@ const Input = ({
           </div>
         )}
       </div>
-      {error && <p className="text-xs font-medium text-danger">{error}</p>}
+      {error && <p id={id ? `${id}-error` : undefined} className="text-xs font-medium text-danger">{error}</p>}
     </div>
   );
 };

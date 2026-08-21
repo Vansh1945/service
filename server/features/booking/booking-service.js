@@ -1567,15 +1567,9 @@ class BookingService {
         });
       }
 
-      // Validate status transition
-      const allowedTransitions = {
-        'pending': ['confirmed', 'cancelled'],
-        'scheduled': ['accepted', 'cancelled'],
-        'confirmed': ['completed', 'cancelled'],
-        'cancelled': []
-      };
-
-      if (!allowedTransitions[booking.status]?.includes(status)) {
+      // Validate status transition using canonical state machine
+      const { validateBookingTransition } = require('./booking-validation');
+      if (!validateBookingTransition(booking.status, status)) {
         return res.status(400).json({
           success: false,
           message: `Invalid status transition from ${booking.status} to ${status}`
@@ -2007,26 +2001,33 @@ class BookingService {
       let paymentResult;
       if (paymentDetails?.paymentMethod === 'wallet') {
 
-        const userWallet = await User.findById(userId).session(session);
-        if (!userWallet.wallet) {
-          userWallet.wallet = { availableBalance: 0, walletTransactions: [], totalRefunded: 0, lastUpdated: new Date() };
-        }
-        const bal = userWallet.wallet.availableBalance || 0;
-        if (bal < booking.totalAmount || booking.totalAmount <= 0) {
+        const updatedUserWallet = await User.findOneAndUpdate(
+          {
+            _id: userId,
+            'wallet.availableBalance': { $gte: booking.totalAmount }
+          },
+          {
+            $inc: { 'wallet.availableBalance': -booking.totalAmount },
+            $push: {
+              'wallet.walletTransactions': {
+                type: 'debit',
+                amount: booking.totalAmount,
+                reason: 'Booking Payment',
+                booking: booking._id,
+                bookingId: booking.bookingId,
+                createdAt: new Date()
+              }
+            },
+            $set: { 'wallet.lastUpdated': new Date() }
+          },
+          { new: true, session }
+        );
+
+        if (!updatedUserWallet) {
           await safeAbort(session);
           if (session) safeEnd(session);
-          return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+          return res.status(400).json({ success: false, message: 'Insufficient wallet balance or concurrent payment request' });
         }
-        userWallet.wallet.availableBalance -= booking.totalAmount;
-        userWallet.wallet.walletTransactions.push({
-          type: 'debit',
-          amount: booking.totalAmount,
-          reason: 'Booking Payment',
-          booking: booking._id,
-          bookingId: booking.bookingId
-        });
-        userWallet.wallet.lastUpdated = new Date();
-        await userWallet.save({ session });
 
         paymentResult = {
           success: true,
@@ -2055,22 +2056,42 @@ class BookingService {
           return res.status(400).json({ success: false, message: 'Invalid payment signature' });
         }
 
-        const userMixed = await User.findById(userId).session(session);
-        const walletBal = userMixed.wallet?.availableBalance || 0;
+        // Prevent duplicate wallet deduction: if createOrder already deducted wallet balance (booking.walletUsed > 0), do not deduct again
+        if (!booking.walletUsed || booking.walletUsed === 0) {
+          const userMixed = await User.findById(userId).session(session);
+          const walletBal = userMixed.wallet?.availableBalance || 0;
+          const walletDeduction = Math.min(walletBal, booking.totalAmount);
 
-        const walletDeduction = Math.min(walletBal, booking.totalAmount);
+          if (walletDeduction > 0) {
+            const updatedUserMixed = await User.findOneAndUpdate(
+              {
+                _id: userId,
+                'wallet.availableBalance': { $gte: walletDeduction }
+              },
+              {
+                $inc: { 'wallet.availableBalance': -walletDeduction },
+                $push: {
+                  'wallet.walletTransactions': {
+                    type: 'debit',
+                    amount: walletDeduction,
+                    reason: 'Booking Payment (Mixed)',
+                    booking: booking._id,
+                    bookingId: booking.bookingId,
+                    createdAt: new Date()
+                  }
+                },
+                $set: { 'wallet.lastUpdated': new Date() }
+              },
+              { new: true, session }
+            );
 
-        if (walletDeduction > 0) {
-          userMixed.wallet.availableBalance -= walletDeduction;
-          userMixed.wallet.walletTransactions.push({
-            type: 'debit',
-            amount: walletDeduction,
-            reason: 'Booking Payment',
-            booking: booking._id,
-            bookingId: booking.bookingId
-          });
-          userMixed.wallet.lastUpdated = new Date();
-          await userMixed.save({ session });
+            if (!updatedUserMixed) {
+              await safeAbort(session);
+              if (session) safeEnd(session);
+              return res.status(400).json({ success: false, message: 'Insufficient wallet balance for mixed payment' });
+            }
+            booking.walletUsed = walletDeduction;
+          }
         }
 
         paymentResult = {

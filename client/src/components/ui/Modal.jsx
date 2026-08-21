@@ -3,15 +3,24 @@ import { X } from 'lucide-react';
 
 const Modal = ({ isOpen, onClose, title, children, size = 'medium', showClose = true }) => {
   useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', handleKeyDown);
     } else {
       document.body.style.overflow = 'unset';
     }
+
     return () => {
       document.body.style.overflow = 'unset';
+      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -27,7 +36,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium', showClose = 
   const selectedSizeClass = sizeClasses[size] || sizeClasses.medium;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
       <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
         <div className="fixed inset-0 transition-opacity" aria-hidden="true">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose}></div>
@@ -43,6 +52,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium', showClose = 
                 {showClose && (
                   <button
                     onClick={onClose}
+                    aria-label="Close modal"
                     className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all duration-200"
                   >
                     <X className="w-5 h-5" />

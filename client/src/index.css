@@ -23,8 +23,8 @@
     /* Border Grey - Text input borders, generic grid borders */
     --color-neutral-300: #d1d5db;
     /* Muted Grey - Placeholder texts, disabled button border frames */
-    --color-neutral-400: #9ca3af;
-    /* Medium Muted Grey - Secondary icons, helper note texts */
+    --color-neutral-400: #6b7280;
+    /* Medium Muted Grey - Secondary icons, helper note texts (WCAG AA Compliant Contrast) */
     --color-neutral-500: #6b7280;
     /* Standard Grey - Basic description copy, paragraph elements */
     --color-neutral-600: #4b5563;

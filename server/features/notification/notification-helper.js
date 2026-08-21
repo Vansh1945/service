@@ -105,6 +105,7 @@ const titleToEventIdMap = {
     'Referral Reward Released': 'referral_reward',
     'Referral Reward': 'referral_reward',
     'referral_reward': 'referral_reward',
+    'referralreward': 'referral_reward',
     'Milestone Reward Released': 'milestone_released',
     'milestone_released': 'milestone_released',
     'Account Approved': 'provider_verification_approved',

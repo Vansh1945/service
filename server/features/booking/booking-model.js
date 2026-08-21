@@ -889,9 +889,11 @@ bookingSchema.pre('save', async function (next) {
       case 'accepted':
         statusChange.note = 'Provider has accepted the booking';
         break;
-      case 'in-progress':
+      case 'workstarted':
         statusChange.note = 'Service is in progress';
-        this.serviceStartedAt = new Date();
+        if (!this.serviceStartedAt) {
+          this.serviceStartedAt = new Date();
+        }
         break;
       case 'completed':
         statusChange.note = 'Service has been completed successfully';

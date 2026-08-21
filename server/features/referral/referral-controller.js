@@ -456,7 +456,7 @@ const triggerCustomerReferralReward = async (booking) => {
             amount: newCustRewardVal,
             paymentStatus: 'completed',
             paymentMethod: 'wallet',
-            type: 'referral_reward',
+            type: 'referralreward',
             description: 'New Customer Referral Welcome Reward'
           });
           await welcomeTx.save();
@@ -962,7 +962,7 @@ const getAdminDashboard = async (req, res, next) => {
       };
 
       const rewardTransactions = await Transaction.find({
-        type: 'referral_reward',
+        type: 'referralreward',
         createdAt: { $gte: dateThreshold }
       }).select('amount description').lean();
 

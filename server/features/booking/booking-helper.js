@@ -30,6 +30,7 @@ const getBookingProgress = (booking) => {
     case 'accepted':
       return 'provider_traveling';
 
+    case 'workstarted':
     case 'in-progress':
       return 'in_progress';
 
