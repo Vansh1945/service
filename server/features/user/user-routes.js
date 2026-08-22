@@ -8,7 +8,12 @@ const {
   getCustomerDashboardStats,
   getWalletHistory,
   toggleFavoriteProvider,
-  checkFavoriteProviderAvailability
+  checkFavoriteProviderAvailability,
+  getSavedAddresses,
+  createSavedAddress,
+  updateSavedAddress,
+  deleteSavedAddress,
+  setDefaultSavedAddress
 } = require('./user-controller');
 const { userAuthMiddleware } = require('../../shared/middlewares/user-middleware');
 const { roleMiddleware } = require('../../shared/middlewares/role-middleware');
@@ -39,5 +44,12 @@ router.get('/wallet/history', userAuthMiddleware, requireCustomer, getWalletHist
 // Favorite Providers routes
 router.post('/favorite-providers/toggle', userAuthMiddleware, requireCustomer, toggleFavoriteProvider);
 router.get('/favorite-providers/check/:providerId', userAuthMiddleware, requireCustomer, checkFavoriteProviderAvailability);
+
+// Saved Addresses routes
+router.get('/addresses', userAuthMiddleware, requireCustomer, getSavedAddresses);
+router.post('/addresses', userAuthMiddleware, requireCustomer, createSavedAddress);
+router.put('/addresses/:addressId', userAuthMiddleware, requireCustomer, updateSavedAddress);
+router.delete('/addresses/:addressId', userAuthMiddleware, requireCustomer, deleteSavedAddress);
+router.patch('/addresses/:addressId/default', userAuthMiddleware, requireCustomer, setDefaultSavedAddress);
 
 module.exports = router;

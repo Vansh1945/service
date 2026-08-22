@@ -1090,7 +1090,7 @@ const AdminBookingsView = () => {
         }
     }, [showToast, fetchBookings, fetchBookingDetails, selectedBooking, bookings, rowActionStates]);
 
-    const handleRescheduleBooking = useCallback(async (bookingId, newDate, newTime) => {
+    const handleRescheduleBooking = useCallback(async (bookingId, newDate, newTime, reason) => {
         if (rowActionStates[bookingId]) return;
 
         const prevBookings = [...bookings];
@@ -1102,6 +1102,7 @@ const AdminBookingsView = () => {
             const body = {};
             if (newDate) body.date = newDate;
             if (newTime) body.time = newTime;
+            if (reason) body.reason = reason;
 
             await BookingService.updateBookingDateTimeAdmin(bookingId, body);
             showToast('Booking rescheduled successfully', 'success');
@@ -1110,7 +1111,8 @@ const AdminBookingsView = () => {
             setShowModal(false);
         } catch (error) {
             console.error('Error rescheduling booking:', error);
-            showToast(error.message, 'error');
+            const errorMsg = error.response?.data?.message || error.message || 'Failed to reschedule booking';
+            showToast(errorMsg, 'error');
             setBookings(prevBookings);
             setSelectedBooking(prevSelectedBooking);
         } finally {
@@ -1911,43 +1913,67 @@ const AdminBookingsView = () => {
                                                 </div>
                                             )}
 
+                                            {bk.rescheduleHistory && bk.rescheduleHistory.length > 0 && (
+                                                <div className="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 space-y-1 text-xs text-secondary mt-2">
+                                                    <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1 flex justify-between">
+                                                        <span>Reschedule History</span>
+                                                        <span>Count: {bk.rescheduleCount || bk.rescheduleHistory.length}</span>
+                                                    </p>
+                                                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                                                        {bk.rescheduleHistory.map((item, idx) => (
+                                                            <div key={idx} className="bg-white p-2 rounded border border-blue-100 text-[11px] space-y-0.5">
+                                                                <div className="flex justify-between font-semibold text-gray-700">
+                                                                    <span>#{idx + 1} {new Date(item.oldDate).toLocaleDateString()} {item.oldTime} &rarr; {new Date(item.newDate).toLocaleDateString()} {item.newTime}</span>
+                                                                    <span className="capitalize px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px]">{item.changedByRole || item.changedBy || 'Customer'}</span>
+                                                                </div>
+                                                                {item.reason && (
+                                                                    <p className="text-gray-500 italic text-[10px]">Reason: {item.reason}</p>
+                                                                )}
+                                                                <p className="text-[9px] text-gray-400 text-right">{new Date(item.createdAt).toLocaleString()}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Payment Status & Details */}
                                             <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] text-gray-500">Payment Status</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrowhold'].includes(normalizeStatus(pay.status)) ? 'bg-green-100 text-green-700' : normalizeStatus(pay.status) === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                        {['escrowhold', 'escrow_hold'].includes(normalizeStatus(pay.status)) ? 'Escrow Hold' : (pay.status || '—')}
-                                                    </span>
-                                                </div>
-                                                {selectedBooking.refundData?.decision && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-gray-500">Admin Refund</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {selectedBooking.refundData.decision}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] text-gray-500">Payout Status</span>
-                                                    <PayoutStatusBadge status={selectedBooking.payoutStatus} />
-                                                </div>
-                                                {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
-                                                    <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
-                                                )}
-                                                {pay.details?.transactionId ? (
-                                                    <div className="flex justify-between items-center pt-0.5">
-                                                        <span className="text-[10px] text-gray-500">Transaction</span>
-                                                        <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                                                            {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
-                                                        </button>
-                                                    </div>
-                                                ) : null}
-                                                {!pay.details?.transactionId && ['paid', 'escrowhold'].includes(normalizeStatus(bk.paymentStatus)) && (
-                                                    <div className="flex justify-end pt-0.5">
-                                                        <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                                                            View Transaction <ExternalLink className="w-2.5 h-2.5" />
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                 <div className="flex justify-between items-center">
+                                                     <span className="text-[10px] text-gray-500">Payment Status</span>
+                                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrowhold'].includes(normalizeStatus(pay.status)) ? 'bg-green-100 text-green-700' : normalizeStatus(pay.status) === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                         {['escrowhold', 'escrow_hold'].includes(normalizeStatus(pay.status)) ? 'Escrow Hold' : (pay.status || '—')}
+                                                     </span>
+                                                 </div>
+                                                 {selectedBooking.refundData?.decision && (
+                                                     <div className="flex justify-between items-center">
+                                                         <span className="text-[10px] text-gray-500">Admin Refund</span>
+                                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                             {selectedBooking.refundData.decision}
+                                                         </span>
+                                                     </div>
+                                                 )}
+                                                 <div className="flex justify-between items-center">
+                                                     <span className="text-[10px] text-gray-500">Payout Status</span>
+                                                     <PayoutStatusBadge status={selectedBooking.payoutStatus} />
+                                                 </div>
+                                                 {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
+                                                     <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
+                                                 )}
+                                                 {pay.details?.transactionId ? (
+                                                     <div className="flex justify-between items-center pt-0.5">
+                                                         <span className="text-[10px] text-gray-500">Transaction</span>
+                                                         <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                             {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
+                                                         </button>
+                                                     </div>
+                                                 ) : null}
+                                                 {!pay.details?.transactionId && ['paid', 'escrowhold'].includes(normalizeStatus(bk.paymentStatus)) && (
+                                                     <div className="flex justify-end pt-0.5">
+                                                         <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                             View Transaction <ExternalLink className="w-2.5 h-2.5" />
+                                                         </button>
+                                                     </div>
+                                                 )}
                                             </div>
                                         </Card>
                                     </div>
@@ -1982,7 +2008,6 @@ const AdminBookingsView = () => {
                 );
             })()}
 
-
             {showCancelModal && selectedBooking && (
                 <CancelBookingModal
                     isOpen={showCancelModal}
@@ -1999,9 +2024,14 @@ const AdminBookingsView = () => {
                 <RescheduleModal
                     isOpen={showRescheduleModal}
                     onClose={() => setShowRescheduleModal(false)}
-                    onConfirm={(date, time) => {
-                        handleRescheduleBooking(selectedBooking._id, date, time);
+                    onConfirm={(date, time, reason) => {
+                        handleRescheduleBooking(selectedBooking._id, date, time, reason);
                     }}
+                    initialDate={selectedBooking.date ? new Date(selectedBooking.date).toISOString().split('T')[0] : ''}
+                    initialTime={selectedBooking.time || ''}
+                    currentDate={selectedBooking.date}
+                    currentTime={selectedBooking.time}
+                    providerName={selectedBooking.provider?.name || selectedBooking.providerName || ''}
                     actionLoading={actionLoading}
                 />
             )}

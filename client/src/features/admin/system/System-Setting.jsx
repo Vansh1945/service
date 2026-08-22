@@ -37,6 +37,7 @@ const SystemSetting = () => {
     bookingSettings: {
       autoAssignProvider: false,
       cancellationWindowMinutes: 60,
+      rescheduleWindowHours: 6,
       refundReviewHours: 48,
       providerResponseSlaHours: 24,
       refundProcessingSlaHours: 72,

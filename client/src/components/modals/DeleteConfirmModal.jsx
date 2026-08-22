@@ -13,7 +13,7 @@ const DeleteConfirmModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4 pb-20 sm:pb-4 animate-fade-in">
       <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-premium border border-gray-100">
         <div className="flex items-center mb-4">
           <AlertCircle className="w-6 h-6 text-red-600 mr-3" />

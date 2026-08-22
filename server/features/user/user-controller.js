@@ -988,6 +988,341 @@ const checkFavoriteProviderAvailability = async (req, res, next) => {
   }
 };
 
+/**
+ * Saved Addresses Controllers
+ */
+
+// GET /api/customer/addresses
+const getSavedAddresses = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('savedAddresses').lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    return res.status(200).json({
+      success: true,
+      savedAddresses: user.savedAddresses || []
+    });
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[UserController.getSavedAddresses] Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
+
+// POST /api/customer/addresses
+const createSavedAddress = async (req, res, next) => {
+  try {
+    const {
+      label,
+      houseNumber,
+      street,
+      road,
+      landmark,
+      area,
+      city,
+      state,
+      pincode,
+      postalCode,
+      country,
+      formattedAddress,
+      lat,
+      lng,
+      isDefault
+    } = req.body;
+
+    const pincodeVal = (pincode || postalCode || '').toString().trim();
+    if (!pincodeVal || !/^\d{6}$/.test(pincodeVal)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid 6-digit Indian PIN code'
+      });
+    }
+
+    const cityVal = (city || '').toString().trim();
+    const stateVal = (state || '').toString().trim();
+    if (!cityVal || !stateVal) {
+      return res.status(400).json({
+        success: false,
+        message: 'City and state are required'
+      });
+    }
+
+    const userDoc = await User.findById(req.user._id).select('savedAddresses');
+    if (!userDoc) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const currentAddresses = userDoc.savedAddresses || [];
+    let shouldBeDefault = !!isDefault;
+    if (currentAddresses.length === 0) {
+      shouldBeDefault = true;
+    }
+
+    if (shouldBeDefault && currentAddresses.length > 0) {
+      await User.updateOne(
+        { _id: req.user._id },
+        { $set: { "savedAddresses.$[].isDefault": false } }
+      );
+    }
+
+    const latVal = typeof lat === 'number' ? lat : (lat ? parseFloat(lat) : null);
+    const lngVal = typeof lng === 'number' ? lng : (lng ? parseFloat(lng) : null);
+
+    let s2CellId = null;
+    let s2CellIdPrecise = null;
+    if (latVal !== null && lngVal !== null && !isNaN(latVal) && !isNaN(lngVal) && (latVal !== 0 || lngVal !== 0)) {
+      s2CellId = latLngToS2CellId(latVal, lngVal, 13);
+      s2CellIdPrecise = latLngToS2CellId(latVal, lngVal, 20);
+    }
+
+    const newAddressObj = {
+      label: (label || 'Home').trim(),
+      houseNumber: houseNumber ? houseNumber.trim() : '',
+      street: street ? street.trim() : '',
+      road: road ? road.trim() : '',
+      landmark: landmark ? landmark.trim() : '',
+      area: area ? area.trim() : '',
+      city: cityVal,
+      state: stateVal,
+      pincode: pincodeVal,
+      postalCode: pincodeVal,
+      country: country ? country.trim() : 'India',
+      formattedAddress: formattedAddress ? formattedAddress.trim() : '',
+      lat: latVal,
+      lng: lngVal,
+      s2CellId,
+      s2CellIdPrecise,
+      isDefault: shouldBeDefault,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $push: { savedAddresses: newAddressObj } },
+      { new: true, runValidators: true }
+    ).select('savedAddresses');
+
+    const createdAddr = updatedUser.savedAddresses[updatedUser.savedAddresses.length - 1];
+
+    return res.status(201).json({
+      success: true,
+      message: 'Address saved successfully',
+      savedAddresses: updatedUser.savedAddresses,
+      address: createdAddr
+    });
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[UserController.createSavedAddress] Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
+
+// PUT /api/customer/addresses/:addressId
+const updateSavedAddress = async (req, res, next) => {
+  try {
+    const { addressId } = req.params;
+
+    const existingUser = await User.findOne({
+      _id: req.user._id,
+      "savedAddresses._id": addressId
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Saved address not found'
+      });
+    }
+
+    const {
+      label,
+      houseNumber,
+      street,
+      road,
+      landmark,
+      area,
+      city,
+      state,
+      pincode,
+      postalCode,
+      country,
+      formattedAddress,
+      lat,
+      lng,
+      isDefault
+    } = req.body;
+
+    const pincodeVal = (pincode || postalCode || '').toString().trim();
+    if (pincodeVal && !/^\d{6}$/.test(pincodeVal)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid 6-digit Indian PIN code'
+      });
+    }
+
+    if (isDefault === true) {
+      await User.updateOne(
+        { _id: req.user._id },
+        { $set: { "savedAddresses.$[].isDefault": false } }
+      );
+    }
+
+    const latVal = typeof lat === 'number' ? lat : (lat ? parseFloat(lat) : null);
+    const lngVal = typeof lng === 'number' ? lng : (lng ? parseFloat(lng) : null);
+
+    let s2CellId = null;
+    let s2CellIdPrecise = null;
+    if (latVal !== null && lngVal !== null && !isNaN(latVal) && !isNaN(lngVal) && (latVal !== 0 || lngVal !== 0)) {
+      s2CellId = latLngToS2CellId(latVal, lngVal, 13);
+      s2CellIdPrecise = latLngToS2CellId(latVal, lngVal, 20);
+    }
+
+    const setFields = {
+      "savedAddresses.$[elem].updatedAt": new Date()
+    };
+
+    if (label !== undefined) setFields["savedAddresses.$[elem].label"] = label.trim();
+    if (houseNumber !== undefined) setFields["savedAddresses.$[elem].houseNumber"] = houseNumber.trim();
+    if (street !== undefined) setFields["savedAddresses.$[elem].street"] = street.trim();
+    if (road !== undefined) setFields["savedAddresses.$[elem].road"] = road.trim();
+    if (landmark !== undefined) setFields["savedAddresses.$[elem].landmark"] = landmark.trim();
+    if (area !== undefined) setFields["savedAddresses.$[elem].area"] = area.trim();
+    if (city !== undefined) setFields["savedAddresses.$[elem].city"] = city.trim();
+    if (state !== undefined) setFields["savedAddresses.$[elem].state"] = state.trim();
+    if (pincodeVal) {
+      setFields["savedAddresses.$[elem].pincode"] = pincodeVal;
+      setFields["savedAddresses.$[elem].postalCode"] = pincodeVal;
+    }
+    if (country !== undefined) setFields["savedAddresses.$[elem].country"] = country.trim();
+    if (formattedAddress !== undefined) setFields["savedAddresses.$[elem].formattedAddress"] = formattedAddress.trim();
+    if (latVal !== null) setFields["savedAddresses.$[elem].lat"] = latVal;
+    if (lngVal !== null) setFields["savedAddresses.$[elem].lng"] = lngVal;
+    if (s2CellId) setFields["savedAddresses.$[elem].s2CellId"] = s2CellId;
+    if (s2CellIdPrecise) setFields["savedAddresses.$[elem].s2CellIdPrecise"] = s2CellIdPrecise;
+    if (isDefault !== undefined) setFields["savedAddresses.$[elem].isDefault"] = !!isDefault;
+
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: req.user._id },
+      { $set: setFields },
+      {
+        arrayFilters: [{ "elem._id": addressId }],
+        new: true,
+        runValidators: true
+      }
+    ).select('savedAddresses');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Address updated successfully',
+      savedAddresses: updatedUser.savedAddresses
+    });
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[UserController.updateSavedAddress] Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
+
+// DELETE /api/customer/addresses/:addressId
+const deleteSavedAddress = async (req, res, next) => {
+  try {
+    const { addressId } = req.params;
+
+    const existingUser = await User.findOne({
+      _id: req.user._id,
+      "savedAddresses._id": addressId
+    }).select('savedAddresses');
+
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Saved address not found'
+      });
+    }
+
+    const targetAddr = existingUser.savedAddresses.id(addressId);
+    const wasDefault = targetAddr ? targetAddr.isDefault : false;
+
+    await User.updateOne(
+      { _id: req.user._id },
+      { $pull: { savedAddresses: { _id: addressId } } }
+    );
+
+    const refreshedUser = await User.findById(req.user._id).select('savedAddresses');
+
+    if (wasDefault && refreshedUser.savedAddresses.length > 0) {
+      const hasDefault = refreshedUser.savedAddresses.some(a => a.isDefault);
+      if (!hasDefault) {
+        refreshedUser.savedAddresses[refreshedUser.savedAddresses.length - 1].isDefault = true;
+        await refreshedUser.save();
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Address deleted successfully',
+      savedAddresses: refreshedUser.savedAddresses
+    });
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[UserController.deleteSavedAddress] Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
+
+// PATCH /api/customer/addresses/:addressId/default
+const setDefaultSavedAddress = async (req, res, next) => {
+  try {
+    const { addressId } = req.params;
+
+    const existingUser = await User.findOne({
+      _id: req.user._id,
+      "savedAddresses._id": addressId
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Saved address not found'
+      });
+    }
+
+    // Step 1: Set all savedAddresses.isDefault = false
+    await User.updateOne(
+      { _id: req.user._id },
+      { $set: { "savedAddresses.$[].isDefault": false } }
+    );
+
+    // Step 2: Set target address isDefault = true
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: req.user._id, "savedAddresses._id": addressId },
+      {
+        $set: {
+          "savedAddresses.$.isDefault": true,
+          "savedAddresses.$.updatedAt": new Date()
+        }
+      },
+      { new: true }
+    ).select('savedAddresses');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Default address updated successfully',
+      savedAddresses: updatedUser.savedAddresses
+    });
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[UserController.setDefaultSavedAddress] Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
 
 module.exports = {
   register,
@@ -997,7 +1332,12 @@ module.exports = {
   getCustomerDashboardStats,
   getWalletHistory,
   toggleFavoriteProvider,
-  checkFavoriteProviderAvailability
+  checkFavoriteProviderAvailability,
+  getSavedAddresses,
+  createSavedAddress,
+  updateSavedAddress,
+  deleteSavedAddress,
+  setDefaultSavedAddress
 };
 
 

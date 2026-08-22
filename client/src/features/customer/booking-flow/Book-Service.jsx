@@ -4,7 +4,7 @@ import { useAuth } from '../../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle, Home, Briefcase, ShoppingBag, X } from 'lucide-react';
 import AddressSelector from '../../../components/AddressSelector';
 import Loader from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
@@ -204,8 +204,12 @@ const BookService = () => {
   // Fetch user addresses
   const fetchUserAddresses = async () => {
     try {
-      const response = await CustomerService.getProfile();
-      return response.data.user.address ? [response.data.user.address] : [];
+      const res = await CustomerService.getSavedAddresses();
+      if (res.data?.success && res.data.savedAddresses?.length > 0) {
+        return res.data.savedAddresses;
+      }
+      const profileRes = await CustomerService.getProfile();
+      return profileRes.data?.user?.address ? [profileRes.data.user.address] : [];
     } catch (err) {
       console.error('Error fetching user addresses:', err);
       return [];
@@ -433,17 +437,26 @@ const BookService = () => {
           return;
         }
 
-        const [serviceData, profileData] = await Promise.all([
+        const [serviceData, profileData, savedList] = await Promise.all([
           fetchService(),
-          CustomerService.getProfile().then(res => res.data?.user).catch(() => null)
+          CustomerService.getProfile().then(res => res.data?.user).catch(() => null),
+          CustomerService.getSavedAddresses().then(res => res.data?.savedAddresses || []).catch(() => [])
         ]);
 
-        const addressesData = profileData?.address ? [profileData.address] : [];
+        let addressesData = savedList;
+        if (addressesData.length === 0 && profileData?.address && (profileData.address.street || profileData.address.city)) {
+          addressesData = [profileData.address];
+        }
 
         setService(serviceData);
         setAddresses(addressesData);
         if (profileData?.wallet) {
           setWalletBalance(profileData.wallet.availableBalance || 0);
+        }
+
+        const defaultAddr = addressesData.find(a => a.isDefault) || addressesData[0];
+        if (defaultAddr && defaultAddr._id) {
+          setFormData(prev => ({ ...prev, addressId: defaultAddr._id }));
         }
 
         // Fetch initial surcharges immediately to avoid rendering delays
@@ -529,6 +542,68 @@ const BookService = () => {
       fetchAvailableCoupons();
     }
   }, [service, formData.quantity, detectedZoneId]);
+
+  const [isAddAddressModalOpen, setIsAddAddressModalOpen] = useState(false);
+  const [addressActionLoading, setAddressActionLoading] = useState(false);
+  const [inlineModalAddressForm, setInlineModalAddressForm] = useState({
+    label: 'Home',
+    houseNumber: '',
+    road: '',
+    landmark: '',
+    area: '',
+    city: '',
+    state: '',
+    pincode: '',
+    postalCode: '',
+    formattedAddress: '',
+    lat: null,
+    lng: null,
+    isDefault: false
+  });
+  const [inlineModalErrors, setInlineModalErrors] = useState({});
+
+  const handleSaveNewAddressModal = async (e) => {
+    if (e) e.preventDefault();
+    const errs = {};
+    const code = (inlineModalAddressForm.pincode || inlineModalAddressForm.postalCode || '').trim();
+    if (!code) errs['address.pincode'] = 'Pincode is required';
+    else if (!/^\d{6}$/.test(code)) errs['address.pincode'] = 'Enter valid 6-digit PIN code';
+
+    if (!inlineModalAddressForm.houseNumber?.trim()) errs['address.houseNumber'] = 'House/Flat No. required';
+    if (!inlineModalAddressForm.road?.trim() && !inlineModalAddressForm.street?.trim()) errs['address.road'] = 'Road/Street required';
+    if (!inlineModalAddressForm.city?.trim()) errs['address.city'] = 'City required';
+    if (!inlineModalAddressForm.state?.trim()) errs['address.state'] = 'State required';
+
+    setInlineModalErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      toast.error('Please fill all mandatory address fields (House No, Road/Street, City, State, Pincode)');
+      return;
+    }
+
+    try {
+      setAddressActionLoading(true);
+      const res = await CustomerService.createSavedAddress(inlineModalAddressForm);
+      if (res.data?.success) {
+        toast.success('Address saved and selected!');
+        const updatedList = res.data.savedAddresses || [];
+        setAddresses(updatedList);
+        const newlyCreated = res.data.address || updatedList[updatedList.length - 1];
+        if (newlyCreated && newlyCreated._id) {
+          setFormData(prev => ({
+            ...prev,
+            addressId: newlyCreated._id,
+            useCustomAddress: false
+          }));
+        }
+        setIsAddAddressModalOpen(false);
+      }
+    } catch (err) {
+      console.error('Error saving new address:', err);
+      toast.error(err.response?.data?.message || 'Failed to save address');
+    } finally {
+      setAddressActionLoading(false);
+    }
+  };
 
   const handleQuantityChange = (action) => {
     setFormData(prev => {
@@ -623,7 +698,7 @@ const BookService = () => {
         addressData = formData.customAddress;
       } else {
         if (addresses.length === 0) throw new Error('No address available');
-        addressData = addresses[0];
+        addressData = addresses.find(a => a._id === formData.addressId) || addresses[0];
       }
 
       const formattedDate = formData.date.toISOString().split('T')[0];
@@ -1161,47 +1236,95 @@ const BookService = () => {
 
                 {/* Service Address Selection */}
                 <div className="border-t border-gray-100 pt-4 mt-2">
-                  <div className="flex items-center justify-between mb-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
                     <div>
                       <label className="block text-sm font-semibold text-secondary">Service Address</label>
                       <span className="text-[10px] text-gray-400">Where should we deliver the service?</span>
                     </div>
-                    {addresses.length > 0 && (
-                      <div className="flex bg-gray-100 p-0.5 rounded-lg w-max shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: false }))}
-                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${!formData.useCustomAddress
-                            ? 'bg-white text-secondary shadow-sm'
-                            : 'text-gray-500 hover:text-secondary'
-                            }`}
-                        >
-                          Saved Address
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: true }))}
-                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${formData.useCustomAddress
-                            ? 'bg-white text-secondary shadow-sm'
-                            : 'text-gray-500 hover:text-secondary'
-                            }`}
-                        >
-                          New Address
-                        </button>
-                      </div>
-                    )}
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddAddressModalOpen(true)}
+                        className="px-2.5 py-1 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Address
+                      </button>
+
+                      {addresses.length > 0 && (
+                        <div className="flex bg-gray-100 p-0.5 rounded-lg w-max shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: false }))}
+                            className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${!formData.useCustomAddress
+                              ? 'bg-white text-secondary shadow-sm'
+                              : 'text-gray-500 hover:text-secondary'
+                              }`}
+                          >
+                            Saved Address
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: true }))}
+                            className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${formData.useCustomAddress
+                              ? 'bg-white text-secondary shadow-sm'
+                              : 'text-gray-500 hover:text-secondary'
+                              }`}
+                          >
+                            Custom Entry
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {!formData.useCustomAddress && addresses.length > 0 ? (
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-start gap-2.5 animate-fade-in">
-                      <div className="p-1.5 bg-primary/10 rounded-lg text-primary mt-0.5 flex-shrink-0">
-                        <MapPin className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-secondary">Deliver to Saved Address</p>
-                        <p className="text-xs text-gray-500 leading-relaxed mt-0.5">
-                          {addresses[0]?.street}, {addresses[0]?.city}, {addresses[0]?.state} - {addresses[0]?.postalCode}
-                        </p>
+                    <div className="space-y-2.5 animate-fade-in">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {addresses.map((addr, idx) => {
+                          const isSelected = (formData.addressId ? addr._id === formData.addressId : idx === 0);
+                          return (
+                            <div
+                              key={addr._id || idx}
+                              onClick={() => {
+                                setFormData(prev => ({ ...prev, addressId: addr._id || '', useCustomAddress: false }));
+                              }}
+                              className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                                isSelected
+                                  ? 'border-primary bg-primary/5 shadow-xs'
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="selectedAddressId"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="mt-1 text-primary focus:ring-primary cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-bold text-secondary truncate">
+                                    {addr.label || 'Home'}
+                                  </span>
+                                  {addr.isDefault && (
+                                    <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.2 rounded uppercase">
+                                      Default
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-600 font-medium leading-relaxed line-clamp-2">
+                                  {addr.houseNumber ? `${addr.houseNumber}, ` : ''}
+                                  {addr.street || addr.road || ''}
+                                </p>
+                                <p className="text-[11px] text-gray-400 font-normal truncate mt-0.5">
+                                  {addr.city}, {addr.state} - {addr.pincode || addr.postalCode}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -1210,6 +1333,75 @@ const BookService = () => {
                         address={formData.customAddress}
                         onChange={(updatedAddress) => setFormData(prev => ({ ...prev, customAddress: updatedAddress }))}
                       />
+                    </div>
+                  )}
+
+                  {/* Inline Compact Add Address Modal */}
+                  {isAddAddressModalOpen && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4 animate-fade-in overflow-y-auto">
+                      <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl border border-gray-100 relative max-h-[96vh] flex flex-col my-auto text-left">
+                        <div className="flex items-center justify-between pb-2 border-b border-gray-100 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-primary" />
+                            <h3 className="text-sm font-bold text-secondary">Add New Address</h3>
+                          </div>
+                          <button type="button" onClick={() => setIsAddAddressModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <form onSubmit={handleSaveNewAddressModal} className="overflow-y-auto py-2.5 space-y-2.5 flex-1 pr-1">
+                          <div className="flex items-center gap-2">
+                            <label className="text-[11px] font-bold text-secondary uppercase shrink-0">Label:</label>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {[
+                                { id: 'Home', label: 'Home', icon: Home },
+                                { id: 'Office', label: 'Office', icon: Briefcase },
+                                { id: 'Shop', label: 'Shop', icon: ShoppingBag },
+                                { id: 'Other', label: 'Other', icon: MapPin }
+                              ].map((item) => {
+                                const IconComp = item.icon;
+                                const isSel = inlineModalAddressForm.label === item.id;
+                                return (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => setInlineModalAddressForm(prev => ({ ...prev, label: item.id }))}
+                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all ${
+                                      isSel ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'
+                                    }`}
+                                  >
+                                    <IconComp className="w-3.5 h-3.5" /> {item.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <AddressSelector
+                            address={inlineModalAddressForm}
+                            onChange={(updated) => setInlineModalAddressForm(prev => ({ ...prev, ...updated }))}
+                            errors={inlineModalErrors}
+                            compact={true}
+                          />
+                          <div className="flex items-center justify-between pt-2 border-t border-gray-100 shrink-0">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="isDefaultModal"
+                                checked={inlineModalAddressForm.isDefault}
+                                onChange={(e) => setInlineModalAddressForm(prev => ({ ...prev, isDefault: e.target.checked }))}
+                                className="w-3.5 h-3.5 text-primary rounded border-gray-300"
+                              />
+                              <label htmlFor="isDefaultModal" className="text-xs font-semibold text-secondary">Set as default</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => setIsAddAddressModalOpen(false)} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                              <Processing type="submit" loading={addressActionLoading} loadingText="Saving..." className="px-4 py-1.5 bg-primary text-white rounded-lg text-xs font-bold">
+                                Save Address
+                              </Processing>
+                            </div>
+                          </div>
+                        </form>
+                      </div>
                     </div>
                   )}
                 </div>

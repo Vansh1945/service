@@ -103,6 +103,27 @@ const userSchema = new mongoose.Schema({
     pincode: String,
     formattedAddress: String
   },
+  savedAddresses: [{
+    label: { type: String, trim: true, default: 'Home' },
+    houseNumber: { type: String, trim: true },
+    street: { type: String, trim: true },
+    road: { type: String, trim: true },
+    landmark: { type: String, trim: true },
+    area: { type: String, trim: true },
+    city: { type: String, trim: true },
+    state: { type: String, trim: true },
+    pincode: { type: String, trim: true },
+    postalCode: { type: String, trim: true },
+    country: { type: String, trim: true, default: 'India' },
+    formattedAddress: { type: String, trim: true },
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    s2CellId: { type: String, default: null },
+    s2CellIdPrecise: { type: String, default: null },
+    isDefault: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+  }],
   currentLocation: {
     type: {
       type: String,

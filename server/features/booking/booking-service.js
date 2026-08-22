@@ -2580,11 +2580,9 @@ class BookingService {
   static async userUpdateBookingDateTime(req, res) {
     try {
       const { id } = req.params;
-      // Fix: Add null check for req.body before destructuring
-      const { date, time } = req.body || {};
-      const userId = req.user.id;
+      const { date, time, reason } = req.body || {};
+      const userId = req.user.id || req.user._id;
 
-      // Validate input
       if (!date && !time) {
         return res.status(400).json({
           success: false,
@@ -2592,7 +2590,6 @@ class BookingService {
         });
       }
 
-      // Find booking
       const booking = await Booking.findOne({ _id: id, customer: userId });
       if (!booking) {
         return res.status(404).json({
@@ -2601,85 +2598,198 @@ class BookingService {
         });
       }
 
-      if (!validateBookingTransition(booking.status, 'rescheduled') && booking.status !== 'pending' && booking.status !== 'confirmed') {
+      const ineligibleStatuses = ['ontheway', 'arrived', 'workstarted', 'completed', 'cancelled', 'rejected', 'noshow'];
+      if (ineligibleStatuses.includes(booking.status)) {
         return res.status(400).json({
           success: false,
           message: `Cannot reschedule booking from its current status: ${booking.status}`
         });
       }
 
-      // User can only modify pending or confirmed bookings
-      if (!['pending', 'confirmed'].includes(booking.status)) {
+      // Fetch dynamic reschedule minimum hours restriction from SystemConfig (default: 6 hours)
+      let minRescheduleHours = 6;
+      try {
+        const { SystemConfig } = require('../system-setting/system-setting-model');
+        const settings = await SystemConfig.findOne().select('bookingSettings').lean();
+        if (settings?.bookingSettings?.rescheduleWindowHours !== undefined) {
+          minRescheduleHours = Number(settings.bookingSettings.rescheduleWindowHours) || 6;
+        }
+      } catch (sysErr) {
+        minRescheduleHours = 6;
+      }
+
+      const year = booking.date.getUTCFullYear();
+      const month = booking.date.getUTCMonth();
+      const day = booking.date.getUTCDate();
+      const [h, m] = (booking.time || '12:00').split(':').map(Number);
+      const currentBookingIst = new Date(Date.UTC(year, month, day, h - 5, m - 30, 0, 0));
+      const minAllowedTime = new Date(Date.now() + minRescheduleHours * 60 * 60 * 1000);
+
+      if (currentBookingIst < minAllowedTime) {
         return res.status(403).json({
           success: false,
-          message: 'Only pending or confirmed bookings can be rescheduled'
+          message: `Cannot reschedule within ${minRescheduleHours} hours of booking time. Please contact support.`
         });
       }
 
-      // Calculate minimum allowed time (6 hours from now)
-      const now = new Date();
-      const sixHoursLater = new Date(now.getTime() + 6 * 60 * 60 * 1000);
-      const bookingDateTime = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.time || '00:00'}`);
+      const updatedBooking = await BookingService.performRescheduleInternal({
+        booking,
+        date,
+        time,
+        reason,
+        role: 'customer',
+        userId
+      });
 
-      // Check if it's too close to booking time
-      if (bookingDateTime < sixHoursLater) {
-        return res.status(403).json({
-          success: false,
-          message: 'Cannot reschedule within 6 hours of booking time. Please contact support.'
-        });
-      }
-
-      // Validate new date if provided
-      if (date) {
-        const newDate = new Date(date);
-        if (isNaN(newDate.getTime())) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid date format'
-          });
-        }
-
-        if (newDate < now) {
-          return res.status(400).json({
-            success: false,
-            message: 'New booking date must be in the future'
-          });
-        }
-        booking.date = newDate;
-      }
-
-      // Validate new time if provided
-      if (time) {
-        if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid time format (use HH:MM)'
-          });
-        }
-        booking.time = time;
-      }
-
-      // Save changes
-      await booking.save();
-      emitBookingUpdate(booking._id, booking, 'rescheduled');
-
-      res.json({
+      return res.json({
         success: true,
         message: 'Booking date/time updated successfully',
         data: {
-          _id: booking._id,
-          date: booking.date,
-          time: booking.time,
-          status: booking.status
+          _id: updatedBooking._id,
+          date: updatedBooking.date,
+          time: updatedBooking.time,
+          status: updatedBooking.status,
+          rescheduleHistory: updatedBooking.rescheduleHistory,
+          rescheduleCount: updatedBooking.rescheduleCount
         }
       });
     } catch (error) {
       console.error('Error updating booking date/time:', error);
-      res.status(500).json({
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
         success: false,
         message: error.message || 'Failed to update booking date/time'
       });
     }
+  }
+
+  static async performRescheduleInternal({ booking, date, time, reason, role, userId }) {
+    const now = new Date();
+    const targetDateObj = date ? new Date(date) : new Date(booking.date);
+    const targetTimeStr = time ? time : (booking.time || '10:00');
+
+    if (isNaN(targetDateObj.getTime())) {
+      const error = new Error('Invalid date format');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(targetTimeStr)) {
+      const error = new Error('Invalid time format (use HH:MM)');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Construct absolute IST target date/time for past check
+    const year = targetDateObj.getUTCFullYear();
+    const month = targetDateObj.getUTCMonth();
+    const day = targetDateObj.getUTCDate();
+    const [targetH, targetM] = targetTimeStr.split(':').map(Number);
+    const targetAbsoluteIst = new Date(Date.UTC(year, month, day, targetH - 5, targetM - 30, 0, 0));
+
+    if (targetAbsoluteIst <= now) {
+      const error = new Error('New booking date and time must be in the future');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Check Provider Availability & Overlap if a provider is assigned
+    if (booking.provider) {
+      const providerId = booking.provider._id || booking.provider;
+      const providerDoc = await Provider.findById(providerId).select('isActive isSuspended blockedTill name phone').lean();
+
+      if (providerDoc) {
+        if (providerDoc.isActive === false || providerDoc.isSuspended === true || (providerDoc.blockedTill && new Date(providerDoc.blockedTill) > now)) {
+          const error = new Error('Selected time is not available for the assigned provider. Assigned provider is currently unavailable.');
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      const providerBookings = await Booking.find({
+        _id: { $ne: booking._id },
+        provider: providerId,
+        status: { $nin: ['cancelled', 'rejected', 'completed', 'noshow'] }
+      }).populate('services.service').lean();
+
+      const candidateBooking = {
+        _id: booking._id,
+        date: targetDateObj,
+        time: targetTimeStr,
+        services: booking.services,
+        estimatedDuration: booking.estimatedDuration,
+        travelBufferMinutes: booking.travelBufferMinutes
+      };
+
+      const hasOverlap = ProviderAssignmentService.checkProviderOverlap(candidateBooking, providerBookings);
+      if (hasOverlap) {
+        const error = new Error('Selected time is not available for the assigned provider. Please select another time slot.');
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+
+    // Record old schedule safely with fallbacks
+    const oldDate = booking.date || new Date();
+    const oldTime = booking.time || '10:00';
+
+    // Update schedule
+    booking.date = targetDateObj;
+    booking.time = targetTimeStr;
+
+    if (!booking.rescheduleHistory) {
+      booking.rescheduleHistory = [];
+    }
+
+    booking.rescheduleHistory.push({
+      oldDate,
+      oldTime,
+      newDate: targetDateObj,
+      newTime: targetTimeStr,
+      changedByRole: role,
+      changedById: userId || null,
+      reason: (reason || '').trim().substring(0, 300),
+      createdAt: new Date()
+    });
+
+    booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
+
+    await booking.save();
+
+    // Socket update
+    emitBookingUpdate(booking._id, booking, 'rescheduled');
+
+    // Send notifications
+    try {
+      const formattedDate = targetDateObj.toISOString().split('T')[0];
+      const customerId = booking.customer?._id || booking.customer;
+      if (customerId) {
+        await sendNotification(
+          customerId,
+          'customer',
+          '🗓️ Booking Rescheduled',
+          `Your booking #${booking.bookingId || booking._id} was successfully rescheduled to ${formattedDate} at ${targetTimeStr}.`,
+          'booking',
+          booking._id
+        );
+      }
+
+      const providerId = booking.provider?._id || booking.provider;
+      if (providerId) {
+        await sendNotification(
+          providerId,
+          'provider',
+          '🗓️ Booking Rescheduled',
+          `Booking #${booking.bookingId || booking._id} has been rescheduled to ${formattedDate} at ${targetTimeStr} by ${role === 'admin' ? 'Admin' : 'Customer'}.`,
+          'booking',
+          booking._id
+        );
+      }
+    } catch (notifErr) {
+      console.error('Error sending reschedule notifications:', notifErr.message);
+    }
+
+    return booking;
   }
 
   static async getProviderBookingById(req, res) {
@@ -5350,10 +5460,9 @@ class BookingService {
   static async updateBookingDateTime(req, res) {
     try {
       const { id } = req.params;
-      // Fix: Add null check for req.body before destructuring
-      const { date, time } = req.body || {};
+      const { date, time, reason } = req.body || {};
+      const adminId = req.user?.id || req.user?._id;
 
-      // Validate input
       if (!date && !time) {
         return res.status(400).json({
           success: false,
@@ -5361,7 +5470,6 @@ class BookingService {
         });
       }
 
-      // Find booking
       const booking = await Booking.findById(id);
       if (!booking) {
         return res.status(404).json({
@@ -5370,61 +5478,41 @@ class BookingService {
         });
       }
 
-      if (!validateBookingTransition(booking.status, 'rescheduled') && booking.status !== 'pending' && booking.status !== 'confirmed') {
-        return res.status(400).json({
-          success: false,
-          message: `Cannot reschedule booking from its current status: ${booking.status}`
-        });
-      }
-
-      if (['completed', 'workstarted'].includes(booking.status)) {
+      const ineligibleStatuses = ['workstarted', 'completed', 'cancelled', 'rejected', 'noshow'];
+      if (ineligibleStatuses.includes(booking.status)) {
         return res.status(400).json({
           success: false,
           message: `Cannot reschedule a ${booking.status} booking.`
         });
       }
 
-      // Validate new date if provided
-      if (date) {
-        const newDate = new Date(date);
-        if (newDate < new Date()) {
-          return res.status(400).json({
-            success: false,
-            message: 'New booking date must be in the future'
-          });
-        }
-        booking.date = newDate;
-      }
+      const updatedBooking = await BookingService.performRescheduleInternal({
+        booking,
+        date,
+        time,
+        reason,
+        role: 'admin',
+        userId: adminId
+      });
 
-      // Validate new time if provided
-      if (time) {
-        if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid time format (use HH:MM)'
-          });
-        }
-        booking.time = time;
-      }
-
-      // Save changes
-      await booking.save();
-      emitBookingUpdate(booking._id, booking, 'rescheduled');
-
-      res.json({
+      return res.json({
         success: true,
         message: 'Booking date/time updated successfully',
         data: {
-          _id: booking._id,
-          date: booking.date,
-          time: booking.time,
-          status: booking.status
+          _id: updatedBooking._id,
+          date: updatedBooking.date,
+          time: updatedBooking.time,
+          status: updatedBooking.status,
+          rescheduleHistory: updatedBooking.rescheduleHistory,
+          rescheduleCount: updatedBooking.rescheduleCount
         }
       });
     } catch (error) {
-      res.status(500).json({
+      console.error('Error updating booking date/time by admin:', error);
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
         success: false,
-        message: error.message
+        message: error.message || 'Failed to update booking date/time'
       });
     }
   }

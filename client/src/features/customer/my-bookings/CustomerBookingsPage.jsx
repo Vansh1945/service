@@ -1156,7 +1156,7 @@ const CustomerBookingsPage = () => {
 
 
 
-  const handleRescheduleSubmit = async ({ date, time }) => {
+  const handleRescheduleSubmit = async ({ date, time, reason }) => {
     if (!bookingToReschedule) return;
     const actionKey = `${bookingToReschedule._id}-reschedule`;
     if (actionLoading[actionKey]) return;
@@ -1173,13 +1173,14 @@ const CustomerBookingsPage = () => {
         setSelectedBooking(prev => ({ ...prev, date, time }));
       }
 
-      await userUpdateBookingDateTime(bookingToReschedule._id, { date, time });
+      await userUpdateBookingDateTime(bookingToReschedule._id, { date, time, reason });
       showToast('Booking rescheduled successfully', 'success');
       setShowRescheduleModal(false);
       setBookingToReschedule(null);
       fetchBookings(true);
     } catch (err) {
-      showToast(`Error: ${err.message}`, 'error');
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to reschedule booking';
+      showToast(`Error: ${errorMsg}`, 'error');
       // Rollback on failure
       setBookings(prevBookings);
       if (prevSelected) setSelectedBooking(prevSelected);
@@ -1324,9 +1325,13 @@ const CustomerBookingsPage = () => {
         <RescheduleModal
           isOpen={showRescheduleModal}
           onClose={() => setShowRescheduleModal(false)}
-          onConfirm={(date, time) => handleRescheduleSubmit({ date, time })}
-          initialDate={bookingToReschedule.date}
-          initialTime={bookingToReschedule.time}
+          onConfirm={(date, time, reason) => handleRescheduleSubmit({ date, time, reason })}
+          initialDate={bookingToReschedule.date ? new Date(bookingToReschedule.date).toISOString().split('T')[0] : ''}
+          initialTime={bookingToReschedule.time || ''}
+          currentDate={bookingToReschedule.date}
+          currentTime={bookingToReschedule.time}
+          providerName={bookingToReschedule.provider?.name || bookingToReschedule.providerName || ''}
+          actionLoading={actionLoading[`${bookingToReschedule._id}-reschedule`]}
         />
       )}
 

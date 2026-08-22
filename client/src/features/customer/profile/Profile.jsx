@@ -3,11 +3,21 @@ import ProfileSkeleton from '../../../components/ui-skeletons/ProfileSkeleton';
 import { useAuth } from '../../../context/auth';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { getProfile, updateProfile } from '../../../services/CustomerService';
+import {
+    getProfile,
+    updateProfile,
+    getSavedAddresses,
+    createSavedAddress,
+    updateSavedAddress,
+    deleteSavedAddress,
+    setDefaultSavedAddress
+} from '../../../services/CustomerService';
 import AddressSelector from '../../../components/AddressSelector';
 import Processing from '../../../components/ui-skeletons/Processing';
+import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import {
-    User, MapPin, Shield, ChevronRight, Gift, Wallet, Heart, LogOut
+    User, MapPin, Shield, ChevronRight, Gift, Wallet, Heart, LogOut,
+    Plus, Home, Briefcase, ShoppingBag, Star, Trash2, Edit3, CheckCircle2, X, ArrowLeft
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/format';
 
@@ -15,6 +25,414 @@ import PersonalDetails from './Components/PersonalDetails';
 import WalletActivity from './Components/WalletActivity';
 import FavoriteProviders from './Components/FavoriteProviders';
 import CouponsOffers from './Components/CouponsOffers';
+
+const LABEL_OPTIONS = [
+    { id: 'Home', label: 'Home', icon: Home },
+    { id: 'Office', label: 'Office', icon: Briefcase },
+    { id: 'Shop', label: 'Shop', icon: ShoppingBag },
+    { id: 'Other', label: 'Other', icon: MapPin }
+];
+
+const SavedAddressesSection = ({ profile, fetchProfile, onBack }) => {
+    const [addresses, setAddresses] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingAddress, setEditingAddress] = useState(null);
+    const [deletingAddressId, setDeletingAddressId] = useState(null);
+
+    const [addressForm, setAddressForm] = useState({
+        label: 'Home',
+        houseNumber: '',
+        road: '',
+        landmark: '',
+        area: '',
+        city: '',
+        state: '',
+        pincode: '',
+        postalCode: '',
+        formattedAddress: '',
+        lat: null,
+        lng: null,
+        isDefault: false
+    });
+    const [formErrors, setFormErrors] = useState({});
+
+    useEffect(() => {
+        loadAddresses();
+    }, []);
+
+    const loadAddresses = async () => {
+        try {
+            setLoading(true);
+            const res = await getSavedAddresses();
+            if (res.data?.success) {
+                setAddresses(res.data.savedAddresses || []);
+            }
+        } catch (err) {
+            console.error('Error fetching addresses:', err);
+            toast.error('Failed to load saved addresses');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOpenAddModal = () => {
+        setEditingAddress(null);
+        setAddressForm({
+            label: 'Home',
+            houseNumber: '',
+            road: '',
+            landmark: '',
+            area: '',
+            city: '',
+            state: '',
+            pincode: '',
+            postalCode: '',
+            formattedAddress: '',
+            lat: null,
+            lng: null,
+            isDefault: false
+        });
+        setFormErrors({});
+        setIsModalOpen(true);
+    };
+
+    const handleOpenEditModal = (addr) => {
+        setEditingAddress(addr);
+        setAddressForm({
+            _id: addr._id,
+            label: addr.label || 'Home',
+            houseNumber: addr.houseNumber || '',
+            road: addr.road || addr.street || '',
+            landmark: addr.landmark || '',
+            area: addr.area || '',
+            city: addr.city || '',
+            state: addr.state || '',
+            pincode: addr.pincode || addr.postalCode || '',
+            postalCode: addr.postalCode || addr.pincode || '',
+            formattedAddress: addr.formattedAddress || '',
+            lat: addr.lat || null,
+            lng: addr.lng || null,
+            isDefault: !!addr.isDefault
+        });
+        setFormErrors({});
+        setIsModalOpen(true);
+    };
+
+    const validateForm = () => {
+        const errs = {};
+        const code = (addressForm.pincode || addressForm.postalCode || '').trim();
+        if (!code) errs['address.pincode'] = 'Pincode is required';
+        else if (!/^\d{6}$/.test(code)) errs['address.pincode'] = 'Enter valid 6-digit PIN code';
+
+        if (!addressForm.houseNumber?.trim()) errs['address.houseNumber'] = 'House/Flat No. required';
+        if (!addressForm.road?.trim() && !addressForm.street?.trim()) errs['address.road'] = 'Road/Street required';
+        if (!addressForm.city?.trim()) errs['address.city'] = 'City required';
+        if (!addressForm.state?.trim()) errs['address.state'] = 'State required';
+
+        setFormErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            toast.error('Please fill all mandatory address fields (House No, Road/Street, City, State, Pincode)');
+            return false;
+        }
+        return true;
+    };
+
+    const handleSaveAddress = async (e) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+
+        try {
+            setActionLoading(true);
+            let res;
+            if (editingAddress?._id) {
+                res = await updateSavedAddress(editingAddress._id, addressForm);
+            } else {
+                res = await createSavedAddress(addressForm);
+            }
+            if (res.data?.success) {
+                toast.success(res.data.message || 'Address saved!');
+                setAddresses(res.data.savedAddresses || []);
+                setIsModalOpen(false);
+            }
+        } catch (err) {
+            console.error('Error saving address:', err);
+            toast.error(err.response?.data?.message || 'Failed to save address');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleSetDefault = async (addressId) => {
+        try {
+            const res = await setDefaultSavedAddress(addressId);
+            if (res.data?.success) {
+                toast.success('Default address updated!');
+                setAddresses(res.data.savedAddresses || []);
+            }
+        } catch (err) {
+            console.error('Error setting default address:', err);
+            toast.error(err.response?.data?.message || 'Failed to set default address');
+        }
+    };
+
+    const handleDeleteAddress = async () => {
+        if (!deletingAddressId) return;
+        try {
+            setActionLoading(true);
+            const res = await deleteSavedAddress(deletingAddressId);
+            if (res.data?.success) {
+                toast.success('Address deleted successfully');
+                setAddresses(res.data.savedAddresses || []);
+                setDeletingAddressId(null);
+            }
+        } catch (err) {
+            console.error('Error deleting address:', err);
+            toast.error(err.response?.data?.message || 'Failed to delete address');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleImportPrimaryAddress = async () => {
+        if (!profile?.address || (!profile.address.street && !profile.address.city)) return;
+        const primary = profile.address;
+        const importData = {
+            label: 'Home',
+            houseNumber: primary.houseNumber || '',
+            street: primary.street || primary.road || '',
+            road: primary.road || '',
+            landmark: primary.landmark || '',
+            area: primary.area || '',
+            city: primary.city || '',
+            state: primary.state || '',
+            pincode: primary.pincode || primary.postalCode || '',
+            formattedAddress: primary.formattedAddress || '',
+            lat: primary.lat || null,
+            lng: primary.lng || null,
+            isDefault: true
+        };
+        try {
+            setActionLoading(true);
+            const res = await createSavedAddress(importData);
+            if (res.data?.success) {
+                toast.success('Profile address saved as Home!');
+                setAddresses(res.data.savedAddresses || []);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to import address');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const hasPrimaryAddressToImport =
+        !loading &&
+        addresses.length === 0 &&
+        profile?.address &&
+        (profile.address.city || profile.address.street || profile.address.formattedAddress);
+
+    return (
+        <div className="bg-white rounded-2xl border border-neutral-100 p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
+                <div className="flex items-center gap-2.5">
+                    {onBack && (
+                        <button
+                            onClick={onBack}
+                            className="p-1 text-neutral-600 hover:text-secondary transition-colors shrink-0 flex items-center justify-center"
+                            title="Back to Personal Details"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                    )}
+                    <div>
+                        <h3 className="text-base font-extrabold text-secondary flex items-center gap-2">
+                            <MapPin className="w-5 h-5 text-primary" />
+                            Saved Addresses
+                        </h3>
+                        <p className="text-xs text-neutral-400 mt-0.5">Manage your service delivery addresses</p>
+                    </div>
+                </div>
+                <button
+                    onClick={handleOpenAddModal}
+                    className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-primary text-white text-xs font-bold rounded-xl shadow-sm hover:bg-primary-dark transition-all self-start sm:self-auto"
+                >
+                    <Plus className="w-4 h-4" /> Add Address
+                </button>
+            </div>
+
+            {hasPrimaryAddressToImport && (
+                <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-fade-in">
+                    <div>
+                        <h4 className="text-xs font-bold">Import Existing Address?</h4>
+                        <p className="text-[11px] text-amber-700 mt-0.5">
+                            {profile.address.formattedAddress || `${profile.address.street || ''}, ${profile.address.city || ''}`}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleImportPrimaryAddress}
+                        disabled={actionLoading}
+                        className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shrink-0"
+                    >
+                        Save as Home
+                    </button>
+                </div>
+            )}
+
+            {loading ? (
+                <div className="space-y-3 py-2">
+                    {[1, 2].map((i) => (
+                        <div key={i} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 animate-pulse h-20"></div>
+                    ))}
+                </div>
+            ) : addresses.length === 0 ? (
+                <div className="text-center py-6 space-y-2">
+                    <MapPin className="w-8 h-8 text-neutral-300 mx-auto" />
+                    <h4 className="text-sm font-bold text-secondary">No Saved Addresses</h4>
+                    <p className="text-xs text-neutral-400 max-w-xs mx-auto">Add your Home, Office or frequently used address for faster booking.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {addresses.map((addr) => (
+                        <div
+                            key={addr._id}
+                            className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2.5 ${
+                                addr.isDefault
+                                    ? 'border-primary/40 bg-primary/5 shadow-xs'
+                                    : 'border-neutral-100 bg-white hover:border-neutral-200'
+                            }`}
+                        >
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-bold text-secondary">{addr.label || 'Home'}</span>
+                                        {addr.isDefault && (
+                                            <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.2 rounded uppercase">
+                                                Default
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-xs font-semibold text-secondary leading-relaxed">
+                                    {addr.houseNumber ? `${addr.houseNumber}, ` : ''}
+                                    {addr.street || addr.road ? `${addr.street || addr.road}, ` : ''}
+                                    {addr.area ? `${addr.area}, ` : ''}
+                                    {addr.city}, {addr.state} - <span className="font-mono">{addr.pincode || addr.postalCode}</span>
+                                </p>
+                            </div>
+                            <div className="pt-2 border-t border-neutral-100/60 flex items-center justify-between text-xs font-bold">
+                                {!addr.isDefault ? (
+                                    <button
+                                        onClick={() => handleSetDefault(addr._id)}
+                                        className="text-neutral-500 hover:text-primary transition-colors flex items-center gap-1 text-[11px]"
+                                    >
+                                        <CheckCircle2 className="w-3.5 h-3.5" /> Set Default
+                                    </button>
+                                ) : (
+                                    <span className="text-primary text-[11px] flex items-center gap-1">
+                                        <Star className="w-3.5 h-3.5 fill-primary text-primary" /> Default
+                                    </span>
+                                )}
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={() => handleOpenEditModal(addr)}
+                                        className="p-1 text-neutral-400 hover:text-secondary rounded transition-colors"
+                                    >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        onClick={() => setDeletingAddressId(addr._id)}
+                                        className="p-1 text-neutral-400 hover:text-danger rounded transition-colors"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Inline Compact Modal Dialog */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-3 sm:p-4 pb-20 sm:pb-4 animate-fade-in overflow-y-auto">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl border border-gray-100 relative max-h-[85vh] sm:max-h-[90vh] flex flex-col my-auto">
+                        <div className="flex items-center justify-between pb-2 border-b border-gray-100 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-primary" />
+                                <h3 className="text-sm font-bold text-secondary">
+                                    {editingAddress ? 'Edit Saved Address' : 'Add New Address'}
+                                </h3>
+                            </div>
+                            <button onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveAddress} className="overflow-y-auto py-2.5 space-y-2.5 flex-1 pr-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <label className="text-[11px] font-bold text-secondary uppercase shrink-0">Label:</label>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {LABEL_OPTIONS.map((item) => {
+                                        const IconComp = item.icon;
+                                        const isSel = addressForm.label === item.id;
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                onClick={() => setAddressForm(prev => ({ ...prev, label: item.id }))}
+                                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all ${
+                                                    isSel ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'
+                                                }`}
+                                            >
+                                                <IconComp className="w-3.5 h-3.5" /> {item.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <AddressSelector
+                                address={addressForm}
+                                onChange={(updated) => setAddressForm(prev => ({ ...prev, ...updated }))}
+                                errors={formErrors}
+                                compact={true}
+                            />
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between pt-2 border-t border-gray-100 shrink-0 gap-2">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="isDefault"
+                                        checked={addressForm.isDefault}
+                                        onChange={(e) => setAddressForm(prev => ({ ...prev, isDefault: e.target.checked }))}
+                                        className="w-3.5 h-3.5 text-primary rounded border-gray-300 cursor-pointer"
+                                    />
+                                    <label htmlFor="isDefault" className="text-xs font-semibold text-secondary cursor-pointer">Set as default</label>
+                                </div>
+                                <div className="flex items-center gap-2 justify-end">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-3.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                    <Processing type="submit" loading={actionLoading} loadingText="Saving..." className="px-4 py-1.5 bg-primary text-white rounded-lg text-xs font-bold shadow-sm">
+                                        Save Address
+                                    </Processing>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {deletingAddressId && (
+                <DeleteConfirmModal
+                    isOpen={!!deletingAddressId}
+                    onClose={() => setDeletingAddressId(null)}
+                    onConfirm={handleDeleteAddress}
+                    title="Delete Saved Address"
+                    message="Are you sure you want to remove this saved address?"
+                    actionLoading={actionLoading}
+                />
+            )}
+        </div>
+    );
+};
 
 const UserProfile = () => {
     const { user, logoutUser, systemSettings } = useAuth();
@@ -50,9 +468,7 @@ const UserProfile = () => {
     });
     const [pageLoading, setPageLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
-    const [isEditingAddress, setIsEditingAddress] = useState(false);
     const [activeTab, setActiveTab] = useState('profile');
-    const [addressLoading, setAddressLoading] = useState(false);
     const [coupons, setCoupons] = useState([]);
     const [couponsLoading, setCouponsLoading] = useState(false);
 
@@ -61,25 +477,6 @@ const UserProfile = () => {
             fetchProfile();
         }
     }, [user]);
-
-    const handleAddressSubmit = async (e) => {
-        e.preventDefault();
-        setAddressLoading(true);
-        try {
-            const response = await updateProfile({ address: profile.address });
-            const data = response.data;
-            setIsEditingAddress(false);
-            setProfile(prev => ({
-                ...prev,
-                address: data.user.address || prev.address
-            }));
-            toast.success('Address updated successfully!');
-        } catch (error) {
-            toast.error(error.message);
-        } finally {
-            setAddressLoading(false);
-        }
-    };
 
     const fetchProfile = async () => {
         try {
@@ -102,16 +499,17 @@ const UserProfile = () => {
 
     const navigationItems = [
         { id: 'profile', label: 'Personal Details', icon: <User className="w-4 h-4" /> },
+        { id: 'addresses', label: 'Saved Addresses', icon: <MapPin className="w-4 h-4" /> },
         isWalletEnabled && { id: 'payments', label: 'Wallet & Activity', icon: <Wallet className="w-4 h-4" /> },
         { id: 'favorites', label: 'Favorite Providers', icon: <Heart className="w-4 h-4" /> },
         { id: 'offers', label: 'Coupons & Offers', icon: <Gift className="w-4 h-4" /> }
     ].filter(Boolean);
 
     const quickActions = [
+        { id: 'addresses', label: 'Addresses', icon: <MapPin className="w-5 h-5" />, color: 'bg-emerald-50 text-emerald-600' },
         isWalletEnabled && { id: 'payments', label: 'Wallet', icon: <Wallet className="w-5 h-5" />, color: 'bg-primary/10 text-primary' },
         { id: 'favorites', label: 'Favorites', icon: <Heart className="w-5 h-5" />, color: 'bg-rose-50 text-rose-500' },
-        { id: 'offers', label: 'Offers', icon: <Gift className="w-5 h-5" />, color: 'bg-amber-50 text-amber-500' },
-        { id: 'support', label: 'Support', icon: <Shield className="w-5 h-5" />, color: 'bg-blue-50 text-blue-500', action: () => navigate('/customer/complaints') }
+        { id: 'offers', label: 'Offers', icon: <Gift className="w-5 h-5" />, color: 'bg-amber-50 text-amber-500' }
     ].filter(Boolean);
 
     const onBack = () => {
@@ -189,75 +587,42 @@ const UserProfile = () => {
 
                         {/* Profile Details Tab */}
                         {activeTab === 'profile' && (
-                            <>
-                                <PersonalDetails
-                                    profile={profile}
-                                    setProfile={setProfile}
-                                    isEditing={isEditing}
-                                    setIsEditing={setIsEditing}
-                                    isWalletEnabled={isWalletEnabled}
-                                >
-                                    {/* Compact Quick Actions Grid */}
-                                    <div className="grid grid-cols-4 gap-3">
-                                        {quickActions.map((action) => (
-                                            <button
-                                                key={action.id}
-                                                onClick={() => {
-                                                    if (action.action) action.action();
-                                                    else { setActiveTab(action.id); setIsEditing(false); }
-                                                }}
-                                                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-white border border-neutral-100 shadow-sm hover:bg-neutral-50 transition-colors"
-                                            >
-                                                <div className={`p-2.5 rounded-xl ${action.color}`}>
-                                                    {action.icon}
-                                                </div>
-                                                <span className="text-[10px] font-black text-secondary tracking-tight">{action.label}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </PersonalDetails>
-
-                                {!isEditing && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {/* Address Card */}
-                                        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 text-left flex flex-col justify-between">
-                                            <div>
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <h3 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Saved Address</h3>
-                                                    <button onClick={() => setIsEditingAddress(!isEditingAddress)} className="text-[10px] font-bold text-primary hover:underline">
-                                                        {isEditingAddress ? 'Cancel' : 'Edit Address'}
-                                                    </button>
-                                                </div>
-                                                {isEditingAddress ? (
-                                                    <form onSubmit={handleAddressSubmit} className="space-y-3">
-                                                        <AddressSelector
-                                                            address={profile.address}
-                                                            onChange={(updatedAddress) => setProfile(prev => ({ ...prev, address: updatedAddress }))}
-                                                        />
-                                                        <Processing type="submit" loading={addressLoading} loadingText="Saving Address..." className="w-full py-2 bg-primary text-white rounded-xl text-xs font-bold">
-                                                            Save Address
-                                                        </Processing>
-                                                    </form>
-                                                ) : (
-                                                    <div className="flex items-start gap-2.5">
-                                                        <MapPin className="w-4.5 h-4.5 text-neutral-400 mt-0.5" />
-                                                        <p className="text-xs font-bold text-secondary leading-normal">
-                                                            {profile.address.formattedAddress || profile.address.street || 'No address added yet.'}
-                                                        </p>
-                                                    </div>
-                                                )}
+                            <PersonalDetails
+                                profile={profile}
+                                setProfile={setProfile}
+                                isEditing={isEditing}
+                                setIsEditing={setIsEditing}
+                                isWalletEnabled={isWalletEnabled}
+                                onNavigateTab={(tab) => { setActiveTab(tab); setIsEditing(false); }}
+                            >
+                                {/* Compact Quick Actions Grid */}
+                                <div className="grid grid-cols-4 gap-3">
+                                    {quickActions.map((action) => (
+                                        <button
+                                            key={action.id}
+                                            onClick={() => {
+                                                if (action.action) action.action();
+                                                else { setActiveTab(action.id); setIsEditing(false); }
+                                            }}
+                                            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-white border border-neutral-100 shadow-sm hover:bg-neutral-50 transition-colors"
+                                        >
+                                            <div className={`p-2.5 rounded-xl ${action.color}`}>
+                                                {action.icon}
                                             </div>
-                                        </div>
+                                            <span className="text-[10px] font-black text-secondary tracking-tight">{action.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </PersonalDetails>
+                        )}
 
-                                        {/* Mobile Logout option */}
-                                        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 flex flex-col justify-center items-center xl:hidden min-h-[100px]">
-                                            <button onClick={logoutUser} className="flex items-center gap-2 px-4 py-2 border border-danger/20 hover:bg-danger/5 rounded-xl text-xs font-black text-danger uppercase tracking-wider transition-colors">
-                                                <LogOut className="w-4 h-4" /> Sign Out of Account
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
+                        {/* Saved Addresses Standalone Tab */}
+                        {activeTab === 'addresses' && (
+                            <SavedAddressesSection
+                                profile={profile}
+                                fetchProfile={fetchProfile}
+                                onBack={onBack}
+                            />
                         )}
 
                         {/* Payments & Wallet Tab */}
@@ -296,3 +661,4 @@ const UserProfile = () => {
 };
 
 export default UserProfile;
+

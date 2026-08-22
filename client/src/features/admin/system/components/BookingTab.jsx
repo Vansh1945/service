@@ -75,6 +75,14 @@ const BookingTab = ({ systemSettings, handleNestedChange }) => {
           description="Period during which a customer can cancel a booking without penalty charges."
         />
         <SettingInput
+          label="Reschedule Minimum Notice (Hours)"
+          value={systemSettings.bookingSettings.rescheduleWindowHours ?? 6}
+          onChange={(e) => handleNestedChange('bookingSettings', 'rescheduleWindowHours', Number(e.target.value))}
+          type="number"
+          min="0"
+          description="Minimum hours before booking scheduled time within which customers can reschedule."
+        />
+        <SettingInput
           label="Refund Review Period (Hours)"
           value={systemSettings.bookingSettings.refundReviewHours}
           onChange={(e) => handleNestedChange('bookingSettings', 'refundReviewHours', Number(e.target.value))}

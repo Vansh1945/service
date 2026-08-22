@@ -121,6 +121,10 @@ const systemConfigSchema = new mongoose.Schema(
         type: Number,
         default: 60
       },
+      rescheduleWindowHours: {
+        type: Number,
+        default: 6
+      },
       refundReviewHours: {
         type: Number,
         default: 48

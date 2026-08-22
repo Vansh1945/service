@@ -12,10 +12,16 @@ const WalletActivity = ({ profile, onBack }) => {
     const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
     const renderBackHeader = (title) => (
-        <div className="flex items-center gap-3 pb-3 mb-4 border-b border-neutral-100 xl:hidden">
-            <button onClick={onBack} className="p-1 rounded-full hover:bg-neutral-100 transition-colors">
-                <ArrowLeft className="w-4.5 h-4.5 text-neutral-600" />
-            </button>
+        <div className="flex items-center gap-3 pb-3 mb-4 border-b border-neutral-100">
+            {onBack && (
+                <button
+                    onClick={onBack}
+                    className="p-1 text-neutral-600 hover:text-secondary transition-colors shrink-0 flex items-center justify-center"
+                    title="Back to Personal Details"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+            )}
             <h2 className="text-sm font-black text-secondary uppercase tracking-wider">{title}</h2>
         </div>
     );

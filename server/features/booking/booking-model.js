@@ -367,6 +367,50 @@ const bookingSchema = new Schema({
     }
   }],
 
+  // Reschedule history & count tracking
+  rescheduleHistory: [{
+    oldDate: {
+      type: Date,
+      default: Date.now
+    },
+    oldTime: {
+      type: String,
+      default: ''
+    },
+    newDate: {
+      type: Date,
+      default: Date.now
+    },
+    newTime: {
+      type: String,
+      default: ''
+    },
+    changedByRole: {
+      type: String,
+      enum: ['customer', 'provider', 'admin', 'system'],
+      default: 'customer'
+    },
+    changedById: {
+      type: Schema.Types.ObjectId,
+      default: null
+    },
+    reason: {
+      type: String,
+      trim: true,
+      maxlength: [300, 'Reason cannot exceed 300 characters'],
+      default: ''
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
+  rescheduleCount: {
+    type: Number,
+    default: 0
+  },
+
   // Estimated completion time for better UX
   estimatedCompletionTime: {
     type: Date
@@ -1094,6 +1138,7 @@ bookingSchema.index({ customer: 1, status: 1 });
 bookingSchema.index({ customer: 1, status: 1, createdAt: -1 });
 bookingSchema.index({ provider: 1 });
 bookingSchema.index({ provider: 1, status: 1 });
+bookingSchema.index({ provider: 1, date: 1, status: 1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ date: 1 });
 bookingSchema.index({ createdAt: -1 });
