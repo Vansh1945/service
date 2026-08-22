@@ -143,8 +143,15 @@ const AdminTransactions = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTxn, setSelectedTxn] = useState(null);
 
+  const abortControllerRef = useRef(null);
+
   // ── Fetch from Master Ledger endpoint ──────────────────────────────────────
   const fetchLedger = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
@@ -160,7 +167,7 @@ const AdminTransactions = () => {
         ...(searchQuery ? { search: searchQuery } : {}),
       };
 
-      const response = await TransactionService.getMasterLedger(params);
+      const response = await TransactionService.getMasterLedger(params, { signal: abortControllerRef.current.signal });
       if (response.data?.success) {
         setTransactions(response.data.data || []);
         setPagination(prev => ({
@@ -170,8 +177,10 @@ const AdminTransactions = () => {
         }));
       }
     } catch (err) {
-      console.error('Master Ledger fetch error:', err);
-      setError('Failed to load ledger records.');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Master Ledger fetch error:', err);
+        setError('Failed to load ledger records.');
+      }
     } finally {
       setLoading(false);
     }
@@ -179,7 +188,7 @@ const AdminTransactions = () => {
 
   useEffect(() => {
     fetchLedger();
-  }, [fetchLedger, filterType, year, financialYear, month, quarter, zoneIds, searchQuery]);
+  }, [fetchLedger]);
 
   // Auto-open TransactionLedgerDetailModal if openDetail query param is present
   const hasAutoOpenedRef = useRef(false);

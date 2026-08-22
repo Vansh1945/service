@@ -804,7 +804,7 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
                 <Calendar className="w-3.5 h-3.5" /> {formatDate(booking.date)}
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Clock className="w-3.5 h-3.5" /> {booking.time ? formatTime(booking.time) : 'Not set'}
+                <Clock className="w-3.5 h-3.5" /> {booking.time ? formatTime(booking.time) : (booking.createdAt ? formatTime(booking.createdAt) : (booking.date ? formatTime(booking.date) : 'Flexible'))}
               </div>
               <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200 capitalize">{booking.status}</span>
               {booking.paymentStatus === 'refunded' && (
@@ -980,30 +980,37 @@ const CustomerBookingsPage = () => {
     }
   };
 
-  const deepLinkLoadedRef = useRef(false);
+  const fetchAbortControllerRef = useRef(null);
 
   const fetchBookings = useCallback(async (isSilent = false) => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     try {
       if (!isSilent) setLoading(true);
       const params = new URLSearchParams({ status: statusFilter, timeFilter, searchTerm: debouncedSearch, page: currentPage, limit: 20 });
-      const res = await getCustomerBookings(params);
+      const res = await getCustomerBookings(params, { signal: fetchAbortControllerRef.current.signal });
       const responseData = res.data;
       setBookings(responseData.data || []);
       setPagination(responseData.pagination || {});
     } catch (err) {
-      showToast(`Error fetching bookings: ${err.message} `, 'error');
-      setBookings([]);
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        showToast(`Error fetching bookings: ${err.message} `, 'error');
+        setBookings([]);
+      }
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [API, token, showToast, statusFilter, timeFilter, debouncedSearch, currentPage]);
+  }, [showToast, statusFilter, timeFilter, debouncedSearch, currentPage]);
 
   // Reset page on debounced search change
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch]);
 
-  useEffect(() => { fetchBookings(); }, [statusFilter, timeFilter, debouncedSearch, currentPage]);
+  useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
   useEffect(() => {
     if (!socket) return;

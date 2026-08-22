@@ -279,7 +279,10 @@ const ProviderEarningsDashboard = () => {
     percentage: previous === 0 ? 0 : Math.abs(((current - previous) / previous) * 100).toFixed(1)
   });
 
-  useEffect(() => { refreshAll(); }, [timeFilter, dateFilter, refreshAll]);
+  useEffect(() => { refreshAll(); }, [refreshAll]);
+  useEffect(() => { fetchSummary(); }, [timeFilter, fetchSummary]);
+  useEffect(() => { fetchEarningsReport(); fetchWithdrawalReport(); }, [dateFilter, fetchEarningsReport, fetchWithdrawalReport]);
+
   useEffect(() => {
     const interval = setInterval(fetchSummary, 60000);
     return () => clearInterval(interval);

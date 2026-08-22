@@ -202,9 +202,9 @@ const AdminProviders = () => {
   }), [providers]);
 
   // Fetch all providers
-  const fetchProviders = useCallback(async () => {
+  const fetchProviders = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await AdminService.getAllProviders();
       if (res.data?.success || res.data?.providers || res.data?.data) {
         setProviders(res.data.providers || res.data.data || []);
@@ -213,7 +213,7 @@ const AdminProviders = () => {
       console.error('Fetch providers error:', error);
       toast.error(error.response?.data?.message || 'Failed to fetch providers');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -261,7 +261,7 @@ const AdminProviders = () => {
         if (action === 'rejected') msg = 'Bank details rejected successfully';
 
         showToast(msg, 'success');
-        fetchProviders();
+        fetchProviders(true);
 
         // Update local state without closing the modal or refresh to meet "no page refresh required"
         if (data.provider) {

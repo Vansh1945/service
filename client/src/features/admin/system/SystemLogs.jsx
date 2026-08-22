@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
@@ -206,7 +206,14 @@ const SystemLogs = () => {
     onPageChange
   } = usePagination(1, 100);
 
+  const fetchAbortControllerRef = useRef(null);
+
   const fetchLogs = useCallback(async (isAuto = false) => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     if (!isAuto) setLoading(true);
     try {
       const res = await AdminService.getSystemLogs({
@@ -214,14 +221,16 @@ const SystemLogs = () => {
         limit: limit,
         level: backendLevel,
         t: Date.now()
-      });
+      }, { signal: fetchAbortControllerRef.current.signal });
       if (res.data?.success) {
         setLogs(res.data.logs);
         setTotalItems(res.data.total);
       }
     } catch (err) {
-      console.error(err);
-      if (!isAuto) showToast('Failed to fetch system logs', 'error');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error(err);
+        if (!isAuto) showToast('Failed to fetch system logs', 'error');
+      }
     } finally {
       if (!isAuto) setLoading(false);
     }

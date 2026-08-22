@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FiDownload, FiCalendar, FiTrendingUp, FiUsers, FiDollarSign,
   FiCreditCard, FiFileText, FiClock, FiFilter, FiAlertCircle,
@@ -80,7 +80,14 @@ const AdminFinancialReportCenter = () => {
 
   const [activeFilterCount, setActiveFilterCount] = useState(0);
 
+  const fetchAbortControllerRef = useRef(null);
+
   const fetchReportData = useCallback(async (overrides = {}) => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       const mergedQuery = getMergedQuery();
@@ -100,7 +107,7 @@ const AdminFinancialReportCenter = () => {
         limit: 50
       };
 
-      const res = await PaymentService.getFinancialReportCenterData(queryParams);
+      const res = await PaymentService.getFinancialReportCenterData(queryParams, { signal: fetchAbortControllerRef.current.signal });
       if (res.data?.success) {
         setSummaryData(res.data.summaryCards || null);
         setReportRows(res.data.data || []);
@@ -109,8 +116,10 @@ const AdminFinancialReportCenter = () => {
         }
       }
     } catch (err) {
-      console.error('Error loading report center data:', err);
-      showToast?.('Failed to load financial report data', 'error');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Error loading report center data:', err);
+        showToast?.('Failed to load financial report data', 'error');
+      }
     } finally {
       setLoading(false);
     }

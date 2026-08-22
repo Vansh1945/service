@@ -850,6 +850,11 @@ const getAllTransactions = async (req, res, next) => {
       filter.type = req.query.type;
     }
 
+    // Exclude uncollected pending cash bookings from general payment ledger until service completion/collection
+    if (!status || status === 'all') {
+      filter.$nor = [{ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending' }];
+    }
+
     const transactions = await Transaction.find(filter)
       .populate('user', 'name email phone')
       .populate({
@@ -3370,6 +3375,11 @@ const getMasterLedger = async (req, res, next) => {
     if (status && status !== 'all') filter.paymentStatus = status;
     if (type && type !== 'all') filter.type = type;
     if (ledgerType && ledgerType !== 'all') filter.ledgerType = ledgerType;
+
+    // Exclude uncollected pending cash bookings from Master Ledger until service completion/collection
+    if (!status || status === 'all') {
+      filter.$nor = [{ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending' }];
+    }
 
     if (paymentMethod && paymentMethod !== 'all') {
       const pm = paymentMethod.toLowerCase();

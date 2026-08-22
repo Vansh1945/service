@@ -752,8 +752,9 @@ const ProviderBooking = () => {
     return { totalBookings: allBookings.length, completedBookings: completed.length, pendingBookings: pending.length, totalCashCollected, commissionPayable, netEarnings: totalCashCollected - commissionPayable };
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
+      if (!silent) setLoading(true);
       const [allBookings, pendingBookings, rejectedBookings] = await Promise.all([
         fetchBookings('all'),
         fetchBookings('pending'),
@@ -799,7 +800,7 @@ const ProviderBooking = () => {
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
       setIsRefreshing(false);
     }
   }, [fetchBookings, calculateStats]);

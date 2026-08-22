@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FiXCircle, FiRefreshCw, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
@@ -20,12 +20,19 @@ const FailedPaymentsPage = () => {
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  const fetchFailedPayments = async () => {
+  const abortControllerRef = useRef(null);
+
+  const fetchFailedPayments = useCallback(async (silent = false) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch });
-      const res = await TransactionService.getFailedPayments(params);
+      const res = await TransactionService.getFailedPayments(params, { signal: abortControllerRef.current.signal });
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
         setPaginationData({
@@ -34,16 +41,18 @@ const FailedPaymentsPage = () => {
         });
       }
     } catch (err) {
-      console.error("Error loading failed payments:", err);
-      setError("Failed to fetch live failed payment records.");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Error loading failed payments:", err);
+        setError("Failed to fetch live failed payment records.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [getMergedQuery, currentPage, limit, debouncedSearch, setPaginationData]);
 
   useEffect(() => {
     fetchFailedPayments();
-  }, [currentPage, limit, debouncedSearch]);
+  }, [fetchFailedPayments]);
 
   const handleRetryVerify = async (id) => {
     try {
@@ -51,7 +60,7 @@ const FailedPaymentsPage = () => {
       const res = await TransactionService.adminRetryVerify(id);
       if (res.data?.success) {
         alert("Payment verified and reconciled successfully!");
-        fetchFailedPayments();
+        fetchFailedPayments(true);
       }
     } catch (err) {
       alert(err.response?.data?.message || "Failed to retry verification with Razorpay.");

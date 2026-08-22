@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
@@ -274,6 +274,7 @@ const getProviderMarkerIcon = (status) => {
 };
 
 const ZoneManagement = () => {
+  const navigate = useNavigate();
   const { showToast } = useAuth();
   const loc = useLocation();
   const [zones, setZones] = useState([]);
@@ -580,7 +581,7 @@ const ZoneManagement = () => {
         {/* Bottom Action Buttons (2x2 Grid with Icon & Name) */}
         <div className="grid grid-cols-2 gap-2 border-t border-primary/10 pt-3 mt-1 text-[10px] font-bold uppercase tracking-wider">
           <button
-            onClick={() => { window.location.href = `/admin/coupons?prefillZone=${zone.id}`; }}
+            onClick={() => { navigate(`/admin/coupons?prefillZone=${zone.id}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
             title="Create Coupon"
           >
@@ -588,7 +589,7 @@ const ZoneManagement = () => {
             <span>Coupon</span>
           </button>
           <button
-            onClick={() => { window.location.href = `/admin/commission?prefillZone=${zone.id}`; }}
+            onClick={() => { navigate(`/admin/commission?prefillZone=${zone.id}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-secondary/10 text-secondary transition-all hover:bg-secondary hover:text-white"
             title="Set Commission"
           >
@@ -596,7 +597,7 @@ const ZoneManagement = () => {
             <span>Commission</span>
           </button>
           <button
-            onClick={() => { window.location.href = `/admin/surge?prefillZone=${zone.id}`; }}
+            onClick={() => { navigate(`/admin/surge?prefillZone=${zone.id}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-accent/10 text-accent transition-all hover:bg-accent hover:text-white"
             title="Add Surge Charge"
           >
@@ -1941,7 +1942,7 @@ const ZoneManagement = () => {
             <div className="grid grid-cols-1 gap-3 relative z-10 font-sans">
               <button
                 onClick={() => {
-                  window.location.href = `/admin/coupons?prefillZone=${actionHubModal.zone.id}`;
+                  navigate(`/admin/coupons?prefillZone=${actionHubModal.zone.id}`);
                 }}
                 className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
               >
@@ -1959,7 +1960,7 @@ const ZoneManagement = () => {
 
               <button
                 onClick={() => {
-                  window.location.href = `/admin/commission?prefillZone=${actionHubModal.zone.id}`;
+                  navigate(`/admin/commission?prefillZone=${actionHubModal.zone.id}`);
                 }}
                 className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
               >
@@ -1977,7 +1978,7 @@ const ZoneManagement = () => {
 
               <button
                 onClick={() => {
-                  window.location.href = `/admin/surge?prefillZone=${actionHubModal.zone.id}`;
+                  navigate(`/admin/surge?prefillZone=${actionHubModal.zone.id}`);
                 }}
                 className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
               >

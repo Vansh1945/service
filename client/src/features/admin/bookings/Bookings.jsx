@@ -237,7 +237,7 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                         {formatDate(booking.date)}
                     </div>
                     <div className="text-sm text-gray-500">
-                        {booking.time ? formatTime(booking.time) : 'Not specified'}
+                        {booking.time ? formatTime(booking.time) : (booking.createdAt ? formatTime(booking.createdAt) : (booking.date ? formatTime(booking.date) : 'Flexible'))}
                     </div>
                 </div>
             </td>
@@ -643,6 +643,8 @@ const AdminBookingsView = () => {
         reset
     } = useAdminFilter();
 
+    const fetchAbortControllerRef = useRef(null);
+
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
     const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
     const [providerSearch, setProviderSearch] = useState('');
@@ -717,6 +719,11 @@ const AdminBookingsView = () => {
     }, [API]);
 
     const fetchBookings = useCallback(async (silent = false) => {
+        if (fetchAbortControllerRef.current) {
+            fetchAbortControllerRef.current.abort();
+        }
+        fetchAbortControllerRef.current = new AbortController();
+
         try {
             if (!silent) setLoading(true);
 
@@ -727,7 +734,7 @@ const AdminBookingsView = () => {
                 ...getMergedQuery()
             };
 
-            const response = await BookingService.getAllBookings(params);
+            const response = await BookingService.getAllBookings(params, { signal: fetchAbortControllerRef.current.signal });
             const data = response.data;
 
             if (data.success || response.status === 200) {
@@ -746,8 +753,10 @@ const AdminBookingsView = () => {
                 }
             }
         } catch (error) {
-            console.error('Error fetching bookings:', error);
-            showToast(error.message, 'error');
+            if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
+                console.error('Error fetching bookings:', error);
+                showToast(error.message, 'error');
+            }
         } finally {
             if (!silent) setLoading(false);
         }
@@ -1252,8 +1261,12 @@ const AdminBookingsView = () => {
     // Fetch data on component mount and when filters/pagination change
     useEffect(() => {
         fetchBookings();
-        fetchProviders();
     }, [filters, pagination.page, pagination.limit, filterType, year, financialYear, month, quarter, zoneIds]);
+
+    // Fetch providers list for assignment modal once on mount
+    useEffect(() => {
+        fetchProviders();
+    }, [fetchProviders]);
 
     // Generate pagination items
 

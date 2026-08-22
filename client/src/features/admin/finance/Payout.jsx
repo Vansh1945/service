@@ -269,26 +269,14 @@ const AdminPayout = () => {
     setPage(1);
   }, [urlSearch, searchQuery]);
 
-  useEffect(() => { fetchWithdrawals(); }, [page, filters, searchQuery]);
+  const fetchAbortControllerRef = useRef(null);
 
-  const hasAutoOpenedRef = useRef(false);
-  useEffect(() => {
-    if (searchParams.get('openDetail') === 'true' && withdrawals.length > 0 && !hasAutoOpenedRef.current) {
-      hasAutoOpenedRef.current = true;
-      const searchVal = searchParams.get('search');
-      const target = withdrawals.find(w =>
-        w._id === searchVal ||
-        w.payoutId === searchVal ||
-        w.transactionReference === searchVal ||
-        w.provider?.name === searchVal
-      ) || withdrawals[0];
-      if (target) {
-        openInvestigationDrawer('payout', target._id, target);
-      }
+  const fetchWithdrawals = useCallback(async () => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
     }
-  }, [searchParams, withdrawals, openInvestigationDrawer]);
+    fetchAbortControllerRef.current = new AbortController();
 
-  const fetchWithdrawals = async () => {
     try {
       setLoading(true);
       const params = getMergedQuery({
@@ -297,8 +285,7 @@ const AdminPayout = () => {
         ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
       });
 
-
-      const response = await PaymentService.getAllWithdrawalRequests(params);
+      const response = await PaymentService.getAllWithdrawalRequests(params, { signal: fetchAbortControllerRef.current.signal });
       const data = response.data;
 
       if (data.success) {
@@ -306,11 +293,15 @@ const AdminPayout = () => {
         setTotal(data.total || 0);
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to load withdrawal requests');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        toast.error(err.message || 'Failed to load withdrawal requests');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMergedQuery, page, limit, filters]);
+
+  useEffect(() => { fetchWithdrawals(); }, [fetchWithdrawals]);
 
   const handleView = (w) => {
     openInvestigationDrawer('payout', w._id, w);

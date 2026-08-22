@@ -114,9 +114,33 @@ const getNotifications = async (req, res, next) => {
             Notification.countDocuments({ ...query, isRead: false })
         ]);
 
+        const formattedNotifications = await Promise.all(notifications.map(async (notif) => {
+            let message = notif.message || '';
+            let title = notif.title || '';
+            if (message.includes('{{') || title.includes('{{')) {
+                let providerName = 'Provider';
+                if (notif.referenceId) {
+                    try {
+                        const BookingModel = mongoose.model('Booking');
+                        const booking = await BookingModel.findById(notif.referenceId).populate('provider', 'name').lean();
+                        if (booking?.provider?.name) {
+                            providerName = booking.provider.name;
+                        }
+                    } catch (e) { }
+                }
+                message = message.replace(/\{\{\s*providerName\s*\}\}/g, providerName)
+                                 .replace(/\{\{\s*customerName\s*\}\}/g, 'Customer')
+                                 .replace(/\{\{\s*serviceName\s*\}\}/g, 'service');
+                title = title.replace(/\{\{\s*providerName\s*\}\}/g, providerName)
+                             .replace(/\{\{\s*customerName\s*\}\}/g, 'Customer')
+                             .replace(/\{\{\s*serviceName\s*\}\}/g, 'service');
+            }
+            return { ...notif, title, message };
+        }));
+
         return res.status(200).json({
             success: true,
-            data: notifications,
+            data: formattedNotifications,
             unreadCount,
             pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
         });

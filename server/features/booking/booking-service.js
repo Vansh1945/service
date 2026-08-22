@@ -860,6 +860,14 @@ class BookingService {
       const resolvedIsEmergency = !!(isEmergency || resolvedBookingType === 'emergency');
       const resolvedIsInstant = !!(isInstant || resolvedBookingType === 'instant');
 
+      let resolvedTime = time;
+      if (!resolvedTime || typeof resolvedTime !== 'string' || !resolvedTime.trim()) {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        resolvedTime = `${hours}:${minutes}`;
+      }
+
       const { SystemConfig } = require('../system-setting/system-setting-model');
       const settings = await SystemConfig.findOne();
       if (settings) {
@@ -1028,9 +1036,14 @@ class BookingService {
           assignedProviderId = providerDoc._id;
         }
 
-        // Resolve booking zone from address coordinates upfront
+        // Resolve booking zone from address coordinates upfront (with active zone fallback)
         if (!detectedZone) {
-          throw new Error('Selected address is outside our active service zones');
+          detectedZone = await ZoneModel.findOne({ status: 'active' });
+        }
+        if (!detectedZone) {
+          const err = new Error('No active service zones are currently available. Please contact support.');
+          err.status = 400;
+          throw err;
         }
         let detectedZoneId = detectedZone._id;
 
@@ -1128,7 +1141,7 @@ class BookingService {
             }
           }],
           date: bookingDate,
-          time: time || null,
+          time: resolvedTime,
           address,
           location: (address && typeof address.lat === 'number' && typeof address.lng === 'number') ? {
             type: 'Point',
@@ -1205,60 +1218,32 @@ class BookingService {
           else await provUpdate;
         }
 
-        // If paymentMethod is cash, create or update a transaction record
-        if (paymentMethod === 'cash') {
-          const Transaction = mongoose.model('Transaction');
-          let transaction;
-          if (session) {
-            transaction = await Transaction.findOne({ booking: booking._id }).session(session);
-          } else {
-            transaction = await Transaction.findOne({ booking: booking._id });
-          }
-
-          if (transaction) {
-            transaction.amount = booking.totalAmount;
-            transaction.paymentMethod = 'cash';
-            transaction.paymentStatus = 'pending';
-            transaction.type = 'payment';
-            transaction.description = 'Pay After Service (Cash/COD) Payment pending';
-            transaction.updatedAt = new Date();
-          } else {
-            transaction = new Transaction({
-              booking: booking._id,
-              bookingId: booking.bookingId || booking._id.toString(),
-              user: req.user._id,
-              customerId: req.user._id.toString(),
-              amount: booking.totalAmount,
-              paymentMethod: 'cash',
-              paymentStatus: 'pending',
-              type: 'payment',
-              description: 'Pay After Service (Cash/COD) Payment pending'
-            });
-          }
-
-          if (session) await transaction.save({ session });
-          else await transaction.save();
-        }
 
         // If coupon was applied, save the updated coupon and flag user firstBookingUsed if first-booking coupon
-        if (couponCode && couponDetails && coupon) {
-          coupon.usedBy.push({
-            user: req.user._id,
-            bookingValue: subtotal,
-            usedAt: new Date()
-          });
-          if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
-            coupon.isActive = false;
-          }
-          if (session) await coupon.save({ session });
-          else await coupon.save();
-
-          if (coupon.isFirstBooking) {
-            const userUpdate = User.findByIdAndUpdate(req.user._id, {
-              $set: { firstBookingUsed: true }
+        if (couponCode && couponDetails) {
+          const Coupon = require('../coupon/coupon-model');
+          const couponQuery = Coupon.findOne({ code: couponCode.trim().toUpperCase() });
+          const coupon = session ? await couponQuery.session(session) : await couponQuery;
+          if (coupon) {
+            coupon.usedBy = coupon.usedBy || [];
+            coupon.usedBy.push({
+              user: req.user._id,
+              bookingValue: subtotal,
+              usedAt: new Date()
             });
-            if (session) await userUpdate.session(session);
-            else await userUpdate;
+            if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
+              coupon.isActive = false;
+            }
+            if (session) await coupon.save({ session });
+            else await coupon.save();
+
+            if (coupon.isFirstBooking) {
+              const userUpdate = User.findByIdAndUpdate(req.user._id, {
+                $set: { firstBookingUsed: true }
+              });
+              if (session) await userUpdate.session(session);
+              else await userUpdate;
+            }
           }
         }
 
@@ -1313,7 +1298,19 @@ class BookingService {
 
     } catch (error) {
       console.error('Error creating booking:', error);
-      res.status(500).json({
+      const isDomainError = error.message && (
+        error.message.includes('outside our active service') ||
+        error.message.includes('unavailable') ||
+        error.message.includes('not found') ||
+        error.message.includes('only allowed for completed') ||
+        error.message.includes('required') ||
+        error.message.includes('disabled') ||
+        error.message.includes('Invalid') ||
+        error.message.includes('profile') ||
+        error.name === 'ValidationError'
+      );
+      const statusCode = error.status || (isDomainError ? 400 : 500);
+      res.status(statusCode).json({
         success: false,
         message: error.message || 'Failed to create booking',
         error: process.env.NODE_ENV === 'development' ? error.stack : undefined

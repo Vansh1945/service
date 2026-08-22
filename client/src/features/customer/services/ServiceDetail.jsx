@@ -263,7 +263,7 @@ const ServiceDetailPage = () => {
       <ErrorState
         title="Service Not Found"
         message={error || "We couldn't find the service you are looking for."}
-        onRetry={() => window.location.reload()}
+        onRetry={fetchServiceData}
         onBack={() => navigate('/customer/services')}
         backText="Browse Services"
       />

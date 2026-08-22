@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FiZap, FiCheckCircle, FiClock, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
@@ -19,7 +19,14 @@ const RazorpayManagementPage = () => {
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  const fetchRazorpayLogs = async () => {
+  const abortControllerRef = useRef(null);
+
+  const fetchRazorpayLogs = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
@@ -29,7 +36,7 @@ const RazorpayManagementPage = () => {
         paymentMethod: 'razorpay',
         search: debouncedSearch
       });
-      const res = await TransactionService.getAllTransactions(params);
+      const res = await TransactionService.getAllTransactions(params, { signal: abortControllerRef.current.signal });
       if (res.data?.success) {
         const list = res.data.data.transactions || res.data.data || [];
         setTransactions(list);
@@ -39,16 +46,18 @@ const RazorpayManagementPage = () => {
         });
       }
     } catch (err) {
-      console.error("Razorpay logs fetch error:", err);
-      setError("Failed to fetch live Razorpay transaction logs.");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Razorpay logs fetch error:", err);
+        setError("Failed to fetch live Razorpay transaction logs.");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMergedQuery, currentPage, limit, debouncedSearch, setPaginationData]);
 
   useEffect(() => {
     fetchRazorpayLogs();
-  }, [currentPage, limit, debouncedSearch]);
+  }, [fetchRazorpayLogs]);
 
   return (
     <div className="space-y-6">

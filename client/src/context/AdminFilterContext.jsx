@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as BookingService from '../services/BookingService';
 import * as ZoneService from '../services/ZoneService';
 import * as AdminService from '../services/AdminService';
@@ -446,68 +446,76 @@ export const AdminFilterProvider = ({ children }) => {
     }
   }, []);
 
-  return (
-    <AdminFilterContext.Provider
-      value={{
-        filterType,
-        setFilterType,
-        year,
-        setYear,
-        financialYear,
-        setFinancialYear,
-        month,
-        setMonth,
-        quarter,
-        setQuarter,
-        zoneIds,
-        setZoneIds,
-        zones,
-        earliestYear,
-        searchQuery,
-        setSearchQuery,
-        paymentMethod,
-        setPaymentMethod,
-        bookingStatus,
-        setBookingStatus,
-        transactionType,
-        setTransactionType,
-        refundStatus,
-        setRefundStatus,
-        gatewayStatus,
-        setGatewayStatus,
-        settlementStatus,
-        setSettlementStatus,
-        drawerConfig,
-        drawerHistory,
-        openInvestigationDrawer,
-        closeInvestigationDrawer,
-        popDrawerHistory,
-        getComputedDateRange,
-        resetGlobalFilters,
-        getMergedQuery,
-        getEntityRoute,
-        showGlobalFilterBar,
-        setShowGlobalFilterBar,
-        refresh,
-        reset,
+  const contextValue = useMemo(() => ({
+    filterType,
+    setFilterType,
+    year,
+    setYear,
+    financialYear,
+    setFinancialYear,
+    month,
+    setMonth,
+    quarter,
+    setQuarter,
+    zoneIds,
+    setZoneIds,
+    zones,
+    earliestYear,
+    searchQuery,
+    setSearchQuery,
+    paymentMethod,
+    setPaymentMethod,
+    bookingStatus,
+    setBookingStatus,
+    transactionType,
+    setTransactionType,
+    refundStatus,
+    setRefundStatus,
+    gatewayStatus,
+    setGatewayStatus,
+    settlementStatus,
+    setSettlementStatus,
+    drawerConfig,
+    drawerHistory,
+    openInvestigationDrawer,
+    closeInvestigationDrawer,
+    popDrawerHistory,
+    getComputedDateRange,
+    resetGlobalFilters,
+    getMergedQuery,
+    getEntityRoute,
+    showGlobalFilterBar,
+    setShowGlobalFilterBar,
+    refresh,
+    reset,
 
-        // Universal Search & Filter Extensions
-        activeModule,
-        setActiveModule,
-        universalSearch,
-        setUniversalSearch,
-        universalFilters,
-        setUniversalFilters,
-        universalPagination,
-        setUniversalPagination,
-        universalResults,
-        setUniversalResults,
-        isSearching,
-        searchError,
-        executeUniversalSearch,
-        resetUniversalSearch
-      }}
-    >
+    // Universal Search & Filter Extensions
+    activeModule,
+    setActiveModule,
+    universalSearch,
+    setUniversalSearch,
+    universalFilters,
+    setUniversalFilters,
+    universalPagination,
+    setUniversalPagination,
+    universalResults,
+    setUniversalResults,
+    isSearching,
+    searchError,
+    executeUniversalSearch,
+    resetUniversalSearch
+  }), [
+    filterType, year, financialYear, month, quarter, zoneIds, zones, earliestYear,
+    searchQuery, paymentMethod, bookingStatus, transactionType, refundStatus,
+    gatewayStatus, settlementStatus, drawerConfig, drawerHistory, openInvestigationDrawer,
+    closeInvestigationDrawer, popDrawerHistory, getComputedDateRange, resetGlobalFilters,
+    getMergedQuery, getEntityRoute, showGlobalFilterBar, refresh, reset, activeModule,
+    universalSearch, universalFilters, universalPagination, universalResults, isSearching,
+    searchError, executeUniversalSearch, resetUniversalSearch
+  ]);
+
+  return (
+    <AdminFilterContext.Provider value={contextValue}>
       {children}
     </AdminFilterContext.Provider>
   );

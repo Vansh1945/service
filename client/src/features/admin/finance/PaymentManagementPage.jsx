@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiCreditCard,
@@ -57,7 +57,14 @@ const PaymentManagementPage = () => {
   } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
+  const abortControllerRef = useRef(null);
+
   const fetchPayments = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
@@ -66,7 +73,7 @@ const PaymentManagementPage = () => {
       if (urlMethod) params.paymentMethod = urlMethod;
       if (urlStatus) params.status = urlStatus;
 
-      const response = await TransactionService.getAllTransactions(params);
+      const response = await TransactionService.getAllTransactions(params, { signal: abortControllerRef.current.signal });
       if (response.data?.success) {
         const rawPayments = response.data.data?.transactions || response.data.data || [];
 
@@ -88,8 +95,10 @@ const PaymentManagementPage = () => {
         });
       }
     } catch (err) {
-      console.error('Error loading payments:', err);
-      setError('Failed to load payment records.');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Error loading payments:', err);
+        setError('Failed to load payment records.');
+      }
     } finally {
       setLoading(false);
     }

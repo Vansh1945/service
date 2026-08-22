@@ -22,12 +22,19 @@ const SettlementsPage = () => {
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  const fetchSettlements = async () => {
+  const abortControllerRef = useRef(null);
+
+  const fetchSettlements = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
       const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch });
-      const res = await TransactionService.getSettlements(params);
+      const res = await TransactionService.getSettlements(params, { signal: abortControllerRef.current.signal });
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
         setPaginationData({
@@ -36,16 +43,18 @@ const SettlementsPage = () => {
         });
       }
     } catch (err) {
-      console.error("Error loading settlements:", err);
-      setError("Failed to fetch live settlement records.");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Error loading settlements:", err);
+        setError("Failed to fetch live settlement records.");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMergedQuery, currentPage, limit, debouncedSearch, setPaginationData]);
 
   useEffect(() => {
     fetchSettlements();
-  }, [currentPage, limit, debouncedSearch]);
+  }, [fetchSettlements]);
 
   const hasAutoOpenedRef = useRef(false);
   useEffect(() => {

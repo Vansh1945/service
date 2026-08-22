@@ -39,9 +39,14 @@ class PricingService {
       throw new Error('Service not found');
     }
 
-    // 2. Resolve Booking Zone from Coordinates
+    // 2. Resolve Booking Zone from Coordinates with active zone fallback
     if (!detectedZone) {
-      throw new Error('Selected address is outside our active service zones');
+      detectedZone = await ZoneModel.findOne({ status: 'active' });
+    }
+    if (!detectedZone) {
+      const err = new Error('No active service zones are currently available. Please contact support.');
+      err.status = 400;
+      throw err;
     }
     const detectedZoneId = detectedZone._id;
 

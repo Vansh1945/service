@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FiTrendingUp, FiCheckCircle, FiClock, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
@@ -20,12 +20,19 @@ const ProviderEarningsPage = () => {
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  const fetchEarnings = async () => {
+  const abortControllerRef = useRef(null);
+
+  const fetchEarnings = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
       const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch, type: 'payment' });
-      const res = await TransactionService.getAllTransactions(params);
+      const res = await TransactionService.getAllTransactions(params, { signal: abortControllerRef.current.signal });
       if (res.data?.success) {
         const list = res.data.data.transactions || res.data.data || [];
         setTransactions(list);
@@ -35,16 +42,18 @@ const ProviderEarningsPage = () => {
         });
       }
     } catch (err) {
-      console.error("Error loading provider earnings:", err);
-      setError("Failed to fetch live provider earnings records.");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Error loading provider earnings:", err);
+        setError("Failed to fetch live provider earnings records.");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMergedQuery, currentPage, limit, debouncedSearch, setPaginationData]);
 
   useEffect(() => {
     fetchEarnings();
-  }, [currentPage, limit, debouncedSearch]);
+  }, [fetchEarnings]);
 
   return (
     <div className="space-y-6">

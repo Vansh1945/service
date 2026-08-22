@@ -203,8 +203,15 @@ const AdminCommissionPage = () => {
   const performanceScores = ['bronze', 'silver', 'gold', 'platinum'];
   const applyToOptions = ['all', 'performanceScore', 'specificProvider'];
 
+  const fetchAbortControllerRef = useRef(null);
+
   // Fetch commission rules
   const fetchCommissionRules = useCallback(async (page = 1, limit = 10) => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     setLoading(true);
     try {
       const params = {
@@ -217,7 +224,7 @@ const AdminCommissionPage = () => {
         ...(zoneIds && zoneIds.length > 0 && { zoneIds: zoneIds.join(',') })
       };
 
-      const response = await CommissionService.listCommissionRules(params);
+      const response = await CommissionService.listCommissionRules(params, { signal: fetchAbortControllerRef.current.signal });
       const data = response.data;
       if (data.success) {
         setCommissionRules(data.data);
@@ -233,8 +240,10 @@ const AdminCommissionPage = () => {
         }
       }
     } catch (error) {
-      console.error(error);
-      showToast('Failed to fetch commission rules', 'error');
+      if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
+        console.error(error);
+        showToast('Failed to fetch commission rules', 'error');
+      }
     } finally {
       setLoading(false);
     }

@@ -712,7 +712,14 @@ const RefundPage = () => {
   const [isLedgerItem, setIsLedgerItem] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  const fetchAbortControllerRef = useRef(null);
+
   const fetchLedgerData = useCallback(async () => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     setLoading(true);
     try {
       if (activeTab === 'ledger') {
@@ -727,7 +734,7 @@ const RefundPage = () => {
           fromDate: fromDate || undefined,
           toDate: toDate || undefined,
           search: searchTerm || undefined,
-        });
+        }, { signal: fetchAbortControllerRef.current.signal });
 
         if (res.data?.success) {
           setRefunds(res.data.data || []);
@@ -739,15 +746,17 @@ const RefundPage = () => {
           page: pagination.page,
           limit: pagination.limit,
           search: searchTerm || undefined,
-        });
+        }, { signal: fetchAbortControllerRef.current.signal });
         if (res.data?.success) {
           setBookings(res.data.data || []);
           if (res.data.pagination) setPagination(res.data.pagination);
         }
       }
     } catch (err) {
-      console.error('Error fetching refund data:', err);
-      showToast('Failed to load refund operations data', 'error');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error('Error fetching refund data:', err);
+        showToast('Failed to load refund operations data', 'error');
+      }
     } finally {
       setLoading(false);
     }

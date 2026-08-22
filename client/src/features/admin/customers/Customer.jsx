@@ -100,8 +100,8 @@ const AdminCustomersDashboard = () => {
     });
 
     // Fetch customers
-    const fetchCustomers = async () => {
-        setLoading(true);
+    const fetchCustomers = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const response = await AdminService.getAllCustomers();
             const data = response.data;
@@ -118,7 +118,7 @@ const AdminCustomersDashboard = () => {
             console.error('Error fetching customers:', error);
             showToast('Error fetching customers', 'error');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -258,7 +258,7 @@ const AdminCustomersDashboard = () => {
             if (response.data.success) {
                 showToast('Customer details updated successfully', 'success');
                 setShowEditModal(false);
-                fetchCustomers();
+                fetchCustomers(true);
             } else {
                 showToast(response.data.message || 'Failed to update customer', 'error');
             }
@@ -307,7 +307,7 @@ const AdminCustomersDashboard = () => {
                 });
                 if (response.data.success) {
                     showToast(`Customer account successfully ${customer.isSuspended ? 'unblocked' : 'blocked'}`, 'success');
-                    fetchCustomers();
+                    fetchCustomers(true);
                     if (selectedCustomer && selectedCustomer._id === customer._id) {
                         setSelectedCustomer(prev => ({
                             ...prev,
@@ -322,7 +322,7 @@ const AdminCustomersDashboard = () => {
                 const response = await AdminService.deleteCustomer(customer._id);
                 if (response.data.success) {
                     showToast('Customer account deactivated successfully', 'success');
-                    fetchCustomers();
+                    fetchCustomers(true);
                     setShowViewModal(false);
                 } else {
                     showToast(response.data.message || 'Failed to deactivate account', 'error');

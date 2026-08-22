@@ -196,10 +196,93 @@ const renderTemplateString = (str, context = {}) => {
             if (acc && acc[curr] !== undefined) return acc[curr];
             return undefined;
         }, context);
-        return value !== undefined ? value : match;
+        if (value !== undefined && value !== null && value !== '') {
+            return value;
+        }
+        if (trimmedKey === 'providerName') return context.providerName || 'Provider';
+        if (trimmedKey === 'customerName') return context.customerName || 'Customer';
+        if (trimmedKey === 'serviceName') return context.serviceName || 'service';
+        return match;
     });
 };
 const { calculateDistance } = require('../../shared/utils/geo-utils');
+
+const enrichNotificationContext = async (context = {}) => {
+    if (!context) return context;
+    const mongoose = require('mongoose');
+    let booking = context.booking || context.referenceId || context.bookingId;
+
+    if (typeof booking === 'string' || (booking && booking instanceof mongoose.Types.ObjectId)) {
+        try {
+            const BookingModel = mongoose.model('Booking');
+            booking = await BookingModel.findById(booking).lean();
+        } catch (e) { }
+    }
+
+    if (booking && typeof booking === 'object') {
+        context.booking = booking;
+        // Ensure customerName is available
+        if (!context.customerName && booking.customer) {
+            if (typeof booking.customer === 'object' && booking.customer.name) {
+                context.customerName = booking.customer.name;
+            } else {
+                try {
+                    const User = mongoose.model('User');
+                    const customer = await User.findById(booking.customer).select('name').lean();
+                    if (customer) {
+                        context.customerName = customer.name;
+                    }
+                } catch (e) { }
+            }
+        }
+
+        // Ensure providerName is available
+        if (!context.providerName && booking.provider) {
+            if (typeof booking.provider === 'object' && booking.provider.name) {
+                context.providerName = booking.provider.name;
+            } else {
+                try {
+                    const Provider = mongoose.model('Provider');
+                    const provider = await Provider.findById(booking.provider).select('name').lean();
+                    if (provider) {
+                        context.providerName = provider.name;
+                    }
+                } catch (e) { }
+            }
+        }
+
+        // Ensure bookingId is available
+        if (!context.bookingId) {
+            context.bookingId = booking.bookingId || booking._id?.toString() || '';
+        }
+
+        // Ensure serviceName is available
+        if (!context.serviceName) {
+            const firstService = booking.services?.[0];
+            let sTitle = firstService?.serviceDetails?.title || firstService?.service?.title;
+            if ((!sTitle || sTitle === 'service') && firstService?.service) {
+                try {
+                    const ServiceModel = mongoose.model('Service');
+                    const sRef = await ServiceModel.findById(firstService.service).select('title').lean();
+                    if (sRef) sTitle = sRef.title;
+                } catch (e) { }
+            }
+            context.serviceName = sTitle || 'service';
+        }
+
+        // Ensure street is available
+        if (!context.street) {
+            context.street = booking.address?.street || booking.address?.formattedAddress || 'your area';
+        }
+
+        // Ensure amount is available
+        if (context.amount === undefined || context.amount === null) {
+            context.amount = booking.totalAmount || booking.pricing?.total || 0;
+        }
+    }
+
+    return context;
+};
 
 const triggerEventNotification = async (eventId, context = {}, overrideTargetUserId = null) => {
     try {
@@ -212,73 +295,7 @@ const triggerEventNotification = async (eventId, context = {}, overrideTargetUse
             return null;
         }
 
-        // Enrich context with flat variables if context.booking exists
-        if (context.booking) {
-            let booking = context.booking;
-
-            // If booking is just an ID, query it
-            if (typeof booking === 'string' || (booking && booking instanceof mongoose.Types.ObjectId)) {
-                const BookingModel = mongoose.model('Booking');
-                booking = await BookingModel.findById(booking);
-            }
-
-            if (booking) {
-                // Ensure customerName is available
-                if (!context.customerName && booking.customer) {
-                    if (typeof booking.customer === 'object' && booking.customer.name) {
-                        context.customerName = booking.customer.name;
-                    } else {
-                        const User = mongoose.model('User');
-                        const customer = await User.findById(booking.customer).select('name');
-                        if (customer) {
-                            context.customerName = customer.name;
-                        }
-                    }
-                }
-
-                // Ensure providerName is available
-                if (!context.providerName && booking.provider) {
-                    if (typeof booking.provider === 'object' && booking.provider.name) {
-                        context.providerName = booking.provider.name;
-                    } else {
-                        const Provider = mongoose.model('Provider');
-                        const provider = await Provider.findById(booking.provider).select('name');
-                        if (provider) {
-                            context.providerName = provider.name;
-                        }
-                    }
-                }
-
-                // Ensure bookingId is available
-                if (!context.bookingId) {
-                    context.bookingId = booking.bookingId || booking._id?.toString() || '';
-                }
-
-                // Ensure serviceName is available
-                if (!context.serviceName) {
-                    const firstService = booking.services?.[0];
-                    let sTitle = firstService?.serviceDetails?.title || firstService?.service?.title;
-                    if ((!sTitle || sTitle === 'service') && firstService?.service) {
-                        try {
-                            const ServiceModel = mongoose.model('Service');
-                            const sRef = await ServiceModel.findById(firstService.service).select('title');
-                            if (sRef) sTitle = sRef.title;
-                        } catch (e) { }
-                    }
-                    context.serviceName = sTitle || 'service';
-                }
-
-                // Ensure street is available
-                if (!context.street) {
-                    context.street = booking.address?.street || booking.address?.formattedAddress || 'your area';
-                }
-
-                // Ensure amount is available
-                if (context.amount === undefined || context.amount === null) {
-                    context.amount = booking.totalAmount || booking.pricing?.total || 0;
-                }
-            }
-        }
+        await enrichNotificationContext(context);
 
         const title = renderTemplateString(template.title, context);
         const message = renderTemplateString(template.message, context);
@@ -425,7 +442,10 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
         if (lookupKey) {
             const template = await NotificationTemplate.findOne({ eventId: lookupKey, isActive: true });
             if (template) {
-                const context = typeof uMessage === 'object' ? uMessage : { title: uTitle, message: uMessage, role: uRole, type: uType, referenceId: uRefId, url: uUrl };
+                let context = typeof uMessage === 'object' && uMessage !== null
+                    ? { ...uMessage, referenceId: uRefId }
+                    : { title: uTitle, message: uMessage, role: uRole, type: uType, referenceId: uRefId, url: uUrl };
+                await enrichNotificationContext(context);
                 finalTitle = renderTemplateString(template.title, context);
                 finalMessage = renderTemplateString(template.message, context);
                 if (template.ctaUrl) finalUrl = template.ctaUrl;

@@ -1,5 +1,5 @@
 // src/pages/admin/ComplaintsPage.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useSearchParams } from 'react-router-dom';
 import StatCard from '../../../components/ui/StatCard';
@@ -1218,8 +1218,15 @@ const ComplaintsPage = () => {
     { value: 'provider', label: 'Provider' },
   ];
 
+  const fetchAbortControllerRef = useRef(null);
+
   // ── Data fetching ──
-  const fetchComplaints = async (silent = false) => {
+  const fetchComplaints = useCallback(async (silent = false) => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     if (!silent) setLoading(true);
     try {
       const params = getMergedQuery({
@@ -1228,7 +1235,7 @@ const ComplaintsPage = () => {
         ...filters
       });
 
-      const res = await ComplaintService.getAllComplaints(params);
+      const res = await ComplaintService.getAllComplaints(params, { signal: fetchAbortControllerRef.current.signal });
       if (res.data?.success) {
         setComplaints(res.data.data || []);
         setPagination(p => ({ ...p, total: res.data.total || 0, pages: res.data.pages || 1 }));
@@ -1236,9 +1243,18 @@ const ComplaintsPage = () => {
         setProviderCount(res.data.providerCount || 0);
         setPendingCount(res.data.pendingCount || 0);
       } else showToast('Failed to fetch complaints', 'error');
-    } catch { showToast('Error fetching complaints', 'error'); }
-    finally { if (!silent) setLoading(false); }
-  };
+    } catch (err) {
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        showToast('Error fetching complaints', 'error');
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [getMergedQuery, pagination.page, pagination.limit, filters, showToast]);
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
 
   const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
@@ -1359,10 +1375,6 @@ const ComplaintsPage = () => {
     setFilters(prev => ({ ...prev, search: urlSearch }));
     setPagination(p => ({ ...p, page: 1 }));
   }, [urlSearch]);
-
-  useEffect(() => {
-    fetchComplaints();
-  }, [filters, pagination.page]);
 
   return (
     <div className="p-4 md:p-6 min-h-screen bg-gray-50/50">

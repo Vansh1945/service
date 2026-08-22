@@ -651,7 +651,7 @@ const LiveTrackingPage = () => {
         {/* Bottom Action Buttons (2x2 Grid with Icon & Name) */}
         <div className="grid grid-cols-2 gap-2 border-t border-primary/10 pt-3 mt-1 text-[10px] font-bold uppercase tracking-wider">
           <button
-            onClick={() => { window.location.href = `/admin/coupons?prefillZone=${zoneId}`; }}
+            onClick={() => { navigate(`/admin/coupons?prefillZone=${zoneId}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
             title="Create Coupon"
           >
@@ -659,7 +659,7 @@ const LiveTrackingPage = () => {
             <span>Coupon</span>
           </button>
           <button
-            onClick={() => { window.location.href = `/admin/commission?prefillZone=${zoneId}`; }}
+            onClick={() => { navigate(`/admin/commission?prefillZone=${zoneId}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-secondary/10 text-secondary transition-all hover:bg-secondary hover:text-white"
             title="Set Commission"
           >
@@ -667,7 +667,7 @@ const LiveTrackingPage = () => {
             <span>Commission</span>
           </button>
           <button
-            onClick={() => { window.location.href = `/admin/surge?prefillZone=${zoneId}`; }}
+            onClick={() => { navigate(`/admin/surge?prefillZone=${zoneId}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-accent/10 text-accent transition-all hover:bg-accent hover:text-white"
             title="Add Surge Charge"
           >
@@ -675,7 +675,7 @@ const LiveTrackingPage = () => {
             <span>Surge</span>
           </button>
           <button
-            onClick={() => { window.location.href = `/admin/zone-management?analyticsZone=${zoneId}`; }}
+            onClick={() => { navigate(`/admin/zone-management?analyticsZone=${zoneId}`); }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
             title="View Zone Stats"
           >
@@ -1142,7 +1142,7 @@ const LiveTrackingPage = () => {
                         </button>
                       </div>
                       <div className="grid gap-3">
-                        <button onClick={() => { window.location.href = `/admin/coupons?prefillZone=${actionHubModal.zone.id}`; }} className="flex items-center justify-between bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300/50 p-4 rounded-lg transition-all group">
+                        <button onClick={() => { navigate(`/admin/coupons?prefillZone=${actionHubModal.zone.id}`); }} className="flex items-center justify-between bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300/50 p-4 rounded-lg transition-all group">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20 group-hover:bg-teal-500/20 transition-all">🎟️</div>
                             <div>
@@ -1347,7 +1347,7 @@ const LiveTrackingPage = () => {
               <div className="grid grid-cols-1 gap-3 relative z-10 font-sans">
                 <button
                   onClick={() => {
-                    window.location.href = `/admin/coupons?prefillZone=${actionHubModal.zone.id}`;
+                    navigate(`/admin/coupons?prefillZone=${actionHubModal.zone.id}`);
                   }}
                   className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
                 >
@@ -1365,7 +1365,7 @@ const LiveTrackingPage = () => {
 
                 <button
                   onClick={() => {
-                    window.location.href = `/admin/commision?prefillZone=${actionHubModal.zone.id}`;
+                    navigate(`/admin/commission?prefillZone=${actionHubModal.zone.id}`);
                   }}
                   className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
                 >
@@ -1383,7 +1383,7 @@ const LiveTrackingPage = () => {
 
                 <button
                   onClick={() => {
-                    window.location.href = `/admin/surge?prefillZone=${actionHubModal.zone.id}`;
+                    navigate(`/admin/surge?prefillZone=${actionHubModal.zone.id}`);
                   }}
                   className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
                 >
@@ -1401,7 +1401,7 @@ const LiveTrackingPage = () => {
 
                 <button
                   onClick={() => {
-                    window.location.href = `/admin/zone-management?analyticsZone=${actionHubModal.zone.id}`;
+                    navigate(`/admin/zone-management?analyticsZone=${actionHubModal.zone.id}`);
                   }}
                   className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
                 >

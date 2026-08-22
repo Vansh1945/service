@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FiDollarSign, FiAlertTriangle, FiCheckCircle, FiClock, FiEye, FiShield, FiTrendingUp } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
@@ -25,12 +25,19 @@ const CashPaymentsPage = () => {
   const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  const fetchCashLedger = async () => {
+  const abortControllerRef = useRef(null);
+
+  const fetchCashLedger = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
       const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch });
-      const res = await TransactionService.getCashLedger(params);
+      const res = await TransactionService.getCashLedger(params, { signal: abortControllerRef.current.signal });
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
         setPaginationData({
@@ -39,16 +46,18 @@ const CashPaymentsPage = () => {
         });
       }
     } catch (err) {
-      console.error("Error loading cash ledger:", err);
-      setError("Failed to fetch live cash collection ledger.");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Error loading cash ledger:", err);
+        setError("Failed to fetch live cash collection ledger.");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMergedQuery, currentPage, limit, debouncedSearch, setPaginationData]);
 
   useEffect(() => {
     fetchCashLedger();
-  }, [currentPage, limit, debouncedSearch]);
+  }, [fetchCashLedger]);
 
   return (
     <div className="space-y-6">

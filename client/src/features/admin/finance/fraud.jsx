@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
@@ -93,7 +93,14 @@ const AdminFraud = () => {
   const [suspendingUser, setSuspendingUser] = useState(null);
   const [suspensionReason, setSuspensionReason] = useState('');
 
-  const fetchFraudData = async (tab) => {
+  const fetchAbortControllerRef = useRef(null);
+
+  const fetchFraudData = useCallback(async (tab) => {
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+    fetchAbortControllerRef.current = new AbortController();
+
     setLoading(true);
     try {
       let res;
@@ -104,30 +111,32 @@ const AdminFraud = () => {
         date: filterDate !== 'all' ? filterDate : undefined
       };
 
+      const options = { signal: fetchAbortControllerRef.current.signal };
+
       switch (tab) {
         case 'ip':
-          res = await AdminService.getSameIPFraud(params);
+          res = await AdminService.getSameIPFraud(params, options);
           if (res.data?.success) {
             setData(prev => ({ ...prev, ip: res.data.data }));
             setTotalPages(res.data.pagination?.pages || 1);
           }
           break;
         case 'device':
-          res = await AdminService.getDeviceAbuse(params);
+          res = await AdminService.getDeviceAbuse(params, options);
           if (res.data?.success) {
             setData(prev => ({ ...prev, device: res.data.data }));
             setTotalPages(res.data.pagination?.pages || 1);
           }
           break;
         case 'cancellation':
-          res = await AdminService.getCancellationAlerts(params);
+          res = await AdminService.getCancellationAlerts(params, options);
           if (res.data?.success) {
             setData(prev => ({ ...prev, cancellation: res.data.data }));
             setTotalPages(res.data.pagination?.pages || 1);
           }
           break;
         case 'sessions':
-          res = await AdminService.getActiveSessions({ ...params, role: filterRisk === 'PROVIDER' ? 'provider' : 'customer' });
+          res = await AdminService.getActiveSessions({ ...params, role: filterRisk === 'PROVIDER' ? 'provider' : 'customer' }, options);
           if (res.data?.success) {
             setData(prev => ({ ...prev, sessions: res.data.data }));
             setTotalPages(res.data.pagination?.pages || 1);
@@ -135,12 +144,14 @@ const AdminFraud = () => {
           break;
       }
     } catch (err) {
-      console.error(err);
-      showToast('Failed to fetch fraud data', 'error');
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error(err);
+        showToast('Failed to fetch fraud data', 'error');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, filterRisk, filterDate, showToast]);
 
   const fetchAllDataForStats = async () => {
     try {
@@ -181,7 +192,7 @@ const AdminFraud = () => {
 
   useEffect(() => {
     fetchFraudData(activeTab);
-  }, [activeTab, filterRisk, filterDate, currentPage]);
+  }, [fetchFraudData, activeTab]);
 
   const handleRefresh = () => {
     fetchAllDataForStats();

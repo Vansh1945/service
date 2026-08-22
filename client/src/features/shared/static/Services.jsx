@@ -21,33 +21,33 @@ const Services = ({ limit }) => {
     return categories.reduce((acc, cat) => ({ ...acc, [cat.value]: cat.label }), {});
   }, [categories]);
 
-  useEffect(() => {
-    const fetchServices = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await getActiveServices();
-        const data = response.data;
+  const fetchServices = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await getActiveServices();
+      const data = response.data;
 
-        if (data.success && data.data) {
-          const transformedData = data.data.map(service => ({
-            ...service,
-            displayImage: service.images && service.images.length > 0 ? service.images[0] : service.image || null
-          }));
-          setServices(transformedData);
-        } else {
-          setServices([]);
-        }
-      } catch (err) {
-        console.error('Error fetching services:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (data.success && data.data) {
+        const transformedData = data.data.map(service => ({
+          ...service,
+          displayImage: service.images && service.images.length > 0 ? service.images[0] : service.image || null
+        }));
+        setServices(transformedData);
+      } else {
+        setServices([]);
       }
-    };
-
-    fetchServices();
+    } catch (err) {
+      console.error('Error fetching services:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
 
   // Auto-scroll effect
   useEffect(() => {

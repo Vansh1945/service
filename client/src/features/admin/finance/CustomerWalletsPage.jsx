@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FiUserCheck, FiDollarSign, FiRefreshCw, FiEye, FiShield } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
@@ -22,12 +22,19 @@ const CustomerWalletsPage = () => {
   const { searchQuery, openInvestigationDrawer, getMergedQuery, refresh } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  const fetchWallets = async () => {
+  const abortControllerRef = useRef(null);
+
+  const fetchWallets = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
       const params = getMergedQuery({ page: currentPage, limit, search: debouncedSearch });
-      const res = await TransactionService.getCustomerWallets(params);
+      const res = await TransactionService.getCustomerWallets(params, { signal: abortControllerRef.current.signal });
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
         setPaginationData({
@@ -36,16 +43,18 @@ const CustomerWalletsPage = () => {
         });
       }
     } catch (err) {
-      console.error("Error loading customer wallets:", err);
-      setError("Failed to fetch live customer wallet ledgers.");
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
+        console.error("Error loading customer wallets:", err);
+        setError("Failed to fetch live customer wallet ledgers.");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMergedQuery, currentPage, limit, debouncedSearch, setPaginationData]);
 
   useEffect(() => {
     fetchWallets();
-  }, [currentPage, limit, debouncedSearch]);
+  }, [fetchWallets]);
 
   const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
