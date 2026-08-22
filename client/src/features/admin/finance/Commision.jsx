@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import { useAuth } from '../../../context/auth';
 import useDebounce from '../../../hooks/useDebounce';
@@ -1015,62 +1015,132 @@ const AdminCommissionPage = () => {
                   </div>
                 </div>
 
-                {/* Section 3: Target Providers & Timeline */}
-                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
-                    🎯 Target Providers & Timeline
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                        Apply To *
-                      </label>
+                  {/* Section 2.5: Dynamic Rating Condition */}
+                  <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-amber-900 flex items-center gap-1.5">
+                        ⭐ Rule Qualification Condition
+                      </h4>
                       <select
-                        value={ruleForm.applyTo}
-                        onChange={(e) => setRuleForm({ ...ruleForm, applyTo: e.target.value, performanceScore: '', specificProvider: '' })}
-                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                        value={ruleForm.conditionType || 'none'}
+                        onChange={(e) => setRuleForm({ ...ruleForm, conditionType: e.target.value })}
+                        className="px-3 py-1.5 border border-amber-300 rounded-lg text-xs font-bold bg-white text-amber-900 focus:outline-none"
                       >
-                        <option value="all">All Providers</option>
-                        <option value="performanceScore">Performance Score</option>
-                        <option value="specificProvider">Specific Provider</option>
+                        <option value="none">Standard (No Rating Filter)</option>
+                        <option value="rating">Rating-Based Condition</option>
                       </select>
                     </div>
 
-                    {ruleForm.applyTo === 'performanceScore' && (
-                      <div className="animate-in fade-in slide-in-from-top-1 duration-200">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                          Performance Score *
-                        </label>
-                        <select
-                          value={ruleForm.performanceScore}
-                          onChange={(e) => setRuleForm({ ...ruleForm, performanceScore: e.target.value })}
-                          className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
-                        >
-                          <option value="">Select tier</option>
-                          {performanceScores.map(tier => (
-                            <option key={tier} value={tier}>
-                              {tier.charAt(0).toUpperCase() + tier.slice(1)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {ruleForm.applyTo === 'specificProvider' && (
-                      <div className="animate-in fade-in slide-in-from-top-1 duration-200">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                          Provider ID *
-                        </label>
-                        <input
-                          type="text"
-                          value={ruleForm.specificProvider}
-                          onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value.toUpperCase() })}
-                          className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
-                          placeholder="e.g., PROV-XXXXXXXX"
-                        />
+                    {ruleForm.conditionType === 'rating' && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                        <div>
+                          <label className="block text-[10px] font-extrabold uppercase text-amber-800 mb-1">Min Rating (★)</label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0"
+                            max="5"
+                            value={ruleForm.ratingMin}
+                            onChange={(e) => setRuleForm({ ...ruleForm, ratingMin: e.target.value })}
+                            placeholder="e.g. 4.85"
+                            className="w-full px-2.5 py-1.5 border border-amber-300 rounded-lg text-xs font-bold bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold uppercase text-amber-800 mb-1">Max Rating (★)</label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0"
+                            max="5"
+                            value={ruleForm.ratingMax}
+                            onChange={(e) => setRuleForm({ ...ruleForm, ratingMax: e.target.value })}
+                            placeholder="e.g. 5.0"
+                            className="w-full px-2.5 py-1.5 border border-amber-300 rounded-lg text-xs font-bold bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold uppercase text-amber-800 mb-1">Min Reviews</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={ruleForm.minimumRatings}
+                            onChange={(e) => setRuleForm({ ...ruleForm, minimumRatings: Number(e.target.value) })}
+                            placeholder="5"
+                            className="w-full px-2.5 py-1.5 border border-amber-300 rounded-lg text-xs font-bold bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold uppercase text-amber-800 mb-1">Period (Days)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={ruleForm.evaluationPeriodDays}
+                            onChange={(e) => setRuleForm({ ...ruleForm, evaluationPeriodDays: Number(e.target.value) })}
+                            placeholder="30"
+                            className="w-full px-2.5 py-1.5 border border-amber-300 rounded-lg text-xs font-bold bg-white"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
+
+                  {/* Section 3: Target Providers & Timeline */}
+                  <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                      🎯 Target Providers & Timeline
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                          Apply To *
+                        </label>
+                        <select
+                          value={ruleForm.applyTo}
+                          onChange={(e) => setRuleForm({ ...ruleForm, applyTo: e.target.value, performanceScore: '', specificProvider: '' })}
+                          className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                        >
+                          <option value="all">All Providers</option>
+                          <option value="performanceScore">Performance Score</option>
+                          <option value="specificProvider">Specific Provider</option>
+                        </select>
+                      </div>
+
+                      {ruleForm.applyTo === 'performanceScore' && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                            Performance Score *
+                          </label>
+                          <select
+                            value={ruleForm.performanceScore}
+                            onChange={(e) => setRuleForm({ ...ruleForm, performanceScore: e.target.value })}
+                            className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                          >
+                            <option value="">Select tier</option>
+                            {performanceScores.map(tier => (
+                              <option key={tier} value={tier}>
+                                {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {ruleForm.applyTo === 'specificProvider' && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                            Provider ID *
+                          </label>
+                          <input
+                            type="text"
+                            value={ruleForm.specificProvider}
+                            onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value.toUpperCase() })}
+                            className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                            placeholder="e.g., PROV-XXXXXXXX"
+                          />
+                        </div>
+                      )}
+                    </div>
 
                   {ruleForm.applyTo === 'specificProvider' && ruleForm.specificProvider && providers.find(p => p.providerId === ruleForm.specificProvider) && (
                     <div className="p-3.5 bg-teal-50 border border-teal-150 rounded-xl animate-in fade-in duration-200">

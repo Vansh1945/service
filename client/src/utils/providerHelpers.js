@@ -82,6 +82,9 @@ export const calculateNetAmount = (booking) => {
   const splitTraffic = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'traffic', 70);
   const splitNight = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'night', 70);
   const splitDemand = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'demand', 50);
+  const splitFestival = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'festival', 70);
+  const splitCustom = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'custom', 70);
+  const splitPlatform = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'platform', 0);
   const splitEmergency = getSplit(booking.surgeSplitSettings, systemSettings?.surgeSplitSettings, 'emergency', 85);
 
   const subtotal = parseFloat(calculateSubtotal(booking)) || 0;
@@ -90,9 +93,11 @@ export const calculateNetAmount = (booking) => {
   const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * (splitTraffic / 100)).toFixed(2)) : 0;
   const night = booking.nightCharge ? parseFloat((booking.nightCharge * (splitNight / 100)).toFixed(2)) : 0;
   const demand = booking.demandSurge ? parseFloat((booking.demandSurge * (splitDemand / 100)).toFixed(2)) : 0;
+  const custom = booking.customCharges ? parseFloat((booking.customCharges * (splitCustom / 100)).toFixed(2)) : 0;
+  const platform = booking.platformFee ? parseFloat((booking.platformFee * (splitPlatform / 100)).toFixed(2)) : 0;
   const emergency = booking.emergencySurge ? parseFloat((booking.emergencySurge * (splitEmergency / 100)).toFixed(2)) : 0;
   const commission = booking.commission?.amount || booking.commissionAmount || 0;
-  return (subtotal + visiting + rain + traffic + night + demand + emergency - commission).toFixed(2);
+  return (subtotal + visiting + rain + traffic + night + demand + custom + platform + emergency - commission).toFixed(2);
 };
 
 /**

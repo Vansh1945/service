@@ -26,3 +26,7 @@ export const updateCommissionRule = (id, data) => {
 export const deleteCommissionRule = (id) => {
     return commissionRuleService.delete(id);
 };
+
+export const previewCommissionRule = (data) => {
+    return axiosInstance.post("/commission/preview", data);
+};

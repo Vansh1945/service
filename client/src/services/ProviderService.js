@@ -49,3 +49,7 @@ export const requestWithdrawal = (data) => {
     return axiosInstance.post("/payment/withdraw", data);
 };
 
+export const getCommissionStatus = (params) => {
+    return axiosInstance.get("/provider/commission-status", { params });
+};
+

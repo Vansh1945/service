@@ -142,19 +142,54 @@ const releaseHeldRewardSchema = z.object({
 });
 
 // Surge Schemas
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+
 const createSurgeRuleSchema = z.object({
   chargeType: z.enum(['rain', 'traffic', 'night', 'demand', 'festival', 'custom', 'visiting', 'platform']),
   scope: z.enum(['global', 'zone']),
   zoneId: z.union([objectIdSchema, z.literal('')]).optional().nullable(),
-  mode: z.enum(['flat', 'percentage']),
+  mode: z.enum(['flat', 'percentage', 'multiplier']),
   value: z.number().nonnegative(),
-  startTime: z.string().optional().nullable(),
-  endTime: z.string().optional().nullable(),
+  startTime: z.string().regex(timeRegex, "Start time must be in HH:MM format").optional().nullable().or(z.literal('')),
+  endTime: z.string().regex(timeRegex, "End time must be in HH:MM format").optional().nullable().or(z.literal('')),
+  effectiveFrom: z.string().regex(dateRegex, "Invalid date format (must be YYYY-MM-DD)").optional().nullable().or(z.literal('')),
+  effectiveUntil: z.string().regex(dateRegex, "Invalid date format (must be YYYY-MM-DD)").optional().nullable().or(z.literal('')),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
   maxBookingValue: z.number().optional().nullable(),
   active: z.boolean().optional()
+}).refine(data => {
+  if (data.effectiveFrom && data.effectiveUntil && data.effectiveFrom !== '' && data.effectiveUntil !== '') {
+    return data.effectiveUntil >= data.effectiveFrom;
+  }
+  return true;
+}, {
+  message: "effectiveUntil must be on or after effectiveFrom",
+  path: ["effectiveUntil"]
 });
 
-const updateSurgeRuleSchema = createSurgeRuleSchema.partial();
+const updateSurgeRuleSchema = z.object({
+  chargeType: z.enum(['rain', 'traffic', 'night', 'demand', 'festival', 'custom', 'visiting', 'platform']).optional(),
+  scope: z.enum(['global', 'zone']).optional(),
+  zoneId: z.union([objectIdSchema, z.literal('')]).optional().nullable(),
+  mode: z.enum(['flat', 'percentage', 'multiplier']).optional(),
+  value: z.number().nonnegative().optional(),
+  startTime: z.string().regex(timeRegex, "Start time must be in HH:MM format").optional().nullable().or(z.literal('')),
+  endTime: z.string().regex(timeRegex, "End time must be in HH:MM format").optional().nullable().or(z.literal('')),
+  effectiveFrom: z.string().regex(dateRegex, "Invalid date format (must be YYYY-MM-DD)").optional().nullable().or(z.literal('')),
+  effectiveUntil: z.string().regex(dateRegex, "Invalid date format (must be YYYY-MM-DD)").optional().nullable().or(z.literal('')),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
+  maxBookingValue: z.number().optional().nullable(),
+  active: z.boolean().optional()
+}).refine(data => {
+  if (data.effectiveFrom && data.effectiveUntil && data.effectiveFrom !== '' && data.effectiveUntil !== '') {
+    return data.effectiveUntil >= data.effectiveFrom;
+  }
+  return true;
+}, {
+  message: "effectiveUntil must be on or after effectiveFrom",
+  path: ["effectiveUntil"]
+});
 
 // Zone Schemas
 const createZoneSchema = z.object({
@@ -185,14 +220,20 @@ const resolveZoneByCoordinatesSchema = z.object({
 const createCommissionRuleSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional().nullable(),
-  type: z.enum(['percentage', 'fixed', 'flat']),
+  type: z.enum(['percentage', 'fixed']),
   value: z.number().nonnegative(),
-  applyTo: z.enum(['all', 'global', 'zone', 'performanceScore', 'specificProvider', 'specificService', 'specificCategory']),
-  performanceScore: z.union([z.string(), z.number()]).optional().nullable(),
+  applyTo: z.enum(['all', 'performanceScore', 'specificProvider', 'specificService', 'specificCategory']),
+  performanceScore: z.enum(['bronze', 'silver', 'gold', 'platinum']).optional().nullable(),
   specificProvider: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
   specificService: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
   specificCategory: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
   zoneId: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
+  conditionType: z.enum(['none', 'rating', 'performanceScore']).optional(),
+  ratingMin: z.number().min(0).max(5).optional().nullable(),
+  ratingMax: z.number().min(0).max(5).optional().nullable(),
+  evaluationPeriodDays: z.number().positive().optional(),
+  minimumRatings: z.number().nonnegative().optional(),
+  priority: z.number().optional(),
   effectiveFrom: z.string().datetime().or(z.string()).optional().nullable(),
   effectiveUntil: z.string().datetime().or(z.string()).optional().nullable()
 }).passthrough();

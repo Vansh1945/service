@@ -246,42 +246,19 @@ const createOrder = async (req, res, next) => {
       });
     }
 
-    // Calculate commission and provider earnings if missing
+    // Calculate commission and provider earnings if missing via booking recalculateFinancials
     let commission = booking.commissionAmount || 0;
     let providerEarning = booking.providerEarnings || 0;
     let commissionRuleId = booking.commissionRule || null;
 
     if (commission === 0 && providerEarning === 0) {
       try {
-        const rule = await CommissionRule.getCommissionForProvider(booking.provider || null, booking.zoneId);
-
-        const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
-        const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
-        const provDiscount = Math.max(0, (booking.totalDiscount || 0) - refAmount);
-        const baseAmount = Math.max(0, (booking.subtotal || booking.totalAmount) - provDiscount);
-
-        if (rule) {
-          const { commission: calculatedComm } = CommissionRule.calculateCommission(baseAmount, rule);
-          commission = calculatedComm || 0;
-          // Provider keeps surcharge: net = totalAmount - commission
-          providerEarning = parseFloat((booking.totalAmount - commission).toFixed(2));
-          commissionRuleId = rule._id;
-        } else {
-          const { SystemConfig } = require('../system-setting/system-setting-model');
-          let settings = await SystemConfig.findOne();
-          if (!settings) {
-            settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
-            await settings.save();
-          }
-          const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
-          const calculatedComm = parseFloat(((baseAmount * defaultCommPercent) / 100).toFixed(2));
-          commission = calculatedComm || 0;
-          // Provider keeps surcharge: net = totalAmount - commission
-          providerEarning = parseFloat((booking.totalAmount - commission).toFixed(2));
-        }
-      } catch (err) {
-        global.logger.error('Error calculating initial commission: ' + err.message, err);
-        providerEarning = booking.totalAmount;
+        await booking.recalculateFinancials();
+        commission = booking.commissionAmount || 0;
+        providerEarning = booking.providerEarnings || 0;
+        commissionRuleId = booking.commissionRule || null;
+      } catch (calcErr) {
+        console.error('Failed to recalculate booking financials in transaction controller:', calcErr);
       }
     }
 

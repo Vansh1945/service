@@ -12,6 +12,7 @@ const {
 
 
 router.post('/rules', adminAuthMiddleware, validateBody(createCommissionRuleSchema), commissionController.createCommissionRule);
+router.post('/preview', adminAuthMiddleware, commissionController.previewCommissionRule);
 router.get('/rules', adminAuthMiddleware, commissionController.listCommissionRules);
 router.get('/rules/:id', adminAuthMiddleware, commissionController.getCommissionRuleById);
 router.patch('/rules/:id/toggle-status', adminAuthMiddleware, validateBody(anyBodySchema), commissionController.toggleCommissionRuleStatus);

@@ -92,6 +92,40 @@ const commissionRuleSchema = new Schema({
     type: Boolean,
     default: true
   },
+  conditionType: {
+    type: String,
+    enum: {
+      values: ['none', 'rating', 'performanceScore'],
+      message: 'conditionType must be one of: none, rating, performanceScore'
+    },
+    default: 'none'
+  },
+  ratingMin: {
+    type: Number,
+    min: 0,
+    max: 5,
+    default: null
+  },
+  ratingMax: {
+    type: Number,
+    min: 0,
+    max: 5,
+    default: null
+  },
+  evaluationPeriodDays: {
+    type: Number,
+    min: 1,
+    default: 30
+  },
+  minimumRatings: {
+    type: Number,
+    min: 0,
+    default: 5
+  },
+  priority: {
+    type: Number,
+    default: 0
+  },
   zoneId: {
     type: Schema.Types.ObjectId,
     ref: 'Zone',
@@ -132,12 +166,75 @@ commissionRuleSchema.index({ performanceScore: 1 });
 commissionRuleSchema.index({ specificProvider: 1 });
 commissionRuleSchema.index({ effectiveFrom: 1 });
 commissionRuleSchema.index({ effectiveUntil: 1 });
+commissionRuleSchema.index({ conditionType: 1 });
+commissionRuleSchema.index({ ratingMin: 1 });
+commissionRuleSchema.index({ priority: -1 });
 
 
 
 /**
  * 🔹 Static Methods
  */
+
+// Reusable helper for active rule filter enforcing effective dates
+commissionRuleSchema.statics.buildActiveRuleFilter = function (extraQuery = {}) {
+  const now = new Date();
+  return {
+    ...extraQuery,
+    isActive: true,
+    effectiveFrom: { $lte: now },
+    $or: [
+      { effectiveUntil: { $exists: false } },
+      { effectiveUntil: null },
+      { effectiveUntil: { $gt: now } }
+    ]
+  };
+};
+
+// Reusable static method to calculate rolling rating
+commissionRuleSchema.statics.getProviderRatingForCommission = async function (providerId, options = {}) {
+  try {
+    if (!providerId) {
+      return { averageRating: 0, ratingCount: 0, periodDays: options.evaluationPeriodDays || 30, eligible: false };
+    }
+    const evaluationPeriodDays = options.evaluationPeriodDays || 30;
+    const minimumRatings = options.minimumRatings ?? 5;
+    const periodEnd = new Date();
+    const periodStart = new Date(periodEnd.getTime() - evaluationPeriodDays * 24 * 60 * 60 * 1000);
+
+    const Feedback = mongoose.model('Feedback');
+    const result = await Feedback.aggregate([
+      {
+        $match: {
+          'providerFeedback.provider': new mongoose.Types.ObjectId(providerId),
+          'providerFeedback.rating': { $ne: null },
+          createdAt: { $gte: periodStart, $lte: periodEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgRating: { $avg: '$providerFeedback.rating' },
+          ratingCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const averageRating = result.length > 0 ? parseFloat(Number(result[0].avgRating).toFixed(2)) : 0;
+    const ratingCount = result.length > 0 ? result[0].ratingCount : 0;
+    const eligible = ratingCount >= minimumRatings;
+
+    return {
+      averageRating,
+      ratingCount,
+      periodDays: evaluationPeriodDays,
+      eligible
+    };
+  } catch (err) {
+    console.error('Error in getProviderRatingForCommission:', err);
+    return { averageRating: 0, ratingCount: 0, periodDays: options.evaluationPeriodDays || 30, eligible: false, error: err };
+  }
+};
 
 // Get applicable commission rule for a provider
 commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = 'standard', serviceId = null, categoryId = null) {
@@ -165,8 +262,8 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
 
     const cacheKey = `comm_rule_${providerId || ''}_${zoneId || ''}_${providerperformanceScore || ''}_${serviceId || ''}_${categoryId || ''}`;
     const cached = cache.get(cacheKey);
-    if (cached) {
-      return cached === 'none' ? null : cached;
+    if (cached && cached !== 'none' && cached.conditionType !== 'rating') {
+      return cached;
     }
 
     // Resolve Zone Ancestry Array
@@ -181,126 +278,139 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       }
     }
 
+    const evaluateScopeCandidates = async (query) => {
+      const filter = this.buildActiveRuleFilter(query);
+      const candidates = await this.find(filter).sort({ priority: -1, ratingMin: -1, createdAt: -1 });
+
+      for (const candidate of candidates) {
+        if (candidate.conditionType === 'rating' || candidate.ratingMin !== null) {
+          if (!providerId) continue; // Rating rule requires providerId
+          const ratingInfo = await this.getProviderRatingForCommission(providerId, {
+            evaluationPeriodDays: candidate.evaluationPeriodDays,
+            minimumRatings: candidate.minimumRatings
+          });
+
+          if (ratingInfo.error) {
+            console.error('Rating evaluation runtime error:', ratingInfo.error);
+            continue;
+          }
+
+          if (!ratingInfo.eligible) continue;
+          if (candidate.ratingMin !== null && ratingInfo.averageRating < candidate.ratingMin) continue;
+          if (candidate.ratingMax !== null && ratingInfo.averageRating > candidate.ratingMax) continue;
+
+          const candidateObj = candidate.toObject ? candidate.toObject() : { ...candidate };
+          candidateObj.ratingInfo = ratingInfo;
+          return candidateObj;
+        }
+
+        // Standard rule (no rating condition)
+        return candidate;
+      }
+
+      return null;
+    };
+
     const rule = await (async () => {
       // PRIORITY 1: Specific Provider Rule (closest zone ancestry first, then global)
       if (providerId) {
         if (zoneAncestry.length > 0) {
           for (const zId of zoneAncestry) {
-            const rule = await this.findOne({
-              isActive: true,
+            const match = await evaluateScopeCandidates({
               applyTo: 'specificProvider',
               specificProvider: providerId,
               zoneId: zId
-            }).sort({ createdAt: -1 });
-
-            if (rule) return rule;
+            });
+            if (match) return match;
           }
         }
 
-        const globalSpecificRule = await this.findOne({
-          isActive: true,
+        const globalSpecificMatch = await evaluateScopeCandidates({
           applyTo: 'specificProvider',
           specificProvider: providerId,
           $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-        }).sort({ createdAt: -1 });
-
-        if (globalSpecificRule) return globalSpecificRule;
+        });
+        if (globalSpecificMatch) return globalSpecificMatch;
       }
 
       // PRIORITY 2: Specific Service Rule (closest zone ancestry first, then global)
       if (serviceId) {
         if (zoneAncestry.length > 0) {
           for (const zId of zoneAncestry) {
-            const rule = await this.findOne({
-              isActive: true,
+            const match = await evaluateScopeCandidates({
               applyTo: 'specificService',
               specificService: serviceId,
               zoneId: zId
-            }).sort({ createdAt: -1 });
-
-            if (rule) return rule;
+            });
+            if (match) return match;
           }
         }
 
-        const globalServiceRule = await this.findOne({
-          isActive: true,
+        const globalServiceMatch = await evaluateScopeCandidates({
           applyTo: 'specificService',
           specificService: serviceId,
           $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-        }).sort({ createdAt: -1 });
-
-        if (globalServiceRule) return globalServiceRule;
+        });
+        if (globalServiceMatch) return globalServiceMatch;
       }
 
       // PRIORITY 3: Specific Category Rule (closest zone ancestry first, then global)
       if (categoryId) {
         if (zoneAncestry.length > 0) {
           for (const zId of zoneAncestry) {
-            const rule = await this.findOne({
-              isActive: true,
+            const match = await evaluateScopeCandidates({
               applyTo: 'specificCategory',
               specificCategory: categoryId,
               zoneId: zId
-            }).sort({ createdAt: -1 });
-
-            if (rule) return rule;
+            });
+            if (match) return match;
           }
         }
 
-        const globalCategoryRule = await this.findOne({
-          isActive: true,
+        const globalCategoryMatch = await evaluateScopeCandidates({
           applyTo: 'specificCategory',
           specificCategory: categoryId,
           $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-        }).sort({ createdAt: -1 });
-
-        if (globalCategoryRule) return globalCategoryRule;
+        });
+        if (globalCategoryMatch) return globalCategoryMatch;
       }
 
       // PRIORITY 4: Zone + Performance Score Rule (closest zone first)
       if (zoneAncestry.length > 0) {
         for (const zId of zoneAncestry) {
-          const zoneTierRule = await this.findOne({
-            isActive: true,
+          const match = await evaluateScopeCandidates({
             applyTo: 'performanceScore',
             performanceScore: providerperformanceScore,
             zoneId: zId
-          }).sort({ createdAt: -1 });
-
-          if (zoneTierRule) return zoneTierRule;
+          });
+          if (match) return match;
         }
       }
 
       // PRIORITY 5: Zone Default Rule (closest zone first)
       if (zoneAncestry.length > 0) {
         for (const zId of zoneAncestry) {
-          const zoneDefaultRule = await this.findOne({
-            isActive: true,
+          const match = await evaluateScopeCandidates({
             applyTo: 'all',
             zoneId: zId
-          }).sort({ createdAt: -1 });
-
-          if (zoneDefaultRule) return zoneDefaultRule;
+          });
+          if (match) return match;
         }
       }
 
       // PRIORITY 6: Global Rules (Performance global tier first, then Global Default rule)
-      const globalTierRule = await this.findOne({
-        isActive: true,
+      const globalTierMatch = await evaluateScopeCandidates({
         applyTo: 'performanceScore',
         performanceScore: providerperformanceScore,
         $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-      }).sort({ createdAt: -1 });
+      });
+      if (globalTierMatch) return globalTierMatch;
 
-      if (globalTierRule) return globalTierRule;
-
-      const globalDefaultRule = await this.findOne({
-        isActive: true,
+      const globalDefaultMatch = await evaluateScopeCandidates({
         applyTo: 'all',
         $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
-      }).sort({ createdAt: -1 });
-
-      if (globalDefaultRule) return globalDefaultRule;
+      });
+      if (globalDefaultMatch) return globalDefaultMatch;
 
       // Fallback: Default system setting commission
       try {
@@ -308,26 +418,30 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
         const sysSettings = await SystemConfig.findOne().lean();
         const defaultRate = sysSettings?.commissionSettings?.defaultCommission ?? 10;
         return {
-          _id: new mongoose.Types.ObjectId(),
+          _id: null,
           name: 'System Default Commission',
           type: 'percentage',
           value: defaultRate,
           applyTo: 'all',
-          isActive: true
+          isActive: true,
+          conditionType: 'none'
         };
       } catch (err) {
         return {
-          _id: new mongoose.Types.ObjectId(),
+          _id: null,
           name: 'System Default Commission',
           type: 'percentage',
           value: 10,
           applyTo: 'all',
-          isActive: true
+          isActive: true,
+          conditionType: 'none'
         };
       }
     })();
 
-    cache.set(cacheKey, rule || 'none', 300);
+    if (rule && rule.conditionType !== 'rating') {
+      cache.set(cacheKey, rule, 300);
+    }
     return rule;
 
   } catch (error) {

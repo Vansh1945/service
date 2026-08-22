@@ -87,12 +87,58 @@ exports.listCommissionRules = async (req, res, next) => {
   }
 };
 
+const validateRatingRuleOverlap = async (newRuleData, currentRuleId = null) => {
+  if (newRuleData.conditionType !== 'rating' || newRuleData.ratingMin === null) return;
+
+  const query = {
+    isActive: true,
+    conditionType: 'rating',
+    applyTo: newRuleData.applyTo || 'all',
+    zoneId: newRuleData.zoneId || null
+  };
+
+  if (currentRuleId) {
+    query._id = { $ne: currentRuleId };
+  }
+
+  if (newRuleData.applyTo === 'specificProvider') query.specificProvider = newRuleData.specificProvider;
+  if (newRuleData.applyTo === 'specificService') query.specificService = newRuleData.specificService;
+  if (newRuleData.applyTo === 'specificCategory') query.specificCategory = newRuleData.specificCategory;
+
+  const existingRules = await CommissionRule.find(query);
+  const newMin = Number(newRuleData.ratingMin);
+  const newMax = newRuleData.ratingMax !== null && newRuleData.ratingMax !== undefined ? Number(newRuleData.ratingMax) : 5.0;
+
+  for (const rule of existingRules) {
+    const existingMin = Number(rule.ratingMin);
+    const existingMax = rule.ratingMax !== null && rule.ratingMax !== undefined ? Number(rule.ratingMax) : 5.0;
+
+    const overlapMin = Math.max(newMin, existingMin);
+    const overlapMax = Math.min(newMax, existingMax);
+
+    if (overlapMin < overlapMax) {
+      throw new Error(`Rating range [${newMin} - ${newMax}] overlaps with active rule "${rule.name}" [${existingMin} - ${existingMax}] for the same scope.`);
+    }
+  }
+};
+
 // Create new commission rule
 exports.createCommissionRule = async (req, res) => {
   try {
-    const { name, description, type, value, applyTo, performanceScore, specificProvider, effectiveFrom, effectiveUntil } = req.body;
+    const {
+      name, description, type, value, applyTo, performanceScore,
+      specificProvider, specificService, specificCategory, zoneId,
+      conditionType, ratingMin, ratingMax, evaluationPeriodDays, minimumRatings, priority,
+      effectiveFrom, effectiveUntil
+    } = req.body;
 
-    // Validate required fields based on applyTo
+    if (applyTo === 'performanceScore' && conditionType === 'rating') {
+      return res.status(400).json({
+        success: false,
+        message: 'Combining performanceScore applyTo with rating condition is not supported in V1'
+      });
+    }
+
     if (applyTo === 'performanceScore' && !performanceScore) {
       return res.status(400).json({
         success: false,
@@ -109,7 +155,6 @@ exports.createCommissionRule = async (req, res) => {
         });
       }
 
-      // If specificProvider is a providerId (PROV-XXXX), find the actual ObjectId
       if (typeof specificProvider === 'string' && specificProvider.startsWith('PROV-')) {
         const provider = await Provider.findOne({ providerId: specificProvider });
         if (!provider) {
@@ -122,6 +167,8 @@ exports.createCommissionRule = async (req, res) => {
       }
     }
 
+    await validateRatingRuleOverlap(req.body);
+
     const newRule = new CommissionRule({
       name,
       description,
@@ -130,6 +177,15 @@ exports.createCommissionRule = async (req, res) => {
       applyTo,
       performanceScore: applyTo === 'performanceScore' && typeof performanceScore === 'string' ? performanceScore.toLowerCase() : (applyTo === 'performanceScore' ? performanceScore : undefined),
       specificProvider: applyTo === 'specificProvider' ? targetProviderId : undefined,
+      specificService: applyTo === 'specificService' ? specificService : undefined,
+      specificCategory: applyTo === 'specificCategory' ? specificCategory : undefined,
+      zoneId,
+      conditionType: conditionType || 'none',
+      ratingMin: ratingMin !== undefined ? ratingMin : null,
+      ratingMax: ratingMax !== undefined ? ratingMax : null,
+      evaluationPeriodDays: evaluationPeriodDays || 30,
+      minimumRatings: minimumRatings !== undefined ? minimumRatings : 5,
+      priority: priority || 0,
       effectiveFrom,
       effectiveUntil,
       createdBy: req.admin._id
@@ -147,6 +203,44 @@ exports.createCommissionRule = async (req, res) => {
       message: 'Commission rule created successfully'
     });
   } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Preview Commission Rule (Read-Only)
+exports.previewCommissionRule = async (req, res, next) => {
+  try {
+    const { providerId, serviceId, categoryId, zoneId, amount = 1000 } = req.body;
+
+    if (!providerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'providerId is required for preview'
+      });
+    }
+
+    const rule = await CommissionRule.getCommissionForProvider(providerId, zoneId, 'standard', serviceId, categoryId);
+
+    const baseAmount = Number(amount);
+    const { commission, netAmount } = CommissionRule.calculateCommission(baseAmount, rule);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        providerId,
+        matchedRule: rule,
+        ratingInfo: rule?.ratingInfo || null,
+        baseAmount,
+        commissionAmount: commission,
+        providerEarning: netAmount,
+        commissionSource: rule?.conditionType === 'rating' ? 'rating_rule' : (rule?._id ? 'standard_rule' : 'system_default')
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[CommissionController.previewCommissionRule] Error: ${error.message}`, error);
     res.status(400).json({
       success: false,
       message: error.message

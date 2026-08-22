@@ -77,4 +77,7 @@ router.delete('/:id/permanent', adminAuthMiddleware, requireAdmin, providerContr
 // Dashboard Routes
 router.get('/dashboard', providerAuthMiddleware, requireProvider, providerController.getDashboardData);
 
+// Commission Status Route
+router.get('/commission-status', providerAuthMiddleware, requireProvider, providerController.getCommissionStatus);
+
 module.exports = router;

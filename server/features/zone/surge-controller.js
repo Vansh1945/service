@@ -1,5 +1,6 @@
 const Surge = require('./surge-model');
 const Zone = require('./zone-model');
+const { SystemConfig } = require('../system-setting/system-setting-model');
 
 // List surge rules for admin
 exports.listSurgeRules = async (req, res, next) => {
@@ -43,7 +44,20 @@ exports.listSurgeRules = async (req, res, next) => {
 // Create new surge rule
 exports.createSurgeRule = async (req, res) => {
   try {
-    const { chargeType, scope, zoneId, mode, value, startTime, endTime, maxBookingValue, active } = req.body;
+    const {
+      chargeType,
+      scope,
+      zoneId,
+      mode,
+      value,
+      startTime,
+      endTime,
+      effectiveFrom,
+      effectiveUntil,
+      daysOfWeek,
+      maxBookingValue,
+      active
+    } = req.body;
 
     const newRule = new Surge({
       chargeType,
@@ -53,7 +67,10 @@ exports.createSurgeRule = async (req, res) => {
       value,
       startTime: startTime || null,
       endTime: endTime || null,
-      maxBookingValue: maxBookingValue !== undefined ? maxBookingValue : null,
+      effectiveFrom: effectiveFrom || null,
+      effectiveUntil: effectiveUntil || null,
+      daysOfWeek: Array.isArray(daysOfWeek) ? daysOfWeek : [],
+      maxBookingValue: maxBookingValue !== undefined && maxBookingValue !== '' ? maxBookingValue : null,
       active: active !== undefined ? active : true
     });
 
@@ -99,7 +116,20 @@ exports.getSurgeRuleById = async (req, res, next) => {
 // Update surge rule
 exports.updateSurgeRule = async (req, res) => {
   try {
-    const { chargeType, scope, zoneId, mode, value, startTime, endTime, maxBookingValue, active } = req.body;
+    const {
+      chargeType,
+      scope,
+      zoneId,
+      mode,
+      value,
+      startTime,
+      endTime,
+      effectiveFrom,
+      effectiveUntil,
+      daysOfWeek,
+      maxBookingValue,
+      active
+    } = req.body;
 
     const rule = await Surge.findById(req.params.id);
     if (!rule) {
@@ -116,7 +146,10 @@ exports.updateSurgeRule = async (req, res) => {
     rule.value = value !== undefined ? value : rule.value;
     rule.startTime = startTime !== undefined ? (startTime || null) : rule.startTime;
     rule.endTime = endTime !== undefined ? (endTime || null) : rule.endTime;
-    rule.maxBookingValue = maxBookingValue !== undefined ? maxBookingValue : rule.maxBookingValue;
+    rule.effectiveFrom = effectiveFrom !== undefined ? (effectiveFrom || null) : rule.effectiveFrom;
+    rule.effectiveUntil = effectiveUntil !== undefined ? (effectiveUntil || null) : rule.effectiveUntil;
+    rule.daysOfWeek = daysOfWeek !== undefined ? (Array.isArray(daysOfWeek) ? daysOfWeek : []) : rule.daysOfWeek;
+    rule.maxBookingValue = maxBookingValue !== undefined ? (maxBookingValue !== '' ? maxBookingValue : null) : rule.maxBookingValue;
     rule.active = active !== undefined ? active : rule.active;
 
     await rule.save();
@@ -188,30 +221,10 @@ exports.deleteSurgeRule = async (req, res) => {
   }
 };
 
-// Helper: Check if current time is within HH:MM window
-const isTimeInWindow = (timeStr, start, end) => {
-  if (!start || !end) return true;
-  const parseTime = (t) => {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
-  
-  const current = parseTime(timeStr);
-  const startTime = parseTime(start);
-  const endTime = parseTime(end);
-
-  if (startTime <= endTime) {
-    return current >= startTime && current <= endTime;
-  } else {
-    // Midnight wrap-around, e.g. 22:00 to 05:00
-    return current >= startTime || current <= endTime;
-  }
-};
-
 // Resolve active surcharges for checkout
 exports.resolveActiveSurcharges = async (req, res, next) => {
   try {
-    const { zoneId, lat, lng, time } = req.query;
+    const { zoneId, lat, lng, date, time, subtotal: rawSubtotal } = req.query;
     
     let resolvedZoneId = zoneId;
     if (!resolvedZoneId && lat && lng) {
@@ -232,39 +245,43 @@ exports.resolveActiveSurcharges = async (req, res, next) => {
       }
     }
 
+    // Fetch SystemConfig for business timezone
+    const settings = await SystemConfig.findOne().lean();
+    const systemTimezone = settings?.timezone || 'Asia/Kolkata';
+
     // Get active rules
-    const rules = await Surge.find({ active: true });
+    const rules = await Surge.find({ active: true }).lean();
     
-    // Filter based on scope and time window
-    const currentTimeStr = time || new Date().toTimeString().substring(0, 5); // "HH:MM"
+    const subtotal = rawSubtotal ? parseFloat(rawSubtotal) : 0;
     
-    const subtotal = req.query.subtotal ? parseFloat(req.query.subtotal) : 0;
+    const evalContext = {
+      date: date || null,
+      time: time || null,
+      subtotal,
+      systemTimezone
+    };
+
+    const defaultComponents = Surge.getDateTimeComponentsInTimezone(new Date(), systemTimezone);
+    const currentTimeStr = time || defaultComponents.timeStr;
+    const currentDateStr = date || defaultComponents.dateStr;
     
     const applicableRules = rules.filter(rule => {
-      // 1. Check scope
+      // 1. Check scope & zone ancestry
       if (rule.scope === 'zone') {
         if (!rule.zoneId || !zoneAncestry.includes(rule.zoneId.toString())) {
           return false;
         }
       }
       
-      // 2. Check time window
-      if (!isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime)) {
-        return false;
-      }
-
-      // 3. Check maxBookingValue constraint
-      if (rule.maxBookingValue && subtotal > rule.maxBookingValue) {
-        return false;
-      }
-
-      return true;
+      // 2. Check schedule & maxBookingValue via Surge model static method
+      return Surge.isRuleApplicable(rule, evalContext);
     });
 
     res.status(200).json({
       success: true,
       data: applicableRules,
       currentTime: currentTimeStr,
+      currentDate: currentDateStr,
       zoneId: resolvedZoneId,
       zoneAncestry: zoneAncestry
     });

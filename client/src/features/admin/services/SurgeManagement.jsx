@@ -44,6 +44,8 @@ const CHARGE_TYPES = [
   { value: 'traffic', label: 'Traffic Charge', icon: Car, color: 'bg-amber-50 text-amber-700 border-amber-200' },
   { value: 'night', label: 'Night Charge', icon: Moon, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   { value: 'demand', label: 'Demand Surge', icon: Flame, color: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { value: 'festival', label: 'Festival Surge', icon: Flame, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { value: 'custom', label: 'Custom Charge', icon: Wrench, color: 'bg-orange-50 text-orange-700 border-orange-200' },
   { value: 'platform', label: 'Platform Fee', icon: Coins, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
 ];
 
@@ -109,6 +111,9 @@ const SurgeManagement = () => {
     value: '',
     startTime: '',
     endTime: '',
+    effectiveFrom: '',
+    effectiveUntil: '',
+    daysOfWeek: [],
     maxBookingValue: '',
     active: true
   };
@@ -353,6 +358,26 @@ const SurgeManagement = () => {
     }));
   };
 
+  // ----- Derived Status Helper -----
+  const getRuleDisplayStatus = (rule) => {
+    if (!rule || !rule.active) {
+      return { label: 'Inactive', badgeClass: 'bg-red-50 text-red-600 border border-red-200' };
+    }
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    if (rule.effectiveFrom && todayStr < rule.effectiveFrom) {
+      return { label: 'Scheduled', badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200' };
+    }
+    if (rule.effectiveUntil && todayStr > rule.effectiveUntil) {
+      return { label: 'Expired', badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200' };
+    }
+    return { label: 'Active Now', badgeClass: 'bg-green-50 text-green-700 border border-green-200' };
+  };
+
   // ----- CRUD -----
   const handleCreateRule = async (e) => {
     e.preventDefault();
@@ -364,6 +389,9 @@ const SurgeManagement = () => {
         value: Number(createForm.value),
         startTime: createForm.startTime || undefined,
         endTime: createForm.endTime || undefined,
+        effectiveFrom: createForm.effectiveFrom || undefined,
+        effectiveUntil: createForm.effectiveUntil || undefined,
+        daysOfWeek: createForm.daysOfWeek || [],
         maxBookingValue: createForm.maxBookingValue ? Number(createForm.maxBookingValue) : null,
         active: createForm.active,
         zoneId: (createForm.scope === 'zone' && createForm.zoneIds?.length > 0) ? createForm.zoneIds[0] : null
@@ -391,6 +419,9 @@ const SurgeManagement = () => {
         value: Number(editForm.value),
         startTime: editForm.startTime || undefined,
         endTime: editForm.endTime || undefined,
+        effectiveFrom: editForm.effectiveFrom || undefined,
+        effectiveUntil: editForm.effectiveUntil || undefined,
+        daysOfWeek: editForm.daysOfWeek || [],
         maxBookingValue: editForm.maxBookingValue ? Number(editForm.maxBookingValue) : null,
         active: editForm.active,
         zoneId: (editForm.scope === 'zone' && editForm.zoneIds?.length > 0) ? editForm.zoneIds[0] : null
@@ -454,6 +485,9 @@ const SurgeManagement = () => {
       value: rule.value,
       startTime: rule.startTime || '',
       endTime: rule.endTime || '',
+      effectiveFrom: rule.effectiveFrom || '',
+      effectiveUntil: rule.effectiveUntil || '',
+      daysOfWeek: rule.daysOfWeek || [],
       maxBookingValue: rule.maxBookingValue || '',
       active: rule.active
     });
@@ -643,22 +677,41 @@ const SurgeManagement = () => {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center text-xs text-gray-600 font-medium">
-                                <Clock className="w-3.5 h-3.5 mr-1 text-gray-400" />
-                                {rule.startTime && rule.endTime ? `${rule.startTime} – ${rule.endTime}` : '24 Hours'}
+                              <div className="flex flex-col text-xs text-gray-600 font-medium gap-0.5">
+                                <div className="flex items-center">
+                                  <Clock className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                                  {rule.startTime && rule.endTime ? `${rule.startTime} – ${rule.endTime}` : '24 Hours'}
+                                </div>
+                                {(rule.effectiveFrom || rule.effectiveUntil) && (
+                                  <div className="text-[11px] text-gray-500">
+                                    🗓️ {rule.effectiveFrom || 'Start'} to {rule.effectiveUntil || 'End'}
+                                  </div>
+                                )}
+                                {Array.isArray(rule.daysOfWeek) && rule.daysOfWeek.length > 0 && (
+                                  <div className="text-[10px] text-teal-700 font-semibold">
+                                    📅 Days: {rule.daysOfWeek.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <button
-                                onClick={() => handleToggleRuleStatus(rule._id)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${rule.active
-                                  ? 'bg-green-50 text-green-700 hover:bg-green-100'
-                                  : 'bg-red-50 text-red-600 hover:bg-red-100'
-                                  }`}
-                              >
-                                {rule.active ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
-                                {rule.active ? 'Active' : 'Inactive'}
-                              </button>
+                              {(() => {
+                                const statusInfo = getRuleDisplayStatus(rule);
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${statusInfo.badgeClass}`}>
+                                      {statusInfo.label}
+                                    </span>
+                                    <button
+                                      onClick={() => handleToggleRuleStatus(rule._id)}
+                                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                                      title={rule.active ? 'Pause Rule' : 'Activate Rule'}
+                                    >
+                                      {rule.active ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5 text-red-400" />}
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               <div className="flex items-center space-x-3">
@@ -787,6 +840,33 @@ const SurgeManagement = () => {
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Demand Share (%)</label>
                 <div className="relative">
                   <input type="number" value={systemSettings.surgeSplitSettings?.demand ?? 50} onChange={(e) => handleSplitChange('demand', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+
+              {/* Festival Share */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Festival Share (%)</label>
+                <div className="relative">
+                  <input type="number" value={systemSettings.surgeSplitSettings?.festival ?? 70} onChange={(e) => handleSplitChange('festival', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+
+              {/* Custom Share */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Custom Share (%)</label>
+                <div className="relative">
+                  <input type="number" value={systemSettings.surgeSplitSettings?.custom ?? 70} onChange={(e) => handleSplitChange('custom', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+
+              {/* Platform Share */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Platform Share (%)</label>
+                <div className="relative">
+                  <input type="number" value={systemSettings.surgeSplitSettings?.platform ?? 0} onChange={(e) => handleSplitChange('platform', e.target.value)} min="0" max="100" className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary" />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
                 </div>
               </div>
@@ -1142,10 +1222,79 @@ const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones }) => {
         </div>
       </div>
 
-      {/* Time Window */}
+      {/* Date Range Scheduling */}
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+          <Clock className="w-4 h-4 text-primary" />
+          Date & Calendar Scheduling (Optional)
+        </h4>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From (YYYY-MM-DD)</label>
+            <input
+              type="date"
+              name="effectiveFrom"
+              value={form.effectiveFrom || ''}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Effective Until (YYYY-MM-DD)</label>
+            <input
+              type="date"
+              name="effectiveUntil"
+              value={form.effectiveUntil || ''}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        {/* Days of Week Selection */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Active Days of Week (Leave empty for All Days)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { id: 1, label: 'Mon' },
+              { id: 2, label: 'Tue' },
+              { id: 3, label: 'Wed' },
+              { id: 4, label: 'Thu' },
+              { id: 5, label: 'Fri' },
+              { id: 6, label: 'Sat' },
+              { id: 0, label: 'Sun' }
+            ].map((day) => {
+              const selectedDays = form.daysOfWeek || [];
+              const isSelected = selectedDays.includes(day.id);
+              return (
+                <button
+                  key={day.id}
+                  type="button"
+                  onClick={() => {
+                    const newDays = isSelected
+                      ? selectedDays.filter(d => d !== day.id)
+                      : [...selectedDays, day.id];
+                    setForm(prev => ({ ...prev, daysOfWeek: newDays }));
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    isSelected
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {day.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Daily Time Window */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
-          <label className="block text-sm font-semibold text-secondary mb-1.5">Start Time (Optional)</label>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">Start Time (HH:MM)</label>
           <input
             type="text"
             name="startTime"
@@ -1158,7 +1307,7 @@ const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones }) => {
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-secondary mb-1.5">End Time (Optional)</label>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">End Time (HH:MM)</label>
           <input
             type="text"
             name="endTime"

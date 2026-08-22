@@ -100,26 +100,7 @@ class PricingService {
       }
     }
 
-    // 7. Time helper for surges
-    const isTimeInWindow = (timeStr, start, end) => {
-      if (!start || !end) return true;
-      const parseTime = (t) => {
-        const [h, m] = t.split(':').map(Number);
-        return h * 60 + m;
-      };
-      const current = parseTime(timeStr);
-      const startTime = parseTime(start);
-      const endTime = parseTime(end);
-      if (startTime <= endTime) {
-        return current >= startTime && current <= endTime;
-      } else {
-        return current >= startTime || current <= endTime;
-      }
-    };
-
-    const currentTimeStr = time || new Date().toTimeString().substring(0, 5); // "HH:MM"
-
-    // 8. Calculate Surges
+    // 7. Calculate Surges using shared eligibility utility
     let totalSurcharge = 0;
     const surchargeBreakdown = [];
     let rainCharge = 0;
@@ -131,19 +112,20 @@ class PricingService {
     let platformFee = 0;
     let emergencySurge = 0;
 
+    const evalContext = {
+      date: date || null,
+      time: time || null,
+      subtotal,
+      systemTimezone: settings?.timezone || 'Asia/Kolkata'
+    };
+
     const applicableSurges = allActiveSurges.filter(rule => {
       if (rule.scope === 'zone') {
         if (!rule.zoneId || !zoneAncestry.includes(rule.zoneId.toString())) {
           return false;
         }
       }
-      if (!isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime)) {
-        return false;
-      }
-      if (rule.maxBookingValue && subtotal > rule.maxBookingValue) {
-        return false;
-      }
-      return true;
+      return SurgeModel.isRuleApplicable(rule, evalContext);
     });
 
     applicableSurges.forEach(s => {

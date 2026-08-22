@@ -431,6 +431,18 @@ const systemConfigSchema = new mongoose.Schema(
         type: Number,
         default: 50
       },
+      festival: {
+        type: Number,
+        default: 70
+      },
+      custom: {
+        type: Number,
+        default: 70
+      },
+      platform: {
+        type: Number,
+        default: 0
+      },
       emergency: {
         type: Number,
         default: 85

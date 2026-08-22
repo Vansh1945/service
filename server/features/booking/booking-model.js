@@ -574,6 +574,42 @@ const bookingSchema = new Schema({
     default: false
   },
 
+  // Audit Snapshots for Dynamic Commission & Financial Traceability
+  commissionSource: {
+    type: String,
+    enum: ['rating_rule', 'standard_rule', 'system_default'],
+    default: 'standard_rule'
+  },
+  commissionTypeSnapshot: {
+    type: String,
+    enum: ['percentage', 'fixed'],
+    default: 'percentage'
+  },
+  commissionValueSnapshot: {
+    type: Number,
+    default: null
+  },
+  commissionRateSnapshot: {
+    type: Number,
+    default: null
+  },
+  ratingSnapshot: {
+    type: Number,
+    default: null
+  },
+  ratingCountSnapshot: {
+    type: Number,
+    default: null
+  },
+  ratingEvaluationPeriodDays: {
+    type: Number,
+    default: null
+  },
+  commissionSnapshotFinalized: {
+    type: Boolean,
+    default: false
+  },
+
   // Payout Hold & Dispute Logic
   payoutHoldUntil: {
     type: Date,
@@ -837,6 +873,21 @@ bookingSchema.virtual('providerDemandShare').get(function () {
 bookingSchema.virtual('providerEmergencyShare').get(function () {
   const split = this.surgeSplitSettings?.emergency ?? 0;
   return parseFloat(((this.emergencySurge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerFestivalShare').get(function () {
+  const split = this.surgeSplitSettings?.festival ?? 70;
+  return parseFloat(((this.visitingCharge || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerCustomShare').get(function () {
+  const split = this.surgeSplitSettings?.custom ?? 70;
+  return parseFloat(((this.customCharges || 0) * (split / 100)).toFixed(2));
+});
+
+bookingSchema.virtual('providerPlatformShare').get(function () {
+  const split = this.surgeSplitSettings?.platform ?? 0;
+  return parseFloat(((this.platformFee || 0) * (split / 100)).toFixed(2));
 });
 
 bookingSchema.pre('save', async function (next) {
@@ -1158,8 +1209,23 @@ bookingSchema.index(
 );
 
 
-bookingSchema.methods.recalculateFinancials = async function() {
+bookingSchema.post('init', function (doc) {
+  if (doc) {
+    doc._previousStatus = doc.status;
+  }
+});
+
+bookingSchema.methods.recalculateFinancials = async function (options = {}) {
   try {
+    const { finalizeCommission = false, mode = 'normal' } = options;
+    const previousStatus = this._previousStatus || (this.isNew ? null : this.status);
+    const isFinalizingTransition = previousStatus !== 'completed' && this.status === 'completed' && !this.commissionSnapshotFinalized;
+
+    // Lock financials if already finalized unless explicit financial adjustment
+    if (this.commissionSnapshotFinalized && mode === 'normal' && !finalizeCommission) {
+      return;
+    }
+
     const CommissionRule = mongoose.model('CommissionRule');
     const firstService = this.services && this.services[0];
     const serviceId = firstService ? firstService.service : null;
@@ -1193,6 +1259,9 @@ bookingSchema.methods.recalculateFinancials = async function() {
     const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
     const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
     const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
+    const splitFestival = typeof splits.festival === 'number' && !isNaN(splits.festival) ? splits.festival : 70;
+    const splitCustom = typeof splits.custom === 'number' && !isNaN(splits.custom) ? splits.custom : 70;
+    const splitPlatform = typeof splits.platform === 'number' && !isNaN(splits.platform) ? splits.platform : 0;
     const splitEmergency = typeof splits.emergency === 'number' && !isNaN(splits.emergency) ? splits.emergency : 85;
     this.surgeSplitSettings = splits;
 
@@ -1212,9 +1281,11 @@ bookingSchema.methods.recalculateFinancials = async function() {
     const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
     const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
     const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
+    const provCustomShare = parseFloat((custom * (splitCustom / 100)).toFixed(2)) || 0;
+    const provPlatformShare = parseFloat((platformFee * (splitPlatform / 100)).toFixed(2)) || 0;
     const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
 
-    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provEmergencyShare).toFixed(2)) || 0;
+    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provCustomShare + provPlatformShare + provEmergencyShare).toFixed(2)) || 0;
     const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom + platformFee;
     const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
@@ -1222,15 +1293,16 @@ bookingSchema.methods.recalculateFinancials = async function() {
     this.companySurgeShare = companySurgeShare;
 
     let activeCommissionRule = commissionRule;
+    let effectiveRate = commissionRule ? commissionRule.value : 0;
     if (this.provider) {
       const Provider = mongoose.model('Provider');
       const providerDoc = await Provider.findById(this.provider);
       if (providerDoc && providerDoc.referralBenefit) {
         const { getReferralCommissionDiscount } = require('../referral/referral-helpers');
-        const discountedRate = getReferralCommissionDiscount(providerDoc, commissionRule, baseForCommission);
-        if (discountedRate !== (commissionRule ? commissionRule.value : 0)) {
+        effectiveRate = getReferralCommissionDiscount(providerDoc, commissionRule, baseForCommission);
+        if (effectiveRate !== (commissionRule ? commissionRule.value : 0)) {
           activeCommissionRule = commissionRule.toObject ? commissionRule.toObject() : { ...commissionRule };
-          activeCommissionRule.value = discountedRate;
+          activeCommissionRule.value = effectiveRate;
           this.referralDiscountApplied = true;
         }
       }
@@ -1241,6 +1313,18 @@ bookingSchema.methods.recalculateFinancials = async function() {
       this.commissionAmount = commission || 0;
       this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
       this.commissionRule = activeCommissionRule._id || null;
+
+      // Populate snapshot metadata
+      this.commissionSource = activeCommissionRule.conditionType === 'rating' ? 'rating_rule' : (activeCommissionRule._id ? 'standard_rule' : 'system_default');
+      this.commissionRuleId = activeCommissionRule._id || null;
+      this.commissionTypeSnapshot = activeCommissionRule.type || 'percentage';
+      this.commissionValueSnapshot = activeCommissionRule.value || 0;
+      this.commissionRateSnapshot = activeCommissionRule.type === 'percentage' ? effectiveRate : null;
+      if (activeCommissionRule.ratingInfo) {
+        this.ratingSnapshot = activeCommissionRule.ratingInfo.averageRating;
+        this.ratingCountSnapshot = activeCommissionRule.ratingInfo.ratingCount;
+        this.ratingEvaluationPeriodDays = activeCommissionRule.ratingInfo.periodDays;
+      }
     } else {
       const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? parseFloat(process.env.DEFAULT_COMMISSION || 10);
       const commission = parseFloat(((baseForCommission * defaultCommPercent) / 100).toFixed(2));
@@ -1249,12 +1333,30 @@ bookingSchema.methods.recalculateFinancials = async function() {
       this.commissionAmount = commission || 0;
       this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
       this.commissionRule = null;
+
+      this.commissionSource = 'system_default';
+      this.commissionRuleId = null;
+      this.commissionTypeSnapshot = 'percentage';
+      this.commissionValueSnapshot = defaultCommPercent;
+      this.commissionRateSnapshot = defaultCommPercent;
+    }
+
+    if (finalizeCommission || isFinalizingTransition) {
+      this.commissionSnapshotFinalized = true;
     }
   } catch (error) {
     console.error('Error in recalculateFinancials:', error);
-    this.commissionAmount = 0;
-    this.providerEarnings = this.totalAmount;
-    this.commissionRule = null;
+    // Safe error fallback
+    const defaultCommPercent = 10;
+    const baseForCommission = Math.max(0, (this.subtotal || 0) - (this.totalDiscount || 0));
+    const commission = parseFloat(((baseForCommission * defaultCommPercent) / 100).toFixed(2));
+    this.commissionAmount = commission;
+    this.providerEarnings = parseFloat((baseForCommission - commission).toFixed(2));
+    this.commissionSource = 'system_default';
+    this.commissionRuleId = null;
+    this.commissionTypeSnapshot = 'percentage';
+    this.commissionValueSnapshot = defaultCommPercent;
+    this.commissionRateSnapshot = defaultCommPercent;
   }
 };
 

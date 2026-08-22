@@ -2346,6 +2346,40 @@ class ProviderService {
         }
     }
 
+    static async getCommissionStatus(req, res) {
+        try {
+            const providerId = req.provider._id;
+            const { serviceId, zoneId } = req.query;
+
+            const CommissionRule = mongoose.model('CommissionRule');
+            const ratingInfo = await CommissionRule.getProviderRatingForCommission(providerId, { evaluationPeriodDays: 30, minimumRatings: 5 });
+
+            const activeRule = await CommissionRule.getCommissionForProvider(providerId, zoneId || req.provider.currentZone || null, 'standard', serviceId || null);
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    averageRating: ratingInfo.averageRating,
+                    ratingCount: ratingInfo.ratingCount,
+                    evaluationPeriodDays: ratingInfo.periodDays,
+                    eligibleForRatingCommission: ratingInfo.eligible,
+                    currentRule: activeRule ? {
+                        _id: activeRule._id,
+                        name: activeRule.name,
+                        type: activeRule.type,
+                        value: activeRule.value,
+                        conditionType: activeRule.conditionType || 'none',
+                        ratingMin: activeRule.ratingMin,
+                        ratingMax: activeRule.ratingMax,
+                        minimumRatings: activeRule.minimumRatings
+                    } : null
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching provider commission status:', error);
+            res.status(500).json({ success: false, message: 'Failed to fetch commission status' });
+        }
+    }
 }
 
 module.exports = ProviderService;

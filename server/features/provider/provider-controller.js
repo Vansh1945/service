@@ -100,6 +100,14 @@ const getAgreementPdf = async (req, res, next) => {
   }
 };
 
+const getCommissionStatus = async (req, res, next) => {
+  try {
+    await ProviderService.getCommissionStatus(req, res, next);
+  } catch (error) {
+    global.logger.error(`[ProviderController.getCommissionStatus] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
 
 module.exports = {
   initiateRegistration,
@@ -112,5 +120,6 @@ module.exports = {
   deleteAccount,
   permanentDeleteAccount,
   getDashboardData,
-  getAgreementPdf
+  getAgreementPdf,
+  getCommissionStatus
 };

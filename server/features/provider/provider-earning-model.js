@@ -64,6 +64,43 @@ const providerEarningSchema = new Schema({
   isHeldByAdmin: {
     type: Boolean,
     default: false
+  },
+
+  // Audit Snapshots for Dynamic Commission & Financial Traceability
+  commissionSource: {
+    type: String,
+    enum: ['rating_rule', 'standard_rule', 'system_default'],
+    default: 'standard_rule'
+  },
+  commissionRuleId: {
+    type: Schema.Types.ObjectId,
+    ref: 'CommissionRule',
+    default: null
+  },
+  commissionTypeSnapshot: {
+    type: String,
+    enum: ['percentage', 'fixed'],
+    default: 'percentage'
+  },
+  commissionValueSnapshot: {
+    type: Number,
+    default: null
+  },
+  commissionRateSnapshot: {
+    type: Number,
+    default: null
+  },
+  ratingSnapshot: {
+    type: Number,
+    default: null
+  },
+  ratingCountSnapshot: {
+    type: Number,
+    default: null
+  },
+  ratingEvaluationPeriodDays: {
+    type: Number,
+    default: null
   }
 }, { timestamps: true });
 
@@ -89,13 +126,23 @@ providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
     (bookingDoc.subtotal || 0) - (bookingDoc.totalDiscount || 0)
   );
 
+  const commissionRate = bookingDoc.commissionRateSnapshot ?? bookingDoc.commissionValueSnapshot ?? 0;
+
   return this.create({
     provider: bookingDoc.provider,
     booking: bookingDoc._id,
     grossAmount,
-    commissionRate: bookingDoc.commissionRule ? bookingDoc.commissionRule.rate : 0,
+    commissionRate,
     commissionAmount: bookingDoc.commissionAmount,
     netAmount: bookingDoc.providerEarnings,
+    commissionSource: bookingDoc.commissionSource || 'standard_rule',
+    commissionRuleId: bookingDoc.commissionRuleId || bookingDoc.commissionRule || null,
+    commissionTypeSnapshot: bookingDoc.commissionTypeSnapshot || 'percentage',
+    commissionValueSnapshot: bookingDoc.commissionValueSnapshot || null,
+    commissionRateSnapshot: bookingDoc.commissionRateSnapshot || null,
+    ratingSnapshot: bookingDoc.ratingSnapshot || null,
+    ratingCountSnapshot: bookingDoc.ratingCountSnapshot || null,
+    ratingEvaluationPeriodDays: bookingDoc.ratingEvaluationPeriodDays || null,
     isVisibleToProvider: true,
     status: bookingDoc.paymentMethod === 'cash' ? 'paid' : 'held',
     availableAfter: bookingDoc.payoutHoldUntil
