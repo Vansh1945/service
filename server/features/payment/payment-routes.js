@@ -13,6 +13,7 @@ const { paymentLimiter, webhookLimiter } = require('../../shared/middlewares/rat
 // Webhook route - must use express.raw() for signature verification
 // This route is PUBLIC - no authentication required
 router.post('/webhook', webhookLimiter, express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+router.post('/razorpay/webhook', webhookLimiter, express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 const { preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
 
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);

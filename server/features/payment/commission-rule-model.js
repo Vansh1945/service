@@ -237,20 +237,29 @@ commissionRuleSchema.statics.getProviderRatingForCommission = async function (pr
 };
 
 // Get applicable commission rule for a provider
-commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = 'standard', serviceId = null, categoryId = null) {
+commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = null, serviceId = null, categoryId = null) {
   try {
-    // If tier not provided, calculate from provider metrics
-    if (!providerperformanceScore || providerperformanceScore === 'standard') {
+    let tier = (providerperformanceScore || '').toLowerCase().trim();
+
+    // Map legacy tier names if passed by old endpoints/calls
+    if (tier === 'basic') tier = 'bronze';
+    else if (tier === 'standard') tier = 'silver';
+    else if (tier === 'premium') tier = 'gold';
+
+    // If tier not provided or invalid, fetch from provider's stored badge
+    if (!tier || !['bronze', 'silver', 'gold', 'platinum'].includes(tier)) {
       const provider = await mongoose.model('Provider')
         .findById(providerId)
         .select('performanceScore');
 
-      if (provider) {
-        providerperformanceScore = provider.performanceScore?.badge || 'bronze';
-      } else {
-        providerperformanceScore = 'bronze';
+      if (provider && provider.performanceScore?.badge) {
+        tier = provider.performanceScore.badge.toLowerCase().trim();
+      }
+      if (!tier || !['bronze', 'silver', 'gold', 'platinum'].includes(tier)) {
+        tier = 'bronze';
       }
     }
+    providerperformanceScore = tier;
 
     // If serviceId is provided and categoryId is not, let's fetch categoryId from service
     if (serviceId && !categoryId) {

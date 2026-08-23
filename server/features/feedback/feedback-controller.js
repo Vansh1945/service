@@ -175,7 +175,7 @@ const submitFeedback = async (req, res, next) => {
         comment: serviceComment || ''
       },
       metadata: {
-        ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        ip: req.clientIp || req.ip || req.socket?.remoteAddress || '0.0.0.0',
         userAgent: req.headers['user-agent']
       }
     });

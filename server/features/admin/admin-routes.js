@@ -13,13 +13,14 @@ const {
   togglePayoutHoldSchema
 } = require('./admin-validation');
 
+const { adminActionLimiter, adminRegisterLimiter } = require('../../shared/middlewares/rate-limit');
+const { preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
+
 // Public routes
-router.post('/register', uploadProfilePic.single('profilePic'), validateBody(registerAdminSchema), adminController.registerAdmin);
+router.post('/register', adminRegisterLimiter, uploadProfilePic.single('profilePic'), validateBody(registerAdminSchema), adminController.registerAdmin);
 
 // Protected routes
 const adminRoleCheck = roleMiddleware(['admin']);
-const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
-const { preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
 router.use(adminAuthMiddleware, adminRoleCheck);
 
 // Universal Admin Search & Filter API

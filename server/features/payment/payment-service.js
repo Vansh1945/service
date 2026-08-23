@@ -593,78 +593,146 @@ class PaymentService {
     await syncEarningsStatus(providerId);
   }
 
-  static async handleWebhook(req, res) {
+  static async handleWebhook(req, res, next) {
     try {
       const signature = req.headers['x-razorpay-signature'];
       const bodyData = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body)));
 
       if (!signature) {
-        console.error('Webhook Error: Missing signature header');
+        global.logger.warn('Webhook Error: Missing signature header');
         return res.status(400).json({ error: 'Missing signature header' });
       }
 
-      // Verify signature (check RAZORPAYX_WEBHOOK_SECRET first, then fallback to RAZORPAY_WEBHOOK_SECRET)
-      const rzpSecret = process.env.RAZORPAYX_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
-      const expectedSignature = crypto
-        .createHmac('sha256', rzpSecret)
-        .update(bodyData)
-        .digest('hex');
+      // Verify signature (check RAZORPAY_WEBHOOK_SECRET first, then fallback to RAZORPAYX_WEBHOOK_SECRET)
+      const secret1 = process.env.RAZORPAY_WEBHOOK_SECRET;
+      const secret2 = process.env.RAZORPAYX_WEBHOOK_SECRET;
+      let isValidSignature = false;
 
-      if (signature !== expectedSignature) {
-        console.error(`[Payment Security Alert] Webhook Error: Invalid signature ${signature}. Expected: ${expectedSignature}`);
+      if (secret1) {
+        const sig1 = crypto.createHmac('sha256', secret1).update(bodyData).digest('hex');
+        if (sig1 === signature) isValidSignature = true;
+      }
+      if (!isValidSignature && secret2) {
+        const sig2 = crypto.createHmac('sha256', secret2).update(bodyData).digest('hex');
+        if (sig2 === signature) isValidSignature = true;
+      }
+
+      if (!isValidSignature) {
+        global.logger.warn(`[Payment Security Alert] Webhook Error: Invalid signature ${signature}`);
         return res.status(400).json({ error: 'Invalid signature' });
       }
 
-      const payload = JSON.parse(bodyData.toString());
+      let payload;
+      try {
+        payload = JSON.parse(bodyData.toString());
+      } catch (parseErr) {
+        global.logger.error('Failed to parse webhook payload: ' + parseErr.message, parseErr);
+        return res.status(400).json({ error: 'Invalid JSON payload' });
+      }
+
       const event = payload.event;
       const payment = payload.payload?.payment?.entity;
       const payoutEntity = payload.payload?.payout?.entity;
+      const qrEntity = payload.payload?.qr_code?.entity;
+      const refundEntity = payload.payload?.refund?.entity;
 
-      if (!payment && !payoutEntity) {
-        console.error('Webhook Error: Missing payment/payout entity');
+      if (!payment && !payoutEntity && !qrEntity && !refundEntity) {
+        global.logger.error('Webhook Error: Missing payment/payout/qr/refund entity');
         return res.status(400).json({ error: 'Invalid payload structure' });
       }
 
-      const entityId = payment?.id || payoutEntity?.id;
+      const entityId = payment?.id || payoutEntity?.id || qrEntity?.id || refundEntity?.id;
 
       // Enforce Webhook Idempotency
       const eventId = payload.id || `${event}:${entityId}`;
       try {
         const WebhookIdempotency = mongoose.models.WebhookIdempotency || mongoose.model('WebhookIdempotency', new mongoose.Schema({
           eventId: { type: String, required: true, unique: true },
-          processedAt: { type: Date, default: Date.now, expires: 604800 } // TTL: 7 days
+          processedAt: { type: Date, default: Date.now, expires: 7776000 } // TTL: 90 days (90 * 24 * 60 * 60 = 7,776,000 seconds)
         }));
+        if (typeof WebhookIdempotency.syncIndexes === 'function') {
+          WebhookIdempotency.syncIndexes().catch(() => {});
+        }
         await WebhookIdempotency.create({ eventId });
       } catch (idempErr) {
         if (idempErr.code === 11000) {
-          console.warn(`[Webhook Duplicate] Webhook event ${eventId} already processed. Skipping to prevent duplicates.`);
+          global.logger.info(`[Webhook Duplicate] Webhook event ${eventId} already processed. Skipping to prevent duplicate processing.`);
           return res.status(200).json({ status: 'success', duplicate: true });
         }
         throw idempErr;
       }
 
-      console.log(`Webhook received: ${event}, Entity ID: ${entityId}`);
+      global.logger.info(`Webhook received: ${event}, Entity ID: ${entityId}, Event ID: ${eventId}`);
 
-      if (event.startsWith('payout.')) {
-        await handlePayoutWebhook(event, payoutEntity);
-      } else {
-        switch (event) {
-          case 'payment.captured':
-            await handlePaymentCaptured(payment);
-            break;
-          case 'payment.failed':
-            await handlePaymentFailed(payment);
-            break;
-          default:
-            console.log(`Unhandled webhook event: ${event}`);
+      const session = await mongoose.startSession();
+      session.startTransaction();
+
+      let bookingToAssignId = null;
+
+      try {
+        if (event.startsWith('payout.')) {
+          await handlePayoutWebhook(event, payoutEntity, session);
+        } else {
+          const TransactionController = require('./transaction-controller');
+          const Transaction = require('./transaction-model');
+
+          switch (event) {
+            case 'qr_code.credited': {
+              const qrEntityObj = payload.payload?.qr_code?.entity || payload.payload?.payment?.entity;
+              await TransactionController.handleQRSuccessPayment(qrEntityObj || payment, session, qrEntityObj?.id);
+              break;
+            }
+            case 'payment.captured': {
+              const isQRPayment = payment?.notes?.qrCodeId || payment?.qr_code_id || payment?.description?.includes('QR');
+              if (isQRPayment) {
+                await TransactionController.handleQRSuccessPayment(payment, session, payment?.notes?.qrCodeId || payment?.qr_code_id);
+              } else {
+                await TransactionController.handleSuccessfulPayment(payment, session);
+                const txn = await Transaction.findOne({ razorpayOrderId: payment?.order_id }).session(session);
+                if (txn) {
+                  bookingToAssignId = txn.booking;
+                }
+              }
+              break;
+            }
+            case 'payment.failed': {
+              await TransactionController.handleFailedPayment(payment, session);
+              break;
+            }
+            case 'refund.processed':
+            case 'refund.created': {
+              await TransactionController.handleRefundProcessed(refundEntity || payment, session);
+              break;
+            }
+            default:
+              global.logger.info(`Unhandled webhook event: ${event}`);
+          }
         }
-      }
 
-      // Always return 200 to acknowledge receipt
-      res.status(200).json({ status: 'success' });
+        await session.commitTransaction();
+        res.status(200).json({ status: 'success' });
+
+        if (bookingToAssignId) {
+          try {
+            const ProviderAssignmentService = require('../booking/provider-assignment-service');
+            ProviderAssignmentService.autoAssignProviderIfEnabled(bookingToAssignId);
+          } catch (assignError) {
+            global.logger.error('Error triggering auto-assignment after webhook captured: ' + assignError.message, assignError);
+          }
+        }
+      } catch (innerErr) {
+        await session.abortTransaction();
+        throw innerErr;
+      } finally {
+        session.endSession();
+      }
     } catch (error) {
-      console.error('Webhook processing error:', error);
-      res.status(500).json({ error: 'Webhook processing failed' });
+      global.logger.error('[PaymentService.handleWebhook] Webhook processing error: ' + error.message, error);
+      if (typeof next === 'function') {
+        next(error);
+      } else {
+        res.status(500).json({ error: 'Webhook processing failed' });
+      }
     }
   }
 

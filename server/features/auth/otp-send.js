@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const nodemailer = require('nodemailer');
 const axios = require('axios');
+const bcrypt = require('bcryptjs');
 const admin = require('../../shared/config/firebase-admin');
 const OTP = require('./otp-model');
 const { sendMail } = require('../../shared/utils/sendmail');
@@ -9,7 +10,7 @@ const { SystemConfig } = require('../system-setting/system-setting-model');
 
 exports.generateOTP = async (email) => {
   const otp = crypto.randomInt(100000, 999999).toString();
-  
+
   let otpExpiryMinutes = 5;
   try {
     const config = await SystemConfig.findOne();
@@ -25,11 +26,15 @@ exports.generateOTP = async (email) => {
   // Clear previous OTP for this email dynamically
   await OTP.findOneAndDelete({ email });
 
+  const salt = await bcrypt.genSalt(10);
+  const otpHash = await bcrypt.hash(otp, salt);
+
   await OTP.create({
     email,
-    otp,
+    otpHash,
     expiresAt,
-    attempts: 0
+    attempts: 0,
+    isVerified: false
   });
 
   return otp;
@@ -138,20 +143,11 @@ exports.sendOTP = async (email, fcmToken = null, otpType = 'forgotPasswordOtp') 
   }
 };
 
-exports.verifyOTP = async (email, otp) => {
+exports.verifyOTP = async (email, otp, isResetStep = false) => {
   const storedData = await OTP.findOne({ email });
 
   if (!storedData) {
     throw new Error("OTP not found or expired");
-  }
-
-  // Increment attempt counter
-  storedData.attempts++;
-  await storedData.save();
-
-  if (storedData.attempts > 3) {
-    await OTP.deleteOne({ email });
-    throw new Error("Too many attempts. OTP invalidated.");
   }
 
   if (storedData.expiresAt < new Date()) {
@@ -159,11 +155,61 @@ exports.verifyOTP = async (email, otp) => {
     throw new Error("OTP expired");
   }
 
-  if (storedData.otp !== otp) {
-    throw new Error("Invalid OTP");
+  if (storedData.attempts >= 3) {
+    await OTP.deleteOne({ email });
+    throw new Error("Too many attempts. OTP invalidated.");
   }
 
-  return true;
+  const hashToCompare = storedData.otpHash || storedData.otp;
+  if (!hashToCompare) {
+    throw new Error("OTP is expired");
+  }
+
+  let isMatch = false;
+  if (hashToCompare.startsWith('$2a$') || hashToCompare.startsWith('$2b$')) {
+    isMatch = await bcrypt.compare(otp, hashToCompare);
+  } else {
+    isMatch = (hashToCompare === otp);
+  }
+
+  if (!isResetStep) {
+    if (storedData.isVerified) {
+      throw new Error("OTP has already been verified");
+    }
+
+    if (!isMatch) {
+      storedData.attempts += 1;
+      await storedData.save();
+      if (storedData.attempts >= 3) {
+        await OTP.deleteOne({ email });
+        throw new Error("Too many attempts. OTP invalidated.");
+      }
+      throw new Error("Invalid OTP");
+    }
+
+    // Atomic one-time verification transition
+    const updated = await OTP.findOneAndUpdate(
+      { _id: storedData._id, isVerified: false },
+      { $set: { isVerified: true } },
+      { new: true }
+    );
+
+    if (!updated) {
+      throw new Error("OTP has already been verified ");
+    }
+
+    return true;
+  } else {
+    if (!storedData.isVerified) {
+      throw new Error("OTP not verified. Please verify OTP first.");
+    }
+
+    if (!isMatch) {
+      throw new Error("Invalid OTP");
+    }
+
+    return true;
+  }
 };
 
 // Additional utility functions

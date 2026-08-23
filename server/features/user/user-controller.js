@@ -221,7 +221,7 @@ const register = async (req, res, next) => {
       profilePicUrl,
       role: 'customer',
       metadata: {
-        ip: req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        ip: req.clientIp || req.ip || req.socket?.remoteAddress || '',
         device: req.deviceFingerprint || '',
         userAgent: req.headers['user-agent'],
         lastLogin: new Date()

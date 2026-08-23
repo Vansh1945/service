@@ -196,6 +196,7 @@ const AdminFeedback = () => {
 
         {/* ── Filters ── */}
         <AdminLocalFilterBar
+          isInline={true}
           searchValue={filters.search || ''}
           onSearchChange={(e) => handleFilterChange('search', e.target.value)}
           onSearchClear={() => {

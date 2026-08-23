@@ -7,16 +7,7 @@ const Provider = require('../../features/provider/provider-model');
  * Extract the real public client IP behind proxies, Render, Vercel, Cloudflare, etc.
  */
 function getClientIp(req) {
-  let ip = req.headers['cf-connecting-ip'] ||
-    req.headers['x-real-ip'] ||
-    req.headers['x-forwarded-for'] ||
-    req.ip ||
-    (req.socket ? req.socket.remoteAddress : '');
-
-  // x-forwarded-for can be a list of IPs: "client, proxy1, proxy2"
-  if (ip && ip.includes(',')) {
-    ip = ip.split(',')[0].trim();
-  }
+  let ip = req.ip || (req.socket ? req.socket.remoteAddress : '');
 
   // Clean IPv6-mapped IPv4 addresses
   if (ip && ip.startsWith('::ffff:')) {

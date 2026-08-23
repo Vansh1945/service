@@ -158,7 +158,7 @@ const checkFraudFlags = async (referrer, referredUser, req, type) => {
   }
 
   if (type === 'registration') {
-    const ip = req ? (req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+    const ip = req ? (req.clientIp || req.ip || '').trim() : '';
     const deviceId = req ? req.headers['x-device-id'] : '';
 
     if (ip && referrer.lastLoginIp === ip) {
@@ -185,7 +185,7 @@ const checkFraudFlags = async (referrer, referredUser, req, type) => {
       score += 70;
     }
 
-    const ip = req ? (req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+    const ip = req ? (req.clientIp || req.ip || '').trim() : '';
     if (ip && referrer.lastLoginIp === ip) {
       abuseFlags.push('same_ip');
       score += 30;

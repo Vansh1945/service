@@ -48,6 +48,13 @@ const templateRoutes = require('./features/template/template-routes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Configure Express Trust Proxy for production reverse proxies (e.g. Render, Cloudflare, Nginx, Vercel)
+// Supports process.env.TRUST_PROXY override if configured; defaults to 1 hop in production, false in dev.
+const trustProxySetting = process.env.TRUST_PROXY !== undefined
+  ? (isNaN(process.env.TRUST_PROXY) ? process.env.TRUST_PROXY : parseInt(process.env.TRUST_PROXY, 10))
+  : (process.env.NODE_ENV === 'production' ? 1 : false);
+app.set('trust proxy', trustProxySetting);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1️⃣ LOGGING CONFIGURATION (WINSTON & MORGAN)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,7 +104,7 @@ app.use(morgan((tokens, req, res) => {
   const responseTime = responseTimeVal.toFixed(2);
   const role = req.role || req.user?.role || req.provider?.role || (req.admin ? 'admin' : '-');
   const userId = req.userID || req.user?._id || req.provider?._id || req.admin?._id || '-';
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '-';
+  const ip = req.clientIp || req.ip || req.socket?.remoteAddress || '-';
 
   return `${method} ${url} ${status} ${responseTime} ms - Role: ${role} - UserID: ${userId} - IP: ${ip}`;
 }, {
@@ -137,12 +144,12 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(compression());
 
 app.use(express.json({
-  limit: '50mb',
+  limit: '1mb',
   verify: (req, res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(mongoSanitize({ allowDots: true, replaceWith: '_' }));
 
 // Custom Security Headers Parser
@@ -306,6 +313,7 @@ app.use('/api/complaint', complaintRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/system-setting', systemSettingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/notifications', notificationRoutes);

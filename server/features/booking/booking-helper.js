@@ -207,14 +207,18 @@ const enrichBookingData = (booking, transaction = null) => {
 
   // Calculate provider shares for lean queries
   const split = b.surgeSplitSettings || {};
-  const visitingSplit = typeof split.visiting === 'number' ? split.visiting : 0;
-  const rainSplit = typeof split.rain === 'number' ? split.rain : 0;
-  const trafficSplit = typeof split.traffic === 'number' ? split.traffic : 0;
-  const nightSplit = typeof split.night === 'number' ? split.night : 0;
-  const demandSplit = typeof split.demand === 'number' ? split.demand : 0;
-  const emergencySplit = typeof split.emergency === 'number' ? split.emergency : 0;
+  const visitingSplit = typeof split.visiting === 'number' ? split.visiting : 60;
+  const festivalSplit = typeof split.festival === 'number' ? split.festival : 70;
+  const customSplit = typeof split.custom === 'number' ? split.custom : 70;
+  const rainSplit = typeof split.rain === 'number' ? split.rain : 70;
+  const trafficSplit = typeof split.traffic === 'number' ? split.traffic : 70;
+  const nightSplit = typeof split.night === 'number' ? split.night : 70;
+  const demandSplit = typeof split.demand === 'number' ? split.demand : 50;
+  const emergencySplit = typeof split.emergency === 'number' ? split.emergency : 85;
 
   b.providerVisitingShare = parseFloat(((b.visitingCharge || 0) * (visitingSplit / 100)).toFixed(2)) || 0;
+  b.providerFestivalShare = parseFloat(((b.festivalCharge || 0) * (festivalSplit / 100)).toFixed(2)) || 0;
+  b.providerCustomShare = parseFloat(((b.customCharges || 0) * (customSplit / 100)).toFixed(2)) || 0;
   b.providerRainShare = parseFloat(((b.rainCharge || 0) * (rainSplit / 100)).toFixed(2)) || 0;
   b.providerTrafficShare = parseFloat(((b.trafficCharge || 0) * (trafficSplit / 100)).toFixed(2)) || 0;
   b.providerNightShare = parseFloat(((b.nightCharge || 0) * (nightSplit / 100)).toFixed(2)) || 0;
@@ -228,6 +232,7 @@ const enrichBookingData = (booking, transaction = null) => {
     (b.trafficCharge || 0) +
     (b.nightCharge || 0) +
     (b.demandSurge || 0) +
+    (b.festivalCharge || 0) +
     (b.customCharges || 0) +
     (b.platformFee || 0);
   const isReferralDiscount = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
@@ -235,7 +240,7 @@ const enrichBookingData = (booking, transaction = null) => {
   const providerApplicableDiscount = Math.max(0, (b.totalDiscount || 0) - referralDiscountAmount);
   const baseForComm = Math.max(0, servicePrice - providerApplicableDiscount);
   const platformCommission = b.commissionAmount || parseFloat(((baseForComm * 10) / 100).toFixed(2));
-  const providerEarnings = b.providerEarnings || parseFloat((baseForComm - platformCommission + (b.providerEmergencyShare || 0) + (b.providerVisitingShare || 0) + (b.providerRainShare || 0) + (b.providerTrafficShare || 0) + (b.providerNightShare || 0) + (b.providerDemandShare || 0)).toFixed(2));
+  const providerEarnings = b.providerEarnings || parseFloat((baseForComm - platformCommission + (b.providerEmergencyShare || 0) + (b.providerVisitingShare || 0) + (b.providerFestivalShare || 0) + (b.providerCustomShare || 0) + (b.providerRainShare || 0) + (b.providerTrafficShare || 0) + (b.providerNightShare || 0) + (b.providerDemandShare || 0)).toFixed(2));
   const platformEarnings = parseFloat((platformCommission + (b.companySurgeShare || 0)).toFixed(2));
   const customerTotal = b.totalAmount || 0;
 
@@ -286,9 +291,90 @@ const enrichBookingData = (booking, transaction = null) => {
   return b;
 };
 
+/**
+ * Validates core financial invariants across booking, pricing, payment, provider earnings, and refunds.
+ * @param {Object} data - The financial document or payload
+ * @param {String} context - Validation context: 'booking', 'pricing', 'earnings', 'refund', 'wallet'
+ * @returns {Object} - { isValid: boolean, errors: Array<string> }
+ */
+const validateFinancialInvariants = (data, context = 'booking') => {
+  const errors = [];
+  if (!data) return { isValid: true, errors: [] };
+
+  if (context === 'booking' || context === 'pricing') {
+    // 1. Customer Total Invariant: customerTotal = subtotal - discount + totalSurcharge + tax
+    const subtotal = Number(data.subtotal || data.servicePrice || 0);
+    const discount = Number(data.totalDiscount || data.discount || 0);
+    const surcharge = Number(data.totalSurcharge || data.surgeCharges || 0);
+    const visiting = Number(data.visitingCharge || data.visitingCharges || 0);
+    const tax = Number(data.tax || 0);
+    const customerTotal = Number(data.totalAmount || data.customerTotal || 0);
+
+    if (discount < 0) {
+      errors.push('Discount cannot be negative.');
+    }
+    if (discount > subtotal && subtotal > 0) {
+      errors.push('Discount cannot exceed subtotal.');
+    }
+
+    const calculatedTotal = parseFloat(Math.max(0, subtotal - discount + surcharge + tax).toFixed(2));
+    if (customerTotal > 0 && Math.abs(customerTotal - calculatedTotal) > 0.05) {
+      errors.push(`Customer total invariant mismatch: stored ${customerTotal} != calculated ${calculatedTotal}`);
+    }
+  }
+
+  if (context === 'earnings') {
+    // 2. Provider Earnings Invariant: providerEarnings = commissionBase - commission + providerSurgeShare + bonus - deductions
+    const base = Number(data.commissionBase || 0);
+    const comm = Number(data.commissionAmount || data.platformCommission || 0);
+    const surgeShare = Number(data.providerSurgeShare || 0);
+    const bonus = Number(data.approvedBonus || data.providerBonus || 0);
+    const deductions = Number(data.providerDeductions || 0);
+    const earnings = Number(data.providerEarnings || 0);
+
+    const calculatedEarnings = parseFloat(Math.max(0, base - comm + surgeShare + bonus - deductions).toFixed(2));
+    if (earnings > 0 && Math.abs(earnings - calculatedEarnings) > 0.05) {
+      errors.push(`Provider earnings invariant mismatch: stored ${earnings} != calculated ${calculatedEarnings}`);
+    }
+  }
+
+  if (context === 'refund') {
+    // 3. Refund Invariant: totalRefunded <= totalPaid
+    const totalPaid = Number(data.totalPaid || data.totalAmount || 0);
+    const totalRefunded = Number(data.totalRefunded || 0);
+    const requestedRefund = Number(data.requestedRefund || 0);
+
+    if (requestedRefund <= 0) {
+      errors.push('Requested refund amount must be greater than zero.');
+    }
+    if (totalRefunded + requestedRefund > totalPaid) {
+      errors.push(`Refund invariant violation: total refunds (${totalRefunded + requestedRefund}) exceed total paid (${totalPaid})`);
+    }
+  }
+
+  if (context === 'wallet') {
+    // 4. Wallet Ledger Invariant: balance = credits - debits; balance >= 0
+    const balance = Number(data.balance || data.walletBalance || 0);
+    const requestedDebit = Number(data.requestedDebit || 0);
+
+    if (balance < 0) {
+      errors.push('Wallet balance cannot be negative.');
+    }
+    if (requestedDebit > 0 && requestedDebit > balance) {
+      errors.push(`Wallet debit invariant violation: requested debit (${requestedDebit}) exceeds available balance (${balance})`);
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
 module.exports = {
   getBookingProgress,
   getBookingTimeline,
-  enrichBookingData
+  enrichBookingData,
+  validateFinancialInvariants
 };
 

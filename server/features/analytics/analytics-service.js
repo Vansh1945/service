@@ -60,7 +60,7 @@ const refreshAnalytics = async () => {
             ]),
             Booking.aggregate([
                 { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-                { $group: { _id: null, totalAdminEarnings: { $sum: { $add: [{ $ifNull: ["$commissionAmount", 0] }, { $ifNull: ["$platformFee", 0] }, { $ifNull: ["$companySurgeShare", 0] }] } } } }
+                { $group: { _id: null, totalAdminEarnings: { $sum: { $add: [{ $ifNull: ["$commissionAmount", 0] }, { $ifNull: ["$companySurgeShare", 0] }] } } } }
             ]),
             Transaction.aggregate([
                 { $match: { paymentStatus: { $in: ['completed', 'paid', 'success'] } } },

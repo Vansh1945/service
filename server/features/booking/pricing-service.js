@@ -108,6 +108,7 @@ class PricingService {
     let nightCharge = 0;
     let demandSurge = 0;
     let visitingCharge = 0;
+    let festivalCharge = 0;
     let customCharges = 0;
     let platformFee = 0;
     let emergencySurge = 0;
@@ -162,12 +163,19 @@ class PricingService {
         } else {
           chargeAmount = 0;
         }
-      } else if (s.chargeType === 'festival' || s.chargeType === 'custom') {
-        if (isEmergency) {
-          chargeAmount = 0;
-        } else {
-          visitingCharge += chargeAmount;
+      } else if (s.chargeType === 'festival') {
+        if (!isEmergency) {
+          festivalCharge += chargeAmount;
           totalSurcharge += chargeAmount;
+        } else {
+          chargeAmount = 0;
+        }
+      } else if (s.chargeType === 'custom') {
+        if (!isEmergency) {
+          customCharges += chargeAmount;
+          totalSurcharge += chargeAmount;
+        } else {
+          chargeAmount = 0;
         }
       }
 
@@ -201,7 +209,7 @@ class PricingService {
       servicePrice: subtotal,
       visitingCharges: visitingCharge,
       emergencyCharges: emergencySurge,
-      surgeCharges: rainCharge + trafficCharge + nightCharge + demandSurge + customCharges + platformFee,
+      surgeCharges: rainCharge + trafficCharge + nightCharge + demandSurge + festivalCharge + customCharges + platformFee,
       discount: totalDiscount,
       walletUsed: 0,
       platformCommission: 0,
@@ -222,6 +230,7 @@ class PricingService {
       nightCharge,
       demandSurge,
       visitingCharge,
+      festivalCharge,
       platformFee,
       customCharges,
       emergencySurge,

@@ -81,28 +81,95 @@ const updateBookingPaymentSchema = z.object({
   paymentStatus: z.enum(['pending', 'processing', 'paid', 'failed'])
 });
 
-const validateBookingTransition = (currentStatus, targetStatus) => {
-  const curr = currentStatus || 'pending';
-  const tgt = targetStatus;
+const normalizeStatus = (status) => {
+  if (!status) return 'pending';
+  const clean = status.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const sMap = {
+    'inprogress': 'workstarted',
+    'started': 'workstarted',
+    'assigned': 'accepted',
+    'in_progress': 'workstarted',
+    'on_the_way': 'ontheway',
+    'searching_provider': 'searchingprovider'
+  };
+  return sMap[clean] || clean;
+};
+
+const ALLOWED_TRANSITIONS = {
+  pending: {
+    customer: ['cancelled'],
+    provider: [],
+    system: ['searchingprovider', 'offered', 'accepted', 'cancelled'],
+    webhook: ['searchingprovider', 'accepted', 'cancelled'],
+    admin: ['searchingprovider', 'offered', 'accepted', 'cancelled', 'rejected']
+  },
+  searchingprovider: {
+    customer: ['cancelled'],
+    provider: [],
+    system: ['offered', 'accepted', 'pending', 'noshow', 'cancelled'],
+    webhook: ['accepted', 'cancelled'],
+    admin: ['offered', 'accepted', 'cancelled', 'rejected']
+  },
+  offered: {
+    customer: ['cancelled'],
+    provider: ['accepted', 'rejected'],
+    system: ['searchingprovider', 'cancelled', 'noshow'],
+    webhook: ['accepted', 'cancelled'],
+    admin: ['accepted', 'cancelled', 'rejected']
+  },
+  accepted: {
+    customer: ['cancelled'],
+    provider: ['ontheway', 'arrived', 'workstarted', 'cancelled'],
+    system: ['cancelled', 'noshow'],
+    webhook: ['cancelled'],
+    admin: ['ontheway', 'arrived', 'workstarted', 'cancelled', 'noshow']
+  },
+  ontheway: {
+    customer: ['cancelled'],
+    provider: ['arrived', 'workstarted', 'cancelled'],
+    system: ['cancelled'],
+    webhook: ['cancelled'],
+    admin: ['arrived', 'workstarted', 'cancelled', 'noshow']
+  },
+  arrived: {
+    customer: [],
+    provider: ['workstarted', 'cancelled'],
+    system: ['cancelled'],
+    webhook: ['cancelled'],
+    admin: ['workstarted', 'cancelled', 'noshow']
+  },
+  workstarted: {
+    customer: [],
+    provider: ['completed'],
+    system: [],
+    webhook: [],
+    admin: ['completed', 'cancelled']
+  },
+  completed: { customer: [], provider: [], system: [], webhook: [], admin: [] },
+  cancelled: { customer: [], provider: [], system: [], webhook: [], admin: [] },
+  rejected: { customer: [], provider: [], system: [], webhook: [], admin: [] },
+  noshow: { customer: [], provider: [], system: [], webhook: [], admin: [] }
+};
+
+const validateBookingTransition = (currentStatus, targetStatus, actor = 'system', options = {}) => {
+  const curr = normalizeStatus(currentStatus);
+  const tgt = normalizeStatus(targetStatus);
 
   if (curr === tgt) return true;
 
-  const transitions = {
-    'pending': ['searchingprovider', 'offered', 'accepted', 'cancelled', 'rejected'],
-    'searchingprovider': ['offered', 'accepted', 'cancelled', 'rejected'],
-    'offered': ['accepted', 'cancelled', 'rejected'],
-    'accepted': ['ontheway', 'workstarted', 'cancelled', 'noshow'],
-    'ontheway': ['arrived', 'workstarted', 'cancelled', 'noshow'],
-    'arrived': ['workstarted', 'cancelled', 'noshow'],
-    'workstarted': ['completed', 'cancelled', 'noshow'],
-    'completed': [],
-    'cancelled': [],
-    'rejected': [],
-    'noshow': []
-  };
+  const validActor = (actor || 'system').toLowerCase();
+  const actorTransitions = ALLOWED_TRANSITIONS[curr]?.[validActor] || [];
 
-  const allowed = transitions[curr] || [];
-  return allowed.includes(tgt);
+  const fallbackTransitions = Object.values(ALLOWED_TRANSITIONS[curr] || {}).flat();
+  const allowed = actorTransitions.length > 0 ? actorTransitions : fallbackTransitions;
+
+  if (allowed.includes(tgt)) return true;
+
+  if (validActor === 'admin' && options.forceAdminOverride) {
+    return true;
+  }
+
+  return false;
 };
 
 module.exports = {

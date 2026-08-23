@@ -44,6 +44,82 @@ const fileFilterHelper = (allowedMimeTypes, allowedExtensions) => {
   };
 };
 
+// Magic-byte / File Signature Security Validator
+const validateMagicBytes = (filePath, mimeType, extension, fieldName) => {
+  if (!fs.existsSync(filePath)) {
+    throw new Error('Security Alert: File does not exist.');
+  }
+
+  const buffer = fs.readFileSync(filePath);
+  if (!buffer || buffer.length === 0) {
+    throw new Error('Security Alert: File is empty or corrupt.');
+  }
+
+  const ext = (extension || '').toLowerCase();
+
+  // 1. SVG Security Inspection / Sanitization
+  if (ext === 'svg' || mimeType === 'image/svg+xml') {
+    const content = buffer.toString('utf8');
+    const dangerousPatterns = [
+      /<script/i,
+      /javascript:/i,
+      /data:/i,
+      /onload=/i,
+      /onerror=/i,
+      /onclick=/i,
+      /onmouseover=/i,
+      /onfocus=/i,
+      /<foreignObject/i,
+      /<iframe/i,
+      /<embed/i,
+      /<object/i
+    ];
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(content)) {
+        throw new Error('Security Alert: SVG file contains potentially malicious scripts or active content.');
+      }
+    }
+  }
+
+  // 2. Magic Byte Signature Validation
+  const headerHex = buffer.subarray(0, 12).toString('hex').toLowerCase();
+
+  if (ext === 'jpg' || ext === 'jpeg' || mimeType === 'image/jpeg') {
+    if (!headerHex.startsWith('ffd8ff')) {
+      throw new Error('Security Alert: Magic-byte validation failed. File is not a valid JPEG image.');
+    }
+  } else if (ext === 'png' || mimeType === 'image/png') {
+    if (!headerHex.startsWith('89504e47')) {
+      throw new Error('Security Alert: Magic-byte validation failed. File is not a valid PNG image.');
+    }
+  } else if (ext === 'webp' || mimeType === 'image/webp') {
+    if (!headerHex.startsWith('52494646') || !buffer.subarray(8, 12).toString('ascii').includes('WEBP')) {
+      throw new Error('Security Alert: Magic-byte validation failed. File is not a valid WebP image.');
+    }
+  } else if (ext === 'gif' || mimeType === 'image/gif') {
+    if (!headerHex.startsWith('47494638')) {
+      throw new Error('Security Alert: Magic-byte validation failed. File is not a valid GIF image.');
+    }
+  } else if (ext === 'pdf' || mimeType === 'application/pdf') {
+    if (!buffer.subarray(0, 5).toString('ascii').startsWith('%PDF-')) {
+      throw new Error('Security Alert: Magic-byte validation failed. File is not a valid PDF document.');
+    }
+    const pdfContent = buffer.toString('latin1');
+    const dangerousPdfTokens = ['/JavaScript', '/JS ', '/Launch ', '/EmbeddedFile'];
+    for (const token of dangerousPdfTokens) {
+      if (pdfContent.includes(token)) {
+        throw new Error('Security Alert: PDF contains active scripts or untrusted executable structures.');
+      }
+    }
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    const isZip = headerHex.startsWith('504b0304');
+    const isOle = headerHex.startsWith('d0cf11e0');
+    if (!isZip && !isOle) {
+      throw new Error('Security Alert: Magic-byte validation failed. File is not a valid Excel spreadsheet.');
+    }
+  }
+};
+
 // Middleware wrapper that intercepts uploaded files and processes them
 const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
   return async (req, res, next) => {
@@ -58,19 +134,24 @@ const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
         if (!file) return;
         const ext = file.originalname.split('.').pop().toLowerCase();
         const mime = file.mimetype.toLowerCase();
+
+        // Perform magic-byte and file signature verification
+        if (file.path && fs.existsSync(file.path)) {
+          validateMagicBytes(file.path, mime, ext, file.fieldname);
+        }
+
+        const blocklistedExts = ['exe', 'zip', 'js', 'html', 'sh', 'bat', 'cmd', 'vbs', 'php', 'py'];
+        if (blocklistedExts.includes(ext)) {
+          throw new Error(`Security Alert: File extension .${ext} is rejected.`);
+        }
         
-        if (file.fieldname === 'passbookImage') {
+        if (['passbookImage', 'aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie'].includes(file.fieldname)) {
           if (!file.size || file.size === 0) {
             throw new Error('Security Alert: File is empty or corrupt.');
           }
           
           const allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
           const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-          const blocklistedExts = ['exe', 'zip', 'js', 'svg', 'html', 'sh', 'bat'];
-
-          if (blocklistedExts.includes(ext)) {
-            throw new Error(`Security Alert: File extension .${ext} is rejected.`);
-          }
 
           if (!allowedExts.includes(ext) || !allowedMimes.includes(mime)) {
             throw new Error(`Security Alert: File type not allowed. Expected formats: ${allowedExts.join(', ')}`);
@@ -160,9 +241,13 @@ const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
 
         // Direct upload without Sharp if PDF/raw file
         if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+          const crypto = require('crypto');
+          const isKYC = ['passbookImage', 'aadhaarFront', 'aadhaarBack', 'panCard'].includes(file.fieldname);
           const uploadResult = await cloudinary.uploader.upload(file.path, {
             folder: activeFolder,
             resource_type: 'raw',
+            type: isKYC ? 'authenticated' : 'upload',
+            public_id: `${activeFolder}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`
           });
           try { fs.unlinkSync(file.path); } catch (e) {}
           return {
@@ -247,66 +332,67 @@ const wrapMulter = (multerInstance, type, folder) => {
 };
 
 // Create Multer instances pointing to local temp storage
-const maxUploadLimit = 20 * 1024 * 1024; // 20MB maximum accepted size
+// Category-specific size limits
+const limit5MB = 5 * 1024 * 1024;
+const limit10MB = 10 * 1024 * 1024;
 
 const rawProfilePic = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit5MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
 });
 
-
 const rawServiceImage = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit10MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
 });
 
 const rawComplaintImage = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit10MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
 });
 
 const rawPassbookImg = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
-  fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'heic', 'heif'])
+  limits: { fileSize: limit5MB },
+  fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif', 'application/pdf'], ['jpg', 'jpeg', 'png', 'heic', 'heif', 'pdf'])
 });
 
 const rawServicesFile = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit10MB },
   fileFilter: fileFilterHelper(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'application/octet-stream'], ['xlsx', 'xls'])
 });
 
 const rawSystemLogo = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit5MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'])
 });
 
 const rawSystemFavicon = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit5MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'ico', 'heic', 'heif'])
 });
 
 const rawCategoryIcon = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit5MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/svg+xml', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'svg', 'heic', 'heif'])
 });
 
 const rawBannerImage = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit5MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/heic', 'image/heif'], ['jpg', 'jpeg', 'png', 'gif', 'heic', 'heif'])
 });
 
 const rawGeneral = multer({
   storage: localStorage,
-  limits: { fileSize: maxUploadLimit },
+  limits: { fileSize: limit10MB },
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif', 'application/pdf'], ['jpg', 'jpeg', 'png', 'heic', 'heif', 'pdf'])
 });
 

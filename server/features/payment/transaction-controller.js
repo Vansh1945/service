@@ -338,7 +338,7 @@ const verifyPayment = async (req, res, next) => {
       transactionId
     } = req.body;
 
-    // Validate input
+    // 1. Validate required input parameters
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !bookingId || !transactionId) {
       await session.abortTransaction();
       return res.status(400).json({
@@ -347,29 +347,15 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // Verify the payment signature
-    const generatedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest('hex');
-
-    if (generatedSignature !== razorpay_signature) {
-      global.logger.warn(`[Payment Security Alert] Invalid signature for order: ${razorpay_order_id}, payment: ${razorpay_payment_id}. Generated: ${generatedSignature}, Received: ${razorpay_signature}`);
-      // Update transaction status to failed and rollback wallet balance
-      const transaction = await Transaction.findById(transactionId).session(session);
-      if (transaction) {
-        transaction.paymentStatus = 'failed';
-        await rollbackWalletDeduction(transaction, session);
-        await transaction.save({ session });
-      }
-      await session.commitTransaction();
+    if (!mongoose.Types.ObjectId.isValid(transactionId) || !mongoose.Types.ObjectId.isValid(bookingId)) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Invalid payment signature'
+        message: 'Invalid transaction or booking ID format'
       });
     }
 
-    // Update transaction record
+    // 2. Fetch transaction
     const transaction = await Transaction.findById(transactionId).session(session);
     if (!transaction) {
       await session.abortTransaction();
@@ -379,11 +365,40 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // Check if razorpayOrderId already has a completed settlement (IDEMPOTENCY)
+    // 3. SECURITY BINDING: Verify transaction ownership (user ↔ transaction)
+    if (transaction.user && transaction.user.toString() !== userId.toString()) {
+      await session.abortTransaction();
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: Transaction does not belong to you'
+      });
+    }
+
+    // 4. SECURITY BINDING: Verify transaction ↔ booking binding
+    if (transaction.booking && transaction.booking.toString() !== bookingId.toString()) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction is not associated with the provided booking'
+      });
+    }
+
+    // 5. SECURITY BINDING: Verify transaction ↔ Razorpay order binding
+    if (transaction.razorpayOrderId && transaction.razorpayOrderId !== razorpay_order_id) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Razorpay order ID mismatch for this transaction'
+      });
+    }
+
+    // 6. IDEMPOTENCY CHECKS
+    // Check if razorpayOrderId already has a completed settlement
     const existingOrderSettled = await Transaction.findOne({
       razorpayOrderId: razorpay_order_id,
       paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }
     }).session(session);
+
     if (existingOrderSettled && existingOrderSettled._id.toString() !== transactionId) {
       await session.commitTransaction();
       return res.status(200).json({
@@ -398,7 +413,7 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // Check if razorpayPaymentId already exists globally (IDEMPOTENCY)
+    // Check if razorpayPaymentId already exists globally
     const duplicatePayment = await Transaction.findOne({ razorpayPaymentId: razorpay_payment_id }).session(session);
     if (duplicatePayment && duplicatePayment._id.toString() !== transactionId) {
       await session.abortTransaction();
@@ -422,33 +437,90 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // Fetch payment details from Razorpay to capture full response state
+    // 7. SECURITY: Verify Razorpay Signature
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (generatedSignature !== razorpay_signature) {
+      global.logger.warn(`[Payment Security Alert] Invalid signature for order: ${razorpay_order_id}, payment: ${razorpay_payment_id}. Generated: ${generatedSignature}, Received: ${razorpay_signature}`);
+      transaction.paymentStatus = 'failed';
+      await rollbackWalletDeduction(transaction, session);
+      await transaction.save({ session });
+      await session.commitTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment signature'
+      });
+    }
+
+    // 8. SECURITY BINDING: Fetch and verify payment details from Razorpay API
     let razorpayResponse = null;
     try {
       razorpayResponse = await razorpay.payments.fetch(razorpay_payment_id);
     } catch (fetchError) {
-      global.logger.warn('Failed to fetch captured payment details from Razorpay API: ' + fetchError.message, fetchError);
+      global.logger.error('Failed to fetch payment details from Razorpay API: ' + fetchError.message, fetchError);
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to verify payment with payment gateway: ' + fetchError.message
+      });
     }
 
-    // Update Transaction
-    transaction.razorpayPaymentId = razorpay_payment_id;
-    transaction.transactionId = razorpay_payment_id;
-    transaction.razorpaySignature = razorpay_signature;
-    transaction.razorpayOrderId = razorpay_order_id;
-    if (razorpayResponse) {
-      transaction.razorpayResponse = razorpayResponse;
-      transaction.paymentMethod = razorpayResponse.method || transaction.paymentMethod;
-      if (razorpayResponse.fee != null) {
-        transaction.gatewayFee = parseFloat((razorpayResponse.fee / 100).toFixed(2));
-      }
-      if (razorpayResponse.tax != null) {
-        transaction.gatewayTax = parseFloat((razorpayResponse.tax / 100).toFixed(2));
-      }
+    if (!razorpayResponse) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Payment details could not be retrieved from payment gateway'
+      });
     }
-    transaction.paymentStatus = 'success';
-    transaction.updatedAt = new Date();
 
-    // Update booking payment status
+    // Check payment status on gateway (must be captured or authorized)
+    if (!['captured', 'authorized'].includes(razorpayResponse.status)) {
+      transaction.paymentStatus = 'failed';
+      await rollbackWalletDeduction(transaction, session);
+      await transaction.save({ session });
+      await session.commitTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Payment failed on gateway with status: ${razorpayResponse.status}`
+      });
+    }
+
+    // SECURITY BINDING: Verify payment ↔ order binding from gateway response
+    if (razorpayResponse.order_id !== razorpay_order_id || (transaction.razorpayOrderId && razorpayResponse.order_id !== transaction.razorpayOrderId)) {
+      global.logger.warn(`[Payment Security Alert] Gateway payment order ID mismatch for transaction ${transactionId}. Expected: ${razorpay_order_id}, Gateway: ${razorpayResponse.order_id}`);
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Razorpay payment does not match expected order'
+      });
+    }
+
+    // 9. SECURITY BINDING: Verify amount binding (convert transaction.amount in Rupees to paise)
+    const expectedAmountPaise = Math.round(transaction.amount * 100);
+    if (Number(razorpayResponse.amount) !== expectedAmountPaise) {
+      global.logger.warn(`[Payment Security Alert] Amount mismatch for transaction ${transactionId}. Expected paise: ${expectedAmountPaise}, Gateway paid: ${razorpayResponse.amount}`);
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Payment amount mismatch. Expected ${expectedAmountPaise} paise, but received ${razorpayResponse.amount} paise.`
+      });
+    }
+
+    // 10. SECURITY BINDING: Verify currency binding
+    const expectedCurrency = (transaction.currency || 'INR').toUpperCase();
+    if (!razorpayResponse.currency || razorpayResponse.currency.toUpperCase() !== expectedCurrency) {
+      global.logger.warn(`[Payment Security Alert] Currency mismatch for transaction ${transactionId}. Expected: ${expectedCurrency}, Gateway currency: ${razorpayResponse.currency}`);
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Payment currency mismatch. Expected ${expectedCurrency}, but received ${razorpayResponse.currency}.`
+      });
+    }
+
+    // 11. Fetch & verify booking ownership
     const booking = await Booking.findById(bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
@@ -458,7 +530,6 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // SECURITY: Validate booking ownership
     if (booking.customer.toString() !== userId.toString()) {
       await session.abortTransaction();
       return res.status(403).json({
@@ -467,7 +538,22 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // Handle Wallet Deduction for Mixed Payments - ALREADY deducted in createOrder!
+    // 12. APPLY SUCCESS SIDE-EFFECTS (ONLY after all checks pass)
+    transaction.razorpayPaymentId = razorpay_payment_id;
+    transaction.transactionId = razorpay_payment_id;
+    transaction.razorpaySignature = razorpay_signature;
+    transaction.razorpayOrderId = razorpay_order_id;
+    transaction.razorpayResponse = razorpayResponse;
+    transaction.paymentMethod = razorpayResponse.method || transaction.paymentMethod;
+    if (razorpayResponse.fee != null) {
+      transaction.gatewayFee = parseFloat((razorpayResponse.fee / 100).toFixed(2));
+    }
+    if (razorpayResponse.tax != null) {
+      transaction.gatewayTax = parseFloat((razorpayResponse.tax / 100).toFixed(2));
+    }
+    transaction.paymentStatus = 'success';
+    transaction.updatedAt = new Date();
+
     if (transaction.paymentMethod === 'mixed') {
       const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
       const walletDeduction = match ? parseFloat(match[1]) : 0;
@@ -521,112 +607,8 @@ const verifyPayment = async (req, res, next) => {
  * @access  Public
  */
 const handleWebhook = async (req, res, next) => {
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  const razorpaySignature = req.headers['x-razorpay-signature'];
-
-  if (!webhookSecret) {
-    global.logger.error('Webhook secret not configured');
-    return res.status(500).send('Server error');
-  }
-
-  // Verify webhook signature using raw body buffer for security
-  const shasum = crypto.createHmac('sha256', webhookSecret);
-  const bodyData = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body)));
-  shasum.update(bodyData);
-  const generatedSignature = shasum.digest('hex');
-
-  if (generatedSignature !== razorpaySignature) {
-    global.logger.warn(`[Payment Security Alert] Webhook signature verification failed for signature ${razorpaySignature}. Generated: ${generatedSignature}`);
-    return res.status(400).send('Invalid signature');
-  }
-
-  // Parse payload from rawBody buffer if available, fallback to req.body
-  let payload;
-  try {
-    payload = req.rawBody ? JSON.parse(req.rawBody.toString()) : (Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body);
-  } catch (parseErr) {
-    global.logger.error('Failed to parse webhook payload: ' + parseErr.message, parseErr);
-    return res.status(400).send('Invalid JSON payload');
-  }
-  const event = payload.event;
-  const payment = payload.payload.payment?.entity;
-
-  if (!payment && !payload.payload?.qr_code?.entity && !payload.payload?.refund?.entity) {
-    return res.status(400).send('Invalid webhook payload');
-  }
-
-  // Enforce Webhook Idempotency
-  const entityId = payment?.id || payload.payload?.qr_code?.entity?.id || payload.payload?.refund?.entity?.id;
-  const eventId = payload.id || `${event}:${entityId}`;
-  try {
-    const WebhookIdempotency = mongoose.models.WebhookIdempotency || mongoose.model('WebhookIdempotency', new mongoose.Schema({
-      eventId: { type: String, required: true, unique: true },
-      processedAt: { type: Date, default: Date.now, expires: 604800 } // TTL: 7 days
-    }));
-    await WebhookIdempotency.create({ eventId });
-  } catch (idempErr) {
-    if (idempErr.code === 11000) {
-      global.logger.info(`[Webhook Duplicate] Webhook event ${eventId} already processed in transaction-controller. Skipping.`);
-      return res.status(200).json({ status: 'success', duplicate: true });
-    }
-    global.logger.error(`Webhook idempotency recording error: ${idempErr.message}`);
-  }
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  let bookingToAssignId = null;
-
-  try {
-    // Handle different webhook events
-    switch (event) {
-      case 'qr_code.credited': {
-        const qrEntity = payload.payload?.qr_code?.entity || payload.payload?.payment?.entity;
-        await handleQRSuccessPayment(qrEntity || payment, session, qrEntity?.id);
-        break;
-      }
-      case 'payment.captured': {
-        const isQRPayment = payment.notes?.qrCodeId || payment.qr_code_id || payment.description?.includes('QR');
-        if (isQRPayment) {
-          await handleQRSuccessPayment(payment, session, payment.notes?.qrCodeId || payment.qr_code_id);
-        } else {
-          await handleSuccessfulPayment(payment, session);
-          // Find the transaction to get booking ID
-          const txn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
-          if (txn) {
-            bookingToAssignId = txn.booking;
-          }
-        }
-        break;
-      }
-      case 'payment.failed':
-        await handleFailedPayment(payment, session);
-        break;
-      case 'refund.processed':
-        await handleRefundProcessed(payload.payload.refund?.entity, session);
-        break;
-      default:
-        console.log(`Unhandled event type: ${event}`);
-    }
-
-    await session.commitTransaction();
-    res.json({ success: true });
-
-    if (bookingToAssignId) {
-      try {
-        const ProviderAssignmentService = require('../booking/provider-assignment-service');
-        ProviderAssignmentService.autoAssignProviderIfEnabled(bookingToAssignId);
-      } catch (assignError) {
-        global.logger.error('Error triggering auto-assignment after webhook captured: ' + assignError.message, assignError);
-      }
-    }
-  } catch (error) {
-    await session.abortTransaction();
-    global.logger.error(`[TransactionController.handleWebhook] Route: ${req.originalUrl || req.url} - Webhook processing error: ${error.message}`, error);
-    next(error);
-  } finally {
-    session.endSession();
-  }
+  const PaymentService = require('./payment-service');
+  return PaymentService.handleWebhook(req, res, next);
 };
 
 // Helper function to handle successful payment from webhook
@@ -1504,7 +1486,7 @@ const getFinanceOverview = async (req, res, next) => {
     completedBookings.forEach(b => {
       const isRefDisc = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
       const refSubsidy = isRefDisc ? (b.totalDiscount || 0) : 0;
-      const netPlatformContribution = (b.commissionAmount || 0) + (b.companySurgeShare || 0) + (b.platformFee || 0) - refSubsidy;
+      const netPlatformContribution = (b.commissionAmount || 0) + (b.companySurgeShare || 0) - refSubsidy;
 
       platformEarnings += netPlatformContribution;
       totalProviderEarnings += (b.providerEarnings || 0);
@@ -4653,6 +4635,10 @@ module.exports = {
   getAdminPaymentDetails,
   getMasterLedger,
   getLedgerDetail,
+  handleSuccessfulPayment,
+  handleFailedPayment,
+  handleRefundProcessed,
+  handleQRSuccessPayment,
   generateBookingQR,
   verifyCashReceived,
   getQRVerificationStatus,

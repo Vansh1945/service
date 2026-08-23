@@ -69,6 +69,7 @@ router.get('/agreement-pdf', providerAuthMiddleware, requireProvider, providerCo
 
 // Document Viewing Route (Protected)
 router.get('/document/:type', providerAuthMiddleware, requireProvider, providerController.viewDocument);
+router.get('/admin/document/:providerId/:type', adminAuthMiddleware, providerController.viewDocument);
 
 // Account Deletion Routes
 router.delete('/profile', providerAuthMiddleware, requireProvider, providerController.deleteAccount);

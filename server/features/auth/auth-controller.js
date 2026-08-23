@@ -10,8 +10,32 @@ const firebaseAdmin = require('../../shared/config/firebase-admin');
 // ── Helpers ───────────────────────────────────────────────────────────────
 const hashToken = (raw) => crypto.createHash('sha256').update(raw).digest('hex');
 
+const getCookieOptions = () => {
+  const isProd = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: '/'
+  };
+};
+
+const extractRefreshToken = (req) => {
+  let token = req.cookies?.refreshToken;
+  if (!token && req.headers?.cookie) {
+    const cookies = req.headers.cookie.split(';').reduce((acc, c) => {
+      const [k, v] = c.trim().split('=');
+      if (k && v) acc[k] = decodeURIComponent(v);
+      return acc;
+    }, {});
+    token = cookies.refreshToken;
+  }
+  return token || req.body?.refreshToken;
+};
+
 const extractDeviceInfo = (req) => {
-  const ip = req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+  const ip = req.clientIp || req.ip || req.socket?.remoteAddress || '';
   return {
     ip,
     deviceId: req.headers['x-device-id'] || req.body?.deviceId || '',
@@ -268,6 +292,10 @@ exports.Login = async (req, res, next) => {
       flagReason: 'Successful login'
     });
 
+    if (refreshTokenRaw) {
+      res.cookie('refreshToken', refreshTokenRaw, getCookieOptions());
+    }
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -284,7 +312,7 @@ exports.Login = async (req, res, next) => {
 
 
 // Password Reset (All User)
-exports.forgotPassword = async (req, res) => {
+exports.forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -301,45 +329,40 @@ exports.forgotPassword = async (req, res) => {
       await Provider.findOne({ email: normalizedEmail }) ||
       await Admin.findOne({ email: normalizedEmail });
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
+    if (user) {
+      // Get FCM token if provider
+      let fcmToken = null;
+      if (user.fcmDevices && user.fcmDevices.length > 0) {
+        fcmToken = user.fcmDevices[0].token;
+      }
+
+      await sendOTP(normalizedEmail, fcmToken);
+
+      // Track OTP request event
+      let userModel = 'User';
+      let role = 'customer';
+      if (user.providerId) {
+        userModel = 'Provider';
+        role = 'provider';
+      } else if (user.role === 'admin') {
+        userModel = 'Admin';
+        role = 'admin';
+      }
+
+      const { trackEvent } = require('../../shared/middlewares/fraud-middleware');
+      await trackEvent({
+        req,
+        actionType: 'otp_request',
+        userId: user._id,
+        userModel,
+        role,
+        flagReason: 'Forgot password OTP request'
       });
     }
 
-    // Get FCM token if provider
-    let fcmToken = null;
-    if (user.fcmDevices && user.fcmDevices.length > 0) {
-      fcmToken = user.fcmDevices[0].token;
-    }
-
-    const otpResponse = await sendOTP(normalizedEmail, fcmToken);
-
-    // Track OTP request event
-    let userModel = 'User';
-    let role = 'customer';
-    if (user.providerId) {
-      userModel = 'Provider';
-      role = 'provider';
-    } else if (user.role === 'admin') {
-      userModel = 'Admin';
-      role = 'admin';
-    }
-
-    const { trackEvent } = require('../../shared/middlewares/fraud-middleware');
-    await trackEvent({
-      req,
-      actionType: 'otp_request',
-      userId: user._id,
-      userModel,
-      role,
-      flagReason: 'Forgot password OTP request'
-    });
-
     res.status(200).json({
       success: true,
-      message: otpResponse.message || "OTP sent successfully"
+      message: "If this email is registered, an OTP has been sent."
     });
 
   } catch (err) {
@@ -385,7 +408,7 @@ exports.verifyResetOTP = async (req, res) => {
   }
 };
 
-exports.resetPassword = async (req, res) => {
+exports.resetPassword = async (req, res, next) => {
   try {
     const { email, otp, newPassword } = req.body;
 
@@ -408,8 +431,7 @@ exports.resetPassword = async (req, res) => {
 
     // Verify OTP before allowing password reset
     try {
-      /* BACKUP COMMENT: Original was: const isValidOTP = verifyOTP(normalizedEmail, otp); */
-      const isValidOTP = await verifyOTP(normalizedEmail, otp);
+      const isValidOTP = await verifyOTP(normalizedEmail, otp, true);
       if (!isValidOTP) {
         return res.status(400).json({
           success: false,
@@ -461,7 +483,6 @@ exports.resetPassword = async (req, res) => {
     await user.save();
 
     // Clear OTP after successful password reset
-    /* BACKUP COMMENT: Original was: clearOTP(normalizedEmail); */
     await clearOTP(normalizedEmail);
 
     res.status(200).json({
@@ -475,7 +496,7 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-exports.resendOTP = async (req, res) => {
+exports.resendOTP = async (req, res, next) => {
   try {
     const { email } = req.body;
 
@@ -493,20 +514,19 @@ exports.resendOTP = async (req, res) => {
       await Provider.findOne({ email: normalizedEmail }) ||
       await Admin.findOne({ email: normalizedEmail });
 
-    // Clear any existing OTP first
-    /* BACKUP COMMENT: Original was: clearOTP(normalizedEmail); */
-    await clearOTP(normalizedEmail);
-
-    let fcmToken = null;
-    if (user && user.fcmDevices && user.fcmDevices.length > 0) {
-      fcmToken = user.fcmDevices[0].token;
-    }
-
-    // Send new OTP
-    const otpResponse = await sendOTP(normalizedEmail, fcmToken);
-
-    // Track OTP request event
     if (user) {
+      // Clear any existing OTP first
+      await clearOTP(normalizedEmail);
+
+      let fcmToken = null;
+      if (user.fcmDevices && user.fcmDevices.length > 0) {
+        fcmToken = user.fcmDevices[0].token;
+      }
+
+      // Send new OTP
+      await sendOTP(normalizedEmail, fcmToken);
+
+      // Track OTP request event
       let userModel = 'User';
       let role = 'customer';
       if (user.providerId) {
@@ -530,7 +550,7 @@ exports.resendOTP = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: otpResponse.message || "New OTP sent successfully"
+      message: "If this email is registered, an OTP has been sent."
     });
 
   } catch (err) {
@@ -544,7 +564,7 @@ exports.resendOTP = async (req, res) => {
 // POST /api/auth/firebase-login
 // Body: { firebaseToken, role: 'customer'|'provider', deviceId? }
 // ─────────────────────────────────────────────────────────────────────────────
-exports.firebaseLogin = async (req, res) => {
+exports.firebaseLogin = async (req, res, next) => {
   try {
     const { firebaseToken, role = 'customer' } = req.body;
     if (!firebaseToken) {
@@ -660,6 +680,10 @@ exports.firebaseLogin = async (req, res) => {
       isNewUser: !user.loginHistory || user.loginHistory.length <= 1
     };
 
+    if (refreshTokenRaw) {
+      res.cookie('refreshToken', refreshTokenRaw, getCookieOptions());
+    }
+
     return res.status(200).json({ success: true, message: 'Login successful', token: accessToken, refreshToken: refreshTokenRaw, user: userData });
   } catch (err) {
     global.logger.error(`[AuthController.firebaseLogin] Route: ${req.originalUrl || req.url} - Firebase login error: ${err.message}`, err);
@@ -672,9 +696,9 @@ exports.firebaseLogin = async (req, res) => {
 // POST /api/auth/refresh-token
 // Body: { refreshToken }
 // ─────────────────────────────────────────────────────────────────────────────
-exports.refreshAccessToken = async (req, res) => {
+exports.refreshAccessToken = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = extractRefreshToken(req);
     if (!refreshToken) {
       return res.status(400).json({ success: false, message: 'Refresh token required' });
     }
@@ -682,7 +706,7 @@ exports.refreshAccessToken = async (req, res) => {
     const tokenHash = hashToken(refreshToken);
     const now = new Date();
 
-    // Search all collections for matching valid token
+    // Search all collections for matching token
     let user, userType, Model;
     const collections = [
       { model: User, type: 'customer' },
@@ -691,37 +715,90 @@ exports.refreshAccessToken = async (req, res) => {
     ];
 
     for (const { model, type } of collections) {
-      const found = await model.findOne({
-        'refreshTokens.tokenHash': tokenHash,
-        'refreshTokens.isValid': true,
-        'refreshTokens.expiresAt': { $gt: now }
-      });
-      if (found) { user = found; userType = type; Model = model; break; }
+      const found = await model.findOne({ 'refreshTokens.tokenHash': tokenHash });
+      if (found) {
+        user = found;
+        userType = type;
+        Model = model;
+        break;
+      }
     }
 
     if (!user) {
+      res.clearCookie('refreshToken', getCookieOptions());
       return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
     }
 
-    // Invalidate old token (rotation)
-    const oldToken = user.refreshTokens.find(t => t.tokenHash === tokenHash);
-    if (oldToken) oldToken.isValid = false;
+    const targetToken = user.refreshTokens.find(t => t.tokenHash === tokenHash);
+    if (!targetToken) {
+      res.clearCookie('refreshToken', getCookieOptions());
+      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+    }
 
-    // Issue new tokens
+    // REUSE DETECTION: If token was already invalidated (previously rotated or revoked)
+    if (!targetToken.isValid) {
+      global.logger.warn(`[Security Alert] Refresh token reuse detected for ${userType} ID ${user._id}. Revoking session tokens.`);
+      // Security measure: Revoke all refresh tokens for this user upon reuse of an old/stolen token
+      user.refreshTokens.forEach(t => { t.isValid = false; });
+      await user.save();
+      res.clearCookie('refreshToken', getCookieOptions());
+      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+    }
+
+    // EXPIRATION CHECK
+    if (new Date(targetToken.expiresAt) <= now) {
+      res.clearCookie('refreshToken', getCookieOptions());
+      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+    }
+
+    // ATOMIC COMPARE-AND-ROTATE
+    // Atomically set isValid: false for this tokenHash ONLY if it is currently isValid: true and not expired
+    const updatedUser = await Model.findOneAndUpdate(
+      {
+        _id: user._id,
+        refreshTokens: {
+          $elemMatch: {
+            tokenHash: tokenHash,
+            isValid: true,
+            expiresAt: { $gt: now }
+          }
+        }
+      },
+      {
+        $set: {
+          'refreshTokens.$.isValid': false
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      // Concurrency race: Another request atomically rotated this token in parallel!
+      global.logger.info(`[AuthController.refreshAccessToken] Concurrent refresh request detected for ${userType} ID ${user._id}. Token already rotated.`);
+      res.clearCookie('refreshToken', getCookieOptions());
+      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+    }
+
+    // Winning request: Issue new access token and generate & store new refresh token
     const { SystemConfig } = require('../system-setting/system-setting-model');
     const settings = await SystemConfig.findOne();
     const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
 
     const accessToken = jwt.sign(
-      { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
+      { id: updatedUser._id, email: updatedUser.email, role: userType === 'admin' ? 'admin' : updatedUser.role || userType },
       process.env.JWT_SECRET,
       { expiresIn: `${sessionTimeoutHours}h` }
     );
-    const deviceInfo = extractDeviceInfo(req);
-    const { raw: newRefreshRaw } = user.generateRefreshToken(deviceInfo);
 
-    recordLoginHistory(user, deviceInfo, 'refresh', true);
-    await user.save();
+    const deviceInfo = extractDeviceInfo(req);
+    const { raw: newRefreshRaw } = updatedUser.generateRefreshToken(deviceInfo);
+
+    recordLoginHistory(updatedUser, deviceInfo, 'refresh', true);
+    await updatedUser.save();
+
+    if (newRefreshRaw) {
+      res.cookie('refreshToken', newRefreshRaw, getCookieOptions());
+    }
 
     return res.status(200).json({ success: true, token: accessToken, refreshToken: newRefreshRaw });
   } catch (err) {
@@ -735,38 +812,36 @@ exports.refreshAccessToken = async (req, res) => {
 // POST /api/auth/logout
 // Body: { refreshToken, allDevices? }
 // ─────────────────────────────────────────────────────────────────────────────
-exports.logout = async (req, res) => {
+exports.logout = async (req, res, next) => {
   try {
-    const { refreshToken, fcmToken, allDevices = false } = req.body;
+    const refreshToken = extractRefreshToken(req);
+    const { fcmToken, allDevices = false } = req.body;
 
     // Logout must NOT remove FCM device token (Persistent Multi-Device FCM Notification Architecture)
 
-    if (!refreshToken) {
-      // Still clear client – just return success
-      return res.status(200).json({ success: true, message: 'Logged out' });
-    }
+    if (refreshToken) {
+      const tokenHash = hashToken(refreshToken);
+      const collections = [
+        { model: User }, { model: Provider }, { model: Admin }
+      ];
 
-    const tokenHash = hashToken(refreshToken);
-    const now = new Date();
-
-    const collections = [
-      { model: User }, { model: Provider }, { model: Admin }
-    ];
-
-    for (const { model } of collections) {
-      const found = await model.findOne({ 'refreshTokens.tokenHash': tokenHash });
-      if (found) {
-        if (allDevices) {
-          // Revoke all sessions
-          found.refreshTokens.forEach(t => { t.isValid = false; });
-        } else {
-          const t = found.refreshTokens.find(t => t.tokenHash === tokenHash);
-          if (t) t.isValid = false;
+      for (const { model } of collections) {
+        const found = await model.findOne({ 'refreshTokens.tokenHash': tokenHash });
+        if (found) {
+          if (allDevices) {
+            // Revoke all sessions
+            found.refreshTokens.forEach(t => { t.isValid = false; });
+          } else {
+            const t = found.refreshTokens.find(t => t.tokenHash === tokenHash);
+            if (t) t.isValid = false;
+          }
+          await found.save();
+          break;
         }
-        await found.save();
-        break;
       }
     }
+
+    res.clearCookie('refreshToken', getCookieOptions());
 
     return res.status(200).json({ success: true, message: allDevices ? 'Logged out from all devices' : 'Logged out successfully' });
   } catch (err) {

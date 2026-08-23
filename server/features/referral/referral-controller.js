@@ -171,7 +171,7 @@ const processReferralRegistration = async (referredUser, referredUserType, refer
       rulesSnapshot: refConfig,
       expiryDate,
       deviceInfo: {
-        ip: req ? (req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '',
+        ip: req ? (req.clientIp || req.ip || '').trim() : '',
         deviceId: req ? req.headers['x-device-id'] : '',
         userAgent: req ? req.headers['user-agent'] : ''
       }

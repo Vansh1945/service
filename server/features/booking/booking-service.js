@@ -181,7 +181,7 @@ const createFraudLog = async (booking, actionType, reason, score, req) => {
   try {
     const FraudLog = require('../fraud/fraud-log-model');
     const log = new FraudLog({
-      ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0',
+      ip: req.clientIp || req.ip || req.socket?.remoteAddress || '0.0.0.0',
       userId: req.user?._id || booking.provider || booking.customer,
       userModel: req.user?.role === 'provider' ? 'Provider' : 'User',
       role: req.user?.role || 'provider',
@@ -213,7 +213,7 @@ const logCancellationFraud = async (req, booking, userId, role) => {
   try {
     const FraudLog = require('../fraud/fraud-log-model');
     const userType = role === 'provider' ? 'Provider' : 'User';
-    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0';
+    const ipAddress = req.clientIp || req.ip || req.socket?.remoteAddress || '0.0.0.0';
     const userAgent = req.headers['user-agent'] || 'N/A';
 
     const recentCancellations = await Booking.countDocuments({
@@ -1092,6 +1092,7 @@ class BookingService {
           nightCharge,
           demandSurge,
           visitingCharge,
+          festivalCharge,
           platformFee,
           customCharges,
           emergencySurge,
@@ -1100,7 +1101,6 @@ class BookingService {
           totalAmount
         } = priceDetails;
 
-        // CHECK FOR DUPLICATE BOOKING (Idempotency)
         const existingQuery = Booking.findOne({
           customer: req.user._id,
           'services.service': serviceId,
@@ -1182,6 +1182,7 @@ class BookingService {
           nightCharge,
           demandSurge,
           visitingCharge,
+          festivalCharge,
           emergencySurge,
           platformFee,
           customCharges,
@@ -1194,7 +1195,7 @@ class BookingService {
             updatedBy: 'customer'
           }],
           metadata: {
-            ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+            ip: req.clientIp || req.ip || req.socket?.remoteAddress || '0.0.0.0',
             userAgent: req.headers['user-agent'],
             totalSurcharge,
             surchargeBreakdown
@@ -1566,10 +1567,11 @@ class BookingService {
 
       // Validate status transition using canonical state machine
       const { validateBookingTransition } = require('./booking-validation');
-      if (!validateBookingTransition(booking.status, status)) {
+      const actor = req.user?.role === 'admin' ? 'admin' : (req.provider ? 'provider' : 'customer');
+      if (!validateBookingTransition(booking.status, status, actor)) {
         return res.status(400).json({
           success: false,
-          message: `Invalid status transition from ${booking.status} to ${status}`
+          message: `Security Alert: Invalid booking status transition from ${booking.status} to ${status} for actor ${actor}`
         });
       }
 
@@ -3922,13 +3924,19 @@ class BookingService {
         throw new Error('Booking must be In Progress or Started before it can be completed.');
       }
 
-      // Map provider performanceScore stats to a tier for commission rule selection
+      // Map provider performanceScore stats to canonical tier for commission rule selection
       const stats = provider.performanceScore || { rating: 0, onTimePercentage: 0, completionPercentage: 0 };
       const avgScore = (stats.rating * 20 + (stats.onTimePercentage || 0) + (stats.completionPercentage || 0)) / 3;
 
-      let performanceTier = 'standard';
-      if (avgScore >= 80) performanceTier = 'premium';
-      else if (avgScore < 40) performanceTier = 'basic';
+      let performanceTier = provider.performanceScore?.badge;
+      if (!performanceTier || !['bronze', 'silver', 'gold', 'platinum'].includes(performanceTier.toLowerCase())) {
+        if (avgScore >= 90) performanceTier = 'platinum';
+        else if (avgScore >= 75) performanceTier = 'gold';
+        else if (avgScore >= 50) performanceTier = 'silver';
+        else performanceTier = 'bronze';
+      } else {
+        performanceTier = performanceTier.toLowerCase();
+      }
 
       // Get commission rule for provider using booking zoneId and serviceId
       const firstService = booking.services && booking.services[0];
@@ -4715,11 +4723,28 @@ class BookingService {
 
       // 3. Status and Payment Status Filters
       if (req.query.status) {
-        match.status = { $in: req.query.status.split(',') };
+        const statusVals = req.query.status.split(',').flatMap(s => {
+          const lower = s.trim().toLowerCase();
+          if (lower === 'pending') return ['pending', 'Pending', 'Waiting Admin Assignment', 'searchingprovider', 'offered', 'waiting'];
+          if (lower === 'accepted') return ['accepted', 'Accepted', 'assigned', 'ontheway', 'arrived'];
+          if (lower === 'in-progress' || lower === 'in_progress') return ['in-progress', 'In Progress', 'in_progress', 'workstarted', 'started'];
+          if (lower === 'completed') return ['completed', 'Completed'];
+          if (lower === 'cancelled') return ['cancelled', 'Cancelled', 'rejected', 'Rejected'];
+          return [s.trim(), new RegExp(`^${s.trim()}$`, 'i')];
+        });
+        match.status = { $in: statusVals };
       }
 
       if (req.query.paymentStatus) {
-        match.paymentStatus = { $in: req.query.paymentStatus.split(',') };
+        const paymentVals = req.query.paymentStatus.split(',').flatMap(p => {
+          const lower = p.trim().toLowerCase();
+          if (lower === 'pending') return ['pending', 'escrowhold', 'settlementpending', 'processing'];
+          if (lower === 'paid') return ['paid', 'settled'];
+          if (lower === 'failed') return ['failed'];
+          if (lower === 'refunded') return ['refunded', 'refundapproved', 'refundcompleted'];
+          return [p.trim(), new RegExp(`^${p.trim()}$`, 'i')];
+        });
+        match.paymentStatus = { $in: paymentVals };
       }
 
       const pipeline = [];
@@ -4812,25 +4837,48 @@ class BookingService {
                   }
                 }
               }
+            },
+            slaStatus: {
+              $cond: {
+                if: { $in: [{ $toLower: '$status' }, ['completed', 'cancelled', 'rejected', 'expired']] },
+                then: 'COMPLETED',
+                else: {
+                  $switch: {
+                    branches: [
+                      { case: { $lte: [{ $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, 60000] }, 15] }, then: 'ON_TIME' },
+                      { case: { $lte: [{ $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, 60000] }, 45] }, then: 'AT_RISK' },
+                      { case: { $lte: [{ $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, 60000] }, 60] }, then: 'DELAYED' }
+                    ],
+                    default: 'CRITICAL'
+                  }
+                }
+              }
             }
           }
         }
       );
 
+      if (req.query.slaStatus) {
+        pipeline.push({ $match: { slaStatus: req.query.slaStatus } });
+      }
+
       if (req.query.search) {
-        const search = req.query.search;
-        const searchRegex = { $regex: search, $options: 'i' };
+        const search = req.query.search.trim();
+        const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = { $regex: safeSearch, $options: 'i' };
 
         const searchMatch = {
           $or: [
             { bookingId: search }, // Prioritize exact match for bookingId
+            { bookingId: searchRegex },
             { 'customer.name': searchRegex },
             { 'customer.email': searchRegex },
+            { 'customer.phone': searchRegex },
             { 'provider.name': searchRegex },
             { 'provider.email': searchRegex },
+            { 'provider.phone': searchRegex },
             { 'serviceDetails.title': searchRegex },
             { status: searchRegex },
-            { bookingId: searchRegex }, // Keep fuzzy match as fallback
             { 'address.street': searchRegex },
             { 'address.city': searchRegex },
             { 'address.postalCode': searchRegex },

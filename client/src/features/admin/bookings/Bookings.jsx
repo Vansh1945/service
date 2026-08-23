@@ -628,7 +628,8 @@ const AdminBookingsView = () => {
         return {
             status: '',
             search: params.get('search') || '',
-            paymentStatus: ''
+            paymentStatus: '',
+            slaStatus: ''
         };
     });
     // useAdminFilter hook provides merged query utility
@@ -910,16 +911,16 @@ const AdminBookingsView = () => {
         setPagination(prev => ({ ...prev, page: 1 }));
     }, [debouncedSearchQuery]);
 
-    // Update filters when URL search param changes (for in-page navigation)
+    // Update searchQuery when URL search param changes via navigation
+    const prevLocSearchRef = useRef(loc.search);
     useEffect(() => {
-        const params = new URLSearchParams(loc.search);
-        const searchParam = params.get('search');
-
-        // Only update if the search filter actually changed to avoid infinite loops
-        if (searchParam !== undefined && searchParam !== searchQuery) {
-            setSearchQuery(searchParam || '');
+        if (prevLocSearchRef.current !== loc.search) {
+            prevLocSearchRef.current = loc.search;
+            const params = new URLSearchParams(loc.search);
+            const searchParam = params.get('search') || '';
+            setSearchQuery(searchParam);
         }
-    }, [loc.search, searchQuery]);
+    }, [loc.search]);
 
     // Fetch all providers for assignment — useCallback keeps reference stable
     const fetchProviders = useCallback(async () => {
@@ -1146,7 +1147,8 @@ const AdminBookingsView = () => {
             setFilters({
                 status: '',
                 search: '',
-                paymentStatus: ''
+                paymentStatus: '',
+                slaStatus: ''
             });
             setPagination(prev => ({ ...prev, page: 1 }));
         }, () => fetchBookings(false));
@@ -1314,6 +1316,7 @@ const AdminBookingsView = () => {
 
             {/* Local Page Filters Section */}
             <AdminLocalFilterBar
+                isInline={true}
                 searchValue={searchQuery}
                 onSearchChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -1367,10 +1370,16 @@ const AdminBookingsView = () => {
                         <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('paymentStatus', '')} />
                     </span>
                 )}
+                {filters.slaStatus && (
+                    <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-105">
+                        SLA: {slaStatusOptions.find(s => s.value === filters.slaStatus)?.label}
+                        <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('slaStatus', '')} />
+                    </span>
+                )}
                 {filters.search && (
                     <div className="flex items-center gap-2">
                         <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-600 text-sm font-semibold rounded-full border border-blue-100">
-                            Filtered by Booking ID: {filters.search}
+                            Search: {filters.search}
                             <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
                         </span>
                         <button

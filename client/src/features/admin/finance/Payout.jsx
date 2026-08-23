@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
 import Processing from '../../../components/ui-skeletons/Processing';
@@ -526,6 +526,7 @@ const AdminPayout = () => {
 
         {/* ── Filters ── */}
         <AdminLocalFilterBar
+          isInline={true}
           searchValue={filters.providerSearch || ''}
           onSearchChange={(e) => handleFilterChange({ ...filters, providerSearch: e.target.value })}
           onSearchClear={() => {
@@ -541,7 +542,6 @@ const AdminPayout = () => {
           filters={filters}
           onChange={(key, val) => handleFilterChange({ ...filters, [key]: val })}
           onClear={clearFilters}
-          isInline={true}
           fields={[
             {
               key: 'status',

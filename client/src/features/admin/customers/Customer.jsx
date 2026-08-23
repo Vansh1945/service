@@ -462,6 +462,7 @@ const AdminCustomersDashboard = () => {
 
                 {/* Filters and Search */}
                 <AdminLocalFilterBar
+                    isInline={true}
                     searchValue={searchTerm}
                     onSearchChange={(e) => setSearchTerm(e.target.value)}
                     onSearchClear={() => {

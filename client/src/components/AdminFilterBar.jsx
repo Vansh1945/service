@@ -473,9 +473,9 @@ export const AdminLocalFilterBar = ({
 
   if (isInline) {
     return (
-      <div className={`bg-white rounded-xl border border-gray-150 p-4 mb-6 shadow-sm ${className}`}>
-        <div className="flex flex-wrap items-center gap-4 justify-between">
-          <div className="flex flex-wrap items-center gap-4 flex-1">
+      <div className={`bg-white rounded-xl border border-gray-150 p-3.5 mb-6 shadow-sm ${className}`}>
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
             {hasSearch && (
               <div className="w-full sm:w-72 md:w-80 shrink-0">
                 {searchProps ? (
@@ -493,7 +493,7 @@ export const AdminLocalFilterBar = ({
               </div>
             )}
             {shouldRenderFields && fields.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 {fields.map((field) => (
                   <div key={field.key} className="flex flex-col min-w-[120px]">
                     <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 font-inter">
@@ -503,7 +503,7 @@ export const AdminLocalFilterBar = ({
                       <select
                         value={filters[field.key] ?? ''}
                         onChange={(e) => onChange(field.key, e.target.value)}
-                        className="w-full px-2 py-1 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter cursor-pointer"
+                        className="w-full px-2.5 py-1.5 bg-gray-50/50 border border-gray-200 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter cursor-pointer"
                       >
                         {field.options.map((opt) => {
                           const val = typeof opt === 'object' ? opt.value : opt;
@@ -521,7 +521,7 @@ export const AdminLocalFilterBar = ({
                         value={filters[field.key] ?? ''}
                         onChange={(e) => onChange(field.key, e.target.value)}
                         placeholder={field.placeholder || ''}
-                        className="w-full px-2 py-1 bg-gray-50/50 border border-gray-250 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter"
+                        className="w-full px-2.5 py-1.5 bg-gray-50/50 border border-gray-250 rounded-lg text-xs font-semibold text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-inter"
                       />
                     )}
                   </div>
@@ -529,7 +529,7 @@ export const AdminLocalFilterBar = ({
               </div>
             )}
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 self-end pb-0.5">
             {actions}
             {onClear && (
               <button

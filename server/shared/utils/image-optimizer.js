@@ -65,7 +65,6 @@ const optimizeAndUploadImage = async (localFilePath, type = 'general', folder = 
     do {
       compressedBuffer = await pipeline
         .clone()
-        .withMetadata()
         .webp({ quality, effort: 4 })
         .toBuffer();
 
@@ -83,11 +82,14 @@ const optimizeAndUploadImage = async (localFilePath, type = 'general', folder = 
     } while (attempts < maxAttempts);
 
     // 5. Upload Compressed WebP Buffer to Cloudinary
+    const crypto = require('crypto');
+    const isKYC = ['passbookImage', 'aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie'].includes(folder);
     const cloudinaryUploadOptions = {
       folder: folder,
       resource_type: 'image',
       format: 'webp',
-      public_id: `${folder}_${Date.now()}_${path.basename(localFilePath, path.extname(localFilePath)).replace(/\s/g, '-')}`,
+      type: isKYC ? 'authenticated' : 'upload',
+      public_id: `${folder}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`,
     };
 
     const uploadResult = await new Promise((resolve, reject) => {

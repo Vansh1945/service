@@ -256,7 +256,7 @@ class ProviderService {
 
             // Capture IP & Device in provider metadata
             provider.metadata = {
-                ip: req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+                ip: req.clientIp || req.ip || req.socket?.remoteAddress || '',
                 device: req.deviceFingerprint || '',
                 userAgent: req.headers['user-agent'],
                 lastLogin: new Date()
@@ -706,7 +706,7 @@ class ProviderService {
             provider.permanentAddress = (addressSame === 'true' || addressSame === true) ? currentAddress : permanentAddress;
 
             // Save Legal Acceptance
-            const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+            const ip = req.clientIp || req.ip || req.socket?.remoteAddress || '';
             const userAgent = req.headers['user-agent'] || '';
             provider.legalAcceptance = {
                 selfDeclaration: selfDeclaration === 'true' || selfDeclaration === true,
@@ -1692,7 +1692,31 @@ class ProviderService {
     static async viewDocument(req, res) {
         try {
             const { type } = req.params;
-            const provider = await Provider.findById(req.providerId);
+            const paramProviderId = req.params.providerId || req.query.providerId;
+
+            // Authorization & IDOR protection:
+            // 1. Admin/Subadmin: Authorized to request document for any provider ID
+            // 2. Provider: Authorized ONLY for own document (req.providerId)
+            const isAdmin = req.admin || (req.user && ['admin'].includes(req.user.role));
+            let targetProviderId = req.providerId;
+
+            if (isAdmin) {
+                targetProviderId = paramProviderId || req.providerId;
+            } else if (paramProviderId && req.providerId && paramProviderId !== req.providerId.toString()) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Security Alert: Access denied. You are not authorized to view another provider\'s document.'
+                });
+            }
+
+            if (!targetProviderId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Provider ID is required'
+                });
+            }
+
+            const provider = await Provider.findById(targetProviderId);
 
             if (!provider) {
                 return res.status(404).json({
@@ -1750,13 +1774,16 @@ class ProviderService {
                 });
             }
 
-            // Generate a signed URL for the private resource
+            // Generate a short-lived signed URL for the private resource (expires in 30 mins)
+            const isKYC = ['aadhaarFront', 'aadhaarBack', 'panCard', 'liveSelfie', 'passbook'].includes(type);
+            const isRaw = (fileUrl && fileUrl.endsWith('.pdf')) || (publicId && publicId.endsWith('.pdf'));
             const signedUrl = cloudinary.url(publicId, {
                 secure: true,
                 private_cdn: false,
                 sign_url: true,
-                resource_type: 'image',
-                expires_at: Math.floor(Date.now() / 1000) + 3600
+                resource_type: isRaw ? 'raw' : 'image',
+                type: isKYC ? 'authenticated' : 'upload',
+                expires_at: Math.floor(Date.now() / 1000) + 1800
             });
 
             return res.status(200).json({

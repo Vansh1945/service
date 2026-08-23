@@ -98,6 +98,15 @@ const webhookLimiter = rateLimit({
   message: { success: false, message: 'Too many webhook events.' }
 });
 
+// Rate limiter for Admin Registration
+const adminRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // Limit each IP to 5 admin registration attempts per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many admin registration attempts. Please try again after an hour.' }
+});
+
 module.exports = {
   authLimiter,
   signupLimiter,
@@ -106,6 +115,7 @@ module.exports = {
   paymentLimiter,
   providerActionLimiter,
   adminActionLimiter,
+  adminRegisterLimiter,
   contactLimiter,
   feedbackLimiter,
   chatLimiter,

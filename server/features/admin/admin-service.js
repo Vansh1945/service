@@ -347,10 +347,10 @@ class AdminService {
                 });
             }
 
-            if (password.length < 6) {
+            if (password.length < 10) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Password must be at least 6 characters long'
+                    message: 'Password must be at least 10 characters long'
                 });
             }
 
@@ -672,11 +672,35 @@ class AdminService {
     static async updateCustomer(req, res) {
         try {
             const customerId = req.params.id;
-            const updateFields = req.body;
+            const allowedFields = ['name', 'phone', 'address', 'isSuspended', 'suspensionReason'];
+            const safeUpdates = {};
+
+            for (const field of allowedFields) {
+                if (req.body[field] !== undefined) {
+                    if (field === 'isSuspended') {
+                        if (typeof req.body.isSuspended === 'boolean') {
+                            safeUpdates.isSuspended = req.body.isSuspended;
+                        } else if (req.body.isSuspended === 'true') {
+                            safeUpdates.isSuspended = true;
+                        } else if (req.body.isSuspended === 'false') {
+                            safeUpdates.isSuspended = false;
+                        }
+                    } else {
+                        safeUpdates[field] = req.body[field];
+                    }
+                }
+            }
+
+            if (Object.keys(safeUpdates).length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No valid editable customer fields provided'
+                });
+            }
 
             const customer = await User.findOneAndUpdate(
                 { _id: customerId, role: 'customer' },
-                { $set: updateFields },
+                { $set: safeUpdates },
                 { new: true, runValidators: true }
             ).select('-password');
 
@@ -3306,7 +3330,7 @@ class AdminService {
             // ── 3. EARNINGS RELEASE ──
             if (ProviderEarning) {
                 const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
-                 if (earning && (earning.status === 'held' || earning.status === 'underreview')) {
+                if (earning && (earning.status === 'held' || earning.status === 'underreview')) {
                     earning.status = 'available';
                     await earning.save({ session });
                 }

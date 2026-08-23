@@ -228,15 +228,14 @@ export const AuthProvider = ({ children }) => {
                 isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
             };
 
-            // Save to cookies securely
+            // Save to cookies securely (refreshToken is managed via HttpOnly cookie by backend)
             setCookie("token", newToken, 7);
-            if (newRefreshToken) setCookie("refreshToken", newRefreshToken, 7);
+            eraseCookie("refreshToken");
             setCookie("role", finalRole, 7);
             setCookie("user", JSON.stringify(userObj), 7);
 
             // Update state
             setToken(newToken);
-            if (newRefreshToken) setRefreshToken(newRefreshToken);
             setRole(finalRole);
             setUser(userObj);
 
@@ -276,8 +275,8 @@ export const AuthProvider = ({ children }) => {
 
     // Logout function
     const logoutUser = () => {
-        const currentRefreshToken = getCookie("refreshToken");
-        const currentFcmToken = localStorage.getItem("fcmToken");
+        // Trigger backend logout to clear HttpOnly cookie
+        AuthService.logoutApi({}).catch(() => {});
 
         // Erase auth cookies securely
         eraseCookie("token");

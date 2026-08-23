@@ -60,7 +60,7 @@ const getCookie = (name) => {
             try {
                 return decodeURIComponent(c.substring(nameEQ.length, c.length));
             } catch (e) {
-      console.error(e);
+                console.error(e);
                 return c.substring(nameEQ.length, c.length);
             }
         }
@@ -74,6 +74,7 @@ const eraseCookie = (name) => {
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api"),
+    withCredentials: true,
 });
 
 // Add a request interceptor to include the auth token and prevent duplicates
@@ -194,32 +195,16 @@ api.interceptors.response.use(
             originalRequest._retry = true;
             isRefreshing = true;
 
-            const refreshToken = getCookie("refreshToken");
-            if (!refreshToken) {
-                isRefreshing = false;
-                // No refresh token -> logout
-                eraseCookie("token");
-                eraseCookie("refreshToken");
-                eraseCookie("role");
-                eraseCookie("user");
-                const persistentDeviceId = localStorage.getItem("persistentDeviceId");
-                const tempFcmToken = localStorage.getItem("tempFcmToken");
-                const fcmToken = localStorage.getItem("fcmToken");
-                localStorage.clear();
-                sessionStorage.clear();
-                if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
-                if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
-                if (fcmToken) localStorage.setItem("fcmToken", fcmToken);
-                window.location.href = '/login';
-                return Promise.reject(error);
-            }
-
             try {
-                // Use standard axios to avoid interceptor loop
-                const { data } = await axios.post(`${import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api")}/auth/refresh-token`, { refreshToken });
+                // Use standard axios with credentials to pass HttpOnly refresh cookie
+                const { data } = await axios.post(
+                    `${import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api")}/auth/refresh-token`,
+                    {},
+                    { withCredentials: true }
+                );
                 if (data.success && data.token) {
                     setCookie("token", data.token, 7);
-                    if (data.refreshToken) setCookie("refreshToken", data.refreshToken, 7);
+                    eraseCookie("refreshToken");
 
                     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
                     originalRequest.headers.Authorization = `Bearer ${data.token}`;

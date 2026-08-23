@@ -505,6 +505,10 @@ const bookingSchema = new Schema({
     type: Number,
     default: 0
   },
+  festivalCharge: {
+    type: Number,
+    default: 0
+  },
   rainCharge: {
     type: Number,
     default: 0
@@ -877,7 +881,7 @@ bookingSchema.virtual('providerEmergencyShare').get(function () {
 
 bookingSchema.virtual('providerFestivalShare').get(function () {
   const split = this.surgeSplitSettings?.festival ?? 70;
-  return parseFloat(((this.visitingCharge || 0) * (split / 100)).toFixed(2));
+  return parseFloat(((this.festivalCharge || 0) * (split / 100)).toFixed(2));
 });
 
 bookingSchema.virtual('providerCustomShare').get(function () {
@@ -1137,6 +1141,7 @@ bookingSchema.virtual('pricingBreakdown').get(function () {
     (this.trafficCharge || 0) +
     (this.nightCharge || 0) +
     (this.demandSurge || 0) +
+    (this.festivalCharge || 0) +
     (this.customCharges || 0) +
     (this.platformFee || 0);
   const discount = this.totalDiscount || 0;
@@ -1267,6 +1272,7 @@ bookingSchema.methods.recalculateFinancials = async function (options = {}) {
 
     // Surcharge amounts on this booking
     const visiting = typeof this.visitingCharge === 'number' && !isNaN(this.visitingCharge) ? this.visitingCharge : 0;
+    const festival = typeof this.festivalCharge === 'number' && !isNaN(this.festivalCharge) ? this.festivalCharge : 0;
     const rain = typeof this.rainCharge === 'number' && !isNaN(this.rainCharge) ? this.rainCharge : 0;
     const traffic = typeof this.trafficCharge === 'number' && !isNaN(this.trafficCharge) ? this.trafficCharge : 0;
     const night = typeof this.nightCharge === 'number' && !isNaN(this.nightCharge) ? this.nightCharge : 0;
@@ -1277,6 +1283,7 @@ bookingSchema.methods.recalculateFinancials = async function (options = {}) {
 
     // Provider splits
     const provVisitingShare = parseFloat((visiting * (splitVisiting / 100)).toFixed(2)) || 0;
+    const provFestivalShare = parseFloat((festival * (splitFestival / 100)).toFixed(2)) || 0;
     const provRainShare = parseFloat((rain * (splitRain / 100)).toFixed(2)) || 0;
     const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
     const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
@@ -1285,8 +1292,8 @@ bookingSchema.methods.recalculateFinancials = async function (options = {}) {
     const provPlatformShare = parseFloat((platformFee * (splitPlatform / 100)).toFixed(2)) || 0;
     const provEmergencyShare = parseFloat((emergency * (splitEmergency / 100)).toFixed(2)) || 0;
 
-    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provCustomShare + provPlatformShare + provEmergencyShare).toFixed(2)) || 0;
-    const totalSurcharges = visiting + rain + traffic + night + demand + emergency + custom + platformFee;
+    const providerSurgeShare = parseFloat((provVisitingShare + provFestivalShare + provRainShare + provTrafficShare + provNightShare + provDemandShare + provCustomShare + provPlatformShare + provEmergencyShare).toFixed(2)) || 0;
+    const totalSurcharges = visiting + festival + rain + traffic + night + demand + emergency + custom + platformFee;
     const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
     this.providerSurgeShare = providerSurgeShare;
