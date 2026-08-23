@@ -3487,19 +3487,22 @@ const getMasterLedger = async (req, res, next) => {
     let runningBalanceMap = {};
     try {
       const allForBalance = await Transaction.find(filter)
-        .select('_id amount entryType type createdAt')
+        .select('_id amount entryType type paymentStatus createdAt')
         .sort({ createdAt: 1 })
         .lean();
 
       let cumulative = 0;
       allForBalance.forEach(t => {
-        const isCredit = t.entryType === 'credit' ||
-          ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(t.type);
-        const isDebit = t.entryType === 'debit' ||
-          ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(t.type);
+        const isFailed = ['failed', 'cancelled', 'rejected'].includes((t.paymentStatus || '').toLowerCase());
+        if (!isFailed) {
+          const isCredit = t.entryType === 'credit' ||
+            ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(t.type);
+          const isDebit = t.entryType === 'debit' ||
+            ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(t.type);
 
-        if (isCredit && !isDebit) cumulative += (t.amount || 0);
-        else if (isDebit && !isCredit) cumulative -= (t.amount || 0);
+          if (isCredit && !isDebit) cumulative += (t.amount || 0);
+          else if (isDebit && !isCredit) cumulative -= (t.amount || 0);
+        }
 
         runningBalanceMap[t._id.toString()] = parseFloat(cumulative.toFixed(2));
       });
@@ -3514,14 +3517,16 @@ const getMasterLedger = async (req, res, next) => {
 
       const linkedRefund = refundByTxnId[txnIdStr] || refundByBookingId[bookingIdStr] || null;
 
+      const isTxnFailed = ['failed', 'cancelled', 'rejected'].includes((txn.paymentStatus || '').toLowerCase());
+
       // Determine debit / credit amounts
       const isCredit = txn.entryType === 'credit' ||
         ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(txn.type);
       const isDebit = txn.entryType === 'debit' ||
         ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
 
-      const creditAmount = (isCredit && !isDebit) ? (txn.amount || 0) : 0;
-      const debitAmount = (isDebit && !isCredit) ? (txn.amount || 0) : 0;
+      const creditAmount = (!isTxnFailed && isCredit && !isDebit) ? (txn.amount || 0) : 0;
+      const debitAmount = (!isTxnFailed && isDebit && !isCredit) ? (txn.amount || 0) : 0;
 
       return {
         ...txn,
@@ -4285,11 +4290,24 @@ const verifyCashReceived = async (req, res, next) => {
       booking.status === 'completed' ||
       booking.paymentStatus === 'paid' ||
       booking.paymentStatus === 'settled' ||
-      booking.paymentStatus === 'escrowhold' ||
-      booking.confirmedBooking
+      booking.paymentStatus === 'escrowhold'
     ) {
       if (session) await session.abortTransaction();
       return res.status(409).json({ success: false, message: 'Payment already completed/settled for this booking.' });
+    }
+
+    // Close any pending QR code if switching from QR to Cash payment
+    if (booking.paymentVerification?.qrCodeId && booking.paymentVerification?.status === 'waiting_payment') {
+      try {
+        const Razorpay = require('razorpay');
+        const razorpay = new Razorpay({
+          key_id: process.env.RAZORPAY_KEY_ID,
+          key_secret: process.env.RAZORPAY_KEY_SECRET
+        });
+        await razorpay.qrCode.close(booking.paymentVerification.qrCodeId);
+      } catch (qrCloseErr) {
+        console.warn(`[verifyCashReceived] Non-critical warning closing QR code: ${qrCloseErr.message}`);
+      }
     }
 
     const provider = await Provider.findById(providerId).session(session);

@@ -18,10 +18,15 @@ import { formatCurrency, formatTime } from '../../../utils/format';
 
 const BookService = () => {
   const { serviceId } = useParams();
-  const { token, user, systemSettings } = useAuth();
+  const { token, user, systemSettings, refreshUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const prefillBooking = location.state?.prefillBooking;
+
+  // Refresh user state on mount to ensure favoriteProviders is fresh from DB
+  useEffect(() => {
+    if (refreshUser) refreshUser();
+  }, [refreshUser]);
 
   // State declarations
   const [isLoading, setIsLoading] = useState(true);

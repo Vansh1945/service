@@ -508,12 +508,12 @@ const Dashboard = () => {
                 <p className="text-[10px] text-neutral-400">Based on your recent completed services</p>
               </div>
             </div>
-            <span className={`text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full tracking-wider border shadow-sm ${performanceBadge === 'Platinum' ? 'bg-neutral-900 border-neutral-800 text-white' :
-              performanceBadge === 'Gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
-                performanceBadge === 'Silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
+            <span className={`text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full tracking-wider border shadow-sm ${performanceBadge === 'platinum' ? 'bg-neutral-900 border-neutral-800 text-white' :
+              performanceBadge === 'gold' ? 'bg-warning/10 border-warning/20 text-warning font-black' :
+                performanceBadge === 'silver' ? 'bg-neutral-100 border-neutral-200 text-neutral-700' :
                   'bg-amber-900 border-amber-955 text-white'
               }`}>
-              {performanceBadge} Partner
+              {performanceBadge.charAt(0).toUpperCase() + performanceBadge.slice(1)} Partner
             </span>
           </div>
           <div className="grid grid-cols-3 divide-x divide-neutral-100 text-center">

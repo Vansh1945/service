@@ -989,8 +989,8 @@ class BookingService {
           }
         }
 
-        if (!service) {
-          throw new Error('Service not found');
+        if (!service || service.isDeleted || service.isActive === false || service.status === 'inactive' || service.status === 'disabled') {
+          throw new Error('Selected service is no longer available for booking');
         }
 
         // Validate date
@@ -1005,13 +1005,21 @@ class BookingService {
             throw new Error('Original booking not found');
           }
 
+          // Strict customer ownership check (IDOR Protection)
+          const oldCustomer = oldBooking.customer?._id || oldBooking.customer;
+          if (!oldCustomer || oldCustomer.toString() !== req.user._id.toString()) {
+            const authErr = new Error('Unauthorized access: You can only rebook your own previous bookings');
+            authErr.status = 403;
+            throw authErr;
+          }
+
           // Rebook allowed only if previous booking is completed and not cancelled
           if (oldBooking.status !== 'completed' || oldBooking.status === 'cancelled') {
             throw new Error('Rebooking is only allowed for completed services');
           }
         }
 
-        // Smart rules: Favorite provider validation
+        // Smart rules: Favorite provider preference validation
         let assignedProviderId = null;
         if (isFavoriteProviderBooking && preferredProviderId) {
           if (!providerDoc) {
@@ -1026,14 +1034,40 @@ class BookingService {
           const blockedTill = providerDoc.blockedTill;
           const isBlocked = blockedTill && new Date(blockedTill) > new Date();
 
-          const serviceCategory = service.category?.toString();
+          const serviceCategory = service.category?._id ? service.category._id.toString() : service.category?.toString();
           const serviceCategoryMatch = providerDoc.services?.some(catId => catId.toString() === serviceCategory);
 
           if (!isApproved || !isOnline || !isActive || isSuspended || isBlocked || !serviceCategoryMatch) {
-            throw new Error('Provider unavailable');
+            throw new Error('Preferred provider is currently unavailable or does not offer this service category');
           }
 
-          assignedProviderId = providerDoc._id;
+          // Check workload capacity & calendar schedule overlap
+          const ProviderAssignmentService = require('./provider-assignment-service');
+          const activeBookings = await Booking.find({
+            provider: providerDoc._id,
+            status: { $in: ['accepted', 'ontheway', 'arrived', 'workstarted'] }
+          }).select('provider date time services estimatedDuration travelBufferMinutes');
+
+          const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+          const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+          const mockBooking = {
+            date: bookingDate,
+            time: resolvedTime,
+            estimatedDuration,
+            travelBufferMinutes,
+            services: [{ service }]
+          };
+
+          const hasOverlap = ProviderAssignmentService.checkProviderOverlap(mockBooking, activeBookings, bufferMinutes);
+
+          if (activeBookings.length < maxBookings && !hasOverlap) {
+            assignedProviderId = providerDoc._id;
+          } else {
+            // Preferred provider has schedule conflict or reached workload limit
+            // Fallback to auto-assignment matching pool
+            assignedProviderId = null;
+          }
         }
 
         // Resolve booking zone from address coordinates upfront (with active zone fallback)
@@ -2825,10 +2859,16 @@ class BookingService {
 
       const booking = await Booking.findOne({
         _id: id,
-        'services.service': { $in: serviceIds },
         $or: [
-          { provider: { $exists: false } },
-          { provider: providerId }
+          { provider: providerId },
+          {
+            provider: { $exists: false },
+            'services.service': { $in: serviceIds }
+          },
+          {
+            provider: null,
+            'services.service': { $in: serviceIds }
+          }
         ]
       })
         .populate('customer', 'name email phone profilePicUrl' + ' createdAt')
@@ -3656,7 +3696,7 @@ class BookingService {
 
         return res.status(400).json({
           success: false,
-          message: `You are outside the precise geofence boundary of the service location.`,
+          message: `You are out of the service address area.`,
           providerLocation: { latitude: providerLat, longitude: providerLng },
           targetLocation: { latitude: targetLoc.latitude, longitude: targetLoc.longitude },
           providerS2Cell: providerS2Precise,
@@ -4108,7 +4148,7 @@ class BookingService {
           safeEnd(session);
           return res.status(400).json({
             success: false,
-            message: `You are outside the geofence boundary of the service location. Distance: ${Math.round(distance)}m`
+            message: `You are out of the service address area. Distance: ${Math.round(distance)}m`
           });
         }
         // S2 mismatch but within 300m - log warning but allow (GPS drift tolerance)
@@ -4493,7 +4533,7 @@ class BookingService {
           status: "completed",
           totalAmount: booking.totalAmount,
           commission,
-          netAmount
+          netAmount: booking.providerEarnings
         }
       });
 

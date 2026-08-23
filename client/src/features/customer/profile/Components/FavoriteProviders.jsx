@@ -4,9 +4,11 @@ import { toast } from 'react-toastify';
 import { Star, Heart, ArrowLeft } from 'lucide-react';
 import { getCustomerBookings } from '../../../../services/BookingService';
 import { toggleFavoriteProvider } from '../../../../services/CustomerService';
+import { useAuth } from '../../../../context/auth';
 
 const FavoriteProviders = ({ profile, fetchProfile, onBack }) => {
     const navigate = useNavigate();
+    const { refreshUser } = useAuth();
     const [loading, setLoading] = useState(false);
 
     const renderBackHeader = (title) => (
@@ -56,7 +58,8 @@ const FavoriteProviders = ({ profile, fetchProfile, onBack }) => {
             const res = await toggleFavoriteProvider({ providerId });
             if (res.data?.success) {
                 toast.success(res.data.message || 'Removed from favorites');
-                fetchProfile();
+                if (fetchProfile) fetchProfile();
+                if (refreshUser) refreshUser();
             }
         } catch (err) {
             toast.error(err.response?.data?.message || err.message || 'Failed to remove favorite');

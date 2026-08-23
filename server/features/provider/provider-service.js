@@ -2378,10 +2378,14 @@ class ProviderService {
             const providerId = req.provider._id;
             const { serviceId, zoneId } = req.query;
 
+            const ProviderModel = mongoose.model('Provider');
+            const provider = await ProviderModel.findById(providerId).select('performanceScore').lean();
+            const performanceBadge = (provider?.performanceScore?.badge || 'bronze').toLowerCase().trim();
+
             const CommissionRule = mongoose.model('CommissionRule');
             const ratingInfo = await CommissionRule.getProviderRatingForCommission(providerId, { evaluationPeriodDays: 30, minimumRatings: 5 });
 
-            const activeRule = await CommissionRule.getCommissionForProvider(providerId, zoneId || req.provider.currentZone || null, 'standard', serviceId || null);
+            const activeRule = await CommissionRule.getCommissionForProvider(providerId, zoneId || req.provider?.currentZone || null, performanceBadge, serviceId || null);
 
             res.status(200).json({
                 success: true,
@@ -2390,6 +2394,7 @@ class ProviderService {
                     ratingCount: ratingInfo.ratingCount,
                     evaluationPeriodDays: ratingInfo.periodDays,
                     eligibleForRatingCommission: ratingInfo.eligible,
+                    performanceBadge,
                     currentRule: activeRule ? {
                         _id: activeRule._id,
                         name: activeRule.name,
@@ -2398,7 +2403,8 @@ class ProviderService {
                         conditionType: activeRule.conditionType || 'none',
                         ratingMin: activeRule.ratingMin,
                         ratingMax: activeRule.ratingMax,
-                        minimumRatings: activeRule.minimumRatings
+                        minimumRatings: activeRule.minimumRatings,
+                        providerperformanceScore: activeRule.providerperformanceScore || performanceBadge
                     } : null
                 }
             });

@@ -411,43 +411,48 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Rating-Based Dynamic Commission Status Card */}
-        {commissionStatus && (
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200/80 p-4 shadow-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-extrabold text-[10px] uppercase tracking-wider">
-                    {commissionStatus.currentRule?.conditionType === 'rating' ? '⭐ Rating Commission Tier' : 'Standard Commission'}
-                  </span>
-                  <span className="text-xs font-bold text-amber-900">
-                    Rule: {commissionStatus.currentRule?.name || 'System Default'}
-                  </span>
-                </div>
-                <p className="text-xs text-amber-800 font-medium">
-                  Effective Commission: <span className="font-extrabold text-amber-950">{commissionStatus.currentRule?.type === 'fixed' ? `₹${commissionStatus.currentRule?.value}` : `${commissionStatus.currentRule?.value || 10}%`}</span>
-                </p>
-              </div>
-              <div className="flex items-center gap-4 bg-white/80 px-3 py-2 rounded-xl border border-amber-200/60 shadow-xs">
-                <div className="text-center">
-                  <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">30-Day Rating</p>
-                  <p className="text-sm font-black text-amber-950">{commissionStatus.averageRating ? `${commissionStatus.averageRating}★` : 'No reviews'}</p>
-                </div>
-                <div className="h-6 w-px bg-amber-200" />
-                <div className="text-center">
-                  <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">Reviews</p>
-                  <p className="text-sm font-black text-amber-950">{commissionStatus.ratingCount}</p>
-                </div>
-                <div className="h-6 w-px bg-amber-200" />
-                <div className="text-center">
-                  <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">Status</p>
-                  <p className={`text-xs font-black ${commissionStatus.eligibleForRatingCommission ? 'text-green-700' : 'text-amber-700'}`}>
-                    {commissionStatus.eligibleForRatingCommission ? 'Qualified' : 'Rating Commission: Not configured'}
+        {commissionStatus && (() => {
+          const badgeRaw = (commissionStatus.performanceBadge || commissionStatus.currentRule?.providerperformanceScore || 'bronze').toLowerCase();
+          const badgeFormatted = badgeRaw.charAt(0).toUpperCase() + badgeRaw.slice(1);
+          return (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200/80 p-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-extrabold text-[10px] uppercase tracking-wider">
+                      {commissionStatus.currentRule?.conditionType === 'rating' ? '⭐ Rating Commission Tier' : `${badgeFormatted} Tier Commission`}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800 font-medium">
+                    Effective Commission: <span className="font-extrabold text-amber-950">{commissionStatus.currentRule?.type === 'fixed' ? `₹${commissionStatus.currentRule?.value}` : `${commissionStatus.currentRule?.value || 10}%`}</span>
                   </p>
+                </div>
+                <div className="flex items-center gap-4 bg-white/80 px-3 py-2 rounded-xl border border-amber-200/60 shadow-xs">
+                  <div className="text-center">
+                    <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">30-Day Rating</p>
+                    <p className="text-sm font-black text-amber-950">{commissionStatus.averageRating ? `${commissionStatus.averageRating}★` : 'No reviews'}</p>
+                  </div>
+                  <div className="h-6 w-px bg-amber-200" />
+                  <div className="text-center">
+                    <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">Reviews</p>
+                    <p className="text-sm font-black text-amber-950">{commissionStatus.ratingCount}</p>
+                  </div>
+                  <div className="h-6 w-px bg-amber-200" />
+                  <div className="text-center">
+                    <p className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">Status</p>
+                    <p className={`text-xs font-black ${commissionStatus.eligibleForRatingCommission ? 'text-green-700' : 'text-amber-800'}`}>
+                      {commissionStatus.eligibleForRatingCommission
+                        ? '⭐ Qualified for Rating Tier'
+                        : (commissionStatus.currentRule?.conditionType === 'rating'
+                            ? 'Rating Tier Active'
+                            : `${badgeFormatted} Tier (${commissionStatus.ratingCount || 0}/${commissionStatus.currentRule?.minimumRatings || 5} reviews)`)}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Performance Accordion / Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

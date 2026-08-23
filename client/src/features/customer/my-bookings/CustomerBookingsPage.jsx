@@ -8,7 +8,7 @@ import {
   Calendar, Clock, MapPin, User, Phone,
   XCircle, AlertCircle, Eye, CreditCard, Star, Package,
   ShoppingCart, Wrench, Activity, Edit3,
-  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare
+  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings, getBooking } from '../../../services/BookingService';
 import { toggleFavoriteProvider } from '../../../services/CustomerService';
@@ -101,11 +101,13 @@ const renderStars = (rating = 0) => {
 
 // ─── Provider Card ────────────────────────────────────────────────────────────
 
-const ProviderCard = ({ provider, status, compact = false, onCall, onChat, bookingId }) => {
+const ProviderCard = ({ provider, status, compact = false, onCall, onChat, bookingId, onToggleFavorite, user }) => {
   if (!provider) return null;
 
   const rating = provider.rating || provider.averageRating || 4.5;
   const completedCount = (provider.completedBookings !== undefined ? provider.completedBookings : provider.completedJobs) || 0;
+  const providerIdStr = (provider._id || provider.id)?.toString();
+  const isFavorited = user?.favoriteProviders?.some(fp => (fp.providerId?._id || fp.providerId)?.toString() === providerIdStr);
 
   return (
     <div className="flex items-center justify-between p-3 rounded-2xl border bg-slate-50 border-slate-100 mt-3 shadow-sm">
@@ -130,7 +132,7 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
         </div>
       </div>
 
-      <div className="flex items-center gap-4 shrink-0">
+      <div className="flex items-center gap-3 shrink-0">
         <div className="text-right">
           <div className="flex items-center justify-end gap-1 text-xs font-extrabold text-slate-700">
             <span className="text-amber-500 tracking-wider text-[11px]">{renderStars(rating)}</span>
@@ -138,6 +140,20 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
           </div>
           <p className="text-[9px] text-slate-400 font-bold mt-0.5">{completedCount} Jobs Completed</p>
         </div>
+
+        {onToggleFavorite && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(provider); }}
+            className={`p-2 rounded-xl transition-all border shadow-sm ${
+              isFavorited
+                ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-rose-500'
+            }`}
+            title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart className={`w-3.5 h-3.5 ${isFavorited ? 'text-rose-500 fill-rose-500' : ''}`} />
+          </button>
+        )}
 
         {/* Contact Actions for non-compact or inline placement */}
         {!compact && !['completed', 'cancelled'].includes(status) && (
@@ -317,10 +333,11 @@ const AddressBlock = ({ address, phone }) => {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
+const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onToggleFavorite }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [activeTab, setActiveTab] = useState('booking');
   const provider = booking.provider || booking.providerDetails;
+  const isModalFavorited = user?.favoriteProviders?.some(fp => (fp.providerId?._id || fp.providerId)?.toString() === (provider?._id || provider?.id)?.toString());
 
   const currentStatus = (booking.status || 'pending').toLowerCase().replace(/[^a-z]/g, '');
 
@@ -404,6 +421,20 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall }) => {
                       <h4 className="font-extrabold text-secondary text-base truncate">{provider.name}</h4>
                       {provider.isVerified && (
                         <span className="text-[9px] text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wider">Verified</span>
+                      )}
+                      {onToggleFavorite && (
+                        <button
+                          onClick={() => onToggleFavorite(provider)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border shadow-xs ml-auto ${
+                            isModalFavorited
+                              ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-rose-500'
+                          }`}
+                          title={isModalFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isModalFavorited ? 'text-rose-500 fill-rose-500' : 'text-gray-400'}`} />
+                          <span>{isModalFavorited ? 'Favorited' : 'Favorite'}</span>
+                        </button>
                       )}
                     </div>
                     <p className="text-xs font-bold text-slate-500 mt-0.5 uppercase tracking-wide">Professional Partner</p>
@@ -757,7 +788,7 @@ const ActionBtn = ({ label, icon: Icon, onClick, variant = 'blue', disabled = fa
   );
 };
 
-const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, actionLoading = {} }) => {
+const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, actionLoading = {}, onToggleFavorite, user }) => {
   const navigate = useNavigate();
   const cfg = getStatusCfg(booking.status);
   const provider = booking.provider || booking.providerDetails;
@@ -825,7 +856,7 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
             </div>
           </div>
         </div>
-        {provider && !['completed', 'cancelled'].includes(booking.status?.toLowerCase()) && booking.paymentStatus !== 'refunded' && <ProviderCard provider={provider} status={booking.status} compact />}
+        {provider && booking.paymentStatus !== 'refunded' && <ProviderCard provider={provider} status={booking.status} compact onToggleFavorite={onToggleFavorite} user={user} />}
         {booking.paymentStatus === 'pending' && booking.status !== 'cancelled' && (
           <p className={`text-xs mt-3 p-2.5 rounded-xl border ${booking.paymentMethod === 'cash' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>
             ⚡ {booking.paymentMethod === 'cash' ? "Payment for this request will be collected by the professional after service completion." : "Confirm payment so a provider can be assigned and your request resolved."}
@@ -1319,7 +1350,7 @@ const CustomerBookingsPage = () => {
 
       {/* Modals */}
       {showModal && selectedBooking && (
-        <BookingModal booking={selectedBooking} onClose={() => setShowModal(false)} onPayNow={handlePayNow} user={user} onChat={(id, type) => { setChatBookingId(id); setChatRoomType(type || 'provider_customer'); }} />
+        <BookingModal booking={selectedBooking} onClose={() => setShowModal(false)} onPayNow={handlePayNow} user={user} onToggleFavorite={handleToggleFavorite} onChat={(id, type) => { setChatBookingId(id); setChatRoomType(type || 'provider_customer'); }} />
       )}
       {showRescheduleModal && bookingToReschedule && (
         <RescheduleModal

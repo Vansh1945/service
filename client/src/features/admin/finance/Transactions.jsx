@@ -239,9 +239,11 @@ const AdminTransactions = () => {
   const goToPayout = (payoutId) => navigate(`/admin/payout?search=${encodeURIComponent(payoutId || '')}&openDetail=true`);
 
   // ── Summary stats ──────────────────────────────────────────────────────────
-  const totalCredit = transactions.reduce((s, t) => s + (t.creditAmount || 0), 0);
-  const totalDebit = transactions.reduce((s, t) => s + (t.debitAmount || 0), 0);
-  const lastBalance = transactions.length > 0 ? (transactions[transactions.length - 1].runningBalance ?? null) : null;
+  const validTransactions = transactions.filter(t => !['failed', 'cancelled', 'rejected'].includes((t.paymentStatus || '').toLowerCase()));
+  const totalCredit = validTransactions.reduce((s, t) => s + (t.creditAmount || 0), 0);
+  const totalDebit = validTransactions.reduce((s, t) => s + (t.debitAmount || 0), 0);
+  const latestTxn = transactions.find(t => !['failed', 'cancelled', 'rejected'].includes((t.paymentStatus || '').toLowerCase())) || transactions[0];
+  const lastBalance = latestTxn ? (latestTxn.runningBalance ?? (totalCredit - totalDebit)) : null;
 
   return (
     <div className="space-y-5">

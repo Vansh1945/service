@@ -472,6 +472,10 @@ class ProviderAssignmentService {
           strategy = 'instant';
         }
 
+        const User = mongoose.model('User');
+        const customerDoc = booking.customer ? await User.findById(booking.customer).select('favoriteProviders').lean() : null;
+        const favoriteProviderIds = customerDoc?.favoriteProviders?.map(fp => fp.providerId?.toString()).filter(Boolean) || [];
+
         const scoredProviders = providersWithDetails.map(item => {
           const p = item.provider;
           const pIdStr = p._id.toString();
@@ -556,10 +560,13 @@ class ProviderAssignmentService {
             }
           }
 
+          const isFavorite = favoriteProviderIds.includes(pIdStr) || (booking.isFavoriteProviderBooking && booking.provider?.toString() === pIdStr);
+
           return {
             ...item,
             tier,
-            workload
+            workload,
+            isFavorite
           };
         }).filter(Boolean);
 
@@ -571,6 +578,12 @@ class ProviderAssignmentService {
           scoredProviders.sort((a, b) => {
             if (a.tier !== b.tier) {
               return a.tier - b.tier;
+            }
+            // Customer favorite provider ranking preference signal
+            const favA = a.isFavorite ? 1 : 0;
+            const favB = b.isFavorite ? 1 : 0;
+            if (favB !== favA) {
+              return favB - favA;
             }
             if (a.distance !== b.distance) {
               return a.distance - b.distance;

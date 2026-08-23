@@ -909,32 +909,40 @@ const toggleFavoriteProvider = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Verify provider exists in database
+    const prov = await Provider.findById(providerId)
+      .select('name services approved isActive role')
+      .populate('services', 'name')
+      .lean();
+
+    if (!prov) {
+      return res.status(404).json({ success: false, message: 'Provider not found or has been removed' });
+    }
+
     if (!user.favoriteProviders) {
       user.favoriteProviders = [];
     }
 
-    const existingIdx = user.favoriteProviders.findIndex(
-      fp => fp.providerId.toString() === providerId.toString()
-    );
+    // Clean up any historical duplicates and check existence
+    const existingCount = user.favoriteProviders.filter(
+      fp => fp.providerId && fp.providerId.toString() === providerId.toString()
+    ).length;
 
     let isFavorite = false;
-    if (existingIdx > -1) {
-      user.favoriteProviders.splice(existingIdx, 1);
+    if (existingCount > 0) {
+      // Remove all duplicate instances (unfavorite)
+      user.favoriteProviders = user.favoriteProviders.filter(
+        fp => !fp.providerId || fp.providerId.toString() !== providerId.toString()
+      );
       isFavorite = false;
     } else {
-      // Find provider to get category & name
-      const prov = await Provider.findById(providerId)
-        .select('name services')
-        .populate('services', 'name')
-        .lean();
-
       const categoryNames = prov && prov.services && prov.services.length > 0
         ? prov.services.map(s => s.name).join(', ')
-        : 'N/A';
+        : (category || 'N/A');
 
       user.favoriteProviders.push({
-        providerId,
-        providerName: prov ? prov.name : (providerName || 'Provider'),
+        providerId: prov._id,
+        providerName: prov.name || providerName || 'Provider',
         category: categoryNames,
         lastBookedAt: new Date()
       });

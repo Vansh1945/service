@@ -553,8 +553,8 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
                 soundUrl = 'https://assets.mixkit.co/active_storage/sfx/2017/2017-84.wav';
             }
 
-            if (_io) {
-                const room = userId.toString();
+            if (_io && uId) {
+                const room = uId.toString();
                 const socketsInRoom = await _io.in(room).fetchSockets();
                 console.log(`[Socket] Emitting to room "${room}" — ${socketsInRoom.length} socket(s) connected`);
 
