@@ -4382,6 +4382,7 @@ class BookingService {
               paymentStatus: 'completed',
               paymentMethod: 'wallet',
               type: 'commissiondeduction',
+              entryType: 'debit',
               balanceBefore: balanceBefore,
               balanceAfter: balanceAfter,
               deductionType: 'cash_booking_commission',
@@ -4401,6 +4402,7 @@ class BookingService {
               paymentStatus: 'completed',
               paymentMethod: 'wallet',
               type: 'referral_coupon_subsidy',
+              entryType: 'credit',
               balanceBefore: balanceBefore,
               balanceAfter: balanceAfter,
               description: `Company-funded referral coupon subsidy of ₹${creditAmount} credited to wallet for Cash Booking #${booking.bookingId || booking._id}`

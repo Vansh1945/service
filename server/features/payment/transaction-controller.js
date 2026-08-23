@@ -22,6 +22,42 @@ const getBookingIdsForZones = async (zoneIds) => {
   return bookings.map(b => b._id);
 };
 
+/**
+ * Helper: Check if a transaction is economically effective
+ * Excludes failed, cancelled, rejected, pending, and processing transactions from running balance & ledger totals.
+ */
+const isFinanciallyEffective = (paymentStatus) => {
+  if (!paymentStatus) return false;
+  const status = String(paymentStatus).toLowerCase().replace(/[^a-z0-9]/g, '');
+  return ['success', 'completed', 'paid', 'captured', 'settled', 'refunded'].includes(status);
+};
+
+/**
+ * Helper: Check if a transaction belongs to the Platform Financial Ledger scope.
+ * Platform Ledger tracks platform financial inflows, outflows, and platform accounting events.
+ */
+const isPlatformLedgerEligible = (txn) => {
+  if (!txn) return false;
+  if (!isFinanciallyEffective(txn.paymentStatus)) return false;
+
+  if (txn.ledgerType) {
+    const lType = String(txn.ledgerType).toLowerCase();
+    if (['payment', 'refund', 'withdrawal', 'settlement', 'commission', 'adjustment', 'referral'].includes(lType)) {
+      return true;
+    }
+  }
+
+  const type = String(txn.type || 'payment').toLowerCase();
+  const platformTypes = [
+    'payment', 'refund', 'settlement', 'wallet_topup', 'withdrawal',
+    'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery',
+    'cashback', 'adjustment', 'referralreward', 'referral_coupon_subsidy',
+    'escrow_hold', 'escrow_release'
+  ];
+  return platformTypes.includes(type);
+};
+
+
 const rollbackWalletDeduction = async (transaction, session) => {
   if (transaction.paymentMethod === 'mixed' && transaction.paymentStatus === 'pending' && !transaction.description?.includes('Rolled Back')) {
     const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
@@ -273,29 +309,48 @@ const createOrder = async (req, res, next) => {
     booking.cashToPay = 0;
     await booking.save({ session });
 
-    // Create transaction record
-    const transaction = new Transaction({
-      amount: finalAmount,
-      currency: systemCurrency,
-      paymentMethod: paymentMethod || 'online',
+    // Create or update pending transaction record idempotently
+    let transaction = await Transaction.findOne({
       booking: bookingId,
-      bookingId: booking.bookingId,
-      user: userId,
-      customerId: req.user.customerId || userId.toString(),
-      provider: booking.provider,
-      providerId: booking.providerId || (booking.provider ? booking.provider.toString() : null),
-      commission: finalCommission,
-      providerEarning: finalProviderEarning,
-      commissionRule: commissionRuleId,
-      razorpayOrderId: order.id,
       type: 'payment',
-      paymentStatus: 'pending',
-      description: paymentMethod === 'mixed'
-        ? `Mixed Payment Pending: Razorpay + Wallet (₹${walletDeduction})`
-        : `Online Payment Pending`
-    });
+      paymentStatus: 'pending'
+    }).session(session);
 
-    await transaction.save({ session });
+    if (transaction) {
+      transaction.amount = finalAmount;
+      transaction.currency = systemCurrency;
+      transaction.paymentMethod = paymentMethod || 'online';
+      transaction.commission = finalCommission;
+      transaction.providerEarning = finalProviderEarning;
+      transaction.commissionRule = commissionRuleId;
+      transaction.razorpayOrderId = order.id;
+      transaction.description = paymentMethod === 'mixed'
+        ? `Mixed Payment Pending: Razorpay + Wallet (₹${walletDeduction})`
+        : `Online Payment Pending`;
+      await transaction.save({ session });
+    } else {
+      transaction = new Transaction({
+        amount: finalAmount,
+        currency: systemCurrency,
+        paymentMethod: paymentMethod || 'online',
+        booking: bookingId,
+        bookingId: booking.bookingId,
+        user: userId,
+        customerId: req.user.customerId || userId.toString(),
+        provider: booking.provider,
+        providerId: booking.providerId || (booking.provider ? booking.provider.toString() : null),
+        commission: finalCommission,
+        providerEarning: finalProviderEarning,
+        commissionRule: commissionRuleId,
+        razorpayOrderId: order.id,
+        type: 'payment',
+        paymentStatus: 'pending',
+        description: paymentMethod === 'mixed'
+          ? `Mixed Payment Pending: Razorpay + Wallet (₹${walletDeduction})`
+          : `Online Payment Pending`
+      });
+      await transaction.save({ session });
+    }
 
     await session.commitTransaction();
 
@@ -1436,7 +1491,7 @@ const getFinanceOverview = async (req, res, next) => {
     const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const Refund = require('./refund-model');
+    const ProviderEarning = require('../provider/provider-earning-model');
 
     const [
       allSuccessful,
@@ -1446,7 +1501,9 @@ const getFinanceOverview = async (req, res, next) => {
       refunds,
       providers,
       failedTxns,
-      completedBookings
+      completedBookings,
+      failedSettlementRecords,
+      providerEarningStats
     ] = await Promise.all([
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] } }).lean(),
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfToday } }).lean(),
@@ -1460,13 +1517,41 @@ const getFinanceOverview = async (req, res, next) => {
         paymentStatus: { $in: ['paid', 'settled'] },
         'cancellationProgress.status': { $ne: 'cancelled' },
         refundProcessed: { $ne: true }
-      }).select('commissionAmount companySurgeShare platformFee totalAmount providerEarnings subtotal totalDiscount couponApplied isReferralDiscount').lean()
+      }).select('commissionAmount companySurgeShare platformFee totalAmount providerEarnings subtotal totalDiscount couponApplied isReferralDiscount').lean(),
+      Transaction.find({
+        $or: [
+          { settlementStatus: { $in: ['failed', 'rejected', 'declined', 'cancelled'] } },
+          { type: 'settlement', paymentStatus: { $in: ['failed', 'rejected', 'declined'] } }
+        ]
+      }).lean(),
+      ProviderEarning.aggregate([
+        { $match: { status: { $ne: 'cancelled' } } },
+        { $group: { _id: null, totalNet: { $sum: '$netAmount' } } }
+      ])
     ]);
+
+    // Deduplicate transaction records by unique payment identity to prevent double-counting revenue
+    const deduplicateByPaymentIdentity = (txns) => {
+      const seen = new Set();
+      return txns.filter(t => {
+        const key = t.razorpayPaymentId
+          ? `rzp:${t.razorpayPaymentId}`
+          : (t.transactionId ? `txn:${t.transactionId}` : `id:${t._id.toString()}`);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
+    const uniqueAllSuccessful = deduplicateByPaymentIdentity(allSuccessful);
+    const uniqueTodayTxns = deduplicateByPaymentIdentity(todayTxns);
+    const uniqueWeeklyTxns = deduplicateByPaymentIdentity(weeklyTxns);
+    const uniqueMonthlyTxns = deduplicateByPaymentIdentity(monthlyTxns);
 
     let totalRevenue = 0, onlineCollection = 0, cashCollection = 0, walletCollection = 0, mixedCollection = 0;
     let gatewayFees = 0, gatewayTax = 0;
 
-    allSuccessful.forEach(t => {
+    uniqueAllSuccessful.forEach(t => {
       const amt = t.amount || 0;
       totalRevenue += amt;
 
@@ -1482,19 +1567,23 @@ const getFinanceOverview = async (req, res, next) => {
     });
 
     let platformEarnings = 0;
-    let totalProviderEarnings = 0;
+    let totalProviderEarningsFromBookings = 0;
     completedBookings.forEach(b => {
       const isRefDisc = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
       const refSubsidy = isRefDisc ? (b.totalDiscount || 0) : 0;
       const netPlatformContribution = (b.commissionAmount || 0) + (b.companySurgeShare || 0) - refSubsidy;
 
       platformEarnings += netPlatformContribution;
-      totalProviderEarnings += (b.providerEarnings || 0);
+      totalProviderEarningsFromBookings += (b.providerEarnings || 0);
     });
 
-    const todayRevenue = todayTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const weeklyRevenue = weeklyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const monthlyRevenue = monthlyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalProviderEarnings = (providerEarningStats && providerEarningStats[0]?.totalNet != null)
+      ? providerEarningStats[0].totalNet
+      : totalProviderEarningsFromBookings;
+
+    const todayRevenue = uniqueTodayTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const weeklyRevenue = uniqueWeeklyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const monthlyRevenue = uniqueMonthlyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
 
     let pendingRefunds = 0, completedRefunds = 0;
     refunds.forEach(r => {
@@ -1510,19 +1599,106 @@ const getFinanceOverview = async (req, res, next) => {
       completedPayout += (p.wallet?.totalWithdrawn || 0);
     });
 
-    const recentActivities = await Transaction.find({})
+    const rawRecentActivities = await Transaction.find({})
       .populate('user', 'name email phone')
       .populate('provider', 'name email phone')
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
 
+    const recentActivities = rawRecentActivities.map(t => {
+      const type = (t.type || 'payment').toLowerCase();
+      const pStatus = (t.paymentStatus || 'completed').toLowerCase();
+      const sStatus = (t.settlementStatus || '').toLowerCase();
+
+      let displayType = 'Payment';
+      if (type === 'refund') displayType = 'Refund';
+      else if (type === 'withdrawal') displayType = 'Withdrawal';
+      else if (type === 'commission' || type === 'commissiondeduction') displayType = 'Commission Deduction';
+      else if (type === 'settlement') displayType = 'Settlement Batch';
+      else if (type === 'wallet_topup') displayType = 'Wallet Topup';
+      else if (type === 'adjustment') displayType = 'Adjustment';
+      else if (type === 'referral') displayType = 'Referral Reward';
+
+      let displayStatus = 'Captured';
+      let isSuccessfulCollection = false;
+      let financialDirection = t.entryType || 'neutral';
+
+      if (type === 'payment') {
+        if (['failed', 'cancelled', 'rejected'].includes(pStatus)) {
+          displayStatus = 'Failed';
+          financialDirection = 'neutral';
+        } else if (['pending', 'processing', 'created'].includes(pStatus)) {
+          displayStatus = 'Pending';
+          financialDirection = 'neutral';
+        } else if (['success', 'completed', 'paid', 'captured'].includes(pStatus)) {
+          displayStatus = 'Captured';
+          isSuccessfulCollection = true;
+          financialDirection = 'credit';
+        }
+      } else if (type === 'refund') {
+        displayStatus = ['completed', 'success'].includes(pStatus) ? 'Completed' : (pStatus === 'failed' ? 'Failed' : 'Pending');
+        financialDirection = pStatus === 'failed' ? 'neutral' : 'debit';
+      } else if (type === 'withdrawal') {
+        displayStatus = ['completed', 'transferred'].includes(pStatus) ? 'Completed' : (pStatus === 'failed' ? 'Failed' : 'Processing');
+        financialDirection = pStatus === 'failed' ? 'neutral' : 'debit';
+      } else if (type === 'commission' || type === 'commissiondeduction') {
+        displayStatus = 'Applied';
+        financialDirection = 'debit';
+      } else if (type === 'settlement') {
+        displayStatus = sStatus === 'settled' || t.razorpaySettlementId ? 'Settled' : (['failed', 'rejected'].includes(sStatus) ? 'Failed' : 'Pending');
+        financialDirection = 'neutral';
+      }
+
+      return {
+        ...t,
+        displayType,
+        displayStatus,
+        isSuccessfulCollection,
+        financialDirection
+      };
+    });
+
     const totalCaptured = onlineCollection + mixedCollection;
-    const totalSettled = Math.max(0, totalCaptured);
-    const bankReceived = Math.max(0, totalSettled - gatewayFees - gatewayTax);
-    const pendingSettlement = 0;
-    const failedSettlement = 0;
-    const reconciliationDifference = 0;
+
+    // Helper to determine authoritative gateway settlement status
+    // Mongoose schema defaults settlementStatus to 'settled'. Therefore, a record with settlementStatus === 'settled'
+    // without a razorpaySettlementId, settlementBatchId, or settlementDate represents an unsettled transaction in progress.
+    const isGatewaySettled = (t) => {
+      if (t.razorpaySettlementId || t.settlementBatchId) return true;
+      if (t.settlementDate && String(t.settlementStatus || '').toLowerCase() === 'settled') return true;
+      return false;
+    };
+
+    const isGatewayFailed = (t) => {
+      const st = String(t.settlementStatus || '').toLowerCase();
+      const ps = String(t.paymentStatus || '').toLowerCase();
+      return ['failed', 'rejected', 'declined', 'cancelled'].includes(st) || (t.type === 'settlement' && ['failed', 'rejected', 'declined'].includes(ps));
+    };
+
+    // Filter online & mixed payments (excluding pure cash/cod and pure wallet)
+    const onlineAndMixedTxns = uniqueAllSuccessful.filter(t => {
+      const method = (t.paymentMethod || '').toLowerCase();
+      return method !== 'cash' && method !== 'cod' && method !== 'wallet';
+    });
+
+    // 1. Authoritative settlement aggregation from transaction history
+    const settledTxns = onlineAndMixedTxns.filter(t => isGatewaySettled(t));
+    const totalSettled = settledTxns.reduce((sum, t) => sum + (t.settlementAmount || t.netSettlementAmount || t.amount || 0), 0);
+
+    // 2. Failed settlement aggregation
+    const uniqueFailedSettlements = deduplicateByPaymentIdentity(failedSettlementRecords);
+    const failedSettlementTxns = uniqueAllSuccessful.filter(t => isGatewayFailed(t));
+    const allFailedSettlementTxns = deduplicateByPaymentIdentity([...failedSettlementTxns, ...uniqueFailedSettlements]);
+    const failedSettlement = allFailedSettlementTxns.reduce((sum, t) => sum + (t.settlementAmount || t.netSettlementAmount || t.amount || 0), 0);
+
+    // 3. Pending settlement aggregation (online/mixed payments awaiting gateway payout)
+    const pendingSettlementTxns = onlineAndMixedTxns.filter(t => !isGatewaySettled(t) && !isGatewayFailed(t));
+    const pendingSettlement = pendingSettlementTxns.reduce((sum, t) => sum + (t.settlementAmount || t.netSettlementAmount || t.amount || 0), 0);
+
+    // 4. Bank received calculation based on actual settled funds
+    const bankReceived = totalSettled > 0 ? Math.max(0, totalSettled - gatewayFees - gatewayTax) : 0;
+    const reconciliationDifference = totalCaptured - (totalSettled + pendingSettlement + failedSettlement);
 
     const totalTxnsCount = allSuccessful.length + failedTxns.length;
     const paymentSuccessRate = totalTxnsCount > 0 ? parseFloat(((allSuccessful.length / totalTxnsCount) * 100).toFixed(1)) : 100;
@@ -1555,6 +1731,8 @@ const getFinanceOverview = async (req, res, next) => {
         totalRefunds: totalRefundsAmount,
         settledAmount,
         pendingSettlement,
+        failedSettlement,
+        reconciliationDifference,
         providerPendingPayout,
         totalProviderEarnings,
         completedPayout,
@@ -1567,6 +1745,8 @@ const getFinanceOverview = async (req, res, next) => {
         cashPendingVerification,
         recentActivities,
         reconciliation: {
+          expectedAmount: totalCaptured,
+          actualAmount: totalSettled + pendingSettlement + failedSettlement,
           totalCaptured,
           totalSettled,
           pendingSettlement,
@@ -1576,7 +1756,11 @@ const getFinanceOverview = async (req, res, next) => {
           gatewayTax,
           providerPending: providerPendingPayout,
           refundPending: pendingRefunds,
-          difference: reconciliationDifference
+          difference: reconciliationDifference,
+          isBalanced: Math.abs(reconciliationDifference) < 0.01,
+          reconciliationStatus: (uniqueAllSuccessful.length === 0 && allFailedSettlementTxns.length === 0)
+            ? 'NO_DATA'
+            : (Math.abs(reconciliationDifference) < 0.01 ? 'MATCHED' : 'UNRECONCILED')
         }
       }
     });
@@ -1902,7 +2086,12 @@ const getCustomerWallets = async (req, res, next) => {
         { $group: { _id: '$user', count: { $sum: 1 } } }
       ]),
       Transaction.aggregate([
-        { $match: { user: { $in: userIds } } },
+        {
+          $match: {
+            user: { $in: userIds },
+            paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled', 'refunded'] }
+          }
+        },
         {
           $group: {
             _id: '$user',
@@ -2900,6 +3089,18 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         const netPlatform = txn.commission || booking.commissionAmount || Math.round(gross * 0.1);
         const providerNet = txn.providerEarning || booking.providerEarnings || (gross - fee - netPlatform);
 
+        const isTxnSettled = Boolean(txn.razorpaySettlementId || txn.settlementDate);
+        const expectedCustomerPaid = gross;
+        const expectedDistribution = providerNet + netPlatform + fee;
+        const distributionDiff = parseFloat((expectedCustomerPaid - expectedDistribution).toFixed(2));
+
+        let calculatedReconStatus = 'UNRECONCILED';
+        if (Math.abs(distributionDiff) < 0.01) {
+          calculatedReconStatus = isTxnSettled ? 'Reconciled (Balanced)' : 'Pending Gateway Settlement';
+        } else {
+          calculatedReconStatus = `Amount Mismatch (Diff: ₹${distributionDiff})`;
+        }
+
         payload.settlement = {
           settlementId: txn.razorpaySettlementId || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
           settlementAmount: gross - fee,
@@ -2914,7 +3115,8 @@ const getUnifiedEntityDetails = async (req, res, next) => {
           providerNetShare: providerNet,
           providerPaidAmount: w.totalWithdrawn || 0,
           providerPendingAmount: w.pendingPayout || provider.pendingPayout || 0,
-          reconciliationStatus: ['success', 'completed'].includes(txn.paymentStatus) ? 'Reconciled (100% Balanced)' : 'Pending Reconciliation'
+          reconciliationStatus: calculatedReconStatus,
+          reconciliationDifference: distributionDiff
         };
 
         payload.gateway = {
@@ -3493,12 +3695,10 @@ const getMasterLedger = async (req, res, next) => {
 
       let cumulative = 0;
       allForBalance.forEach(t => {
-        const isFailed = ['failed', 'cancelled', 'rejected'].includes((t.paymentStatus || '').toLowerCase());
-        if (!isFailed) {
-          const isCredit = t.entryType === 'credit' ||
-            ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(t.type);
-          const isDebit = t.entryType === 'debit' ||
-            ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(t.type);
+        if (isPlatformLedgerEligible(t)) {
+          const entryDirection = String(t.entryType || '').toLowerCase();
+          const isCredit = entryDirection === 'credit';
+          const isDebit = entryDirection === 'debit';
 
           if (isCredit && !isDebit) cumulative += (t.amount || 0);
           else if (isDebit && !isCredit) cumulative -= (t.amount || 0);
@@ -3517,16 +3717,15 @@ const getMasterLedger = async (req, res, next) => {
 
       const linkedRefund = refundByTxnId[txnIdStr] || refundByBookingId[bookingIdStr] || null;
 
-      const isTxnFailed = ['failed', 'cancelled', 'rejected'].includes((txn.paymentStatus || '').toLowerCase());
+      const isEligible = isPlatformLedgerEligible(txn);
 
-      // Determine debit / credit amounts
-      const isCredit = txn.entryType === 'credit' ||
-        ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(txn.type);
-      const isDebit = txn.entryType === 'debit' ||
-        ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+      // Authoritative financial direction from entryType
+      const entryDirection = String(txn.entryType || '').toLowerCase();
+      const isCredit = entryDirection === 'credit';
+      const isDebit = entryDirection === 'debit';
 
-      const creditAmount = (!isTxnFailed && isCredit && !isDebit) ? (txn.amount || 0) : 0;
-      const debitAmount = (!isTxnFailed && isDebit && !isCredit) ? (txn.amount || 0) : 0;
+      const creditAmount = (isEligible && isCredit) ? (txn.amount || 0) : 0;
+      const debitAmount = (isEligible && isDebit) ? (txn.amount || 0) : 0;
 
       return {
         ...txn,
@@ -3674,14 +3873,15 @@ const getLedgerDetail = async (req, res, next) => {
       else onlinePaid = (txn.type === 'payment') ? (txn.amount || 0) : 0;
     }
 
-    // Debit / Credit
-    const isCredit = txn.entryType === 'credit' ||
-      ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release', 'withdrawalrejection'].includes(txn.type);
-    const isDebit = txn.entryType === 'debit' ||
-      ['refund', 'withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(txn.type);
+    const isEligible = isPlatformLedgerEligible(txn);
 
-    const creditAmount = (isCredit && !isDebit) ? (txn.amount || 0) : 0;
-    const debitAmount = (isDebit && !isCredit) ? (txn.amount || 0) : 0;
+    // Authoritative financial direction from entryType
+    const entryDirection = String(txn.entryType || '').toLowerCase();
+    const isCredit = entryDirection === 'credit';
+    const isDebit = entryDirection === 'debit';
+
+    const creditAmount = (isEligible && isCredit) ? (txn.amount || 0) : 0;
+    const debitAmount = (isEligible && isDebit) ? (txn.amount || 0) : 0;
 
     // ── Linked Refund ────────────────────────────────────────────────────────
     const Refund = require('./refund-model');

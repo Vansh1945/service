@@ -77,11 +77,13 @@ const PaymentManagementPage = () => {
       if (response.data?.success) {
         const rawPayments = response.data.data?.transactions || response.data.data || [];
 
-        // Deduplicate — one payment record per unique key
+        // Defensive frontend deduplication — scope-prefixed identity keys
         const uniquePayments = [];
         const seenIds = new Set();
         rawPayments.forEach((txn) => {
-          const key = txn.razorpayPaymentId || txn.transactionId || txn._id;
+          const key = txn.razorpayPaymentId
+            ? `rzp:${txn.razorpayPaymentId}`
+            : (txn.transactionId ? `txn:${txn.transactionId}` : `id:${txn._id}`);
           if (key && !seenIds.has(key)) {
             seenIds.add(key);
             uniquePayments.push(txn);

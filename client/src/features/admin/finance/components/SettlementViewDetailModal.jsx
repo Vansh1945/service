@@ -84,7 +84,9 @@ const SettlementViewDetailModal = ({ isOpen, onClose, entityData }) => {
               </div>
               <div>
                 <span className="text-xs text-slate-400 font-medium block">Reconciliation Status</span>
-                <span className="font-bold text-emerald-600">100% Reconciled (Zero Difference)</span>
+                <span className={`font-bold ${data.reconciliationStatus?.includes('Reconciled') || data.reconciliationStatus?.includes('MATCHED') || data.reconciliationStatus?.includes('Balanced') ? 'text-emerald-600' : (data.reconciliationStatus?.includes('Pending') ? 'text-amber-600' : 'text-slate-600')}`}>
+                  {data.reconciliationStatus || (['SETTLED', 'completed', 'paid'].includes(data.status?.toLowerCase() || data.paymentStatus?.toLowerCase()) ? 'Reconciled (Balanced)' : 'Pending Reconciliation')}
+                </span>
               </div>
             </div>
           </div>

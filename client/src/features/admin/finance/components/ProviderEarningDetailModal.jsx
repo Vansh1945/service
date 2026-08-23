@@ -96,6 +96,13 @@ const ProviderEarningDetailModal = ({ isOpen, onClose, entityData, earningId }) 
   const settlement = data.settlement || {};
   const paymentRecord = data.paymentRecord || {};
 
+  const customerPaid = data.amount || data.totalAmount || booking.totalAmount || booking.subtotal || 0;
+  const commission = (data.commission !== undefined && data.commission !== null)
+    ? data.commission
+    : ((booking.commissionAmount !== undefined && booking.commissionAmount !== null)
+      ? booking.commissionAmount
+      : (data.platformFee || 0));
+
   const serviceBase = data.grossAmount || booking.subtotal || customerPaid;
   const providerShare = data.providerEarnings || data.providerEarning || data.netAmount || (serviceBase - commission);
 

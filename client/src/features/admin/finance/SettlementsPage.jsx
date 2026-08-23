@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FiCheckCircle, FiDollarSign, FiEye, FiShield } from 'react-icons/fi';
+import { FiCheckCircle, FiDollarSign, FiEye, FiShield, FiAlertTriangle } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Pagination from '../../../components/ui/Pagination';
@@ -119,8 +119,20 @@ const SettlementsPage = () => {
         </div>
         <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
           <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Reconciliation Status</p>
-          <h3 className="text-2xl font-black text-primary mt-1 flex items-center gap-1.5">
-            <FiCheckCircle className="w-5 h-5 text-emerald-500" /> 100% Balanced
+          <h3 className="text-2xl font-black mt-1 flex items-center gap-1.5">
+            {data.summary?.settlementDifference != null ? (
+              Math.abs(data.summary.settlementDifference) < 0.01 ? (
+                <span className="text-emerald-600 flex items-center gap-1.5">
+                  <FiCheckCircle className="w-5 h-5 text-emerald-500" /> Balanced
+                </span>
+              ) : (
+                <span className="text-rose-600 flex items-center gap-1.5 text-lg">
+                  <FiAlertTriangle className="w-5 h-5 text-rose-500" /> Unbalanced (<PriceDisplay amount={data.summary.settlementDifference} />)
+                </span>
+              )
+            ) : (
+              <span className="text-slate-400 text-lg font-normal">N/A (Unknown)</span>
+            )}
           </h3>
         </div>
       </div>
@@ -162,10 +174,22 @@ const SettlementsPage = () => {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {data.settlements.map((s) => {
                   const gross = s.grossAmount || s.amount || s.booking?.totalAmount || 0;
-                  const fee = s.gatewayFee !== undefined ? s.gatewayFee : Math.round(gross * 0.02);
-                  const net = s.netAmount || (gross - fee);
-                  const comm = s.platformCommission || s.commission || s.booking?.commissionAmount || Math.round(gross * 0.1);
-                  const isSettled = ['success', 'completed', 'settled'].includes(s.settlementStatus || s.paymentStatus || 'settled');
+                  const fee = (s.gatewayFee !== undefined && s.gatewayFee !== null) ? s.gatewayFee : null;
+                  const net = (s.netAmount !== undefined && s.netAmount !== null) 
+                    ? s.netAmount 
+                    : ((s.settlementAmount !== undefined && s.settlementAmount !== null) ? s.settlementAmount : null);
+                  const comm = (s.platformCommission !== undefined && s.platformCommission !== null)
+                    ? s.platformCommission
+                    : ((s.commission !== undefined && s.commission !== null)
+                      ? s.commission
+                      : ((s.booking?.commissionAmount !== undefined && s.booking?.commissionAmount !== null)
+                        ? s.booking.commissionAmount
+                        : null));
+                  const rawSettlementStatus = s.settlementStatus || (s.payoutStatus ? s.payoutStatus : null);
+                  const rawStatusLower = String(rawSettlementStatus || '').toLowerCase();
+                  const isSettled = ['success', 'completed', 'settled', 'paid'].includes(rawStatusLower);
+                  const isPending = ['pending', 'processing', 'queued', 'initiated'].includes(rawStatusLower);
+                  const isFailed = ['failed', 'rejected', 'declined', 'cancelled'].includes(rawStatusLower);
 
                   return (
                     <tr key={s._id} className="hover:bg-emerald-50/20 transition-colors">
@@ -227,17 +251,29 @@ const SettlementsPage = () => {
 
                       {/* 8. Gateway Fee */}
                       <td className="p-3.5 font-bold text-amber-600">
-                        <PriceDisplay amount={fee} />
+                        {fee !== null && fee !== undefined ? (
+                          <PriceDisplay amount={fee} />
+                        ) : (
+                          <span className="text-slate-400 font-medium text-xs">N/A</span>
+                        )}
                       </td>
 
                       {/* 9. Net Amount */}
                       <td className="p-3.5 font-black text-teal-700">
-                        <PriceDisplay amount={net} />
+                        {net !== null && net !== undefined ? (
+                          <PriceDisplay amount={net} />
+                        ) : (
+                          <span className="text-slate-400 font-medium text-xs">N/A</span>
+                        )}
                       </td>
 
                       {/* 10. Platform Commission */}
                       <td className="p-3.5 font-bold text-emerald-700">
-                        <PriceDisplay amount={comm} />
+                        {comm !== null && comm !== undefined ? (
+                          <PriceDisplay amount={comm} />
+                        ) : (
+                          <span className="text-slate-400 font-medium text-xs">N/A</span>
+                        )}
                       </td>
 
                       {/* 11. Settlement Status */}
@@ -246,9 +282,17 @@ const SettlementsPage = () => {
                           <span className="inline-flex items-center px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold uppercase">
                             <FiCheckCircle className="mr-1" /> SETTLED
                           </span>
-                        ) : (
+                        ) : isPending ? (
                           <span className="inline-flex items-center px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-extrabold uppercase">
-                            PENDING
+                            <FiClock className="mr-1" /> PENDING
+                          </span>
+                        ) : isFailed ? (
+                          <span className="inline-flex items-center px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full text-[10px] font-extrabold uppercase">
+                            <FiXCircle className="mr-1" /> FAILED
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-extrabold uppercase">
+                            <FiHelpCircle className="mr-1" /> UNKNOWN
                           </span>
                         )}
                       </td>

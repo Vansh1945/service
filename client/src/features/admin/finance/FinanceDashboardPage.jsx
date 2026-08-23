@@ -146,7 +146,7 @@ const FinanceDashboardPage = () => {
 
         // Settlement Status Chart Data (computed from overview totals — not time-series)
         setSettlementStatusData([
-          { status: 'Settled', amount: d.reconciliation?.totalSettled || totalRev, color: '#10B981' },
+          { status: 'Settled', amount: d.reconciliation?.totalSettled ?? d.settledAmount ?? 0, color: '#10B981' },
           { status: 'Pending Settlement', amount: pendingSet, color: '#F59E0B' },
           { status: 'Processing', amount: d.reconciliation?.processingSettlement || d.processingSettlement || 0, color: '#6366F1' },
           { status: 'Failed', amount: d.reconciliation?.failedSettlement || 0, color: '#EF4444' }
@@ -164,21 +164,33 @@ const FinanceDashboardPage = () => {
         }
       } catch (tErr) {
         console.warn('Chart trends fetch failed, keeping computed data:', tErr);
-      }
-
-      if (settlementsRes.status === 'fulfilled' && settlementsRes.value.data?.success && settlementsRes.value.data?.data?.settlements) {
-        const rawSettlements = settlementsRes.value.data.data.settlements;
-        if (Array.isArray(rawSettlements) && rawSettlements.length > 0) {
-          const mapped = rawSettlements.map((s) => ({
-            batchId: s.transactionId || (s._id ? `#${String(s._id).slice(-6).toUpperCase()}` : 'SET-BATCH'),
-            provider: s.provider?.name || s.user?.name || s.description || 'Razorpay Settlement',
+        if (overviewRes.value.data?.data?.recentActivities && Array.isArray(overviewRes.value.data?.data?.recentActivities) && overviewRes.value.data?.data?.recentActivities.length > 0) {
+          const mappedActivities = overviewRes.value.data.data.recentActivities.map((s) => ({
+            batchId: s.transactionId || (s._id ? `#${String(s._id).slice(-6).toUpperCase()}` : 'TXN-REF'),
+            typeLabel: s.displayType || 'Activity',
+            provider: s.provider?.name || s.user?.name || s.description || 'System Financial Event',
             amount: s.amount || 0,
-            status: String(s.paymentStatus || s.status || 'SETTLED').toUpperCase(),
+            direction: s.financialDirection || 'neutral',
+            status: String(s.displayStatus || s.paymentStatus || s.status || 'PENDING').toUpperCase(),
             time: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'
           }));
-          setRecentSettlements(mapped);
-        } else {
-          setRecentSettlements([]);
+          setRecentSettlements(mappedActivities);
+        } else if (settlementsRes.status === 'fulfilled' && settlementsRes.value.data?.success && settlementsRes.value.data?.data?.settlements) {
+          const rawSettlements = settlementsRes.value.data.data.settlements;
+          if (Array.isArray(rawSettlements) && rawSettlements.length > 0) {
+            const mapped = rawSettlements.map((s) => ({
+              batchId: s.transactionId || (s._id ? `#${String(s._id).slice(-6).toUpperCase()}` : 'SET-BATCH'),
+              typeLabel: 'Settlement Batch',
+              provider: s.provider?.name || s.user?.name || s.description || 'Razorpay Settlement',
+              amount: s.amount || 0,
+              direction: 'neutral',
+              status: String(s.paymentStatus || s.status || 'SETTLED').toUpperCase(),
+              time: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'
+            }));
+            setRecentSettlements(mapped);
+          } else {
+            setRecentSettlements([]);
+          }
         }
       }
 
@@ -893,16 +905,32 @@ const FinanceDashboardPage = () => {
               <tbody className="divide-y divide-neutral-100">
                 {recentSettlements.map((row, idx) => (
                   <tr key={idx} className="hover:bg-neutral-50 transition-colors">
-                    <td className="py-3.5 px-2 font-mono font-bold text-neutral-900">{row.batchId}</td>
+                    <td className="py-3.5 px-2 font-mono font-bold text-neutral-900">
+                      <div>
+                        <span>{row.batchId}</span>
+                        {row.typeLabel && <span className="block text-[10px] text-neutral-400 font-sans font-medium">{row.typeLabel}</span>}
+                      </div>
+                    </td>
                     <td className="py-3.5 px-2 font-medium text-neutral-700">{row.provider}</td>
                     <td className="py-3.5 px-2 font-bold text-neutral-900">
-                      <PriceDisplay amount={row.amount} />
+                      {row.direction === 'credit' ? (
+                        <span className="text-emerald-600 font-bold">+<PriceDisplay amount={row.amount} /></span>
+                      ) : row.direction === 'debit' ? (
+                        <span className="text-rose-600 font-bold">-<PriceDisplay amount={row.amount} /></span>
+                      ) : (
+                        <span className="text-neutral-600 font-medium">
+                          <PriceDisplay amount={row.amount} />
+                          {row.status === 'FAILED' && <span className="text-[10px] text-rose-500 font-bold ml-1">(Attempted)</span>}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-2">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                        row.status === 'SETTLED' || row.status === 'SUCCESS' || row.status === 'COMPLETED'
+                        ['SETTLED', 'SUCCESS', 'COMPLETED', 'CAPTURED'].includes(row.status)
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                          : (['FAILED', 'REJECTED', 'DECLINED', 'CANCELLED'].includes(row.status)
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200')
                       }`}>
                         {row.status}
                       </span>

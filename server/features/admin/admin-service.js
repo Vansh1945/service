@@ -160,6 +160,7 @@ class AdminService {
                     paymentStatus: 'completed',
                     paymentMethod: 'wallet',
                     type: 'refund',
+                    entryType: 'debit',
                     description: `Admin cancelled booking - Refund to wallet. Reason: ${reasonText}`,
                     refundReason: reasonText
                 });

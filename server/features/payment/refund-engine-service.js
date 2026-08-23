@@ -402,6 +402,7 @@ class RefundEngineService {
             provider: booking.provider?._id || booking.provider || null,
             amount: walletCreditAmt,
             type: 'refund',
+            entryType: 'debit',
             paymentMethod: 'wallet',
             paymentStatus: 'completed',
             refundStatus: 'completed',

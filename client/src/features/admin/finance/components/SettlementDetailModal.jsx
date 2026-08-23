@@ -122,7 +122,7 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-black tracking-tight">Financial Settlement Console</h2>
-                <StatusChip label={settlement.settlementStatus || 'SETTLED'} type="success" />
+                <StatusChip label={settlement.settlementStatus ? settlement.settlementStatus.toUpperCase() : 'UNKNOWN'} type={['settled', 'completed', 'success', 'paid'].includes((settlement.settlementStatus || '').toLowerCase()) ? 'success' : (settlement.settlementStatus ? 'warning' : 'default')} />
               </div>
               <p className="text-xs text-neutral-300 font-medium mt-0.5">
                 Settlement ID: <span className="font-mono font-bold text-white">{settlement.settlementId || `#${(entityData?._id || '').slice(-6)}`}</span>
@@ -222,7 +222,7 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
                     badge={<span className="font-bold text-blue-700"><PriceDisplay amount={provider.walletCredit || provider.wallet?.availableBalance || 0} /></span>}
                     onClick={() => openInvestigationDrawer('provider_wallet', provider._id)}
                   />
-                  <InfoRow label="Reconciliation Status" badge={<StatusChip label="100% BALANCED" type="success" />} />
+                  <InfoRow label="Reconciliation Status" badge={<StatusChip label={settlement.reconciliationStatus || 'UNRECONCILED'} type={settlement.reconciliationStatus?.includes('Reconciled') || settlement.reconciliationStatus?.includes('Balanced') || settlement.reconciliationStatus?.includes('MATCHED') ? 'success' : (settlement.reconciliationStatus?.includes('Pending') ? 'warning' : 'danger')} />} />
                 </SectionCard>
               </div>
             </div>

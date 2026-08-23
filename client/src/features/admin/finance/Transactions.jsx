@@ -256,7 +256,7 @@ const AdminTransactions = () => {
               <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 font-extrabold text-[10px] uppercase tracking-wider rounded-md border border-indigo-200">
                 Master Ledger
               </span>
-              <span className="text-[11px] text-gray-400 font-medium">Single Source of Truth · Double-Entry Accounting</span>
+              <span className="text-[11px] text-gray-400 font-medium">Single Source of Truth · Platform Financial Ledger</span>
             </div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center">
               <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl mr-3">
@@ -285,7 +285,7 @@ const AdminTransactions = () => {
             </div>
             {lastBalance !== null && (
               <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs">
-                <div className="text-indigo-500 font-semibold uppercase tracking-wide text-[10px]">Net Balance</div>
+                <div className="text-indigo-500 font-semibold uppercase tracking-wide text-[10px]">Platform Net Balance</div>
                 <div className={`font-black text-sm mt-0.5 ${lastBalance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>
                   <PriceDisplay amount={Math.abs(lastBalance)} />
                 </div>

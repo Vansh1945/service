@@ -205,11 +205,15 @@ const AdminFinancialReportCenter = () => {
   };
 
   const renderStatusBadge = (status) => {
-    const norm = normalizeStatus(status);
+    const s = String(status || '').toLowerCase();
     let color = 'bg-gray-100 text-gray-700';
-    if (['paid', 'completed', 'success', 'transferred', 'resolved', 'matched'].includes(norm)) color = 'bg-emerald-100 text-emerald-800';
-    else if (['escrowhold', 'held', 'available', 'underreview', 'pending'].includes(norm)) color = 'bg-amber-100 text-amber-800';
-    else if (['failed', 'rejected', 'cancelled', 'refunded', 'mismatch', 'amountmismatch'].includes(norm)) color = 'bg-rose-100 text-rose-800';
+    if (s.includes('captured') || s.includes('paid') || s.includes('completed') || s.includes('success') || s.includes('transferred') || s.includes('matched')) {
+      color = 'bg-emerald-100 text-emerald-800';
+    } else if (s.includes('failed') || s.includes('rejected') || s.includes('cancelled') || s.includes('mismatch')) {
+      color = 'bg-rose-100 text-rose-800';
+    } else if (s.includes('pending') || s.includes('held') || s.includes('review') || s.includes('escrow')) {
+      color = 'bg-amber-100 text-amber-800';
+    }
 
     return (
       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${color}`}>
@@ -247,43 +251,53 @@ const AdminFinancialReportCenter = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Booking Value</p>
-            <p className="text-base md:text-lg font-black text-gray-900 mt-1">₹{summaryData.totalBookingValue?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-gray-900 mt-0.5">₹{summaryData.totalBookingValue?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-gray-400 mt-1">Gross Order / Service Demand</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer Payments</p>
-            <p className="text-base md:text-lg font-black text-blue-600 mt-1">₹{summaryData.totalCustomerPayments?.toLocaleString()}</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Collected Payments</p>
+            <p className="text-base md:text-lg font-black text-blue-600 mt-0.5">₹{summaryData.totalCustomerPayments?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-blue-400 mt-1">Actual Customer Collections</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Platform Commission</p>
-            <p className="text-base md:text-lg font-black text-purple-600 mt-1">₹{summaryData.platformCommission?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-purple-600 mt-0.5">₹{summaryData.platformCommission?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-purple-400 mt-1">Gross Commission Share</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Earnings</p>
-            <p className="text-base md:text-lg font-black text-emerald-600 mt-1">₹{summaryData.providerEarnings?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-emerald-600 mt-0.5">₹{summaryData.providerEarnings?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-emerald-400 mt-1">Provider Net Payable</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Refunds</p>
-            <p className="text-base md:text-lg font-black text-rose-600 mt-1">₹{summaryData.totalRefunds?.toLocaleString()}</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Actual Refunded</p>
+            <p className="text-base md:text-lg font-black text-rose-600 mt-0.5">₹{summaryData.totalRefunds?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-rose-400 mt-1">Financially Completed Refunds</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Payouts</p>
-            <p className="text-base md:text-lg font-black text-indigo-600 mt-1">₹{summaryData.totalPayouts?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-indigo-600 mt-0.5">₹{summaryData.totalPayouts?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-indigo-400 mt-1">Disbursed Provider Payouts</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Referral Rewards</p>
-            <p className="text-base md:text-lg font-black text-cyan-600 mt-1">₹{summaryData.referralRewards?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-cyan-600 mt-0.5">₹{summaryData.referralRewards?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-cyan-400 mt-1">User Referral Subsidies</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Coupon Subsidy</p>
-            <p className="text-base md:text-lg font-black text-amber-600 mt-1">₹{summaryData.couponSubsidy?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-amber-600 mt-0.5">₹{summaryData.couponSubsidy?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-amber-400 mt-1">Platform Discount Subsidies</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cash Recovery</p>
-            <p className="text-base md:text-lg font-black text-teal-600 mt-1">₹{summaryData.cashRecovery?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">₹{summaryData.cashRecovery?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-teal-400 mt-1">Cash Booking Commission</p>
           </div>
           <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Net Platform Revenue</p>
-            <p className="text-base md:text-lg font-black mt-1">₹{summaryData.netPlatformRevenue?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black mt-0.5">₹{summaryData.netPlatformRevenue?.toLocaleString()}</p>
+            <p className="text-[9px] font-medium text-emerald-200 mt-1">Net Retained Earnings</p>
           </div>
         </div>
       )}
@@ -397,10 +411,23 @@ const AdminFinancialReportCenter = () => {
 
       {/* REPORT PREVIEW TABLE */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden space-y-4">
-        <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+        <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <FiLayers className="w-4 h-4 text-primary" />
-            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Report Preview ({pagination.totalRecords} Records)</h3>
+            <div>
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Report Preview ({pagination.totalRecords} Records)</h3>
+              <span className="text-[10px] text-gray-400 font-semibold block mt-0.5">
+                Date Filter Basis: <span className="text-primary font-bold">{
+                  selectedReport === 'booking_revenue' ? 'Booking Creation Date' :
+                  selectedReport === 'customer_payment' ? 'Payment Transaction Event Date' :
+                  (selectedReport === 'provider_earnings' || selectedReport === 'commission') ? 'Earning Ledger Date' :
+                  selectedReport === 'refund' ? 'Refund Event Date' :
+                  selectedReport === 'payout' ? 'Payout Execution Date' :
+                  selectedReport === 'wallet_ledger' ? 'Wallet Transaction Date' :
+                  'Financial Audit Timestamp'
+                }</span> ({filters.startDate} to {filters.endDate})
+              </span>
+            </div>
           </div>
           <span className="text-[11px] text-gray-500 font-medium">Showing page {pagination.page} of {pagination.totalPages}</span>
         </div>

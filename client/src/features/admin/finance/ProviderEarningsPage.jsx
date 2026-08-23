@@ -107,77 +107,97 @@ const ProviderEarningsPage = () => {
                 {transactions.map((txn) => {
                   const isWithdrawal = txn.type === 'withdrawal' || txn.ledgerType === 'withdrawal' || (txn.bookingId && txn.bookingId.startsWith('WDL-'));
                   const customerPaid = isWithdrawal ? 0 : (txn.amount || txn.booking?.totalAmount || 0);
-                  const commission = isWithdrawal ? 0 : (txn.commission || txn.booking?.commissionAmount || (customerPaid * 0.1));
-                  const providerNetShare = isWithdrawal ? 0 : (txn.providerEarning || txn.booking?.providerEarnings || (customerPaid - commission));
+                  const commission = isWithdrawal
+                    ? 0
+                    : ((txn.commission !== undefined && txn.commission !== null)
+                      ? txn.commission
+                      : ((txn.booking?.commissionAmount !== undefined && txn.booking?.commissionAmount !== null)
+                        ? txn.booking.commissionAmount
+                        : null));
+                  const providerNetShare = isWithdrawal
+                    ? 0
+                    : ((txn.providerEarning !== undefined && txn.providerEarning !== null)
+                      ? txn.providerEarning
+                      : ((txn.booking?.providerEarnings !== undefined && txn.booking?.providerEarnings !== null)
+                        ? txn.booking.providerEarnings
+                        : (commission !== null ? customerPaid - commission : null)));
                   const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending');
                   const withdrawalStatus = txn.withdrawalStatus || 'Available';
                   const isCompleted = ['success', 'completed'].includes(txn.paymentStatus);
 
                   return (
-                    <tr key={txn._id} className="hover:bg-neutral-50/50 transition-colors">
-                      <td className="p-3.5 font-bold text-secondary">
-                        {isWithdrawal ? (
-                          <span className="font-mono text-neutral-400">Withdrawal</span>
-                        ) : (
-                          <button
-                            onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking || txn._id)}
-                            className="text-primary font-mono hover:underline"
-                          >
-                            {txn.booking?.bookingId || txn.bookingId || `#${txn._id.slice(-6)}`}
-                          </button>
-                        )}
-                      </td>
+                <tr key={txn._id} className="hover:bg-neutral-50/50 transition-colors">
+                  <td className="p-3.5 font-bold text-secondary">
+                    {isWithdrawal ? (
+                      <span className="font-mono text-neutral-400">Withdrawal</span>
+                    ) : (
+                      <button
+                        onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking || txn._id)}
+                        className="text-primary font-mono hover:underline"
+                      >
+                        {txn.booking?.bookingId || txn.bookingId || `#${txn._id.slice(-6)}`}
+                      </button>
+                    )}
+                  </td>
 
-                      <td className="p-3.5 font-bold text-secondary text-sm">
-                        <PriceDisplay amount={customerPaid} />
-                      </td>
+                  <td className="p-3.5 font-bold text-secondary text-sm">
+                    <PriceDisplay amount={customerPaid} />
+                  </td>
 
-                      <td className="p-3.5 font-bold text-danger">
-                        <PriceDisplay amount={commission} />
-                      </td>
+                  <td className="p-3.5 font-bold text-danger">
+                    {commission !== null && commission !== undefined ? (
+                      <PriceDisplay amount={commission} />
+                    ) : (
+                      <span className="text-neutral-400 font-medium text-xs">N/A</span>
+                    )}
+                  </td>
 
-                      <td className="p-3.5 font-black text-success text-sm">
-                        <PriceDisplay amount={providerNetShare} />
-                      </td>
+                  <td className="p-3.5 font-black text-success text-sm">
+                    {providerNetShare !== null && providerNetShare !== undefined ? (
+                      <PriceDisplay amount={providerNetShare} />
+                    ) : (
+                      <span className="text-neutral-400 font-medium text-xs">N/A</span>
+                    )}
+                  </td>
 
-                      <td className="p-3.5 font-bold text-secondary">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold ${settlementStatus.toLowerCase().includes('settled') ? 'bg-success-light text-success' : 'bg-warning-light text-warning'}`}>
-                          {settlementStatus}
-                        </span>
-                      </td>
+                  <td className="p-3.5 font-bold text-secondary">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold ${settlementStatus.toLowerCase().includes('settled') ? 'bg-success-light text-success' : 'bg-warning-light text-warning'}`}>
+                      {settlementStatus}
+                    </span>
+                  </td>
 
-                      <td className="p-3.5 font-bold text-secondary">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold bg-primary/10 text-primary">
-                          {withdrawalStatus}
-                        </span>
-                      </td>
+                  <td className="p-3.5 font-bold text-secondary">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-extrabold bg-primary/10 text-primary">
+                      {withdrawalStatus}
+                    </span>
+                  </td>
 
-                      <td className="p-3.5">
-                        {isCompleted ? (
-                          <span className="inline-flex items-center px-2 py-0.5 bg-success-light text-success rounded-full text-[10px] font-extrabold uppercase">
-                            <FiCheckCircle className="mr-1" /> COMPLETED
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 bg-warning-light text-warning rounded-full text-[10px] font-extrabold uppercase">
-                            <FiClock className="mr-1" /> PENDING
-                          </span>
-                        )}
-                      </td>
+                  <td className="p-3.5">
+                    {isCompleted ? (
+                      <span className="inline-flex items-center px-2 py-0.5 bg-success-light text-success rounded-full text-[10px] font-extrabold uppercase">
+                        <FiCheckCircle className="mr-1" /> COMPLETED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 bg-warning-light text-warning rounded-full text-[10px] font-extrabold uppercase">
+                        <FiClock className="mr-1" /> PENDING
+                      </span>
+                    )}
+                  </td>
 
-                      <td className="p-3.5 text-neutral-400 whitespace-nowrap">
-                        {fmtDate(txn.createdAt)}
-                      </td>
+                  <td className="p-3.5 text-neutral-400 whitespace-nowrap">
+                    {fmtDate(txn.createdAt)}
+                  </td>
 
-                      <td className="p-3.5 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => openInvestigationDrawer('provider_earning', txn._id, txn)}
-                          className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm"
-                        >
-                          <FiEye className="mr-1.5" /> View Details
-                        </button>
-                      </td>
-                    </tr>
-                  );
+                  <td className="p-3.5 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => openInvestigationDrawer('provider_earning', txn._id, txn)}
+                      className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                    >
+                      <FiEye className="mr-1.5" /> View Details
+                    </button>
+                  </td>
+                </tr>
+                );
                 })}
               </tbody>
             </table>

@@ -4482,7 +4482,7 @@ class PaymentService {
           }
         ]),
         Transaction.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate } } },
+          { $match: { createdAt: { $gte: sDate, $lte: eDate }, paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } } },
           {
             $group: {
               _id: '$type',
@@ -4664,18 +4664,31 @@ class PaymentService {
             .populate('booking')
             .lean();
 
-          reportData = txns.map(t => ({
-            transactionId: t.transactionId || t._id,
-            bookingId: t.bookingId || t.booking?.bookingId || 'N/A',
-            customer: t.user?.name || 'N/A',
-            amount: t.amount || 0,
-            paymentMethod: t.paymentMethod,
-            paymentStatus: t.paymentStatus,
-            transactionType: t.type,
-            razorpayOrderId: t.razorpayOrderId || 'N/A',
-            razorpayPaymentId: t.razorpayPaymentId || 'N/A',
-            createdAt: t.createdAt
-          }));
+          reportData = txns.map(t => {
+            const pStatus = (t.paymentStatus || 'pending').toLowerCase();
+            const isCaptured = ['success', 'completed', 'paid', 'captured', 'settled'].includes(pStatus);
+            const isFailed = ['failed', 'cancelled', 'rejected'].includes(pStatus);
+
+            const actualCollectedAmount = isCaptured ? (t.amount || 0) : 0;
+            const collectionStatus = isCaptured
+              ? 'Captured Collection'
+              : (isFailed ? 'Failed Attempt' : 'Pending / In-Flight Attempt');
+
+            return {
+              transactionId: t.transactionId || t._id,
+              bookingId: t.bookingId || t.booking?.bookingId || 'N/A',
+              customer: t.user?.name || 'N/A',
+              attemptedAmount: t.amount || 0,
+              actualCollectedAmount,
+              collectionStatus,
+              paymentMethod: t.paymentMethod,
+              paymentStatus: t.paymentStatus,
+              transactionType: t.type || 'payment',
+              razorpayOrderId: t.razorpayOrderId || 'N/A',
+              razorpayPaymentId: t.razorpayPaymentId || 'N/A',
+              createdAt: t.createdAt
+            };
+          });
           break;
         }
 
@@ -4770,7 +4783,16 @@ class PaymentService {
         }
 
         case 'wallet_ledger': {
-          const filter = { ledgerType: 'wallet', createdAt: { $gte: sDate, $lte: eDate } };
+          const filter = {
+            $or: [
+              { ledgerType: 'wallet' },
+              { paymentMethod: 'wallet' },
+              { type: { $in: ['wallet_topup', 'cashback', 'referralreward'] } }
+            ],
+            createdAt: { $gte: sDate, $lte: eDate }
+          };
+          if (paymentStatus) filter.paymentStatus = paymentStatus;
+
           totalRecords = await Transaction.countDocuments(filter);
           const txns = await Transaction.find(filter)
             .sort({ createdAt: -1 })
@@ -4780,18 +4802,32 @@ class PaymentService {
             .populate('provider', 'name')
             .lean();
 
-          reportData = txns.map(t => ({
-            transactionId: t.transactionId || t._id,
-            walletOwner: t.provider?.name || t.user?.name || 'N/A',
-            role: t.provider ? 'provider' : (t.user?.role || 'customer'),
-            entryType: t.entryType,
-            amount: t.amount,
-            balanceBefore: t.balanceBefore ?? 'N/A',
-            balanceAfter: t.balanceAfter ?? 'N/A',
-            type: t.type,
-            description: t.description || 'Wallet transaction',
-            createdAt: t.createdAt
-          }));
+          reportData = txns.map(t => {
+            const pStatus = (t.paymentStatus || 'pending').toLowerCase();
+            const isPosted = ['success', 'completed', 'paid', 'captured', 'settled'].includes(pStatus);
+            const isFailed = ['failed', 'cancelled', 'rejected'].includes(pStatus);
+
+            const postedFinancialImpact = isPosted ? (t.amount || 0) : 0;
+            const ledgerStatus = isPosted
+              ? 'Posted Financial Entry'
+              : (isFailed ? 'Failed Wallet Entry' : 'Pending / Non-Posted Entry');
+
+            return {
+              transactionId: t.transactionId || t._id,
+              walletOwner: t.provider?.name || t.user?.name || 'N/A',
+              role: t.provider ? 'provider' : (t.user?.role || 'customer'),
+              entryDirection: t.entryType || (['wallet_topup', 'cashback', 'referralreward'].includes(t.type) ? 'credit' : 'debit'),
+              attemptedAmount: t.amount || 0,
+              postedFinancialImpact,
+              ledgerStatus,
+              paymentStatus: t.paymentStatus,
+              balanceBefore: t.balanceBefore ?? 'N/A',
+              balanceAfter: t.balanceAfter ?? 'N/A',
+              transactionType: t.type || 'wallet',
+              description: t.description || 'Wallet transaction',
+              createdAt: t.createdAt
+            };
+          });
           break;
         }
 
@@ -4913,35 +4949,98 @@ class PaymentService {
             PaymentRecord.find({ booking: { $in: bookingIds } }).lean()
           ]);
 
-          const txnMap = {};
-          txns.forEach(t => { txnMap[t.booking.toString()] = t; });
+          const txnsByBooking = {};
+          txns.forEach(t => {
+            if (!t.booking) return;
+            const key = t.booking.toString();
+            if (!txnsByBooking[key]) txnsByBooking[key] = [];
+            txnsByBooking[key].push(t);
+          });
+
           const earningMap = {};
-          earnings.forEach(e => { earningMap[e.booking.toString()] = e; });
-          const refundMap = {};
-          refunds.forEach(r => { refundMap[r.bookingId.toString()] = r; });
+          earnings.forEach(e => { if (e.booking) earningMap[e.booking.toString()] = e; });
+
+          const refundsByBooking = {};
+          refunds.forEach(r => {
+            if (!r.bookingId) return;
+            const key = r.bookingId.toString();
+            if (!refundsByBooking[key]) refundsByBooking[key] = [];
+            refundsByBooking[key].push(r);
+          });
+
           const payoutMap = {};
-          payouts.forEach(p => { if (p.booking) payoutMap[p.booking.toString()] = p; });
+          payouts.forEach(p => { if (p.booking) payoutMap[p.booking.toString()] = (payoutMap[p.booking.toString()] || 0) + (p.amount || 0); });
+
+          const successfulStatuses = ['success', 'completed', 'paid', 'captured', 'settled'];
 
           reportData = bookings.map(b => {
             const bId = b._id.toString();
-            const t = txnMap[bId] || {};
+            const bTxns = txnsByBooking[bId] || [];
             const e = earningMap[bId] || {};
-            const r = refundMap[bId] || {};
-            const p = payoutMap[bId] || {};
+            const bRefunds = refundsByBooking[bId] || [];
+            const payoutAmt = payoutMap[bId] || 0;
 
+            // 1. Filter financially effective payment transactions for this booking
+            const effectivePaymentTxns = bTxns.filter(t => 
+              t.type === 'payment' && successfulStatuses.includes(t.paymentStatus)
+            );
+
+            // 2. Deduplicate duplicate records representing the exact same payment event
+            const seenKeys = new Set();
+            const uniquePaymentTxns = effectivePaymentTxns.filter(t => {
+              const key = t.razorpayPaymentId
+                ? `rzp:${t.razorpayPaymentId}`
+                : (t.transactionId ? `txn:${t.transactionId}` : `id:${t._id.toString()}`);
+              if (seenKeys.has(key)) return false;
+              seenKeys.add(key);
+              return true;
+            });
+
+            // 3. Calculate gross customer paid amount from transaction history
+            const grossPaidFromTxns = uniquePaymentTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+            const fallbackPaid = (['paid', 'settled', 'completed', 'escrowhold'].includes(b.paymentStatus)) 
+              ? ((b.onlinePaid || 0) + (b.walletUsed || 0) + (b.cashToPay || 0)) 
+              : (b.walletUsed || 0);
+
+            const customerPaid = grossPaidFromTxns > 0 ? grossPaidFromTxns : fallbackPaid;
+
+            // 4. Calculate financially completed refunds for booking (excluding failed/pending/processing)
+            const completedStatuses = ['completed', 'success', 'paid', 'approved'];
+            const completedRefunds = bRefunds.filter(r => 
+              completedStatuses.includes(r.refundStatus || r.status)
+            );
+
+            const seenRefundKeys = new Set();
+            const uniqueRefunds = completedRefunds.filter(r => {
+              const key = r.gatewayRefundId
+                ? `rzp_ref:${r.gatewayRefundId}`
+                : (r.refundId ? `ref:${r.refundId}` : `id:${r._id.toString()}`);
+              if (seenRefundKeys.has(key)) return false;
+              seenRefundKeys.add(key);
+              return true;
+            });
+
+            const totalRefundForBooking = uniqueRefunds.reduce((sum, r) => sum + (r.refundAmount || r.requestedAmount || 0), 0);
+
+            // 5. Determine reconciliation status
             let reconStatus = 'MATCHED';
-            if (t.razorpayPaymentId && Math.abs((t.amount || 0) - (b.totalAmount || 0)) > 0.01) reconStatus = 'PAYMENT_MISMATCH';
-            else if (r.refundAmount > b.totalAmount) reconStatus = 'REFUND_MISMATCH';
+            if (b.paymentStatus === 'failed') {
+              reconStatus = 'PAYMENT_FAILED';
+            } else if (totalRefundForBooking > (b.totalAmount || 0)) {
+              reconStatus = 'REFUND_MISMATCH';
+            } else if (Math.abs(customerPaid - (b.totalAmount || 0)) > 0.01 && customerPaid > 0) {
+              reconStatus = 'AMOUNT_MISMATCH';
+            }
 
             return {
               bookingId: b.bookingId || b._id,
               bookingTotal: b.totalAmount || 0,
-              customerPaid: t.amount || b.onlinePaid + b.walletUsed || 0,
+              customerPaid: customerPaid,
               platformCommission: b.commissionAmount || 0,
               providerEarning: b.providerEarnings || 0,
               walletAmount: b.walletUsed || 0,
-              refundAmount: r.refundAmount || 0,
-              payoutAmount: p.amount || 0,
+              refundAmount: totalRefundForBooking,
+              payoutAmount: payoutAmt,
               paymentMethod: b.paymentMethod,
               bookingStatus: b.status,
               paymentStatus: b.paymentStatus,
