@@ -428,7 +428,7 @@ class ComplaintService {
         // If customer raises service issue, mark as dispute ONLY if refund eligible
         if (category === 'Service issue' && userRole === 'customer' && isRefundEligible) {
           updateData.disputeRaised = true;
-           updateData.disputeStatus = 'underreview';
+          updateData.disputeStatus = 'underreview';
 
           // Hold provider earnings if they exist
           const ProviderEarning = mongoose.model('ProviderEarning');
@@ -1088,7 +1088,7 @@ class ComplaintService {
               const penaltyTx = new Transaction({
                 booking: booking._id,
                 bookingId: booking.bookingId || booking._id,
-                user: booking.customer,
+                user: null,
                 provider: booking.provider,
                 amount: penaltyAmount,
                 paymentStatus: 'completed',
@@ -1160,201 +1160,201 @@ class ComplaintService {
                 complaintId: complaint._id,
               });
 
-                // ── REFUND RECOVERY PRIORITY ──
-                let recoveryStatus = 'platform_absorbed';
-                let recoveredAmount = 0;
-                let providerEarningsReversal = 0;
-                let adminRevenueReversal = 0;
+              // ── REFUND RECOVERY PRIORITY ──
+              let recoveryStatus = 'platform_absorbed';
+              let recoveredAmount = 0;
+              let providerEarningsReversal = 0;
+              let adminRevenueReversal = 0;
 
-                if (decision === 'platform_credit') {
-                  recoveryStatus = 'platform_credit_reserve';
+              if (decision === 'platform_credit') {
+                recoveryStatus = 'platform_credit_reserve';
 
-                  const RecoveryLedger = mongoose.model('RecoveryLedger');
+                const RecoveryLedger = mongoose.model('RecoveryLedger');
+                await RecoveryLedger.create([{
+                  provider: booking.provider,
+                  booking: booking._id,
+                  complaint: complaint._id,
+                  amount: refundAmount,
+                  source: 'platform_credit_reserve',
+                  reason: resolutionNotes
+                }], { session });
+              } else {
+                const splitsResult = await calculateRecoverySplits(booking, refundAmount, absorption, req.body.absorbPlatformCommission === true);
+                providerEarningsReversal = splitsResult.providerEarningsReversal;
+                adminRevenueReversal = splitsResult.adminRevenueReversal;
+
+                const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+                if (earning) {
+                  earning.netAmount = Math.max(0, earning.netAmount - providerEarningsReversal);
+                  earning.commissionAmount = Math.max(0, earning.commissionAmount - adminRevenueReversal);
+                  earning.grossAmount = Math.max(0, earning.grossAmount - refundAmount);
+
+                  if (splitsResult.splits.held > 0) {
+                    recoveryStatus = 'held_earnings';
+                    recoveredAmount = splitsResult.splits.held;
+                    if (earning.netAmount <= 0) {
+                      earning.status = 'cancelled';
+                    }
+                  } else if (splitsResult.splits.pendingRelease > 0 || splitsResult.splits.available > 0) {
+                    recoveryStatus = earning.status === 'pending_release' ? 'pending_release' : 'escrow';
+                    recoveredAmount = splitsResult.splits.pendingRelease + splitsResult.splits.available;
+                    if (earning.netAmount <= 0) {
+                      earning.status = 'cancelled';
+                    }
+                  } else if (splitsResult.splits.paidWithdrawn > 0) {
+                    recoveryStatus = 'provider_wallet';
+                    recoveredAmount = splitsResult.splits.paidWithdrawn;
+
+                    const providerDoc = await Provider.findById(booking.provider).session(session);
+                    if (providerDoc && providerDoc.wallet) {
+                      if (providerDoc.wallet.availableBalance === undefined) {
+                        providerDoc.wallet.availableBalance = 0;
+                      }
+                      const balanceBefore = providerDoc.wallet.availableBalance;
+                      providerDoc.wallet.availableBalance -= recoveredAmount;
+                      const balanceAfter = providerDoc.wallet.availableBalance;
+                      providerDoc.wallet.lastUpdated = new Date();
+                      await providerDoc.save({ session });
+
+                      // Log explicit recovery transaction for audit visibility
+                      const recoveryTx = new Transaction({
+                        booking: booking._id,
+                        bookingId: booking.bookingId || booking._id,
+                        user: null,
+                        provider: booking.provider,
+                        amount: recoveredAmount,
+                        paymentStatus: 'completed',
+                        paymentMethod: 'wallet',
+                        type: 'refundrecovery',
+                        balanceBefore: balanceBefore,
+                        balanceAfter: balanceAfter,
+                        complaint: complaint._id,
+                        approvedBy: req.admin ? req.admin._id : null,
+                        recoveryType: 'wallet',
+                        deductionType: 'refund_clawback',
+                        description: `Refund clawback of ₹${recoveredAmount} from provider wallet for complaint #${complaint._id.toString().slice(-6)}. Reason: ${resolutionNotes}`,
+                        refundReason: resolutionNotes
+                      });
+                      await recoveryTx.save({ session });
+                    }
+                  } else {
+                    recoveryStatus = 'platform_absorbed';
+                    recoveredAmount = 0;
+                  }
+                  await earning.save({ session });
+                }
+
+                // Log recoveries to RecoveryLedger
+                const RecoveryLedger = mongoose.model('RecoveryLedger');
+                if (splitsResult.splits.held > 0) {
                   await RecoveryLedger.create([{
                     provider: booking.provider,
                     booking: booking._id,
                     complaint: complaint._id,
-                    amount: refundAmount,
-                    source: 'platform_credit_reserve',
+                    amount: splitsResult.splits.held,
+                    source: 'held_earnings',
                     reason: resolutionNotes
                   }], { session });
-                } else {
-                  const splitsResult = await calculateRecoverySplits(booking, refundAmount, absorption, req.body.absorbPlatformCommission === true);
-                  providerEarningsReversal = splitsResult.providerEarningsReversal;
-                  adminRevenueReversal = splitsResult.adminRevenueReversal;
-
-                  const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
-                  if (earning) {
-                    earning.netAmount = Math.max(0, earning.netAmount - providerEarningsReversal);
-                    earning.commissionAmount = Math.max(0, earning.commissionAmount - adminRevenueReversal);
-                    earning.grossAmount = Math.max(0, earning.grossAmount - refundAmount);
-
-                    if (splitsResult.splits.held > 0) {
-                      recoveryStatus = 'held_earnings';
-                      recoveredAmount = splitsResult.splits.held;
-                      if (earning.netAmount <= 0) {
-                        earning.status = 'cancelled';
-                      }
-                    } else if (splitsResult.splits.pendingRelease > 0 || splitsResult.splits.available > 0) {
-                      recoveryStatus = earning.status === 'pending_release' ? 'pending_release' : 'escrow';
-                      recoveredAmount = splitsResult.splits.pendingRelease + splitsResult.splits.available;
-                      if (earning.netAmount <= 0) {
-                        earning.status = 'cancelled';
-                      }
-                    } else if (splitsResult.splits.paidWithdrawn > 0) {
-                      recoveryStatus = 'provider_wallet';
-                      recoveredAmount = splitsResult.splits.paidWithdrawn;
-
-                      const providerDoc = await Provider.findById(booking.provider).session(session);
-                      if (providerDoc && providerDoc.wallet) {
-                        if (providerDoc.wallet.availableBalance === undefined) {
-                          providerDoc.wallet.availableBalance = 0;
-                        }
-                        const balanceBefore = providerDoc.wallet.availableBalance;
-                        providerDoc.wallet.availableBalance -= recoveredAmount;
-                        const balanceAfter = providerDoc.wallet.availableBalance;
-                        providerDoc.wallet.lastUpdated = new Date();
-                        await providerDoc.save({ session });
-
-                        // Log explicit recovery transaction for audit visibility
-                        const recoveryTx = new Transaction({
-                          booking: booking._id,
-                          bookingId: booking.bookingId || booking._id,
-                          user: booking.customer,
-                          provider: booking.provider,
-                          amount: recoveredAmount,
-                          paymentStatus: 'completed',
-                          paymentMethod: 'wallet',
-                          type: 'refundrecovery',
-                          balanceBefore: balanceBefore,
-                          balanceAfter: balanceAfter,
-                          complaint: complaint._id,
-                          approvedBy: req.admin ? req.admin._id : null,
-                          recoveryType: 'wallet',
-                          deductionType: 'refund_clawback',
-                          description: `Refund clawback of ₹${recoveredAmount} from provider wallet for complaint #${complaint._id.toString().slice(-6)}. Reason: ${resolutionNotes}`,
-                          refundReason: resolutionNotes
-                        });
-                        await recoveryTx.save({ session });
-                      }
-                    } else {
-                      recoveryStatus = 'platform_absorbed';
-                      recoveredAmount = 0;
-                    }
-                    await earning.save({ session });
-                  }
-
-                  // Log recoveries to RecoveryLedger
-                  const RecoveryLedger = mongoose.model('RecoveryLedger');
-                  if (splitsResult.splits.held > 0) {
-                    await RecoveryLedger.create([{
-                      provider: booking.provider,
-                      booking: booking._id,
-                      complaint: complaint._id,
-                      amount: splitsResult.splits.held,
-                      source: 'held_earnings',
-                      reason: resolutionNotes
-                    }], { session });
-                  }
-                  if (splitsResult.splits.pendingRelease > 0) {
-                    await RecoveryLedger.create([{
-                      provider: booking.provider,
-                      booking: booking._id,
-                      complaint: complaint._id,
-                      amount: splitsResult.splits.pendingRelease,
-                      source: 'pending_release',
-                      reason: resolutionNotes
-                    }], { session });
-                  }
-                  if (splitsResult.splits.available > 0) {
-                    await RecoveryLedger.create([{
-                      provider: booking.provider,
-                      booking: booking._id,
-                      complaint: complaint._id,
-                      amount: splitsResult.splits.available,
-                      source: 'available',
-                      reason: resolutionNotes
-                    }], { session });
-                  }
-                  if (splitsResult.splits.paidWithdrawn > 0) {
-                    await RecoveryLedger.create([{
-                      provider: booking.provider,
-                      booking: booking._id,
-                      complaint: complaint._id,
-                      amount: splitsResult.splits.paidWithdrawn,
-                      source: 'wallet',
-                      reason: resolutionNotes
-                    }], { session });
-                  }
-                  if (splitsResult.splits.platformAbsorption > 0) {
-                    await RecoveryLedger.create([{
-                      provider: booking.provider,
-                      booking: booking._id,
-                      complaint: complaint._id,
-                      amount: splitsResult.splits.platformAbsorption,
-                      source: 'platform_absorbed',
-                      reason: resolutionNotes
-                    }], { session });
-                  }
-
-                  booking.providerEarnings = Math.max(0, booking.providerEarnings - providerEarningsReversal);
-                  booking.commissionAmount = Math.max(0, booking.commissionAmount - adminRevenueReversal);
+                }
+                if (splitsResult.splits.pendingRelease > 0) {
+                  await RecoveryLedger.create([{
+                    provider: booking.provider,
+                    booking: booking._id,
+                    complaint: complaint._id,
+                    amount: splitsResult.splits.pendingRelease,
+                    source: 'pending_release',
+                    reason: resolutionNotes
+                  }], { session });
+                }
+                if (splitsResult.splits.available > 0) {
+                  await RecoveryLedger.create([{
+                    provider: booking.provider,
+                    booking: booking._id,
+                    complaint: complaint._id,
+                    amount: splitsResult.splits.available,
+                    source: 'available',
+                    reason: resolutionNotes
+                  }], { session });
+                }
+                if (splitsResult.splits.paidWithdrawn > 0) {
+                  await RecoveryLedger.create([{
+                    provider: booking.provider,
+                    booking: booking._id,
+                    complaint: complaint._id,
+                    amount: splitsResult.splits.paidWithdrawn,
+                    source: 'wallet',
+                    reason: resolutionNotes
+                  }], { session });
+                }
+                if (splitsResult.splits.platformAbsorption > 0) {
+                  await RecoveryLedger.create([{
+                    provider: booking.provider,
+                    booking: booking._id,
+                    complaint: complaint._id,
+                    amount: splitsResult.splits.platformAbsorption,
+                    source: 'platform_absorbed',
+                    reason: resolutionNotes
+                  }], { session });
                 }
 
-                // Update booking fields
-                if (complaintType === 'cancel_booking' || complaint.complaintType === 'cancel_booking') {
-                  booking.status = 'cancelled';
-                }
-                booking.paymentStatus = 'refunded';
-                booking.disputeStatus = 'resolved';
-                booking.adminRefundDecision = (refundAmount >= booking.totalAmount) ? 'approved' : 'partial';
-                if (!booking.cancellationProgress) {
-                  booking.cancellationProgress = {};
-                }
-                booking.cancellationProgress.status = 'refundcompleted';
-                booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
-                booking.cancellationProgress.refundCompletedAt = new Date();
-                booking.adminRemark = resolutionNotes || 'Admin approved refund via complaint resolution';
-                booking.refundStatus = 'completed';
-                booking.refundMode = 'wallet';
-                booking.refundProcessed = true;
+                booking.providerEarnings = Math.max(0, booking.providerEarnings - providerEarningsReversal);
+                booking.commissionAmount = Math.max(0, booking.commissionAmount - adminRevenueReversal);
+              }
 
-                booking.adminRemark = (booking.adminRemark || '') +
-                  ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${providerEarningsReversal.toFixed(2)} recovered from provider)`;
+              // Update booking fields
+              if (complaintType === 'cancel_booking' || complaint.complaintType === 'cancel_booking') {
+                booking.status = 'cancelled';
+              }
+              booking.paymentStatus = 'refunded';
+              booking.disputeStatus = 'resolved';
+              booking.adminRefundDecision = (refundAmount >= booking.totalAmount) ? 'approved' : 'partial';
+              if (!booking.cancellationProgress) {
+                booking.cancellationProgress = {};
+              }
+              booking.cancellationProgress.status = 'refundcompleted';
+              booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
+              booking.cancellationProgress.refundCompletedAt = new Date();
+              booking.adminRemark = resolutionNotes || 'Admin approved refund via complaint resolution';
+              booking.refundStatus = 'completed';
+              booking.refundMode = 'wallet';
+              booking.refundProcessed = true;
 
-                await booking.save({ session });
+              booking.adminRemark = (booking.adminRemark || '') +
+                ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${providerEarningsReversal.toFixed(2)} recovered from provider)`;
 
-                // Finalize transaction record
-                transaction.refundStatus = 'completed';
-                transaction.refundReason = resolutionNotes;
-                transaction.refundedAt = new Date();
-                transaction.paymentStatus = 'refunded';
-                transaction.refundedAmount = previouslyRefunded + refundAmount;
-                await transaction.save({ session });
+              await booking.save({ session });
 
-                // Notify Customer
-                try {
-                  const { sendNotification } = require('../notification/notification-helper');
+              // Finalize transaction record
+              transaction.refundStatus = 'completed';
+              transaction.refundReason = resolutionNotes;
+              transaction.refundedAt = new Date();
+              transaction.paymentStatus = 'refunded';
+              transaction.refundedAmount = previouslyRefunded + refundAmount;
+              await transaction.save({ session });
+
+              // Notify Customer
+              try {
+                const { sendNotification } = require('../notification/notification-helper');
+                sendNotification(
+                  booking.customer,
+                  'customer',
+                  'Refund Credited ',
+                  `A refund of ₹${refundAmount} has been credited to your wallet.`,
+                  'refund_processed',
+                  booking._id
+                );
+
+                if (booking.provider) {
                   sendNotification(
-                    booking.customer,
-                    'customer',
-                    'Refund Credited ',
-                    `A refund of ₹${refundAmount} has been credited to your wallet.`,
-                    'refund_processed',
+                    booking.provider,
+                    'provider',
+                    'Refund Deduction Notice ',
+                    `A refund of ₹${refundAmount} was approved for Booking #${booking.bookingId || booking._id.toString().slice(-6)}. Recovery source: ${recoveryStatus.replace(/_/g, ' ')}.`,
+                    'refund_deducted',
                     booking._id
                   );
-
-                  if (booking.provider) {
-                    sendNotification(
-                      booking.provider,
-                      'provider',
-                      'Refund Deduction Notice ',
-                      `A refund of ₹${refundAmount} was approved for Booking #${booking.bookingId || booking._id.toString().slice(-6)}. Recovery source: ${recoveryStatus.replace(/_/g, ' ')}.`,
-                      'refund_deducted',
-                      booking._id
-                    );
-                  }
-                } catch (err) { }
+                }
+              } catch (err) { }
             }
           }
         }

@@ -4376,7 +4376,7 @@ class BookingService {
             const commissionTx = new Transaction({
               booking: booking._id,
               bookingId: booking.bookingId || booking._id,
-              user: booking.customer,
+              user: null,
               provider: providerId,
               amount: cashRecovery,
               paymentStatus: 'completed',
@@ -4396,7 +4396,7 @@ class BookingService {
             const subsidyTx = new Transaction({
               booking: booking._id,
               bookingId: booking.bookingId || booking._id,
-              user: booking.customer,
+              user: null,
               provider: providerId,
               amount: creditAmount,
               paymentStatus: 'completed',

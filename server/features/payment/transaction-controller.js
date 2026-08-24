@@ -1218,6 +1218,7 @@ const getCustomerTransactions = async (req, res, next) => {
       user: userId,
       paymentMethod: { $in: ['wallet'] },
       paymentStatus: { $in: ['success', 'completed', 'paid'] },
+      type: { $nin: ['commissiondeduction', 'refundrecovery', 'penalty', 'withdrawal', 'referral_coupon_subsidy'] }
     })
       .populate({ path: 'booking', select: 'bookingId services', populate: { path: 'services.service', select: 'title' } })
       .select('bookingId amount paymentMethod paymentStatus createdAt booking')
@@ -2104,15 +2105,30 @@ const getCustomerWallets = async (req, res, next) => {
                 ]
               }
             },
-            debits: {
+            cashback: {
               $sum: {
                 $cond: [
-                  { $or: [{ $eq: ['$entryType', 'debit'] }, { $in: ['$type', ['withdrawal', 'penalty', 'commissiondeduction']] }, { $eq: ['$paymentMethod', 'wallet'] }] },
+                  { $in: ['$type', ['cashback', 'referralreward']] },
                   '$amount',
                   0
                 ]
               }
-            }
+            },
+            debits: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $eq: ['$paymentMethod', 'wallet'] },
+                      { $nor: [{ $in: ['$type', ['withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'referral_coupon_subsidy']] }] }
+                    ]
+                  },
+                  '$amount',
+                  0
+                ]
+              }
+            },
+            latestTxnTime: { $max: '$createdAt' }
           }
         }
       ])
@@ -2128,38 +2144,18 @@ const getCustomerWallets = async (req, res, next) => {
     const txnStatsMap = {};
     transactionStats.forEach(ts => { txnStatsMap[ts._id.toString()] = ts; });
 
-    // Enrich users with backend-calculated wallet metrics
+    // Enrich users with backend-calculated wallet metrics strictly from canonical Transaction ledger
     const enrichedUsers = users.map(u => {
       const uId = u._id.toString();
       const w = u.wallet || {};
-      const wTxns = w.walletTransactions || [];
+      const dbStats = txnStatsMap[uId] || { credits: 0, debits: 0, cashback: 0, latestTxnTime: null };
 
-      // Calculate credits & debits from wallet array + transactions
-      let totalWalletCredits = 0;
-      let totalWalletDebits = 0;
-      let cashbackCredits = 0;
-      let latestTxnTime = u.createdAt;
-
-      wTxns.forEach(t => {
-        const amt = t.amount || 0;
-        const rsn = (t.reason || '').toLowerCase();
-        if (t.type === 'credit') {
-          totalWalletCredits += amt;
-          if (rsn.includes('cashback') || rsn.includes('referral') || rsn.includes('promo')) {
-            cashbackCredits += amt;
-          }
-        } else if (t.type === 'debit') {
-          totalWalletDebits += amt;
-        }
-        if (t.createdAt && new Date(t.createdAt) > new Date(latestTxnTime)) {
-          latestTxnTime = t.createdAt;
-        }
-      });
-
-      const dbStats = txnStatsMap[uId] || { credits: 0, debits: 0 };
-      const credits = Math.max(totalWalletCredits, dbStats.credits);
-      const debits = Math.max(totalWalletDebits, dbStats.debits);
+      const credits = dbStats.credits || 0;
+      const debits = dbStats.debits || 0;
       const refundCredit = w.totalRefunded || 0;
+      const cashbackCredits = dbStats.cashback || 0;
+      const transactionsCount = txnCountMap[uId] || 0;
+      const lastActivity = dbStats.latestTxnTime || w.lastUpdated || u.createdAt;
 
       return {
         ...u,
@@ -2169,8 +2165,8 @@ const getCustomerWallets = async (req, res, next) => {
         refundCredit,
         cashback: cashbackCredits,
         bookingsCount: bookingCountMap[uId] || 0,
-        transactionsCount: (txnCountMap[uId] || 0) + wTxns.length,
-        lastActivity: w.lastUpdated || latestTxnTime || u.createdAt
+        transactionsCount,
+        lastActivity
       };
     });
 
@@ -4555,7 +4551,7 @@ const verifyCashReceived = async (req, res, next) => {
       const subsidyTx = new Transaction({
         booking: booking._id,
         bookingId: booking.bookingId || booking._id.toString(),
-        user: booking.customer,
+        user: null,
         provider: providerId,
         amount: subsidyAmount,
         paymentStatus: 'completed',
@@ -4601,7 +4597,7 @@ const verifyCashReceived = async (req, res, next) => {
         const commissionTx = new Transaction({
           booking: booking._id,
           bookingId: booking.bookingId || booking._id.toString(),
-          user: booking.customer,
+          user: null,
           provider: providerId,
           amount: cashRecovery,
           paymentStatus: 'completed',
