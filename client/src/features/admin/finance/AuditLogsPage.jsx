@@ -7,15 +7,17 @@ import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import AuditLogViewDetailModal from './components/AuditLogViewDetailModal';
 
 const AuditLogsPage = () => {
   const [data, setData] = useState({ logs: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedAuditLog, setSelectedAuditLog] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -66,10 +68,10 @@ const AuditLogsPage = () => {
         l.refundId === searchVal
       ) || data.logs[0];
       if (target) {
-        openInvestigationDrawer('audit_log', target._id, target);
+        setSelectedAuditLog(target);
       }
     }
-  }, [data.logs, openInvestigationDrawer]);
+  }, [data.logs]);
 
   return (
     <div className="space-y-6">
@@ -166,48 +168,48 @@ const AuditLogsPage = () => {
                       {/* 6. Booking ID */}
                       <td className="p-3 font-bold text-blue-600">
                         {bId !== 'N/A' ? (
-                          <button
-                            onClick={() => openInvestigationDrawer('booking', log.bookingId?._id || log.bookingId)}
+                          <a
+                            href={getEntityRoute('booking', log.bookingId?._id || log.bookingId)}
                             className="hover:underline font-mono"
                           >
                             {bId}
-                          </button>
+                          </a>
                         ) : '—'}
                       </td>
 
                       {/* 7. Transaction ID */}
                       <td className="p-3 font-mono text-slate-700">
                         {tId !== 'N/A' ? (
-                          <button
-                            onClick={() => openInvestigationDrawer('payment', tId)}
+                          <a
+                            href={getEntityRoute('payment', tId)}
                             className="hover:underline text-blue-600 font-bold"
                           >
                             {tId}
-                          </button>
+                          </a>
                         ) : '—'}
                       </td>
 
                       {/* 8. Payment ID */}
                       <td className="p-3 font-mono text-slate-700">
                         {pId !== 'N/A' ? (
-                          <button
-                            onClick={() => openInvestigationDrawer('payment', pId)}
+                          <a
+                            href={getEntityRoute('payment', pId)}
                             className="hover:underline text-blue-600 font-bold"
                           >
                             {pId}
-                          </button>
+                          </a>
                         ) : '—'}
                       </td>
 
                       {/* 9. Refund ID */}
                       <td className="p-3 font-mono text-slate-700">
                         {rId !== 'N/A' ? (
-                          <button
-                            onClick={() => openInvestigationDrawer('refund', rId)}
+                          <a
+                            href={getEntityRoute('refund', rId)}
                             className="hover:underline text-rose-600 font-bold"
                           >
                             {rId}
-                          </button>
+                          </a>
                         ) : '—'}
                       </td>
 
@@ -228,7 +230,7 @@ const AuditLogsPage = () => {
                       {/* 13. View Details */}
                       <td className="p-3 text-right whitespace-nowrap">
                         <button
-                          onClick={() => openInvestigationDrawer('audit', log._id, log)}
+                          onClick={() => setSelectedAuditLog(log)}
                           className="inline-flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
                         >
                           <FiEye className="mr-1.5" /> View Details
@@ -254,8 +256,16 @@ const AuditLogsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Audit Log Detail Modal */}
+      <AuditLogViewDetailModal
+        isOpen={!!selectedAuditLog}
+        onClose={() => setSelectedAuditLog(null)}
+        entityData={selectedAuditLog}
+      />
     </div>
   );
 };
 
 export default AuditLogsPage;
+

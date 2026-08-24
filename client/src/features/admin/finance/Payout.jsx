@@ -304,7 +304,8 @@ const AdminPayout = () => {
   useEffect(() => { fetchWithdrawals(); }, [fetchWithdrawals]);
 
   const handleView = (w) => {
-    openInvestigationDrawer('payout', w._id, w);
+    setSelectedDetails(w);
+    setShowDetailsModal(true);
   };
 
   const handleFilterChange = (newFilters) => { setFilters(newFilters); setPage(1); };

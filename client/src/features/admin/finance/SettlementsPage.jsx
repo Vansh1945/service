@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FiCheckCircle, FiDollarSign, FiEye, FiShield, FiAlertTriangle } from 'react-icons/fi';
+import { FiCheckCircle, FiDollarSign, FiEye, FiShield, FiAlertTriangle, FiClock, FiXCircle, FiHelpCircle } from 'react-icons/fi';
 import * as TransactionService from '../../../services/TransactionService';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Pagination from '../../../components/ui/Pagination';
@@ -8,6 +8,7 @@ import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import SettlementDetailModal from './components/SettlementDetailModal';
 
 const SettlementsPage = () => {
   const [data, setData] = useState({
@@ -16,10 +17,11 @@ const SettlementsPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedSettlement, setSelectedSettlement] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -68,10 +70,10 @@ const SettlementsPage = () => {
         s.bookingId === searchVal
       ) || data.settlements[0];
       if (target) {
-        openInvestigationDrawer('settlement', target.settlementId || target._id, target);
+        setSelectedSettlement(target);
       }
     }
-  }, [data.settlements, openInvestigationDrawer]);
+  }, [data.settlements]);
 
   return (
     <div className="space-y-6">
@@ -201,22 +203,22 @@ const SettlementsPage = () => {
 
                       {/* 2. Booking ID */}
                       <td className="p-3.5 font-bold text-slate-900">
-                        <button
-                          onClick={() => openInvestigationDrawer('booking', s.booking?._id || s.booking)}
+                        <a
+                          href={getEntityRoute('booking', s.booking?._id || s.booking)}
                           className="text-blue-600 hover:underline font-mono"
                         >
                           {s.booking?.bookingId || s.bookingId || 'N/A'}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 3. Payment ID */}
                       <td className="p-3.5 font-mono text-slate-700 font-semibold">
-                        <button
-                          onClick={() => openInvestigationDrawer('payment', s._id)}
+                        <a
+                          href={getEntityRoute('payment', s._id)}
                           className="hover:underline text-slate-800"
                         >
                           {s.paymentId || s.razorpayPaymentId || s.transactionId || `#${s._id.slice(-6)}`}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 4. Gateway */}
@@ -226,22 +228,22 @@ const SettlementsPage = () => {
 
                       {/* 5. Customer */}
                       <td className="p-3.5 font-semibold text-slate-800">
-                        <button
-                          onClick={() => openInvestigationDrawer('customer', s.user?._id || s.user)}
+                        <a
+                          href={getEntityRoute('customer', s.user?._id || s.user)}
                           className="hover:underline text-slate-900 font-bold"
                         >
                           {s.user?.name || 'Customer'}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 6. Provider */}
                       <td className="p-3.5 font-semibold text-slate-800">
-                        <button
-                          onClick={() => openInvestigationDrawer('provider', s.provider?._id || s.provider)}
+                        <a
+                          href={getEntityRoute('provider', s.provider?._id || s.provider)}
                           className="hover:underline text-slate-900 font-bold"
                         >
                           {s.provider?.name || 'Provider'}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 7. Gross Amount */}
@@ -305,8 +307,8 @@ const SettlementsPage = () => {
                       {/* 13. Action */}
                       <td className="p-3.5 text-right whitespace-nowrap">
                         <button
-                          onClick={() => openInvestigationDrawer('settlement', s._id, s)}
-                          className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
+                          onClick={() => setSelectedSettlement(s)}
+                          className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
                         >
                           <FiEye className="mr-1.5" /> Details
                         </button>
@@ -331,8 +333,16 @@ const SettlementsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Settlement Detail Modal */}
+      <SettlementDetailModal
+        isOpen={!!selectedSettlement}
+        onClose={() => setSelectedSettlement(null)}
+        entityData={selectedSettlement}
+      />
     </div>
   );
 };
 
 export default SettlementsPage;
+

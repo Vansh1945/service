@@ -9,15 +9,17 @@ import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
 import Error from '../../../components/ui/Error';
+import ProviderEarningDetailModal from './components/ProviderEarningDetailModal';
 
 const ProviderEarningsPage = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedEarning, setSelectedEarning] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -131,12 +133,12 @@ const ProviderEarningsPage = () => {
                     {isWithdrawal ? (
                       <span className="font-mono text-neutral-400">Withdrawal</span>
                     ) : (
-                      <button
-                        onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking || txn._id)}
+                      <a
+                        href={getEntityRoute('booking', txn.booking?._id || txn.booking || txn._id)}
                         className="text-primary font-mono hover:underline"
                       >
                         {txn.booking?.bookingId || txn.bookingId || `#${txn._id.slice(-6)}`}
-                      </button>
+                      </a>
                     )}
                   </td>
 
@@ -190,8 +192,8 @@ const ProviderEarningsPage = () => {
 
                   <td className="p-3.5 text-right whitespace-nowrap">
                     <button
-                      onClick={() => openInvestigationDrawer('provider_earning', txn._id, txn)}
-                      className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                      onClick={() => setSelectedEarning(txn)}
+                      className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                       <FiEye className="mr-1.5" /> View Details
                     </button>
@@ -216,8 +218,16 @@ const ProviderEarningsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Provider Earning Detail Modal */}
+      <ProviderEarningDetailModal
+        isOpen={!!selectedEarning}
+        onClose={() => setSelectedEarning(null)}
+        entityData={selectedEarning}
+      />
     </div>
   );
 };
 
 export default ProviderEarningsPage;
+

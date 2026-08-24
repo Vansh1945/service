@@ -8,6 +8,7 @@ import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import CustomerWalletDetailModal from './components/CustomerWalletDetailModal';
 
 const CustomerWalletsPage = () => {
   const [data, setData] = useState({
@@ -16,10 +17,11 @@ const CustomerWalletsPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedWallet, setSelectedWallet] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery, refresh } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute, refresh } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -69,10 +71,10 @@ const CustomerWalletsPage = () => {
         u.phone === searchVal
       ) || data.users[0];
       if (target) {
-        openInvestigationDrawer('customer_wallet', target._id, target);
+        setSelectedWallet(target);
       }
     }
-  }, [data.users, openInvestigationDrawer]);
+  }, [data.users]);
 
   return (
     <div className="space-y-6">
@@ -80,73 +82,66 @@ const CustomerWalletsPage = () => {
       {/* Header Banner */}
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-secondary tracking-tight flex items-center">
-            <span className="p-2 bg-primary/10 text-primary rounded-xl mr-3">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center">
+            <span className="p-2 bg-purple-50 text-purple-600 rounded-xl mr-3">
               <FiUserCheck className="w-6 h-6" />
             </span>
-            Customer Wallet Management Console
+            Customer Wallet Balances Console
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Production-grade customer wallet ledger, instant refund deposits, and promotional cashback balances powered by single-source MongoDB aggregations.
+          <p className="text-sm text-slate-500 mt-1 font-medium">
+            Immutable tracking of customer wallet deposits, promotional credits, refund additions, booking debits, and balance ledgers.
           </p>
         </div>
         <button
-          onClick={() => refresh(fetchWallets, setLoading)}
-          className="text-xs bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-primary/90 font-bold shadow-xs transition-all flex items-center gap-1.5 self-start md:self-auto"
+          onClick={fetchWallets}
+          className="text-xs bg-purple-700 text-white px-4 py-2.5 rounded-xl hover:bg-purple-800 font-bold shadow-xs transition-all flex items-center gap-1.5 self-start md:self-auto"
         >
-          <FiShield className="w-4 h-4" /> Refresh Ledger
+          <FiShield className="w-4 h-4" /> Refresh Wallet Balances
         </button>
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Customer Active Balances</p>
-            <h3 className="text-2xl font-black text-primary mt-1">
-              <PriceDisplay amount={data.summary?.totalAvailableBalance || 0} />
-            </h3>
-            <span className="text-xs text-primary font-medium">Available Cash & Promotional Credits</span>
-          </div>
-          <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
-            <FiDollarSign className="w-6 h-6" />
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Active Customer Wallet Balances</p>
+          <h3 className="text-2xl font-black text-purple-700 mt-1">
+            <PriceDisplay amount={data.summary?.totalAvailableBalance || 0} />
+          </h3>
         </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Refunds Credited to Wallet</p>
-            <h3 className="text-2xl font-black text-emerald-600 mt-1">
-              <PriceDisplay amount={data.summary?.totalRefunded || 0} />
-            </h3>
-            <span className="text-xs text-emerald-600 font-medium">Instant Cancellation Deposits</span>
-          </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100">
-            <FiRefreshCw className="w-6 h-6" />
-          </div>
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Refund Credits Deposited</p>
+          <h3 className="text-2xl font-black text-blue-600 mt-1">
+            <PriceDisplay amount={data.summary?.totalRefunded || 0} />
+          </h3>
         </div>
       </div>
 
-      {/* Exact 11-Column Customer Wallet Table */}
+      {/* 11-Column Customer Wallets Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={6} columns={11} standalone />
+          <div className="overflow-x-auto p-6">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1200px]">
+              <tbody>
+                <TableSkeleton rows={6} cols={11} />
+              </tbody>
+            </table>
+          </div>
         ) : error ? (
           <div className="p-6 text-center text-rose-600 font-semibold text-sm">{error}</div>
         ) : data.users.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 text-sm">No customer wallet records found.</div>
+          <div className="p-12 text-center text-slate-500 text-sm">No customer wallet accounts found.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600 min-w-[1200px]">
               <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
                   <th className="p-3.5">Customer</th>
-                  <th className="p-3.5">Contact</th>
+                  <th className="p-3.5">Contact Details</th>
                   <th className="p-3.5">Wallet Balance</th>
-                  <th className="p-3.5">Credits</th>
-                  <th className="p-3.5">Debits</th>
+                  <th className="p-3.5">Total Credits</th>
+                  <th className="p-3.5">Total Debits</th>
                   <th className="p-3.5">Refund Credit</th>
-                  <th className="p-3.5">Cashback</th>
+                  <th className="p-3.5">Cashback Credit</th>
                   <th className="p-3.5">Bookings Count</th>
                   <th className="p-3.5">Transactions Count</th>
                   <th className="p-3.5">Last Activity</th>
@@ -159,12 +154,12 @@ const CustomerWalletsPage = () => {
 
                     {/* 1. Customer */}
                     <td className="p-3.5 font-bold text-slate-900">
-                      <button
-                        onClick={() => openInvestigationDrawer('customer', u._id, u)}
+                      <a
+                        href={getEntityRoute('customer', u._id)}
                         className="text-purple-700 hover:underline flex items-center gap-1.5"
                       >
                         {u.name || 'Customer'}
-                      </button>
+                      </a>
                     </td>
 
                     {/* 2. Contact */}
@@ -216,8 +211,8 @@ const CustomerWalletsPage = () => {
                     {/* 11. Actions */}
                     <td className="p-3.5 text-right whitespace-nowrap">
                       <button
-                        onClick={() => openInvestigationDrawer('customer_wallet', u._id, u)}
-                        className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
+                        onClick={() => setSelectedWallet(u)}
+                        className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
                       >
                         <FiEye className="mr-1.5" /> Details
                       </button>
@@ -241,6 +236,13 @@ const CustomerWalletsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Customer Wallet Detail Modal */}
+      <CustomerWalletDetailModal
+        isOpen={!!selectedWallet}
+        onClose={() => setSelectedWallet(null)}
+        entityData={selectedWallet}
+      />
     </div>
   );
 };

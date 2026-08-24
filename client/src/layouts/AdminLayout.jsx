@@ -12,7 +12,7 @@ import { useAdminFilter } from '../context/AdminFilterContext';
 import NotificationBell from '../components/NotificationBell';
 import AdminSearchBar from '../components/AdminSearchBar';
 import AdminFilterBar, { getRouteFilterConfig } from '../components/AdminFilterBar';
-import FinanceInvestigationDrawer from '../components/FinanceInvestigationDrawer';
+
 
 
 
@@ -462,7 +462,7 @@ const AdminLayout = () => {
           </div>
         </main>
       </div>
-      <FinanceInvestigationDrawer />
+
     </div>
   );
 };

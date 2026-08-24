@@ -11,6 +11,7 @@ import { fmtDate, fmtDateTime } from '../../../utils/format';
 import { formatStatus, getDepositStatusBadge, getStatusColor } from '../../../utils/status';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import CashPaymentDetailModal from './components/CashPaymentDetailModal';
 
 const CashPaymentsPage = () => {
   const [data, setData] = useState({
@@ -19,10 +20,11 @@ const CashPaymentsPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedCashPayment, setSelectedCashPayment] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -162,8 +164,8 @@ const CashPaymentsPage = () => {
                       {/* 1. Cash ID */}
                       <td className="p-3.5 font-mono font-bold text-amber-700">
                         <button
-                          onClick={() => openInvestigationDrawer('cash_payment', txn._id, txn)}
-                          className="hover:underline"
+                          onClick={() => setSelectedCashPayment(txn)}
+                          className="hover:underline cursor-pointer"
                         >
                           {txn.cashId || txn.transactionId || `#${txn._id.slice(-6)}`}
                         </button>
@@ -171,32 +173,32 @@ const CashPaymentsPage = () => {
 
                       {/* 2. Booking ID */}
                       <td className="p-3.5 font-semibold">
-                        <button
-                          onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.bookingId || txn.booking)}
+                        <a
+                          href={getEntityRoute('booking', txn.booking?._id || txn.bookingId || txn.booking)}
                           className="hover:underline text-blue-600 font-bold"
                         >
                           {txn.bookingIdDisplay || txn.booking?.bookingId || 'N/A'}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 3. Customer */}
                       <td className="p-3.5 text-slate-800">
-                        <button
-                          onClick={() => openInvestigationDrawer('customer', txn.user?._id || txn.user)}
+                        <a
+                          href={getEntityRoute('customer', txn.user?._id || txn.user)}
                           className="hover:underline text-slate-800 font-semibold"
                         >
                           {txn.user?.name || 'Customer'}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 4. Provider */}
                       <td className="p-3.5 text-slate-800">
-                        <button
-                          onClick={() => openInvestigationDrawer('provider', txn.provider?._id || txn.provider)}
+                        <a
+                          href={getEntityRoute('provider', txn.provider?._id || txn.provider)}
                           className="hover:underline text-slate-800 font-semibold"
                         >
                           {txn.provider?.name || 'Assigned Provider'}
-                        </button>
+                        </a>
                       </td>
 
                       {/* 5. Service */}
@@ -300,8 +302,8 @@ const CashPaymentsPage = () => {
                       {/* 17. Actions */}
                       <td className="p-3.5 text-right whitespace-nowrap">
                         <button
-                          onClick={() => openInvestigationDrawer('cash_payment', txn._id, txn)}
-                          className="inline-flex items-center px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-600 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs"
+                          onClick={() => setSelectedCashPayment(txn)}
+                          className="inline-flex items-center px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-600 hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
                         >
                           <FiEye className="mr-1.5" /> Details
                         </button>
@@ -326,8 +328,16 @@ const CashPaymentsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Cash Payment Detail Modal */}
+      <CashPaymentDetailModal
+        isOpen={!!selectedCashPayment}
+        onClose={() => setSelectedCashPayment(null)}
+        entityData={selectedCashPayment}
+      />
     </div>
   );
 };
 
 export default CashPaymentsPage;
+

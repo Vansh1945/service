@@ -1209,7 +1209,7 @@ class BookingService {
           startPin,
           completionPin,
           status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
-          paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
+          paymentStatus: 'pending',
           confirmedBooking: paymentMethod === 'cash',
           rainCharge,
           trafficCharge,

@@ -8,6 +8,7 @@ import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import ProviderWalletDetailModal from './components/ProviderWalletDetailModal';
 
 const ProviderWalletsPage = () => {
   const [data, setData] = useState({
@@ -16,10 +17,11 @@ const ProviderWalletsPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedWallet, setSelectedWallet] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -69,10 +71,10 @@ const ProviderWalletsPage = () => {
         p.phone === searchVal
       ) || data.providers[0];
       if (target) {
-        openInvestigationDrawer('provider_wallet', target._id, target);
+        setSelectedWallet(target);
       }
     }
-  }, [data.providers, openInvestigationDrawer]);
+  }, [data.providers]);
 
   return (
     <div className="space-y-6">
@@ -100,43 +102,49 @@ const ProviderWalletsPage = () => {
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
-          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Available Balance</p>
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Available Balances</p>
           <h3 className="text-2xl font-black text-blue-700 mt-1">
             <PriceDisplay amount={data.summary?.totalBalance || 0} />
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
-          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Escrow Reserve</p>
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Escrow Reserves</p>
           <h3 className="text-2xl font-black text-amber-600 mt-1">
             <PriceDisplay amount={data.summary?.totalEscrow || 0} />
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
-          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Pending Payout Liability</p>
-          <h3 className="text-2xl font-black text-primary mt-1">
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Pending Payouts</p>
+          <h3 className="text-2xl font-black text-purple-600 mt-1">
             <PriceDisplay amount={data.summary?.totalPendingPayout || 0} />
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
-          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Penalties / Deductions</p>
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Penalties</p>
           <h3 className="text-2xl font-black text-rose-600 mt-1">
             <PriceDisplay amount={data.summary?.totalPenalty || 0} />
           </h3>
         </div>
       </div>
 
-      {/* Exact 8-Column Provider Wallet Table */}
+      {/* 8-Column Provider Wallets Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={6} columns={8} standalone />
+          <div className="overflow-x-auto p-6">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1100px]">
+              <tbody>
+                <TableSkeleton rows={6} cols={8} />
+              </tbody>
+            </table>
+          </div>
         ) : error ? (
           <div className="p-6 text-center text-rose-600 font-semibold text-sm">{error}</div>
         ) : data.providers.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 text-sm">No provider wallet records found.</div>
+          <div className="p-12 text-center text-slate-500 text-sm">No provider wallet accounts found.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600 min-w-[1000px]">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1100px]">
               <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
                   <th className="p-3.5">Provider</th>
@@ -145,7 +153,7 @@ const ProviderWalletsPage = () => {
                   <th className="p-3.5">Pending Payout</th>
                   <th className="p-3.5">Penalty Balance</th>
                   <th className="p-3.5">Total Withdrawn</th>
-                  <th className="p-3.5">Last Settlement Date</th>
+                  <th className="p-3.5">Last Settlement</th>
                   <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -155,13 +163,13 @@ const ProviderWalletsPage = () => {
 
                     {/* 1. Provider Profile */}
                     <td className="p-3.5 font-bold text-slate-900">
-                      <button
-                        onClick={() => openInvestigationDrawer('provider', p._id, p)}
-                        className="text-blue-700 hover:underline flex flex-col text-left"
+                      <a
+                        href={getEntityRoute('provider', p._id)}
+                        className="text-blue-700 hover:underline flex flex-col text-left font-semibold"
                       >
                         <span className="font-extrabold">{p.name || 'Provider'}</span>
                         <span className="text-[11px] font-normal text-slate-400">{p.email || p.phone || 'N/A'}</span>
-                      </button>
+                      </a>
                     </td>
 
                     {/* 2. Available Balance */}
@@ -197,8 +205,8 @@ const ProviderWalletsPage = () => {
                     {/* 8. Actions */}
                     <td className="p-3.5 text-right whitespace-nowrap">
                       <button
-                        onClick={() => openInvestigationDrawer('provider_wallet', p._id, p)}
-                        className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
+                        onClick={() => setSelectedWallet(p)}
+                        className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
                       >
                         <FiEye className="mr-1.5" /> View Details
                       </button>
@@ -222,6 +230,13 @@ const ProviderWalletsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Provider Wallet Detail Modal */}
+      <ProviderWalletDetailModal
+        isOpen={!!selectedWallet}
+        onClose={() => setSelectedWallet(null)}
+        entityData={selectedWallet}
+      />
     </div>
   );
 };

@@ -8,15 +8,17 @@ import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { fmtDate } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import RazorpayPaymentDetailModal from './components/RazorpayPaymentDetailModal';
 
 const RazorpayManagementPage = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedRazorpay, setSelectedRazorpay] = useState(null);
 
   const { currentPage, limit, totalItems, totalPages, onPageChange, setPaginationData } = usePagination(1, 10);
 
-  const { searchQuery, openInvestigationDrawer, getMergedQuery } = useAdminFilter();
+  const { searchQuery, getMergedQuery, getEntityRoute } = useAdminFilter();
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   const abortControllerRef = useRef(null);
@@ -69,10 +71,10 @@ const RazorpayManagementPage = () => {
             <span className="p-2 bg-blue-50 text-blue-600 rounded-xl mr-3">
               <FiZap className="w-6 h-6" />
             </span>
-            Razorpay Live Gateway Console
+            Razorpay Payment Gateway Console
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Real-time gateway synchronization merging stored MongoDB business source of truth with official Razorpay gateway records.
+            Real-time Razorpay telemetry tracking order creation, signature validation, payment IDs, bank RRN references, and webhook events.
           </p>
         </div>
         <button
@@ -83,11 +85,11 @@ const RazorpayManagementPage = () => {
         </button>
       </div>
 
-      {/* Exact 14-Column Razorpay Gateway Table */}
+      {/* 14-Column Razorpay Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         {loading ? (
           <div className="overflow-x-auto p-6">
-            <table className="w-full text-left text-xs text-slate-600 min-w-[1400px]">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1300px]">
               <tbody>
                 <TableSkeleton rows={6} cols={14} />
               </tbody>
@@ -96,24 +98,22 @@ const RazorpayManagementPage = () => {
         ) : error ? (
           <div className="p-6 text-center text-rose-600 font-semibold text-sm">{error}</div>
         ) : transactions.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 text-sm">
-            No Razorpay gateway transaction logs found in live database yet.
-          </div>
+          <div className="p-12 text-center text-slate-500 text-sm">No Razorpay transactions found.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600 min-w-[1400px]">
+            <table className="w-full text-left text-xs text-slate-600 min-w-[1300px]">
               <thead className="bg-slate-50 text-slate-700 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-100">
                 <tr>
-                  <th className="p-3">Payment ID</th>
-                  <th className="p-3">Order ID</th>
-                  <th className="p-3">Customer</th>
+                  <th className="p-3">Razorpay Payment ID</th>
                   <th className="p-3">Booking ID</th>
+                  <th className="p-3">Customer</th>
+                  <th className="p-3">Provider</th>
                   <th className="p-3">Payment Method</th>
                   <th className="p-3">Sub-Method</th>
                   <th className="p-3">Bank</th>
-                  <th className="p-3">Captured Amount</th>
+                  <th className="p-3">Gross Amount</th>
                   <th className="p-3">Refund Amount</th>
-                  <th className="p-3">Settlement Status</th>
+                  <th className="p-3">Settlement</th>
                   <th className="p-3">Gateway Status</th>
                   <th className="p-3">Payment Status</th>
                   <th className="p-3">Created Date</th>
@@ -122,13 +122,13 @@ const RazorpayManagementPage = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {transactions.map((txn) => {
-                  const gross = txn.amount || 0;
-                  const razorpayResp = txn.razorpayResponse || {};
-                  const subMethod = razorpayResp.vpa ? 'UPI' : (razorpayResp.card ? `Card (${razorpayResp.card.network || 'Card'})` : (razorpayResp.bank ? `NetBanking (${razorpayResp.bank})` : (txn.paymentMethod || 'Online')));
-                  const bank = razorpayResp.bank || 'N/A';
-                  const refundAmt = txn.refundAmount || txn.booking?.refundAmount || 0;
-                  const gatewayStatus = razorpayResp.status || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'pending');
-                  const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Processing');
+                  const payId = txn.razorpayPaymentId || txn.paymentId || txn.transactionId || `#${txn._id.slice(-6)}`;
+                  const gross = txn.amount || txn.grossAmount || txn.booking?.totalAmount || 0;
+                  const refundAmt = txn.refundAmount || 0;
+                  const subMethod = txn.paymentSubMethod || txn.subMethod || (txn.paymentMethod === 'razorpay' ? 'UPI / Card' : 'Online');
+                  const bank = txn.bank || txn.bankName || 'Razorpay Gateway';
+                  const gatewayStatus = txn.gatewayStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'created');
+                  const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending');
 
                   return (
                     <tr key={txn._id} className="hover:bg-blue-50/20 transition-colors">
@@ -136,36 +136,41 @@ const RazorpayManagementPage = () => {
                       {/* 1. Payment ID */}
                       <td className="p-3 font-mono font-bold text-blue-700">
                         <button
-                          onClick={() => openInvestigationDrawer('razorpay', txn._id, txn)}
-                          className="hover:underline"
+                          onClick={() => setSelectedRazorpay(txn)}
+                          className="hover:underline cursor-pointer"
                         >
-                          {txn.razorpayPaymentId || txn.transactionId || `#${txn._id.slice(-6)}`}
+                          {payId}
                         </button>
                       </td>
 
-                      {/* 2. Order ID */}
-                      <td className="p-3 font-mono text-slate-500">
-                        {txn.razorpayOrderId || 'order_N/A'}
-                      </td>
-
-                      {/* 3. Customer */}
+                      {/* 2. Booking ID */}
                       <td className="p-3 font-bold text-slate-900">
-                        <button
-                          onClick={() => openInvestigationDrawer('customer', txn.user?._id || txn.user)}
-                          className="text-blue-700 hover:underline"
-                        >
-                          {txn.user?.name || 'Customer'}
-                        </button>
-                      </td>
-
-                      {/* 4. Booking ID */}
-                      <td className="p-3 font-mono font-bold text-slate-900">
-                        <button
-                          onClick={() => openInvestigationDrawer('booking', txn.booking?._id || txn.booking)}
+                        <a
+                          href={getEntityRoute('booking', txn.booking?._id || txn.booking)}
                           className="text-blue-600 hover:underline font-mono"
                         >
                           {txn.booking?.bookingId || txn.bookingId || 'N/A'}
-                        </button>
+                        </a>
+                      </td>
+
+                      {/* 3. Customer */}
+                      <td className="p-3 font-semibold text-slate-800">
+                        <a
+                          href={getEntityRoute('customer', txn.user?._id || txn.user)}
+                          className="hover:underline text-slate-900 font-bold"
+                        >
+                          {txn.user?.name || 'Customer'}
+                        </a>
+                      </td>
+
+                      {/* 4. Provider */}
+                      <td className="p-3 font-semibold text-slate-800">
+                        <a
+                          href={getEntityRoute('provider', txn.provider?._id || txn.provider)}
+                          className="hover:underline text-slate-900 font-bold"
+                        >
+                          {txn.provider?.name || 'Provider'}
+                        </a>
                       </td>
 
                       {/* 5. Payment Method */}
@@ -173,7 +178,7 @@ const RazorpayManagementPage = () => {
                         {txn.paymentMethod || 'Razorpay'}
                       </td>
 
-                      {/* 6. UPI / Card / NetBanking / Wallet / EMI */}
+                      {/* 6. Sub-Method */}
                       <td className="p-3 font-semibold text-primary">
                         <span className="inline-flex items-center px-2 py-0.5 bg-primary/10 text-primary rounded-md text-[11px] font-bold">
                           {subMethod}
@@ -183,7 +188,7 @@ const RazorpayManagementPage = () => {
                       {/* 7. Bank */}
                       <td className="p-3 text-slate-700 font-medium">{bank}</td>
 
-                      {/* 8. Captured Amount */}
+                      {/* 8. Gross Amount */}
                       <td className="p-3 font-black text-slate-900 text-sm">
                         <PriceDisplay amount={gross} />
                       </td>
@@ -228,8 +233,8 @@ const RazorpayManagementPage = () => {
                       {/* 14. Actions */}
                       <td className="p-3 text-right whitespace-nowrap">
                         <button
-                          onClick={() => openInvestigationDrawer('razorpay', txn._id, txn)}
-                          className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
+                          onClick={() => setSelectedRazorpay(txn)}
+                          className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
                         >
                           <FiEye className="mr-1.5" /> View Details
                         </button>
@@ -254,6 +259,13 @@ const RazorpayManagementPage = () => {
           </div>
         )}
       </div>
+
+      {/* Razorpay Detail Modal */}
+      <RazorpayPaymentDetailModal
+        isOpen={!!selectedRazorpay}
+        onClose={() => setSelectedRazorpay(null)}
+        entityData={selectedRazorpay}
+      />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { FiX, FiDollarSign, FiUser, FiCreditCard, FiCheckCircle, FiXCircle, FiCl
 import PriceDisplay from '../../../../components/PriceDisplay';
 import { formatDate, formatDateTime } from '../../../../utils/format';
 import { getWithdrawalStatusBadge } from '../../../../utils/status';
+import { useAdminFilter } from '../../../../context/AdminFilterContext';
 
 const maskAccNo = (acc) => {
   if (!acc || acc === 'N/A') return '••••••••';
@@ -10,7 +11,9 @@ const maskAccNo = (acc) => {
   return str.length > 4 ? `•••• ${str.slice(-4)}` : str;
 };
 
-const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manual', openInvestigationDrawer }) => {
+const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manual' }) => {
+  const { getEntityRoute } = useAdminFilter();
+
   if (!isOpen || !entityData) return null;
 
   const data = entityData;
@@ -28,8 +31,9 @@ const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manu
   const accountName = bank.accountName || provider.bankDetails?.accountName || providerName;
 
   const handleEntityClick = (type, id) => {
-    if (openInvestigationDrawer && id) {
-      openInvestigationDrawer(type, id);
+    if (id) {
+      const route = getEntityRoute(type, id);
+      if (route) window.location.href = route;
     }
   };
 

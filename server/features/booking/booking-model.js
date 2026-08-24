@@ -207,11 +207,7 @@ const bookingSchema = new Schema({
     default: 'pending',
     set: function (v) {
       if (!v) return v;
-      const clean = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const pMap = {
-        'processing': 'escrowhold'
-      };
-      return pMap[clean] || clean;
+      return v.toLowerCase().replace(/[^a-z0-9]/g, '');
     }
   },
 
