@@ -316,7 +316,7 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     </div>
                     <div className="p-4 bg-blue-50 rounded-2xl text-center border border-blue-100">
                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Actually Paid</p>
-                      <p className="text-xl font-black text-blue-800 mt-1"><PriceDisplay amount={d.finalPaid != null ? d.finalPaid : (d.totalAmount || 0)} /></p>
+                      <p className="text-xl font-black text-blue-800 mt-1"><PriceDisplay amount={d.finalPaid ?? 0} /></p>
                     </div>
                     <div className="p-4 bg-amber-50 rounded-2xl text-center border border-amber-100">
                       <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Wallet Paid</p>
@@ -325,7 +325,7 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     <div className="p-4 bg-emerald-50 rounded-2xl text-center border border-emerald-100">
                       <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Cash / QR Paid</p>
                       <p className="text-xl font-black text-emerald-800 mt-1">
-                        <PriceDisplay amount={d.paymentType === 'cash' ? (d.cashPaid || d.finalPaid || 0) : (d.onlinePaid || d.finalPaid || 0)} />
+                        <PriceDisplay amount={d.paymentType === 'cash' ? (d.cashPaid || 0) : (d.onlinePaid || 0)} />
                       </p>
                     </div>
                   </div>
@@ -355,7 +355,9 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                       <InfoRow label="Subtotal" value={<AmtCell amount={d.subtotal || d.totalAmount || 0} />} />
                       <InfoRow label="Discount" value={d.discount > 0 ? <AmtCell amount={d.discount} colorClass="text-rose-600" /> : '₹0'} />
                       {d.coupon?.code && <InfoRow label="Coupon" value={<span className="px-2 py-0.5 bg-green-100 text-green-800 rounded font-bold text-[11px]">{d.coupon.code}</span>} />}
-                      <InfoRow label="Total Amount" value={<AmtCell amount={d.totalAmount || 0} />} />
+                      <InfoRow label="Booking Amount" value={<AmtCell amount={d.totalAmount || 0} />} />
+                      <InfoRow label="Attempted Amount" value={<AmtCell amount={d.attemptedAmount != null ? d.attemptedAmount : (d.totalAmount || 0)} colorClass="text-slate-700 font-semibold" />} />
+                      <InfoRow label="Actually Paid" value={<AmtCell amount={d.finalPaid ?? 0} colorClass={(d.finalPaid || 0) > 0 ? "text-emerald-700 font-black" : "text-rose-600 font-bold"} />} />
                       <InfoRow label="Platform Commission" value={<AmtCell amount={d.commissionAmount || 0} colorClass="text-purple-700" />} />
                       <InfoRow label="Provider Earnings" value={<AmtCell amount={d.providerEarnings || 0} colorClass="text-blue-700" />} />
                     </SectionCard>
@@ -648,7 +650,7 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                       <SectionCard title="Financial Audit & Earnings" icon={FiTrendingUp} iconColor="text-blue-600">
                         <InfoRow label="Total Amount" value={<AmtCell amount={d.totalAmount || 0} />} />
                         <InfoRow label="Wallet Used" value={<AmtCell amount={d.walletPaid || 0} colorClass="text-amber-700" />} />
-                        <InfoRow label="Cash / QR Collection" value={<AmtCell amount={d.paymentType === 'cash' ? (d.cashPaid || d.finalPaid || 0) : (d.onlinePaid || d.finalPaid || 0)} colorClass="text-emerald-700" />} />
+                        <InfoRow label="Cash / QR Collection" value={<AmtCell amount={d.paymentType === 'cash' ? (d.cashPaid || 0) : (d.onlinePaid || 0)} colorClass="text-emerald-700" />} />
                         <InfoRow label="Platform Commission" value={<AmtCell amount={d.commissionAmount || 0} colorClass="text-purple-700" />} />
                         <InfoRow label="Provider Net Earnings" value={<AmtCell amount={d.providerEarnings || 0} colorClass="text-blue-700" />} />
                       </SectionCard>

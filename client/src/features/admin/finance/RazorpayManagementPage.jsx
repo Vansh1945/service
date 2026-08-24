@@ -127,8 +127,11 @@ const RazorpayManagementPage = () => {
                   const refundAmt = txn.refundAmount || 0;
                   const subMethod = txn.paymentSubMethod || txn.subMethod || (txn.paymentMethod === 'razorpay' ? 'UPI / Card' : 'Online');
                   const bank = txn.bank || txn.bankName || 'Razorpay Gateway';
-                  const gatewayStatus = txn.gatewayStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'created');
-                  const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending');
+                  const pMethod = (txn.paymentMethod || '').toLowerCase();
+                  const isCash = pMethod === 'cash' || pMethod === 'cod';
+
+                  const gatewayStatus = isCash ? 'N/A' : (txn.gatewayStatus || txn.razorpayStatus || txn.paymentStatus || 'created');
+                  const settlementStatus = isCash ? 'N/A' : (txn.settlementStatus || (txn.razorpaySettlementId ? 'Settled' : 'Pending'));
 
                   return (
                     <tr key={txn._id} className="hover:bg-blue-50/20 transition-colors">

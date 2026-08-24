@@ -290,8 +290,13 @@ const AdminFinancialReportCenter = () => {
             <p className="text-[9px] font-medium text-amber-400 mt-1">Platform Discount Subsidies</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Cash Collection</p>
+            <p className="text-base md:text-lg font-black text-slate-700 mt-0.5">₹{summaryData.providerCollectedCash?.toLocaleString() || '0'}</p>
+            <p className="text-[9px] font-medium text-slate-400 mt-1">Cash Collected by Providers</p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cash Recovery</p>
-            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">₹{summaryData.cashRecovery?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">₹{summaryData.cashRecovery?.toLocaleString() || '0'}</p>
             <p className="text-[9px] font-medium text-teal-400 mt-1">Cash Booking Commission</p>
           </div>
           <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-sm">

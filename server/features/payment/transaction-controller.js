@@ -40,21 +40,28 @@ const isPlatformLedgerEligible = (txn) => {
   if (!txn) return false;
   if (!isFinanciallyEffective(txn.paymentStatus)) return false;
 
+  const pMethod = String(txn.paymentMethod || '').toLowerCase();
+  const pType = String(txn.type || 'payment').toLowerCase();
+  const lType = String(txn.ledgerType || '').toLowerCase();
+
+  // Direct provider-collected cash booking payments (customer -> provider) do not represent direct platform bank/wallet collections
+  if ((pMethod === 'cash' || pMethod === 'cod') && (pType === 'payment' || lType === 'payment')) {
+    return false;
+  }
+
   if (txn.ledgerType) {
-    const lType = String(txn.ledgerType).toLowerCase();
     if (['payment', 'refund', 'withdrawal', 'settlement', 'commission', 'adjustment', 'referral'].includes(lType)) {
       return true;
     }
   }
 
-  const type = String(txn.type || 'payment').toLowerCase();
   const platformTypes = [
     'payment', 'refund', 'settlement', 'wallet_topup', 'withdrawal',
     'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery',
     'cashback', 'adjustment', 'referralreward', 'referral_coupon_subsidy',
     'escrow_hold', 'escrow_release'
   ];
-  return platformTypes.includes(type);
+  return platformTypes.includes(pType);
 };
 
 
@@ -989,35 +996,44 @@ const getAdminPaymentDetails = async (req, res, next) => {
     let finalPaid = 0;
 
     const paymentMethod = (txn.paymentMethod || booking?.paymentMethod || 'online').toLowerCase();
-    const isSuccess = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
+    const isEffective = isFinanciallyEffective(txn.paymentStatus);
+    const attemptedAmount = typeof txn.amount === 'number' ? txn.amount : (parseFloat(txn.amount) || totalAmount);
 
-    if (txn.type === 'withdrawal') {
+    const isCommissionDeductionTxn = txn.type === 'commissiondeduction' || txn.ledgerType === 'commission';
+
+    if (txn.type === 'withdrawal' || !isEffective) {
       finalPaid = 0;
-      walletPaid = txn.amount || 0;
       onlinePaid = 0;
       cashPaid = 0;
+      walletPaid = txn.type === 'withdrawal' ? attemptedAmount : 0;
+    } else if (isCommissionDeductionTxn) {
+      // Internal provider wallet commission recovery event — NOT a customer payment
+      finalPaid = 0;
+      onlinePaid = 0;
+      cashPaid = 0;
+      walletPaid = attemptedAmount;
     } else if (paymentMethod === 'cash' || paymentMethod === 'cod') {
       cashPaid = Math.max(0, totalAmount - walletUsed);
       onlinePaid = 0;
-      finalPaid = isSuccess ? totalAmount : (txn.amount || cashPaid);
+      finalPaid = totalAmount;
     } else if (paymentMethod === 'upi' || paymentMethod === 'qr_code' || txn.razorpayPaymentId) {
       onlinePaid = Math.max(0, totalAmount - walletUsed);
       cashPaid = 0;
-      finalPaid = isSuccess ? totalAmount : (txn.amount || onlinePaid);
+      finalPaid = totalAmount;
     } else if (paymentMethod === 'wallet') {
       walletPaid = totalAmount;
       onlinePaid = 0;
       cashPaid = 0;
-      finalPaid = isSuccess ? totalAmount : (txn.amount || walletPaid);
+      finalPaid = totalAmount;
     } else if (paymentMethod === 'mixed') {
       walletPaid = walletUsed;
       onlinePaid = Math.max(0, totalAmount - walletUsed);
       cashPaid = 0;
-      finalPaid = isSuccess ? totalAmount : (walletPaid + onlinePaid);
+      finalPaid = walletPaid + onlinePaid;
     } else {
       onlinePaid = Math.max(0, totalAmount - walletUsed);
       cashPaid = 0;
-      finalPaid = isSuccess ? totalAmount : (txn.amount || onlinePaid);
+      finalPaid = totalAmount;
     }
 
     const commissionAmount = txn.type === 'withdrawal' ? 0 : (booking?.commissionAmount || txn.commission || 0);
@@ -1067,23 +1083,24 @@ const getAdminPaymentDetails = async (req, res, next) => {
     }
 
     // ── Build settlement info from transaction ─────────────────────────────────────
+    const isCashPayment = paymentMethod === 'cash' || paymentMethod === 'cod';
     const isTxnCaptured = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
     const isSettled = Boolean(txn.razorpaySettlementId);
-    const calculatedSettlementStatus = isSettled ? 'settled' : (isTxnCaptured ? 'processing' : 'pending');
+    const calculatedSettlementStatus = isCashPayment ? 'N/A' : (isSettled ? 'settled' : (isTxnCaptured ? 'processing' : 'pending'));
 
-    const gatewayFee = txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0);
-    const gatewayTax = txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0);
-    const netSettlementAmount = txn.netSettlementAmount || Math.max(0, parseFloat((txn.amount - gatewayFee - gatewayTax).toFixed(2)));
+    const gatewayFee = isCashPayment ? 0 : (txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0));
+    const gatewayTax = isCashPayment ? 0 : (txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0));
+    const netSettlementAmount = isCashPayment ? 0 : (txn.netSettlementAmount || Math.max(0, parseFloat(((txn.amount || 0) - gatewayFee - gatewayTax).toFixed(2))));
 
     const settlement = {
       settlementStatus: calculatedSettlementStatus,
-      settlementAmount: txn.settlementAmount || txn.amount || 0,
-      settlementDate: isSettled ? (txn.settlementDate || txn.updatedAt) : null,
+      settlementAmount: isCashPayment ? 0 : (txn.settlementAmount || txn.amount || 0),
+      settlementDate: isCashPayment ? null : (isSettled ? (txn.settlementDate || txn.updatedAt) : null),
       gatewayFee,
       gatewayTax,
       netSettlementAmount,
-      razorpaySettlementId: txn.razorpaySettlementId || null,
-      bankReference: txn.bankReference || null,
+      razorpaySettlementId: isCashPayment ? null : (txn.razorpaySettlementId || null),
+      bankReference: isCashPayment ? null : (txn.bankReference || null),
       commissionAmount,
       providerEarnings,
       providerPayoutStatus: txn.provider ? (isTxnCaptured ? 'available' : 'pending') : null
@@ -1124,6 +1141,7 @@ const getAdminPaymentDetails = async (req, res, next) => {
 
         // Amount Breakup — ALL FROM BACKEND, never calculated in React
         totalAmount,
+        attemptedAmount,
         walletPaid,
         onlinePaid,
         cashPaid,
@@ -1506,13 +1524,13 @@ const getFinanceOverview = async (req, res, next) => {
       failedSettlementRecords,
       providerEarningStats
     ] = await Promise.all([
-      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] } }).lean(),
-      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfToday } }).lean(),
-      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfWeek } }).lean(),
-      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: startOfMonth } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfToday } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfWeek } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfMonth } }).lean(),
       Refund.find({}).lean(),
       Provider.find({}).select('wallet pendingPayout earnings').lean(),
-      Transaction.find({ type: 'payment', paymentStatus: 'failed' }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] } }).lean(),
       Booking.find({
         status: 'completed',
         paymentStatus: { $in: ['paid', 'settled'] },
@@ -2417,10 +2435,21 @@ const getRazorpayLogs = async (req, res, next) => {
       Transaction.countDocuments(filter)
     ]);
 
+    const enrichedTransactions = transactions.map(t => {
+      const isEffective = isFinanciallyEffective(t.paymentStatus);
+      const amt = typeof t.amount === 'number' ? t.amount : (parseFloat(t.amount) || 0);
+      return {
+        ...t,
+        attemptedAmount: amt,
+        actualCollectedAmount: isEffective ? amt : 0,
+        financialImpact: isEffective ? amt : 0
+      };
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        transactions,
+        transactions: enrichedTransactions,
         total,
         page,
         totalPages: Math.ceil(total / limit)
@@ -2443,8 +2472,8 @@ const getFailedPayments = async (req, res, next) => {
 
     const filter = {
       $or: [
-        { paymentStatus: 'failed' },
-        { status: 'failed' },
+        { paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] } },
+        { status: { $in: ['failed', 'cancelled', 'rejected'] } },
         { 'razorpayResponse.error_code': { $exists: true, $ne: null } }
       ]
     };
@@ -2488,6 +2517,9 @@ const getFailedPayments = async (req, res, next) => {
         typeDisplay: txn.type || 'payment',
         gatewayDisplay: txn.paymentMethod === 'wallet' ? 'Wallet' : 'Razorpay',
         amountDisplay: amount,
+        attemptedAmount: amount,
+        actualCollectedAmount: 0,
+        financialImpact: 0,
         gatewayStatusDisplay: gData.status || 'failed',
         failureReasonDisplay: txn.failureReason || gData.error_description || 'Payment Gateway Drop-off / Verification Timeout',
         errorCodeDisplay: txn.errorCode || gData.error_code || 'PAYMENT_FAILED',
@@ -3654,7 +3686,7 @@ const getMasterLedger = async (req, res, next) => {
         select: 'bookingId totalAmount status paymentMethod walletUsed onlinePaid cashToPay commissionAmount providerEarnings',
       })
       .populate('approvedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
@@ -3679,29 +3711,44 @@ const getMasterLedger = async (req, res, next) => {
       if (r.bookingId) refundByBookingId[r.bookingId.toString()] = r;
     });
 
-    // ── Compute running balance sequentially (works on all MongoDB versions) ──
-    // Fetch all transactions up to and including the last one on this page
-    // sorted ascending to compute cumulative balance
+    // ── Helper: Get transaction financial direction ────────────────────────────
+    const getTransactionDirection = (t) => {
+      const entryDirection = String(t.entryType || '').toLowerCase();
+      if (entryDirection === 'credit') return 'credit';
+      if (entryDirection === 'debit') return 'debit';
+
+      const type = String(t.type || 'payment').toLowerCase();
+      const debitTypes = [
+        'refund', 'withdrawal', 'withdrawalrejection', 'penalty',
+        'commissiondeduction', 'refundrecovery', 'escrow_hold'
+      ];
+      if (debitTypes.includes(type)) return 'debit';
+
+      return 'credit';
+    };
+
+    // ── Compute global running balance chronologically over ALL eligible platform transactions ──
+    // Display filters (date, provider, tab, search) MUST NOT modify historical running balance.
     let runningBalanceMap = {};
+    let globalPlatformBalance = 0;
     try {
-      const allForBalance = await Transaction.find(filter)
-        .select('_id amount entryType type paymentStatus createdAt')
-        .sort({ createdAt: 1 })
+      const allForBalance = await Transaction.find({})
+        .select('_id amount entryType type paymentStatus paymentMethod ledgerType createdAt')
+        .sort({ createdAt: 1, _id: 1 })
         .lean();
 
       let cumulative = 0;
       allForBalance.forEach(t => {
         if (isPlatformLedgerEligible(t)) {
-          const entryDirection = String(t.entryType || '').toLowerCase();
-          const isCredit = entryDirection === 'credit';
-          const isDebit = entryDirection === 'debit';
-
-          if (isCredit && !isDebit) cumulative += (t.amount || 0);
-          else if (isDebit && !isCredit) cumulative -= (t.amount || 0);
+          const dir = getTransactionDirection(t);
+          const rawAmt = typeof t.amount === 'number' ? t.amount : (parseFloat(t.amount) || 0);
+          if (dir === 'credit') cumulative += rawAmt;
+          else if (dir === 'debit') cumulative -= rawAmt;
         }
 
         runningBalanceMap[t._id.toString()] = parseFloat(cumulative.toFixed(2));
       });
+      globalPlatformBalance = parseFloat(cumulative.toFixed(2));
     } catch (balErr) {
       global.logger?.warn('[getMasterLedger] Running balance computation skipped: ' + balErr.message);
     }
@@ -3715,20 +3762,20 @@ const getMasterLedger = async (req, res, next) => {
 
       const isEligible = isPlatformLedgerEligible(txn);
 
-      // Authoritative financial direction from entryType
-      const entryDirection = String(txn.entryType || '').toLowerCase();
-      const isCredit = entryDirection === 'credit';
-      const isDebit = entryDirection === 'debit';
+      const direction = getTransactionDirection(txn);
+      const isCredit = direction === 'credit';
+      const isDebit = direction === 'debit';
 
-      const creditAmount = (isEligible && isCredit) ? (txn.amount || 0) : 0;
-      const debitAmount = (isEligible && isDebit) ? (txn.amount || 0) : 0;
+      const rawAmount = typeof txn.amount === 'number' ? txn.amount : (parseFloat(txn.amount) || 0);
+      const creditAmount = (isEligible && isCredit) ? rawAmount : 0;
+      const debitAmount = (isEligible && isDebit) ? rawAmount : 0;
 
       return {
         ...txn,
         // Ledger debit/credit (backend-computed, not in React)
         creditAmount,
         debitAmount,
-        // Running balance
+        // Running balance from global platform chronological ledger
         runningBalance: runningBalanceMap[txnIdStr] ?? null,
         // Linked entity IDs
         refundId: linkedRefund?.refundId || null,
@@ -3736,7 +3783,7 @@ const getMasterLedger = async (req, res, next) => {
         refundAmount: linkedRefund?.refundAmount || null,
         refundStatus: linkedRefund?.refundStatus || null,
         gatewayRefundId: linkedRefund?.gatewayRefundId || null,
-        walletTransactionId: linkedRefund?.walletTransactionId || txn.description?.includes('Wallet') ? (txn.transactionId || null) : null,
+        walletTransactionId: linkedRefund?.walletTransactionId || (txn.description?.includes('Wallet') ? (txn.transactionId || null) : null),
         settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
         // Human-readable transaction type
         displayType: (txn.type || 'payment').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
@@ -3755,6 +3802,7 @@ const getMasterLedger = async (req, res, next) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
+      platformNetBalance: globalPlatformBalance,
       data: enriched
     });
   } catch (error) {
@@ -3818,6 +3866,9 @@ const getLedgerDetail = async (req, res, next) => {
     let commissionAmount = 0;
     let providerEarnings = 0;
 
+    const isEligible = isPlatformLedgerEligible(txn);
+    const attemptedAmount = typeof txn.amount === 'number' ? txn.amount : (parseFloat(txn.amount) || 0);
+
     if (isWithdrawalTxn) {
       totalAmount = txn.amount || 0;
       walletPaid = txn.amount || 0;
@@ -3826,6 +3877,28 @@ const getLedgerDetail = async (req, res, next) => {
       providerEarnings = 0;
       subtotal = 0;
       discount = 0;
+    } else if (!isEligible) {
+      // Failed, pending, processing, cancelled, rejected transaction attempt
+      totalAmount = booking?.totalAmount || txn.amount || 0;
+      discount = booking?.totalDiscount || 0;
+      subtotal = booking?.subtotal || (totalAmount + discount);
+      commissionAmount = 0;
+      providerEarnings = 0;
+      walletPaid = 0;
+      onlinePaid = 0;
+      cashPaid = 0;
+      finalPaid = 0;
+    } else if (isCommissionTxn) {
+      // Provider wallet commission recovery event — NOT a customer payment
+      totalAmount = booking?.totalAmount || txn.amount || 0;
+      discount = booking?.totalDiscount || 0;
+      subtotal = booking?.subtotal || (totalAmount + discount);
+      commissionAmount = txn.amount || booking?.commissionAmount || 0;
+      providerEarnings = booking?.providerEarnings || 0;
+      walletPaid = txn.amount || 0;
+      onlinePaid = 0;
+      cashPaid = 0;
+      finalPaid = 0;
     } else if (booking) {
       totalAmount = booking.totalAmount || txn.amount || 0;
       discount = booking.totalDiscount || 0;
@@ -3868,8 +3941,6 @@ const getLedgerDetail = async (req, res, next) => {
       else if (txn.paymentMethod === 'wallet') walletPaid = txn.amount || 0;
       else onlinePaid = (txn.type === 'payment') ? (txn.amount || 0) : 0;
     }
-
-    const isEligible = isPlatformLedgerEligible(txn);
 
     // Authoritative financial direction from entryType
     const entryDirection = String(txn.entryType || '').toLowerCase();
@@ -3926,20 +3997,21 @@ const getLedgerDetail = async (req, res, next) => {
     }
 
     // ── Settlement info ───────────────────────────────────────────────────────
+    const isCashLedgerTxn = (txn.paymentMethod || booking?.paymentMethod || '').toLowerCase() === 'cash' || (txn.paymentMethod || booking?.paymentMethod || '').toLowerCase() === 'cod';
     const isTxnSettled = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
-    const gatewayFee = txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0);
-    const gatewayTax = txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0);
-    const netSettlementAmount = txn.netSettlementAmount || Math.max(0, parseFloat((txn.amount - gatewayFee - gatewayTax).toFixed(2)));
+    const gatewayFee = isCashLedgerTxn ? 0 : (txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0));
+    const gatewayTax = isCashLedgerTxn ? 0 : (txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0));
+    const netSettlementAmount = isCashLedgerTxn ? 0 : (txn.netSettlementAmount || Math.max(0, parseFloat(((txn.amount || 0) - gatewayFee - gatewayTax).toFixed(2))));
 
     const settlement = {
-      settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
-      settlementStatus: txn.settlementStatus || (isTxnSettled ? 'settled' : 'pending'),
-      settlementAmount: txn.settlementAmount || txn.amount || 0,
-      settlementDate: txn.settlementDate || (isTxnSettled ? (txn.updatedAt || txn.createdAt) : null),
+      settlementId: isCashLedgerTxn ? null : (txn.razorpaySettlementId || txn.settlementBatchId || null),
+      settlementStatus: isCashLedgerTxn ? 'N/A' : (txn.settlementStatus || (isTxnSettled ? 'settled' : 'pending')),
+      settlementAmount: isCashLedgerTxn ? 0 : (txn.settlementAmount || txn.amount || 0),
+      settlementDate: isCashLedgerTxn ? null : (txn.settlementDate || (isTxnSettled ? (txn.updatedAt || txn.createdAt) : null)),
       gatewayFee,
       gatewayTax,
       netSettlementAmount,
-      bankReference: txn.bankReference || null,
+      bankReference: isCashLedgerTxn ? null : (txn.bankReference || null),
     };
 
     // ── Timeline — chronological events ──────────────────────────────────────
@@ -4025,6 +4097,7 @@ const getLedgerDetail = async (req, res, next) => {
 
         // Financial Breakdown — ALL FROM BACKEND
         amount: txn.amount,
+        attemptedAmount,
         creditAmount,
         debitAmount,
         totalAmount,

@@ -138,6 +138,7 @@ const AdminTransactions = () => {
   const [error, setError] = useState(null);
   const [activeLedger, setActiveLedger] = useState('all');
   const [pagination, setPagination] = useState({ page: 1, limit: 15, total: 0, pages: 1 });
+  const [platformNetBalance, setPlatformNetBalance] = useState(null);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -170,6 +171,9 @@ const AdminTransactions = () => {
       const response = await TransactionService.getMasterLedger(params, { signal: abortControllerRef.current.signal });
       if (response.data?.success) {
         setTransactions(response.data.data || []);
+        if (response.data.platformNetBalance !== undefined) {
+          setPlatformNetBalance(response.data.platformNetBalance);
+        }
         setPagination(prev => ({
           ...prev,
           total: response.data.total || 0,
@@ -243,7 +247,7 @@ const AdminTransactions = () => {
   const totalCredit = validTransactions.reduce((s, t) => s + (t.creditAmount || 0), 0);
   const totalDebit = validTransactions.reduce((s, t) => s + (t.debitAmount || 0), 0);
   const latestTxn = transactions.find(t => !['failed', 'cancelled', 'rejected'].includes((t.paymentStatus || '').toLowerCase())) || transactions[0];
-  const lastBalance = latestTxn ? (latestTxn.runningBalance ?? (totalCredit - totalDebit)) : null;
+  const lastBalance = platformNetBalance !== null ? platformNetBalance : (latestTxn ? (latestTxn.runningBalance ?? (totalCredit - totalDebit)) : null);
 
   return (
     <div className="space-y-5">
@@ -284,8 +288,8 @@ const AdminTransactions = () => {
               </div>
             </div>
             {lastBalance !== null && (
-              <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs">
-                <div className="text-indigo-500 font-semibold uppercase tracking-wide text-[10px]">Platform Net Balance</div>
+              <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs" title="Authoritative running ledger position of posted platform financial events (Not live bank settlement balance)">
+                <div className="text-indigo-500 font-semibold uppercase tracking-wide text-[10px]">Net Platform Ledger Balance</div>
                 <div className={`font-black text-sm mt-0.5 ${lastBalance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>
                   <PriceDisplay amount={Math.abs(lastBalance)} />
                 </div>

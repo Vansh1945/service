@@ -378,8 +378,9 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
               {(d.walletPaid || 0) > 0 && <AmtRow label="Wallet Used" amount={d.walletPaid} colorClass="text-amber-700" indent />}
               {(d.cashPaid || 0) > 0 && <AmtRow label="Cash Paid" amount={d.cashPaid} colorClass="text-lime-700" indent />}
             </div>
-            <div className="pt-1">
-              <AmtRow label="Final Paid" amount={d.finalPaid || d.amount || 0} bold colorClass="text-slate-900" />
+            <div className="pt-1 space-y-1">
+              <AmtRow label="Attempted Amount" amount={d.attemptedAmount != null ? d.attemptedAmount : (d.amount || 0)} colorClass="text-slate-600" indent />
+              <AmtRow label="Actually Paid" amount={d.finalPaid ?? 0} bold colorClass={(d.finalPaid || 0) > 0 ? "text-emerald-700 font-black" : "text-rose-600 font-bold"} />
             </div>
           </div>
         </SectionCard>

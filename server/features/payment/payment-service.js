@@ -4477,6 +4477,15 @@ class PaymentService {
               totalCashToPay: { $sum: '$cashToPay' },
               totalOnlinePaid: { $sum: '$onlinePaid' },
               totalWalletUsed: { $sum: '$walletUsed' },
+              cashBookingCommission: {
+                $sum: {
+                  $cond: [
+                    { $in: ['$paymentMethod', ['cash', 'cod']] },
+                    { $ifNull: ['$commissionAmount', 0] },
+                    0
+                  ]
+                }
+              },
               count: { $sum: 1 }
             }
           }
@@ -4534,7 +4543,8 @@ class PaymentService {
       const totalRefunds = rStat.totalRefunds || 0;
       const totalPayouts = pStat.totalPayouts || 0;
       const referralRewards = refStat.totalReferralRewards || 0;
-      const cashRecovery = bStat.totalCashToPay || 0;
+      const providerCollectedCash = bStat.totalCashToPay || 0;
+      const cashRecovery = bStat.cashBookingCommission != null ? parseFloat(bStat.cashBookingCommission.toFixed(2)) : 0;
       const netPlatformRevenue = parseFloat((platformCommission - referralRewards - couponSubsidy - totalRefunds).toFixed(2));
 
       const summaryCards = {
@@ -4546,6 +4556,7 @@ class PaymentService {
         totalPayouts,
         referralRewards,
         couponSubsidy,
+        providerCollectedCash,
         cashRecovery,
         netPlatformRevenue
       };

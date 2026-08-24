@@ -123,7 +123,7 @@ const ProviderEarningsPage = () => {
                       : ((txn.booking?.providerEarnings !== undefined && txn.booking?.providerEarnings !== null)
                         ? txn.booking.providerEarnings
                         : (commission !== null ? customerPaid - commission : null)));
-                  const settlementStatus = txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending');
+                  const settlementStatus = txn.settlementStatus || (txn.razorpaySettlementId ? 'Settled' : 'Pending');
                   const withdrawalStatus = txn.withdrawalStatus || 'Available';
                   const isCompleted = ['success', 'completed'].includes(txn.paymentStatus);
 
