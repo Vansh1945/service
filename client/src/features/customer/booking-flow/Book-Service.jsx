@@ -4,8 +4,9 @@ import { useAuth } from '../../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle, Home, Briefcase, ShoppingBag, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle, Home, Briefcase, ShoppingBag, X, Edit3 } from 'lucide-react';
 import AddressSelector from '../../../components/AddressSelector';
+import AddressModal from '../../../components/modals/AddressModal';
 import Loader from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
 import { getPublicServiceById } from '../../../services/ServiceService';
@@ -549,6 +550,7 @@ const BookService = () => {
   }, [service, formData.quantity, detectedZoneId]);
 
   const [isAddAddressModalOpen, setIsAddAddressModalOpen] = useState(false);
+  const [editingAddressModalData, setEditingAddressModalData] = useState(null);
   const [addressActionLoading, setAddressActionLoading] = useState(false);
   const [inlineModalAddressForm, setInlineModalAddressForm] = useState({
     label: 'Home',
@@ -1247,44 +1249,20 @@ const BookService = () => {
                       <span className="text-[10px] text-gray-400">Where should we deliver the service?</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddAddressModalOpen(true)}
-                        className="px-2.5 py-1 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors flex items-center gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add Address
-                      </button>
-
-                      {addresses.length > 0 && (
-                        <div className="flex bg-gray-100 p-0.5 rounded-lg w-max shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: false }))}
-                            className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${!formData.useCustomAddress
-                              ? 'bg-white text-secondary shadow-sm'
-                              : 'text-gray-500 hover:text-secondary'
-                              }`}
-                          >
-                            Saved Address
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: true }))}
-                            className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${formData.useCustomAddress
-                              ? 'bg-white text-secondary shadow-sm'
-                              : 'text-gray-500 hover:text-secondary'
-                              }`}
-                          >
-                            Custom Entry
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingAddressModalData(null);
+                        setIsAddAddressModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Address
+                    </button>
                   </div>
 
-                  {!formData.useCustomAddress && addresses.length > 0 ? (
+                  {addresses.length > 0 ? (
                     <div className="space-y-2.5 animate-fade-in">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {addresses.map((addr, idx) => {
@@ -1293,31 +1271,44 @@ const BookService = () => {
                             <div
                               key={addr._id || idx}
                               onClick={() => {
-                                setFormData(prev => ({ ...prev, addressId: addr._id || '', useCustomAddress: false }));
+                                setFormData(prev => ({ ...prev, addressId: addr._id || '' }));
                               }}
-                              className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
-                                isSelected
+                              className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${isSelected
                                   ? 'border-primary bg-primary/5 shadow-xs'
                                   : 'border-gray-200 bg-white hover:border-gray-300'
-                              }`}
+                                }`}
                             >
                               <input
                                 type="radio"
                                 name="selectedAddressId"
                                 checked={isSelected}
-                                onChange={() => {}}
+                                onChange={() => { }}
                                 className="mt-1 text-primary focus:ring-primary cursor-pointer"
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-bold text-secondary truncate">
-                                    {addr.label || 'Home'}
-                                  </span>
-                                  {addr.isDefault && (
-                                    <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.2 rounded uppercase">
-                                      Default
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-xs font-bold text-secondary truncate">
+                                      {addr.label || 'Home'}
                                     </span>
-                                  )}
+                                    {addr.isDefault && (
+                                      <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.2 rounded uppercase">
+                                        Default
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingAddressModalData(addr);
+                                      setIsAddAddressModalOpen(true);
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-primary hover:bg-gray-100 rounded transition-colors"
+                                    title="Edit Address"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <p className="text-xs text-gray-600 font-medium leading-relaxed line-clamp-2">
                                   {addr.houseNumber ? `${addr.houseNumber}, ` : ''}
@@ -1333,82 +1324,40 @@ const BookService = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3.5 bg-white border border-gray-100 rounded-xl shadow-sm animate-fade-in space-y-3">
-                      <AddressSelector
-                        address={formData.customAddress}
-                        onChange={(updatedAddress) => setFormData(prev => ({ ...prev, customAddress: updatedAddress }))}
-                      />
+                    <div className="p-5 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center flex flex-col items-center justify-center gap-2">
+                      <MapPin className="w-6 h-6 text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-600">No saved address found</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAddressModalData(null);
+                          setIsAddAddressModalOpen(true);
+                        }}
+                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-primary rounded-lg shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1.5 mt-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add New Address
+                      </button>
                     </div>
                   )}
 
-                  {/* Inline Compact Add Address Modal */}
-                  {isAddAddressModalOpen && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4 animate-fade-in overflow-y-auto">
-                      <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl border border-gray-100 relative max-h-[96vh] flex flex-col my-auto text-left">
-                        <div className="flex items-center justify-between pb-2 border-b border-gray-100 shrink-0">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-primary" />
-                            <h3 className="text-sm font-bold text-secondary">Add New Address</h3>
-                          </div>
-                          <button type="button" onClick={() => setIsAddAddressModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <form onSubmit={handleSaveNewAddressModal} className="overflow-y-auto py-2.5 space-y-2.5 flex-1 pr-1">
-                          <div className="flex items-center gap-2">
-                            <label className="text-[11px] font-bold text-secondary uppercase shrink-0">Label:</label>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {[
-                                { id: 'Home', label: 'Home', icon: Home },
-                                { id: 'Office', label: 'Office', icon: Briefcase },
-                                { id: 'Shop', label: 'Shop', icon: ShoppingBag },
-                                { id: 'Other', label: 'Other', icon: MapPin }
-                              ].map((item) => {
-                                const IconComp = item.icon;
-                                const isSel = inlineModalAddressForm.label === item.id;
-                                return (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => setInlineModalAddressForm(prev => ({ ...prev, label: item.id }))}
-                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all ${
-                                      isSel ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'
-                                    }`}
-                                  >
-                                    <IconComp className="w-3.5 h-3.5" /> {item.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <AddressSelector
-                            address={inlineModalAddressForm}
-                            onChange={(updated) => setInlineModalAddressForm(prev => ({ ...prev, ...updated }))}
-                            errors={inlineModalErrors}
-                            compact={true}
-                          />
-                          <div className="flex items-center justify-between pt-2 border-t border-gray-100 shrink-0">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                id="isDefaultModal"
-                                checked={inlineModalAddressForm.isDefault}
-                                onChange={(e) => setInlineModalAddressForm(prev => ({ ...prev, isDefault: e.target.checked }))}
-                                className="w-3.5 h-3.5 text-primary rounded border-gray-300"
-                              />
-                              <label htmlFor="isDefaultModal" className="text-xs font-semibold text-secondary">Set as default</label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={() => setIsAddAddressModalOpen(false)} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                              <Processing type="submit" loading={addressActionLoading} loadingText="Saving..." className="px-4 py-1.5 bg-primary text-white rounded-lg text-xs font-bold">
-                                Save Address
-                              </Processing>
-                            </div>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  )}
+                  <AddressModal
+                    isOpen={isAddAddressModalOpen}
+                    onClose={() => {
+                      setIsAddAddressModalOpen(false);
+                      setEditingAddressModalData(null);
+                    }}
+                    initialAddress={editingAddressModalData}
+                    onAddressSaved={(newlyCreated, updatedList) => {
+                      if (updatedList) setAddresses(updatedList);
+                      if (newlyCreated && newlyCreated._id) {
+                        setFormData(prev => ({
+                          ...prev,
+                          addressId: newlyCreated._id
+                        }));
+                      }
+                    }}
+                  />
                 </div>
 
                 {/* Notes Input */}

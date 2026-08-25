@@ -27,6 +27,7 @@ const addressSchema = z.object({
 });
 
 const createBookingSchema = z.object({
+  bookingId: objectIdSchema.optional(),
   serviceId: objectIdSchema,
   date: z.string().refine((val) => {
     const bookingDate = new Date(val);

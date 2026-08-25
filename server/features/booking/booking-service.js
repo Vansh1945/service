@@ -827,6 +827,7 @@ class BookingService {
 
   static async createBooking(req, res) {
     try {
+      const targetBookingId = req.body.bookingId || req.body.checkoutBookingId;
       const {
         serviceId,
         date,
@@ -1135,30 +1136,114 @@ class BookingService {
           totalAmount
         } = priceDetails;
 
-        const existingQuery = Booking.findOne({
-          customer: req.user._id,
-          'services.service': serviceId,
-          date: bookingDate,
-          time: time || null,
-          totalAmount: totalAmount,
-          status: { $nin: ['cancelled'] },
-          paymentStatus: { $in: ['pending', 'processing'] }
-        });
-        const existingBooking = session ? await existingQuery.session(session) : await existingQuery;
+        // CHECKOUT EDIT: Check if an existing checkout booking ID is passed or an unconfirmed checkout draft exists for this customer & service
+        let existingDraft = null;
+        if (targetBookingId && mongoose.Types.ObjectId.isValid(targetBookingId)) {
+          const draftQuery = Booking.findOne({
+            _id: targetBookingId,
+            customer: req.user._id
+          });
+          existingDraft = session ? await draftQuery.session(session) : await draftQuery;
+        }
 
-        if (existingBooking) {
+        // Fallback safety net: If targetBookingId was not passed or found, find any active unconfirmed checkout draft for this customer & service
+        if (!existingDraft) {
+          const draftQuery = Booking.findOne({
+            customer: req.user._id,
+            'services.service': serviceId,
+            confirmedBooking: false,
+            paymentStatus: { $in: ['pending', 'processing'] },
+            status: { $nin: ['cancelled', 'completed', 'workstarted', 'ontheway', 'arrived'] }
+          }).sort({ createdAt: -1 });
+          existingDraft = session ? await draftQuery.session(session) : await draftQuery;
+        }
+
+        if (existingDraft) {
+          if (existingDraft.confirmedBooking === true || existingDraft.paymentStatus === 'paid' || existingDraft.paymentStatus === 'escrowhold' || ['cancelled', 'completed', 'workstarted', 'ontheway', 'arrived'].includes(existingDraft.status)) {
+            throw new Error('Cannot modify booking: Checkout already completed or booking is in active workflow.');
+          }
+
+          existingDraft.services = [{
+            service: serviceId,
+            quantity,
+            price: service.discountPrice || service.basePrice,
+            discountAmount: totalDiscount,
+            serviceDetails: {
+              title: service.title,
+              description: service.description,
+              duration: service.duration,
+              category: service.category
+            }
+          }];
+          existingDraft.date = bookingDate;
+          existingDraft.time = resolvedTime;
+          existingDraft.address = address;
+          existingDraft.location = (address && typeof address.lat === 'number' && typeof address.lng === 'number') ? {
+            type: 'Point',
+            coordinates: [address.lng, address.lat]
+          } : undefined;
+          existingDraft.notes = notes || null;
+          existingDraft.couponApplied = couponDetails;
+          existingDraft.totalDiscount = totalDiscount;
+          existingDraft.subtotal = subtotal;
+          existingDraft.totalAmount = totalAmount;
+          existingDraft.paymentMethod = paymentMethod;
+          existingDraft.isRebook = isRebook || false;
+          existingDraft.originalBooking = originalBooking || null;
+          existingDraft.isFavoriteProviderBooking = false;
+          existingDraft.provider = undefined; // Remain unassigned until confirmation
+          existingDraft.zoneId = detectedZoneId || undefined;
+          existingDraft.bookingType = resolvedBookingType;
+          existingDraft.isEmergency = resolvedIsEmergency;
+          existingDraft.isInstant = resolvedIsInstant;
+          existingDraft.estimatedDuration = estimatedDuration !== undefined ? estimatedDuration : null;
+          existingDraft.travelBufferMinutes = travelBufferMinutes !== undefined ? travelBufferMinutes : null;
+          existingDraft.expectedStartTime = expectedStartTime ? new Date(expectedStartTime) : null;
+          existingDraft.expectedEndTime = expectedEndTime ? new Date(expectedEndTime) : null;
+          existingDraft.providerAcceptanceStatus = providerAcceptanceStatus !== undefined ? providerAcceptanceStatus : null;
+          existingDraft.reassignmentReason = reassignmentReason !== undefined ? reassignmentReason : null;
+          existingDraft.surgeCharge = surgeCharge !== undefined ? surgeCharge : 0;
+          existingDraft.providerBonus = providerBonus !== undefined ? providerBonus : 0;
+          existingDraft.bookingPriority = bookingPriority || 'medium';
+          existingDraft.providerResponseDeadline = providerResponseDeadline ? new Date(providerResponseDeadline) : null;
+          existingDraft.trustedProviderOnly = trustedProviderOnly !== undefined ? trustedProviderOnly : false;
+          existingDraft.status = 'pending';
+          existingDraft.paymentStatus = 'pending';
+          existingDraft.confirmedBooking = false; // Always false for checkout draft
+          existingDraft.rainCharge = rainCharge;
+          existingDraft.trafficCharge = trafficCharge;
+          existingDraft.nightCharge = nightCharge;
+          existingDraft.demandSurge = demandSurge;
+          existingDraft.visitingCharge = visitingCharge;
+          existingDraft.festivalCharge = festivalCharge;
+          existingDraft.emergencySurge = emergencySurge;
+          existingDraft.platformFee = platformFee;
+          existingDraft.customCharges = customCharges;
+          existingDraft.metadata = {
+            ip: req.clientIp || req.ip || req.socket?.remoteAddress || '0.0.0.0',
+            userAgent: req.headers['user-agent'],
+            totalSurcharge,
+            surchargeBreakdown
+          };
+
+          if (session) {
+            await existingDraft.save({ session });
+          } else {
+            await existingDraft.save();
+          }
+
           return {
-            isDuplicate: true,
-            data: existingBooking.toObject(),
-            bookingId: existingBooking.bookingId || existingBooking._id,
-            _id: existingBooking._id
+            isUpdated: true,
+            data: existingDraft.toObject(),
+            bookingId: existingDraft.bookingId || existingDraft._id,
+            _id: existingDraft._id
           };
         }
 
         const startPin = Math.floor(1000 + Math.random() * 9000).toString();
         const completionPin = Math.floor(1000 + Math.random() * 9000).toString();
 
-        // Create booking
+        // Create booking as unconfirmed checkout draft
         const booking = new Booking({
           bookingId: generateBookingId(),
           customer: req.user._id,
@@ -1189,8 +1274,8 @@ class BookingService {
           paymentMethod,
           isRebook: isRebook || false,
           originalBooking: originalBooking || null,
-          isFavoriteProviderBooking: !!assignedProviderId,
-          provider: assignedProviderId || undefined,
+          isFavoriteProviderBooking: false,
+          provider: undefined, // Unassigned until payment/confirmation
           zoneId: detectedZoneId || undefined,
           bookingType: resolvedBookingType,
           isEmergency: resolvedIsEmergency,
@@ -1208,9 +1293,9 @@ class BookingService {
           trustedProviderOnly: trustedProviderOnly !== undefined ? trustedProviderOnly : false,
           startPin,
           completionPin,
-          status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
+          status: 'pending',
           paymentStatus: 'pending',
-          confirmedBooking: paymentMethod === 'cash',
+          confirmedBooking: false, // Checkout draft is unconfirmed!
           rainCharge,
           trafficCharge,
           nightCharge,
@@ -1221,11 +1306,9 @@ class BookingService {
           platformFee,
           customCharges,
           statusHistory: [{
-            status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
+            status: 'pending',
             timestamp: new Date(),
-            note: assignedProviderId
-              ? `Booking created with preferred provider. START_PIN:**** COMPLETION_PIN:****`
-              : `Booking created. START_PIN:**** COMPLETION_PIN:****`,
+            note: `Checkout draft created. START_PIN:**** COMPLETION_PIN:****`,
             updatedBy: 'customer'
           }],
           metadata: {
@@ -1243,45 +1326,6 @@ class BookingService {
           await booking.save();
         }
 
-        // Link active booking if directly assigned with cash payment
-        if (paymentMethod === 'cash' && assignedProviderId) {
-          const provUpdate = Provider.findByIdAndUpdate(assignedProviderId, {
-            activeBooking: booking._id,
-            lastUpdated: new Date()
-          });
-          if (session) await provUpdate.session(session);
-          else await provUpdate;
-        }
-
-
-        // If coupon was applied, save the updated coupon and flag user firstBookingUsed if first-booking coupon
-        if (couponCode && couponDetails) {
-          const Coupon = require('../coupon/coupon-model');
-          const couponQuery = Coupon.findOne({ code: couponCode.trim().toUpperCase() });
-          const coupon = session ? await couponQuery.session(session) : await couponQuery;
-          if (coupon) {
-            coupon.usedBy = coupon.usedBy || [];
-            coupon.usedBy.push({
-              user: req.user._id,
-              bookingValue: subtotal,
-              usedAt: new Date()
-            });
-            if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
-              coupon.isActive = false;
-            }
-            if (session) await coupon.save({ session });
-            else await coupon.save();
-
-            if (coupon.isFirstBooking) {
-              const userUpdate = User.findByIdAndUpdate(req.user._id, {
-                $set: { firstBookingUsed: true }
-              });
-              if (session) await userUpdate.session(session);
-              else await userUpdate;
-            }
-          }
-        }
-
         return {
           isDuplicate: false,
           data: { ...booking.toObject(), startPin, completionPin },
@@ -1290,46 +1334,25 @@ class BookingService {
         };
       });
 
-      if (bookingResult.isDuplicate) {
+      if (bookingResult.isDuplicate || bookingResult.isUpdated) {
         return res.status(200).json({
           success: true,
-          message: 'Existing booking found. Returning current booking.',
+          message: bookingResult.isUpdated ? 'Checkout booking updated successfully.' : 'Existing checkout booking found.',
           data: enrichBookingData(bookingResult.data),
           bookingId: bookingResult.bookingId,
           _id: bookingResult._id,
-          isDuplicate: true
+          isDuplicate: !!bookingResult.isDuplicate,
+          isUpdated: !!bookingResult.isUpdated
         });
       }
 
       res.status(201).json({
         success: true,
-        message: 'Booking created successfully. Please confirm payment to complete booking.',
+        message: 'Booking checkout draft created successfully. Please confirm payment to complete booking.',
         data: enrichBookingData(bookingResult.data),
         bookingId: bookingResult.bookingId,
         _id: bookingResult._id
       });
-
-      // Trigger auto-assignment if booking is confirmed immediately (cash payment method)
-      if (paymentMethod === 'cash') {
-        autoAssignProviderIfEnabled(bookingResult._id);
-      }
-
-      // Real-time notification (non-blocking)
-      try {
-        if (bookingResult.data.provider) {
-          const providerDoc = await Provider.findById(bookingResult.data.provider).select('_id').lean();
-          if (providerDoc?._id) {
-            sendNotification(
-              providerDoc._id,
-              'provider',
-              'New Booking Request',
-              `You have a new booking request for ${bookingResult.data.services?.[0]?.serviceDetails?.title || 'a service'}.`,
-              'booking',
-              bookingResult._id
-            );
-          }
-        }
-      } catch (e) { /* ignore notification errors */ }
 
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -1532,6 +1555,39 @@ class BookingService {
         const userUpdate = User.findByIdAndUpdate(userId, { $inc: { totalBookings: 1 } });
         if (session) await userUpdate.session(session);
         else await userUpdate;
+
+        // If coupon was applied, consume coupon now that booking is confirmed
+        if (booking.couponApplied && booking.couponApplied.code) {
+          const Coupon = require('../coupon/coupon-model');
+          const couponCode = booking.couponApplied.code.trim().toUpperCase();
+          const couponQuery = Coupon.findOne({ code: couponCode });
+          const coupon = session ? await couponQuery.session(session) : await couponQuery;
+          if (coupon) {
+            coupon.usedBy = coupon.usedBy || [];
+            const alreadyUsed = coupon.usedBy.some(u => u.booking && u.booking.toString() === booking._id.toString());
+            if (!alreadyUsed) {
+              coupon.usedBy.push({
+                user: userId,
+                booking: booking._id,
+                bookingValue: booking.subtotal || booking.totalAmount,
+                usedAt: new Date()
+              });
+              if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
+                coupon.isActive = false;
+              }
+              if (session) await coupon.save({ session });
+              else await coupon.save();
+
+              if (coupon.isFirstBooking) {
+                const firstBkUpdate = User.findByIdAndUpdate(userId, {
+                  $set: { firstBookingUsed: true }
+                });
+                if (session) await firstBkUpdate.session(session);
+                else await firstBkUpdate;
+              }
+            }
+          }
+        }
 
         return {
           success: true,

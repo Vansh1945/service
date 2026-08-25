@@ -8,7 +8,7 @@ import {
   Truck, Phone, ChevronRight, MessageCircle, AlertCircle
 } from 'lucide-react';
 import { getPublicServiceById } from '../../../services/ServiceService';
-import { getBooking, updateBookingPayment, payBooking } from '../../../services/BookingService';
+import { getBooking, updateBookingPayment, payBooking, confirmBooking } from '../../../services/BookingService';
 import axiosInstance from '../../../api/axiosInstance';
 import * as TransactionService from '../../../services/TransactionService';
 import * as CustomerService from '../../../services/CustomerService';
@@ -304,6 +304,7 @@ const BookingConfirmation = () => {
         autoClose: 2000
       });
       axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
+      clearCheckoutSession();
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
       console.error('Wallet payment error:', error);
@@ -401,6 +402,7 @@ const BookingConfirmation = () => {
 
             if (!verifyResponse.data?.success) throw new Error('Payment verification failed');
 
+            clearCheckoutSession();
             showToast('Payment successful! Booking confirmed.', 'success');
             axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
             setTimeout(() => navigate('/customer/bookings'), 2000);
@@ -446,6 +448,29 @@ const BookingConfirmation = () => {
     }
   };
 
+  const clearCheckoutSession = () => {
+    const targetServiceId = bookingDetails?.services?.[0]?.service?._id || bookingDetails?.services?.[0]?.service || bookingDetails?.serviceId;
+    if (targetServiceId) {
+      try {
+        sessionStorage.removeItem(`checkout_booking_${targetServiceId}`);
+      } catch (e) {}
+    }
+  };
+
+  const handleBackToBookService = () => {
+    const targetServiceId = bookingDetails?.services?.[0]?.service?._id || bookingDetails?.services?.[0]?.service || bookingDetails?.serviceId;
+    if (targetServiceId) {
+      navigate(`/customer/book-service/${targetServiceId}`, {
+        state: {
+          prefillBooking: bookingDetails,
+          checkoutBookingId: bookingId
+        }
+      });
+    } else {
+      navigate(-1);
+    }
+  };
+
   const handleCashPayment = async () => {
     if (isProcessingPayment) return;
     setIsProcessingPayment(true);
@@ -453,16 +478,16 @@ const BookingConfirmation = () => {
     try {
       setShowCashModal(false);
       showToast('Confirming booking...', 'info');
-      await updateBookingPayment(bookingDetails._id, {
-        paymentMethod: 'cash',
-        paymentStatus: 'pending',
-        bookingStatus: 'confirmed',
+      await confirmBooking({
+        bookingId: bookingDetails._id,
+        paymentMethod: 'cash'
       });
+      clearCheckoutSession();
       showToast('Booking Confirmed! Pay after service completion.', 'success');
       axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
-      showToast(error.response?.data?.message || 'Failed to confirm booking', 'error');
+      showToast(error.response?.data?.message || error.message || 'Failed to confirm booking', 'error');
     } finally {
       setIsProcessingPayment(false);
       setPaymentProgressMessage('');
@@ -505,7 +530,7 @@ const BookingConfirmation = () => {
       <div className="z-20 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-[98%] mx-auto px-4">
           <div className="flex items-center gap-4 py-3">
-            <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <button onClick={handleBackToBookService} className="p-2 hover:bg-gray-100 rounded-full transition-colors" title="Back / Edit Booking">
               <ArrowLeft className="w-5 h-5 text-secondary" />
             </button>
             <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
@@ -612,10 +637,20 @@ const BookingConfirmation = () => {
 
             {/* Booking Details */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <h3 className="text-base font-bold text-secondary mb-4 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-primary" />
-                Booking Details
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-secondary flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  Booking Details
+                </h3>
+                {!bookingDetails.confirmedBooking && (
+                  <button
+                    onClick={handleBackToBookService}
+                    className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                  >
+                    Edit Details
+                  </button>
+                )}
+              </div>
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                   <Calendar className="w-4 h-4 text-primary mt-0.5" />

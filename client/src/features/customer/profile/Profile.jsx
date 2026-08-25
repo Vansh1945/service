@@ -13,6 +13,7 @@ import {
     setDefaultSavedAddress
 } from '../../../services/CustomerService';
 import AddressSelector from '../../../components/AddressSelector';
+import AddressModal from '../../../components/modals/AddressModal';
 import Processing from '../../../components/ui-skeletons/Processing';
 import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import {
@@ -354,71 +355,15 @@ const SavedAddressesSection = ({ profile, fetchProfile, onBack }) => {
                 </div>
             )}
 
-            {/* Inline Compact Modal Dialog */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-3 sm:p-4 pb-20 sm:pb-4 animate-fade-in overflow-y-auto">
-                    <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl border border-gray-100 relative max-h-[85vh] sm:max-h-[90vh] flex flex-col my-auto">
-                        <div className="flex items-center justify-between pb-2 border-b border-gray-100 shrink-0">
-                            <div className="flex items-center gap-2">
-                                <MapPin className="w-4 h-4 text-primary" />
-                                <h3 className="text-sm font-bold text-secondary">
-                                    {editingAddress ? 'Edit Saved Address' : 'Add New Address'}
-                                </h3>
-                            </div>
-                            <button onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <form onSubmit={handleSaveAddress} className="overflow-y-auto py-2.5 space-y-2.5 flex-1 pr-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <label className="text-[11px] font-bold text-secondary uppercase shrink-0">Label:</label>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                    {LABEL_OPTIONS.map((item) => {
-                                        const IconComp = item.icon;
-                                        const isSel = addressForm.label === item.id;
-                                        return (
-                                            <button
-                                                key={item.id}
-                                                type="button"
-                                                onClick={() => setAddressForm(prev => ({ ...prev, label: item.id }))}
-                                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all ${
-                                                    isSel ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'
-                                                }`}
-                                            >
-                                                <IconComp className="w-3.5 h-3.5" /> {item.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <AddressSelector
-                                address={addressForm}
-                                onChange={(updated) => setAddressForm(prev => ({ ...prev, ...updated }))}
-                                errors={formErrors}
-                                compact={true}
-                            />
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between pt-2 border-t border-gray-100 shrink-0 gap-2">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        id="isDefault"
-                                        checked={addressForm.isDefault}
-                                        onChange={(e) => setAddressForm(prev => ({ ...prev, isDefault: e.target.checked }))}
-                                        className="w-3.5 h-3.5 text-primary rounded border-gray-300 cursor-pointer"
-                                    />
-                                    <label htmlFor="isDefault" className="text-xs font-semibold text-secondary cursor-pointer">Set as default</label>
-                                </div>
-                                <div className="flex items-center gap-2 justify-end">
-                                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-3.5 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                                    <Processing type="submit" loading={actionLoading} loadingText="Saving..." className="px-4 py-1.5 bg-primary text-white rounded-lg text-xs font-bold shadow-sm">
-                                        Save Address
-                                    </Processing>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <AddressModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                initialAddress={editingAddress}
+                onAddressSaved={(_newlyCreated, updatedList) => {
+                    if (updatedList) setAddresses(updatedList);
+                    else fetchAddresses();
+                }}
+            />
 
             {deletingAddressId && (
                 <DeleteConfirmModal

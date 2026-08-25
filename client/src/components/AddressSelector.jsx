@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Building, ChevronDown } from 'lucide-react';
+import { MapPin, Building, ChevronDown, Home, Briefcase, ShoppingBag } from 'lucide-react';
 import LocationPickerModal from './modals/LocationPickerModal';
 import { buildAddressPreview, smartAddressBuilder, buildStreetAddress } from '../utils/format';
 import { latLngToS2CellId } from '../utils/s2Helper';
@@ -9,7 +9,8 @@ const AddressSelector = ({
   onChange,
   errors = {},
   className = "",
-  compact = false
+  compact = false,
+  showLabel = false
 }) => {
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const selectedCountry = 'IN'; // Fixed to India for now
@@ -142,6 +143,39 @@ const AddressSelector = ({
 
   return (
     <div className={`${compact ? 'space-y-2.5' : 'space-y-4'} ${className}`}>
+      {/* Label Selection Row */}
+      {showLabel && (
+        <div className="flex flex-col gap-1.5 pb-2 border-b border-gray-100">
+          <label className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider">LABEL:</label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { id: 'Home', label: 'Home', icon: Home },
+              { id: 'Office', label: 'Office', icon: Briefcase },
+              { id: 'Shop', label: 'Shop', icon: ShoppingBag },
+              { id: 'Other', label: 'Other', icon: MapPin }
+            ].map((item) => {
+              const IconComp = item.icon;
+              const isSel = (address.label || 'Home') === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleFieldChange('label', item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-bold transition-all ${
+                    isSel
+                      ? 'border-primary bg-primary/10 text-primary shadow-xs'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <IconComp className="w-3.5 h-3.5" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Section Header with Map Selector Trigger */}
       <div className={`flex justify-between items-center ${compact ? 'pb-1 border-b border-gray-100' : 'pb-2 border-b border-gray-150'}`}>
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
