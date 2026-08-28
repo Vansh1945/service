@@ -62,6 +62,13 @@ router.get('/admin/razorpay/logs', adminAuthMiddleware, adminRoleCheck, paymentC
 router.get('/admin/failed-payments', adminAuthMiddleware, adminRoleCheck, paymentController.getFailedPayments);
 router.get('/admin/audit-logs', adminAuthMiddleware, adminRoleCheck, paymentController.getAuditLogs);
 
+// ── Razorpay Synchronization & Reconciliation Admin Routes ────────────────
+router.post('/admin/razorpay/sync-all', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayAll);
+router.post('/admin/razorpay/sync-payments', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayPayments);
+router.post('/admin/razorpay/sync-settlements', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpaySettlements);
+router.post('/admin/razorpay/sync-refunds', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayRefunds);
+router.post('/admin/razorpay/sync-recon', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayRecon);
+
 // ── Master Financial Ledger Routes ────────────────────
 router.get('/admin/ledger', adminAuthMiddleware, adminRoleCheck, paymentController.getMasterLedger);
 router.get('/admin/ledger-detail/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getLedgerDetail);

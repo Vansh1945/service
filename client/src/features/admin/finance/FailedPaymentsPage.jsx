@@ -59,7 +59,7 @@ const FailedPaymentsPage = () => {
   const handleRetryVerify = async (paymentId) => {
     try {
       setRetryingId(paymentId);
-      const res = await TransactionService.retryVerifyPayment(paymentId);
+      const res = await TransactionService.adminRetryVerify(paymentId);
       if (res.data?.success) {
         fetchFailedPayments(true);
       }

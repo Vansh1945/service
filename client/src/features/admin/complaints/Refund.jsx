@@ -303,6 +303,7 @@ const DetailedInspectionModal = ({ data, isLedgerItem, onClose, onActionSuccess,
   const isPending = data.refundStatus === 'pending' || normalizeStatus(booking.paymentStatus) === 'refundpending';
 
   const handleApproveAction = async () => {
+    if (submitting) return;
     setSubmitting(true);
     try {
       let res;
@@ -324,13 +325,20 @@ const DetailedInspectionModal = ({ data, isLedgerItem, onClose, onActionSuccess,
       }
     } catch (err) {
       console.error(err);
-      showToast(err.response?.data?.message || 'Error executing refund action', 'error');
+      if (err.response?.status === 409) {
+        showToast(err.response?.data?.message || 'Refund claim already processed (Conflict)', 'info');
+        onActionSuccess();
+        onClose();
+      } else {
+        showToast(err.response?.data?.message || 'Error executing refund action', 'error');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleRejectAction = async () => {
+    if (submitting) return;
     setSubmitting(true);
     try {
       let res;
@@ -348,7 +356,13 @@ const DetailedInspectionModal = ({ data, isLedgerItem, onClose, onActionSuccess,
       }
     } catch (err) {
       console.error(err);
-      showToast(err.response?.data?.message || 'Error rejecting refund action', 'error');
+      if (err.response?.status === 409) {
+        showToast(err.response?.data?.message || 'Refund claim already processed (Conflict)', 'info');
+        onActionSuccess();
+        onClose();
+      } else {
+        showToast(err.response?.data?.message || 'Error rejecting refund action', 'error');
+      }
     } finally {
       setSubmitting(false);
     }

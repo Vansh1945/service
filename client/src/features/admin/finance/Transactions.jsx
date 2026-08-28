@@ -64,21 +64,26 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const MethodBadge = ({ method }) => {
-  const m = (method || '').toLowerCase();
+const MethodBadge = ({ method, paymentMethodDisplay }) => {
+  const label = paymentMethodDisplay || method || 'N/A';
+  const m = String(label).toLowerCase();
   const map = {
     upi: 'bg-indigo-100 text-indigo-800 font-extrabold',
+    qr: 'bg-teal-100 text-teal-800 font-extrabold',
+    qr_code: 'bg-teal-100 text-teal-800 font-extrabold',
+    upi_qr: 'bg-teal-100 text-teal-800 font-extrabold',
     card: 'bg-blue-100 text-blue-800',
     netbanking: 'bg-cyan-100 text-cyan-800',
     wallet: 'bg-amber-100 text-amber-800',
     cash: 'bg-lime-100 text-lime-800',
-    mixed: 'bg-primary/10 text-primary',
+    cod: 'bg-lime-100 text-lime-800',
+    mixed: 'bg-purple-100 text-purple-800',
     online: 'bg-sky-100 text-sky-800',
     system: 'bg-gray-100 text-gray-600',
   };
   return (
     <span className={`px-2 py-0.5 ${map[m] || 'bg-gray-100 text-gray-600'} rounded-md text-[10px] font-bold uppercase`}>
-      {m === 'upi' ? 'UPI (Razorpay QR)' : m || 'N/A'}
+      {label}
     </span>
   );
 };

@@ -1528,7 +1528,7 @@ const AdminBookingsView = () => {
                                         <InfoRow label="Created">{bk.createdAt ? new Date(bk.createdAt).toLocaleDateString() : '—'}</InfoRow>
                                         <InfoRow label="Payment Method">
                                             <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-750 border border-blue-200">
-                                                {bk.paymentMethod || '—'}
+                                                {bk.paymentMethodDisplay || bk.paymentMethod || '—'}
                                             </span>
                                         </InfoRow>
                                         <InfoRow label="Service Zone">
@@ -1944,15 +1944,30 @@ const AdminBookingsView = () => {
                                                     </div>
                                                 </div>
                                             )}
-
                                             {/* Payment Status & Details */}
                                             <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
                                                  <div className="flex justify-between items-center">
                                                      <span className="text-[10px] text-gray-500">Payment Status</span>
-                                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrowhold'].includes(normalizeStatus(pay.status)) ? 'bg-green-100 text-green-700' : normalizeStatus(pay.status) === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                         {['escrowhold', 'escrow_hold'].includes(normalizeStatus(pay.status)) ? 'Escrow Hold' : (pay.status || '—')}
+                                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrowhold', 'success', 'completed'].includes(normalizeStatus(bk.paymentDisplayStatus || pay.status || bk.paymentStatus)) ? 'bg-green-100 text-green-700' : normalizeStatus(pay.status) === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                         {['escrowhold', 'escrow_hold'].includes(normalizeStatus(pay.status)) ? 'Escrow Hold' : (bk.paymentDisplayStatus || pay.status || bk.paymentStatus || '—')}
                                                      </span>
                                                  </div>
+                                                 {(bk.reconciliationStatus || bk.reconciliation?.reconciliationStatus) && (
+                                                     <div className="flex justify-between items-center">
+                                                         <span className="text-[10px] text-gray-500">Customer Recon</span>
+                                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${(bk.reconciliationStatus || bk.reconciliation?.reconciliationStatus) === 'MATCHED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                             {bk.reconciliationStatus || bk.reconciliation?.reconciliationStatus}
+                                                         </span>
+                                                     </div>
+                                                 )}
+                                                 {(bk.settlementStatus || pay.settlementStatus) && (
+                                                     <div className="flex justify-between items-center">
+                                                         <span className="text-[10px] text-gray-500">Settlement Status</span>
+                                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${(bk.paymentMethod === 'cash' || bk.paymentMethod === 'cod') ? 'bg-gray-100 text-gray-500' : (bk.settlementStatus || pay.settlementStatus) === 'settled' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                             {(bk.paymentMethod === 'cash' || bk.paymentMethod === 'cod') ? 'N/A' : (bk.settlementStatus || pay.settlementStatus)}
+                                                         </span>
+                                                     </div>
+                                                 )}
                                                  {selectedBooking.refundData?.decision && (
                                                      <div className="flex justify-between items-center">
                                                          <span className="text-[10px] text-gray-500">Admin Refund</span>

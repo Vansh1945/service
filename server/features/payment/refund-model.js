@@ -62,6 +62,11 @@ const refundSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    idempotencyKey: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
     walletTransactionId: {
       type: String,
     },

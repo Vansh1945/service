@@ -94,3 +94,25 @@ export const getMasterLedger = (params) => {
 export const getLedgerDetail = (id) => {
     return axiosInstance.get(`/transaction/admin/ledger-detail/${id}`);
 };
+
+// ── Razorpay Synchronization API ──────────────────────────────────────────────
+export const syncRazorpayAll = (params) => {
+    return axiosInstance.post("/transaction/admin/razorpay/sync-all", null, { params });
+};
+
+export const syncRazorpayPayments = (params) => {
+    return axiosInstance.post("/transaction/admin/razorpay/sync-payments", null, { params });
+};
+
+export const syncRazorpaySettlements = (params) => {
+    return axiosInstance.post("/transaction/admin/razorpay/sync-settlements", null, { params });
+};
+
+export const syncRazorpayRefunds = (params) => {
+    return axiosInstance.post("/transaction/admin/razorpay/sync-refunds", null, { params });
+};
+
+export const syncRazorpayRecon = (params) => {
+    return axiosInstance.post("/transaction/admin/razorpay/sync-recon", null, { params });
+};
+

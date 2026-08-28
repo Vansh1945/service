@@ -301,7 +301,7 @@ const SettlementsPage = () => {
 
                       {/* 12. Settlement Date */}
                       <td className="p-3.5 text-slate-400 whitespace-nowrap">
-                        {fmtDate(s.settlementDate || s.updatedAt || s.createdAt)}
+                        {s.settlementDate ? fmtDate(s.settlementDate) : '—'}
                       </td>
 
                       {/* 13. Action */}

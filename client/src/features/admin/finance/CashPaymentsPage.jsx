@@ -260,15 +260,9 @@ const CashPaymentsPage = () => {
 
                       {/* 12. Settlement Status */}
                       <td className="p-3.5">
-                        {(() => {
-                          const rawSettlement = txn.settlementStatus || (isVerified ? 'Settled' : 'Pending Settlement');
-                          const color = getStatusColor(rawSettlement);
-                          return (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${color}`}>
-                              {formatStatus(rawSettlement)}
-                            </span>
-                          );
-                        })()}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border bg-gray-100 text-gray-500 border-gray-200">
+                          N/A
+                        </span>
                       </td>
 
                       {/* 13. Deposit Status */}

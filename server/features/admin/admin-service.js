@@ -3198,27 +3198,84 @@ class AdminService {
             const Booking = require('../booking/booking-model');
             const RefundEngineService = require('../payment/refund-engine-service');
 
-            const refund = await Refund.findById(id);
-            if (!refund) {
-                return res.status(404).json({ success: false, message: 'Refund record not found.' });
+            const adminId = req.user?._id || req.admin?._id;
+            const isAdmin = req.user?.role === 'admin' || req.admin?.role === 'admin';
+            if (!adminId || !isAdmin) {
+                return res.status(403).json({ success: false, message: 'Unauthorized. Admin authentication required.' });
             }
 
-            if (refund.refundStatus === 'completed') {
-                return res.status(400).json({ success: false, message: 'Refund is already completed.' });
+            // Atomic pending -> approved transition (eliminates concurrent double-approval on same refund record)
+            const refund = await Refund.findOneAndUpdate(
+                { _id: id, refundStatus: 'pending' },
+                {
+                    $set: {
+                        refundStatus: 'approved',
+                        approvedBy: adminId,
+                        approvedAt: new Date(),
+                    },
+                    $push: {
+                        timeline: {
+                            status: 'approved',
+                            actor: 'Admin',
+                            notes: 'Refund manually approved by admin',
+                            timestamp: new Date(),
+                        },
+                        auditLogs: {
+                            action: 'REFUND_APPROVED',
+                            performedBy: adminId,
+                            userRole: 'admin',
+                            details: { refundId: id },
+                            ip: req.ip || '',
+                            timestamp: new Date(),
+                        },
+                    },
+                },
+                { new: true }
+            );
+
+            if (!refund) {
+                const existingRefund = await Refund.findById(id);
+                if (!existingRefund) {
+                    return res.status(404).json({ success: false, message: 'Refund record not found.' });
+                }
+
+                if (existingRefund.refundStatus === 'completed') {
+                    return res.status(200).json({ success: true, alreadyCompleted: true, message: 'Refund is already completed.', data: existingRefund });
+                }
+
+                if (existingRefund.refundStatus === 'rejected') {
+                    return res.status(400).json({ success: false, message: 'Rejected refunds cannot be approved.' });
+                }
+
+                if (existingRefund.refundStatus === 'processing') {
+                    const booking = await Booking.findById(existingRefund.bookingId);
+                    const settings = await RefundEngineService.getRefundSettings();
+                    const result = await RefundEngineService.executeRefundPayout(existingRefund, booking, settings, req.ip || '');
+                    return res.status(200).json({
+                        success: result.success,
+                        message: result.message || 'Refund processing recovery checked.',
+                        data: result.refund,
+                    });
+                }
+
+                if (existingRefund.refundStatus === 'approved') {
+                    const booking = await Booking.findById(existingRefund.bookingId);
+                    const settings = await RefundEngineService.getRefundSettings();
+                    const result = await RefundEngineService.executeRefundPayout(existingRefund, booking, settings, req.ip || '');
+                    return res.status(200).json({
+                        success: result.success,
+                        message: result.message || 'Refund payout executed.',
+                        data: result.refund,
+                    });
+                }
+
+                return res.status(400).json({ success: false, message: `Refund cannot be approved from status '${existingRefund.refundStatus}'.` });
             }
 
             const booking = await Booking.findById(refund.bookingId);
             if (!booking) {
                 return res.status(404).json({ success: false, message: 'Associated booking not found.' });
             }
-
-            const adminId = req.user?._id || req.admin?._id;
-            refund.approvedBy = adminId;
-            refund.approvedAt = new Date();
-            refund.refundStatus = 'approved';
-            refund.addTimelineStep('approved', 'Admin', 'Refund manually approved by admin');
-            refund.addAuditLog('REFUND_APPROVED', adminId, 'admin', { refundId: refund.refundId }, req.ip || '');
-            await refund.save();
 
             const settings = await RefundEngineService.getRefundSettings();
             const result = await RefundEngineService.executeRefundPayout(refund, booking, settings, req.ip || '');
@@ -3235,8 +3292,18 @@ class AdminService {
     }
 
     static async rejectRefundById(req, res) {
-        const session = await mongoose.startSession();
-        session.startTransaction();
+        let session = null;
+        let useTransaction = false;
+        try {
+            if (mongoose.connection?.client?.topology?.description?.type !== 'Single' && mongoose.connection?.replicaSet) {
+                session = await mongoose.startSession();
+                session.startTransaction();
+                useTransaction = true;
+            }
+        } catch (sErr) {
+            session = null;
+            useTransaction = false;
+        }
 
         try {
             const idParam = req.params.id || req.params.bookingId;
@@ -3246,13 +3313,15 @@ class AdminService {
             const Complaint = require('../complaint/complaint-model');
             const ProviderEarning = require('../provider/provider-earning-model');
 
-            let refundDoc = await Refund.findById(idParam).session(session);
+            const sessOpt = useTransaction && session ? { session } : {};
+
+            let refundDoc = useTransaction && session ? await Refund.findById(idParam).session(session) : await Refund.findById(idParam);
             let bookingId = null;
 
             if (refundDoc) {
                 if (refundDoc.refundStatus === 'completed') {
-                    await session.abortTransaction();
-                    session.endSession();
+                    if (useTransaction && session) await session.abortTransaction();
+                    if (session) session.endSession();
                     return res.status(400).json({ success: false, message: 'Completed refunds cannot be rejected.' });
                 }
 
@@ -3261,26 +3330,29 @@ class AdminService {
                 refundDoc.failureReason = reason;
                 refundDoc.addTimelineStep('rejected', 'Admin', reason);
                 refundDoc.addAuditLog('REFUND_REJECTED', adminId, 'admin', { reason }, req.ip || '');
-                await refundDoc.save({ session });
+                await refundDoc.save(sessOpt);
                 bookingId = refundDoc.bookingId;
             } else {
                 bookingId = idParam;
-                const pendingRefund = await Refund.findOne({ bookingId, refundStatus: { $in: ['pending', 'approved', 'draft'] } }).session(session);
+                const pendingRefund = useTransaction && session
+                    ? await Refund.findOne({ bookingId, refundStatus: { $in: ['pending', 'approved', 'draft'] } }).session(session)
+                    : await Refund.findOne({ bookingId, refundStatus: { $in: ['pending', 'approved', 'draft'] } });
+
                 if (pendingRefund) {
                     const adminId = req.user?._id || req.admin?._id;
                     pendingRefund.refundStatus = 'rejected';
                     pendingRefund.failureReason = reason;
                     pendingRefund.addTimelineStep('rejected', 'Admin', reason);
                     pendingRefund.addAuditLog('REFUND_REJECTED', adminId, 'admin', { reason }, req.ip || '');
-                    await pendingRefund.save({ session });
+                    await pendingRefund.save(sessOpt);
                     refundDoc = pendingRefund;
                 }
             }
 
-            const booking = await Booking.findById(bookingId).session(session);
+            const booking = useTransaction && session ? await Booking.findById(bookingId).session(session) : await Booking.findById(bookingId);
             if (!booking) {
-                await session.abortTransaction();
-                session.endSession();
+                if (useTransaction && session) await session.abortTransaction();
+                if (session) session.endSession();
                 return res.status(404).json({ success: false, message: 'Booking not found.' });
             }
 
@@ -3308,14 +3380,18 @@ class AdminService {
                 timestamp: new Date()
             });
 
-            await booking.save({ session });
+            await booking.save(sessOpt);
 
             // ── 2. COMPLAINT UPDATE ──
             let complaintObj = null;
             if (booking.complaint) {
-                complaintObj = await Complaint.findById(booking.complaint._id || booking.complaint).session(session);
+                complaintObj = useTransaction && session
+                    ? await Complaint.findById(booking.complaint._id || booking.complaint).session(session)
+                    : await Complaint.findById(booking.complaint._id || booking.complaint);
             } else {
-                complaintObj = await Complaint.findOne({ booking: booking._id }).session(session);
+                complaintObj = useTransaction && session
+                    ? await Complaint.findOne({ booking: booking._id }).session(session)
+                    : await Complaint.findOne({ booking: booking._id });
             }
 
             if (complaintObj) {
@@ -3325,20 +3401,27 @@ class AdminService {
                 complaintObj.resolvedBy = req.user?._id || req.admin?._id;
                 if (!complaintObj.statusHistory) complaintObj.statusHistory = [];
                 complaintObj.statusHistory.push({ status: 'resolved', updatedAt: new Date() });
-                await complaintObj.save({ session });
+                await complaintObj.save(sessOpt);
             }
 
             // ── 3. EARNINGS RELEASE ──
             if (ProviderEarning) {
-                const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+                const earning = useTransaction && session
+                    ? await ProviderEarning.findOne({ booking: booking._id }).session(session)
+                    : await ProviderEarning.findOne({ booking: booking._id });
+
                 if (earning && (earning.status === 'held' || earning.status === 'underreview')) {
                     earning.status = 'available';
-                    await earning.save({ session });
+                    await earning.save(sessOpt);
                 }
             }
 
-            await session.commitTransaction();
-            session.endSession();
+            if (useTransaction && session) {
+                await session.commitTransaction();
+                session.endSession();
+            } else if (session) {
+                session.endSession();
+            }
 
             return res.status(200).json({
                 success: true,
@@ -3346,10 +3429,10 @@ class AdminService {
                 data: refundDoc || { bookingId: booking._id },
             });
         } catch (error) {
-            if (session.inTransaction()) {
+            if (useTransaction && session && session.inTransaction()) {
                 await session.abortTransaction();
             }
-            session.endSession();
+            if (session) session.endSession();
             console.error('Reject refund error:', error);
             return res.status(400).json({ success: false, message: error.message });
         }

@@ -142,7 +142,7 @@ const transactionSchema = new Schema({
   settlementStatus: {
     type: String,
     enum: ['authorized', 'captured', 'queued', 'processing', 'settled', 'failed', 'reversed', 'refunded', 'partial_refund', 'disputed'],
-    default: 'settled',
+    default: 'queued',
     set: function (v) {
       if (!v) return v;
       return v.toLowerCase().replace(/[^a-z0-9_]/g, '');

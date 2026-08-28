@@ -21,6 +21,15 @@ export const formatStatus = (status) => {
   if (clean === 'pending_deposit' || clean === 'pendingdeposit') return 'Pending Deposit';
   if (clean === 'pending_settlement' || clean === 'pendingsettlement') return 'Pending Settlement';
   if (clean === 'pending_verify' || clean === 'pendingverify') return 'Pending Verify';
+  if (clean === 'matched') return 'Matched';
+  if (clean === 'amount_mismatch') return 'Amount Mismatch';
+  if (clean === 'cash_mismatch') return 'Cash Mismatch';
+  if (clean === 'pending_collection') return 'Pending Collection';
+  if (clean === 'pending_verification') return 'Pending Verification';
+  if (clean === 'missing_gateway_record') return 'Missing Gateway Record';
+  if (clean === 'pending_reconciliation') return 'Pending Reconciliation';
+  if (clean === 'not_reconciled') return 'Not Reconciled';
+  if (clean === 'pending_gateway') return 'Pending Gateway';
   return titleCase(status);
 };
 
@@ -59,6 +68,7 @@ const STATUS_COLOR_MAP = {
   deposited: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   reconciled: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   collected: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  matched: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 
   // Pending / In Progress statuses
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -84,9 +94,18 @@ const STATUS_COLOR_MAP = {
   pendingsettlement: 'bg-slate-100 text-slate-700 border-slate-200',
   pending_verify: 'bg-amber-50 text-amber-700 border-amber-200',
   pendingverify: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending_verification: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending_collection: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending_reconciliation: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending_gateway: 'bg-slate-100 text-slate-700 border-slate-200',
+  queued: 'bg-slate-100 text-slate-700 border-slate-200',
   unverified: 'bg-amber-50 text-amber-700 border-amber-200',
 
-  // Warning / Hold statuses
+  // Warning / Mismatch / Hold statuses
+  amount_mismatch: 'bg-rose-50 text-rose-700 border-rose-200',
+  cash_mismatch: 'bg-rose-50 text-rose-700 border-rose-200',
+  missing_gateway_record: 'bg-rose-50 text-rose-700 border-rose-200',
+  not_reconciled: 'bg-rose-50 text-rose-700 border-rose-200',
   on_hold: 'bg-orange-50 text-orange-700 border-orange-200',
   held: 'bg-orange-50 text-orange-700 border-orange-200',
   dispute_hold: 'bg-orange-50 text-orange-700 border-orange-200',
@@ -185,10 +204,15 @@ export const getDepositStatusBadge = (status) => {
 
 const PAYMENT_METHOD_MAP = {
   cod: { label: 'Cash on Delivery', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cash: { label: 'Cash', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   online: { label: 'Online Payment', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   razorpay: { label: 'Razorpay', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   wallet: { label: 'Wallet', color: 'bg-primary/10 text-primary border-primary/20' },
   upi: { label: 'UPI', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  qr: { label: 'QR', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  qr_code: { label: 'QR', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  upi_qr: { label: 'QR', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  mixed: { label: 'Mixed', color: 'bg-purple-50 text-purple-700 border-purple-200' },
   card: { label: 'Card Payment', color: 'bg-sky-50 text-sky-700 border-sky-200' },
   netbanking: { label: 'Net Banking', color: 'bg-amber-50 text-amber-700 border-amber-200' }
 };

@@ -6,6 +6,8 @@ const Service = require('../catalog/service-model');
 const CommissionRule = require('./commission-rule-model');
 const Refund = require('./refund-model');
 const PaymentRecord = require('./payment-record-model');
+try { require('../admin/admin-model'); } catch (e) { }
+try { require('../zone/zone-model'); } catch (e) { }
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
@@ -62,6 +64,16 @@ const isPlatformLedgerEligible = (txn) => {
     'escrow_hold', 'escrow_release'
   ];
   return platformTypes.includes(pType);
+};
+
+/**
+ * Helper: Safely return Mongoose session option if active
+ */
+const safeSessionOpt = (session) => {
+  if (session && typeof session.inTransaction === 'function' && session.inTransaction()) {
+    return { session };
+  }
+  return {};
 };
 
 
@@ -600,38 +612,17 @@ const verifyPayment = async (req, res, next) => {
       });
     }
 
-    // 12. APPLY SUCCESS SIDE-EFFECTS (ONLY after all checks pass)
-    transaction.razorpayPaymentId = razorpay_payment_id;
-    transaction.transactionId = razorpay_payment_id;
+    // 12. ROUTE THROUGH SHARED FINALIZER PATH (Using outer session)
     transaction.razorpaySignature = razorpay_signature;
-    transaction.razorpayOrderId = razorpay_order_id;
-    transaction.razorpayResponse = razorpayResponse;
-    transaction.paymentMethod = razorpayResponse.method || transaction.paymentMethod;
     if (razorpayResponse.fee != null) {
       transaction.gatewayFee = parseFloat((razorpayResponse.fee / 100).toFixed(2));
     }
     if (razorpayResponse.tax != null) {
       transaction.gatewayTax = parseFloat((razorpayResponse.tax / 100).toFixed(2));
     }
-    transaction.paymentStatus = 'success';
-    transaction.updatedAt = new Date();
-
-    if (transaction.paymentMethod === 'mixed') {
-      const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
-      const walletDeduction = match ? parseFloat(match[1]) : 0;
-      transaction.description = `Mixed Payment: Razorpay + Wallet (₹${walletDeduction})`;
-    }
-
     await transaction.save({ session });
 
-    booking.paymentStatus = 'escrowhold';
-    booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
-    booking.confirmedBooking = true;
-    if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
-      booking.status = 'pending';
-    }
-    booking.updatedAt = new Date();
-    await booking.save({ session });
+    const finalTxn = await handleSuccessfulPayment(razorpayResponse, session);
 
     await session.commitTransaction();
 
@@ -639,7 +630,7 @@ const verifyPayment = async (req, res, next) => {
       success: true,
       message: 'Payment verified successfully. Booking is pending provider acceptance.',
       data: {
-        transactionId: transaction._id,
+        transactionId: finalTxn._id || transaction._id,
         bookingId: booking._id,
         paymentStatus: booking.paymentStatus,
         bookingStatus: booking.status
@@ -673,40 +664,60 @@ const handleWebhook = async (req, res, next) => {
   return PaymentService.handleWebhook(req, res, next);
 };
 
-// Helper function to handle successful payment from webhook
+// Helper function to handle successful payment from webhook & verifyPayment
 const handleSuccessfulPayment = async (payment, session) => {
-  // 1. Find transaction by order ID
-  const transaction = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
+  const sess = safeSessionOpt(session).session || null;
+  // 1. Find transaction by order ID or payment ID
+  let transaction = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(sess);
+  if (!transaction && payment.id) {
+    transaction = await Transaction.findOne({ razorpayPaymentId: payment.id }).session(sess);
+  }
 
   if (!transaction) {
-    throw new Error('Transaction not found for successful payment');
+    throw new Error(`Transaction not found for order: ${payment.order_id || 'N/A'}, payment: ${payment.id || 'N/A'}`);
   }
 
-  if (transaction.paymentStatus === 'success' || transaction.paymentStatus === 'completed' || transaction.razorpayPaymentId === payment.id) {
-    global.logger.info(`Payment already processed for order: ${payment.order_id}`);
-    const { notifyAdmins } = require('../notification/notification-helper');
-    try {
-      notifyAdmins(
-        'Duplicate Payment Alert',
-        `Duplicate payment success received for order ${payment.order_id}, payment ID: ${payment.id}. Already processed.`,
-        'payment_alert',
-        transaction._id
-      );
-    } catch (e) { }
-    return;
+  // 2. Atomic Finalizer Claim (pending / processing -> success)
+  const claimRes = await Transaction.updateOne(
+    {
+      _id: transaction._id,
+      paymentStatus: { $in: ['pending', 'processing'] }
+    },
+    {
+      $set: {
+        paymentStatus: 'success',
+        razorpayPaymentId: payment.id,
+        transactionId: payment.id,
+        razorpayResponse: payment,
+        paymentMethod: transaction.paymentMethod === 'mixed' ? 'mixed' : (payment.method || transaction.paymentMethod || 'online'),
+        updatedAt: new Date()
+      }
+    },
+    sess ? { session: sess } : {}
+  );
+
+  // 3. Authoritative DB Re-read on modifiedCount === 0
+  if (claimRes.modifiedCount === 0) {
+    const latestTxn = await Transaction.findById(transaction._id).session(sess);
+    if (!latestTxn) return transaction;
+
+    const currentStatus = latestTxn.paymentStatus;
+    if (['success', 'completed', 'paid'].includes(currentStatus)) {
+      global.logger.info(`Payment already finalized for order: ${payment.order_id}, payment: ${payment.id}`);
+      return latestTxn;
+    } else if (currentStatus === 'failed') {
+      // Branch based on actual status: verify if gateway event legitimately proves capture
+      if (['captured', 'authorized'].includes(payment.status) && payment.id === latestTxn.razorpayPaymentId) {
+        latestTxn.paymentStatus = 'success';
+        await latestTxn.save(sess ? { session: sess } : {});
+      } else {
+        return latestTxn;
+      }
+    }
   }
 
-  transaction.paymentStatus = 'success';
-  transaction.razorpayPaymentId = payment.id;
-  transaction.transactionId = payment.id;
-  transaction.razorpayResponse = payment;
-  transaction.paymentMethod = payment.method || 'online';
-  transaction.updatedAt = new Date();
-  await transaction.save({ session });
-
-  // 2. Find the booking
-  const booking = await Booking.findById(transaction.booking).session(session);
-
+  // 4. Find the booking
+  const booking = await Booking.findById(transaction.booking).session(sess);
   if (!booking) {
     throw new Error('Booking not found');
   }
@@ -714,15 +725,15 @@ const handleSuccessfulPayment = async (payment, session) => {
   // Terminal Cash Guard: If booking was settled/paid via Cash, do not allow late online webhooks to override
   if (booking.paymentMethod === 'cash' && (booking.paymentStatus === 'paid' || booking.paymentStatus === 'settled')) {
     global.logger.info(`[handleSuccessfulPayment] Booking ${booking._id} already settled via Cash. Skipping online payment status override.`);
-    return;
+    return transaction;
   }
 
-  // Handle Wallet Deduction for Mixed Payments (Webhook Path)
+  // Handle Wallet Deduction for Mixed Payments
   if (transaction.paymentMethod === 'mixed') {
     const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
     const walletDeduction = match ? parseFloat(match[1]) : 0;
     transaction.description = `Mixed Payment: Razorpay + Wallet (₹${walletDeduction})`;
-    await transaction.save({ session });
+    await transaction.save(sess ? { session: sess } : {});
   }
 
   booking.paymentStatus = 'escrowhold';
@@ -733,14 +744,14 @@ const handleSuccessfulPayment = async (payment, session) => {
   if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
     booking.status = 'pending';
   }
-  await booking.save({ session });
+  await booking.save(sess ? { session: sess } : {});
 
-  // 5. Post-service payment handling - invoice generation removed
-  // Payment is now handled directly through transactions and provider earnings
+  return transaction;
 };
 
 // Helper function to handle failed payment from webhook
 const handleFailedPayment = async (payment, session) => {
+  const sess = safeSessionOpt(session).session || null;
   await Transaction.findOneAndUpdate(
     { razorpayOrderId: payment.order_id },
     {
@@ -750,19 +761,19 @@ const handleFailedPayment = async (payment, session) => {
       razorpayResponse: payment,
       updatedAt: new Date()
     },
-    { session }
+    sess ? { session: sess } : {}
   );
 
   const transaction = await Transaction.findOne({
     razorpayOrderId: payment.order_id
-  }).session(session);
+  }).session(sess);
 
   if (transaction) {
-    await rollbackWalletDeduction(transaction, session);
+    await rollbackWalletDeduction(transaction, sess);
     await Booking.findByIdAndUpdate(
       transaction.booking,
       { paymentStatus: 'failed' },
-      { session }
+      sess ? { session: sess } : {}
     );
   }
 };
@@ -770,6 +781,7 @@ const handleFailedPayment = async (payment, session) => {
 // Helper function to handle refund from webhook
 const handleRefundProcessed = async (refund, session) => {
   if (!refund || !refund.payment_id) return;
+  const sess = safeSessionOpt(session).session || null;
 
   // Use findOneAndUpdate atomically to prevent duplicate processing
   const transaction = await Transaction.findOneAndUpdate(
@@ -781,15 +793,14 @@ const handleRefundProcessed = async (refund, session) => {
       $set: {
         paymentStatus: 'refunded',
         refundStatus: 'completed',
-        refundedAt: new Date(),
-        updatedAt: new Date(),
-        razorpayResponse: refund // update response field
+        refundedAt: refund.created_at ? new Date(refund.created_at * 1000) : new Date(),
+        updatedAt: new Date()
       }
     },
-    { session, new: true }
+    sess ? { session: sess } : {}
   );
 
-  if (transaction) {
+  if (transaction && transaction.booking) {
     await Booking.findByIdAndUpdate(
       transaction.booking,
       {
@@ -797,7 +808,7 @@ const handleRefundProcessed = async (refund, session) => {
         'cancellationProgress.status': 'refundcompleted',
         'cancellationProgress.refundCompletedAt': new Date()
       },
-      { session }
+      sess ? { session: sess } : {}
     );
   }
 };
@@ -808,7 +819,8 @@ const handleRefundProcessed = async (refund, session) => {
  */
 const getAllTransactions = async (req, res, next) => {
   try {
-    const { bookingId, status, page = 1, limit = 10 } = req.query;
+    const bookingId = req.query.bookingId || req.query.search || req.query.q;
+    const { status, page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const filter = {};
@@ -880,7 +892,7 @@ const getAllTransactions = async (req, res, next) => {
       .populate('user', 'name email phone')
       .populate({
         path: 'booking',
-        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings companySurgeShare providerSurgeShare visitingCharge rainCharge trafficCharge nightCharge demandSurge platformFee customCharges commissionRule',
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings walletUsed onlinePaid cashToPay cashCollectionVerified paymentVerification companySurgeShare providerSurgeShare visitingCharge rainCharge trafficCharge nightCharge demandSurge platformFee customCharges commissionRule',
         populate: [
           { path: 'services.service', select: 'title' },
           { path: 'commissionRule', select: 'name rate type' }
@@ -894,16 +906,34 @@ const getAllTransactions = async (req, res, next) => {
 
     const total = await Transaction.countDocuments(filter);
 
+    const { buildCanonicalFinancialStatus } = require('./financial-status-service');
+    const enrichedTransactions = transactions.map(t => {
+      const canonical = buildCanonicalFinancialStatus(t, t.booking);
+      return {
+        ...t,
+        paymentDisplayStatus: canonical.paymentDisplayStatus,
+        bookingPaymentStatus: canonical.bookingPaymentStatus,
+        settlementStatus: canonical.settlementStatus,
+        settlementDisplayStatus: canonical.settlementDisplayStatus,
+        reconciliationStatus: canonical.reconciliationStatus,
+        gatewayReconciliationStatus: canonical.gatewayReconciliationStatus,
+        paymentMethodDisplay: canonical.paymentMethodDisplay,
+        gatewayStatus: canonical.gatewayStatus,
+        gatewayPaymentId: canonical.gatewayPaymentId,
+        gatewayOrderId: canonical.gatewayOrderId
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: transactions.length,
+      count: enrichedTransactions.length,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / limit),
-      data: transactions
+      data: enrichedTransactions
     });
   } catch (error) {
-    global.logger.error(`[TransactionController.getAllTransactions] Route: ${req.originalUrl || req.url} - Get transactions error: ${error.message}`, error);
+    global.logger?.error(`[TransactionController.getAllTransactions] Route: ${req.originalUrl || req.url} - Get transactions error: ${error.message}`, error);
     next(error);
   }
 };
@@ -1116,6 +1146,9 @@ const getAdminPaymentDetails = async (req, res, next) => {
       ...(booking?.paymentVerification?.verifiedAt ? [{ label: 'Payment Verified', timestamp: booking.paymentVerification.verifiedAt, status: 'done' }] : [])
     ];
 
+    const { buildCanonicalFinancialStatus } = require('./financial-status-service');
+    const canonical = buildCanonicalFinancialStatus(txn, booking);
+
     res.status(200).json({
       success: true,
       data: {
@@ -1126,8 +1159,14 @@ const getAdminPaymentDetails = async (req, res, next) => {
         razorpayOrderId: txn.razorpayOrderId || null,
         razorpaySignature: txn.razorpaySignature || null,
         paymentStatus: txn.paymentStatus,
+        paymentDisplayStatus: canonical.paymentDisplayStatus,
         captureStatus: txn.paymentStatus === 'success' || txn.paymentStatus === 'completed' ? 'captured' : txn.paymentStatus === 'failed' ? 'failed' : 'authorized',
-        settlementStatus: calculatedSettlementStatus,
+        settlementStatus: canonical.settlementStatus,
+        settlementDisplayStatus: canonical.settlementDisplayStatus,
+        reconciliationStatus: canonical.reconciliationStatus,
+        gatewayReconciliationStatus: canonical.gatewayReconciliationStatus,
+        paymentMethodDisplay: canonical.paymentMethodDisplay,
+        financialStatus: canonical,
         paymentMethod: txn.paymentMethod,
         paymentType,
 
@@ -1177,7 +1216,7 @@ const getAdminPaymentDetails = async (req, res, next) => {
       }
     });
   } catch (error) {
-    global.logger.error(`[TransactionController.getAdminPaymentDetails] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    global.logger?.error(`[TransactionController.getAdminPaymentDetails] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
     next(error);
   }
 };
@@ -1567,56 +1606,72 @@ const getFinanceOverview = async (req, res, next) => {
     const uniqueWeeklyTxns = deduplicateByPaymentIdentity(weeklyTxns);
     const uniqueMonthlyTxns = deduplicateByPaymentIdentity(monthlyTxns);
 
-    let totalRevenue = 0, onlineCollection = 0, cashCollection = 0, walletCollection = 0, mixedCollection = 0;
-    let gatewayFees = 0, gatewayTax = 0;
+    let totalRevenuePaise = 0, onlineCollectionPaise = 0, cashCollectionPaise = 0, walletCollectionPaise = 0, mixedCollectionPaise = 0;
+    let gatewayFeesPaise = 0, gatewayTaxPaise = 0;
 
     uniqueAllSuccessful.forEach(t => {
-      const amt = t.amount || 0;
-      totalRevenue += amt;
+      const amtPaise = toPaise(t.amount) || 0;
+      totalRevenuePaise += amtPaise;
 
-      if (t.gatewayFee) gatewayFees += t.gatewayFee;
-      if (t.gatewayTax) gatewayTax += t.gatewayTax;
+      if (t.gatewayFee) gatewayFeesPaise += (toPaise(t.gatewayFee) || 0);
+      if (t.gatewayTax) gatewayTaxPaise += (toPaise(t.gatewayTax) || 0);
 
       const method = t.paymentMethod?.toLowerCase();
-      if (method === 'razorpay' || method === 'online') onlineCollection += amt;
-      else if (method === 'cash' || method === 'cod') cashCollection += amt;
-      else if (method === 'wallet') walletCollection += amt;
-      else if (method === 'mixed') mixedCollection += amt;
-      else onlineCollection += amt;
+      if (method === 'razorpay' || method === 'online') onlineCollectionPaise += amtPaise;
+      else if (method === 'cash' || method === 'cod') cashCollectionPaise += amtPaise;
+      else if (method === 'wallet') walletCollectionPaise += amtPaise;
+      else if (method === 'mixed') mixedCollectionPaise += amtPaise;
+      else onlineCollectionPaise += amtPaise;
     });
 
-    let platformEarnings = 0;
-    let totalProviderEarningsFromBookings = 0;
+    const totalRevenue = totalRevenuePaise / 100;
+    const onlineCollection = onlineCollectionPaise / 100;
+    const cashCollection = cashCollectionPaise / 100;
+    const walletCollection = walletCollectionPaise / 100;
+    const mixedCollection = mixedCollectionPaise / 100;
+    const gatewayFees = gatewayFeesPaise / 100;
+    const gatewayTax = gatewayTaxPaise / 100;
+
+    let platformEarningsPaise = 0;
+    let totalProviderEarningsFromBookingsPaise = 0;
     completedBookings.forEach(b => {
       const isRefDisc = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
-      const refSubsidy = isRefDisc ? (b.totalDiscount || 0) : 0;
-      const netPlatformContribution = (b.commissionAmount || 0) + (b.companySurgeShare || 0) - refSubsidy;
+      const refSubsidyPaise = isRefDisc ? (toPaise(b.totalDiscount) || 0) : 0;
+      const netPlatformContributionPaise = (toPaise(b.commissionAmount) || 0) + (toPaise(b.companySurgeShare) || 0) - refSubsidyPaise;
 
-      platformEarnings += netPlatformContribution;
-      totalProviderEarningsFromBookings += (b.providerEarnings || 0);
+      platformEarningsPaise += netPlatformContributionPaise;
+      totalProviderEarningsFromBookingsPaise += (toPaise(b.providerEarnings) || 0);
     });
+
+    const platformEarnings = platformEarningsPaise / 100;
+    const totalProviderEarningsFromBookings = totalProviderEarningsFromBookingsPaise / 100;
 
     const totalProviderEarnings = (providerEarningStats && providerEarningStats[0]?.totalNet != null)
       ? providerEarningStats[0].totalNet
       : totalProviderEarningsFromBookings;
 
-    const todayRevenue = uniqueTodayTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const weeklyRevenue = uniqueWeeklyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const monthlyRevenue = uniqueMonthlyTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const todayRevenue = (uniqueTodayTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
+    const weeklyRevenue = (uniqueWeeklyTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
+    const monthlyRevenue = (uniqueMonthlyTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
 
-    let pendingRefunds = 0, completedRefunds = 0;
+    let pendingRefundsPaise = 0, completedRefundsPaise = 0;
     refunds.forEach(r => {
-      const amt = r.refundAmount || r.requestedAmount || 0;
+      const amtPaise = toPaise(r.refundAmount ?? r.requestedAmount ?? 0) || 0;
       const status = r.refundStatus || r.status;
-      if (status === 'completed') completedRefunds += amt;
-      else if (status === 'pending' || status === 'processing' || status === 'approved') pendingRefunds += amt;
+      if (status === 'completed') completedRefundsPaise += amtPaise;
+      else if (status === 'pending' || status === 'processing' || status === 'approved') pendingRefundsPaise += amtPaise;
     });
 
-    let providerPendingPayout = 0, completedPayout = 0;
+    const pendingRefunds = pendingRefundsPaise / 100;
+    const completedRefunds = completedRefundsPaise / 100;
+
+    let providerPendingPayoutPaise = 0, completedPayoutPaise = 0;
     providers.forEach(p => {
-      providerPendingPayout += (p.wallet?.pendingPayout || p.pendingPayout || 0);
-      completedPayout += (p.wallet?.totalWithdrawn || 0);
+      providerPendingPayoutPaise += (toPaise(p.wallet?.pendingPayout || p.pendingPayout) || 0);
+      completedPayoutPaise += (toPaise(p.wallet?.totalWithdrawn) || 0);
     });
+    const providerPendingPayout = providerPendingPayoutPaise / 100;
+    const completedPayout = completedPayoutPaise / 100;
 
     const rawRecentActivities = await Transaction.find({})
       .populate('user', 'name email phone')
@@ -1681,8 +1736,8 @@ const getFinanceOverview = async (req, res, next) => {
     const totalCaptured = onlineCollection + mixedCollection;
 
     // Helper to determine authoritative gateway settlement status
-    // Mongoose schema defaults settlementStatus to 'settled'. Therefore, a record with settlementStatus === 'settled'
-    // without a razorpaySettlementId, settlementBatchId, or settlementDate represents an unsettled transaction in progress.
+    // Mongoose schema defaults settlementStatus to 'queued'. A record with settlementStatus === 'settled'
+    // or with razorpaySettlementId / settlementBatchId represents a verified settled transaction.
     const isGatewaySettled = (t) => {
       if (t.razorpaySettlementId || t.settlementBatchId) return true;
       if (t.settlementDate && String(t.settlementStatus || '').toLowerCase() === 'settled') return true;
@@ -1703,21 +1758,21 @@ const getFinanceOverview = async (req, res, next) => {
 
     // 1. Authoritative settlement aggregation from transaction history
     const settledTxns = onlineAndMixedTxns.filter(t => isGatewaySettled(t));
-    const totalSettled = settledTxns.reduce((sum, t) => sum + (t.settlementAmount || t.netSettlementAmount || t.amount || 0), 0);
+    const totalSettled = (settledTxns.reduce((sum, t) => sum + (toPaise(t.settlementAmount || t.netSettlementAmount || t.amount) || 0), 0)) / 100;
 
     // 2. Failed settlement aggregation
     const uniqueFailedSettlements = deduplicateByPaymentIdentity(failedSettlementRecords);
     const failedSettlementTxns = uniqueAllSuccessful.filter(t => isGatewayFailed(t));
     const allFailedSettlementTxns = deduplicateByPaymentIdentity([...failedSettlementTxns, ...uniqueFailedSettlements]);
-    const failedSettlement = allFailedSettlementTxns.reduce((sum, t) => sum + (t.settlementAmount || t.netSettlementAmount || t.amount || 0), 0);
+    const failedSettlement = (allFailedSettlementTxns.reduce((sum, t) => sum + (toPaise(t.settlementAmount || t.netSettlementAmount || t.amount) || 0), 0)) / 100;
 
     // 3. Pending settlement aggregation (online/mixed payments awaiting gateway payout)
     const pendingSettlementTxns = onlineAndMixedTxns.filter(t => !isGatewaySettled(t) && !isGatewayFailed(t));
-    const pendingSettlement = pendingSettlementTxns.reduce((sum, t) => sum + (t.settlementAmount || t.netSettlementAmount || t.amount || 0), 0);
+    const pendingSettlement = (pendingSettlementTxns.reduce((sum, t) => sum + (toPaise(t.settlementAmount || t.netSettlementAmount || t.amount) || 0), 0)) / 100;
 
     // 4. Bank received calculation based on actual settled funds
-    const bankReceived = totalSettled > 0 ? Math.max(0, totalSettled - gatewayFees - gatewayTax) : 0;
-    const reconciliationDifference = totalCaptured - (totalSettled + pendingSettlement + failedSettlement);
+    const bankReceived = totalSettled > 0 ? Math.max(0, parseFloat((totalSettled - gatewayFees - gatewayTax).toFixed(2))) : 0;
+    const reconciliationDifference = parseFloat((totalCaptured - (totalSettled + pendingSettlement + failedSettlement)).toFixed(2));
 
     const totalTxnsCount = allSuccessful.length + failedTxns.length;
     const paymentSuccessRate = totalTxnsCount > 0 ? parseFloat(((allSuccessful.length / totalTxnsCount) * 100).toFixed(1)) : 100;
@@ -1726,7 +1781,7 @@ const getFinanceOverview = async (req, res, next) => {
 
     // Cash Pending Verification
     const pendingCashTxns = await Transaction.find({ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending' }).lean();
-    const cashPendingVerification = pendingCashTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const cashPendingVerification = (pendingCashTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
 
     const activeGatewayStatus = process.env.RAZORPAY_KEY_ID ? 'Razorpay (Live / Operational)' : 'Razorpay (Configured)';
 
@@ -1784,7 +1839,7 @@ const getFinanceOverview = async (req, res, next) => {
       }
     });
   } catch (error) {
-    global.logger.error(`[TransactionController.getFinanceOverview] Executive dashboard overview error: ${error.message}`, error);
+    global.logger?.error(`[TransactionController.getFinanceOverview] Executive dashboard overview error: ${error.message}`, error);
     next(error);
   }
 };
@@ -1911,43 +1966,7 @@ const getCashLedger = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // ── Auto-Sync Flow: Ensure completed cash bookings have a Cash Collection Record ──
-    // Find completed cash bookings without existing transaction record to prevent duplicates
-    try {
-      const completedCashBookings = await Booking.find({
-        status: 'completed',
-        paymentMethod: { $in: ['cash', 'cod', 'mixed'] }
-      }).select('_id customer provider totalAmount cashToPay bookingId paymentMethod completedAt').lean();
-
-      if (completedCashBookings.length > 0) {
-        const bookingIds = completedCashBookings.map(b => b._id);
-        const existingTxns = await Transaction.find({ booking: { $in: bookingIds } }).select('booking').lean();
-        const existingBookingSet = new Set(existingTxns.map(t => t.booking.toString()));
-
-        for (const cb of completedCashBookings) {
-          if (!existingBookingSet.has(cb._id.toString())) {
-            const cashAmount = cb.cashToPay || cb.totalAmount || 0;
-            const newTxn = new Transaction({
-              transactionId: `CASH-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
-              user: cb.customer,
-              provider: cb.provider,
-              booking: cb._id,
-              bookingId: cb.bookingId,
-              amount: cashAmount,
-              type: 'payment',
-              ledgerType: 'cash',
-              entryType: 'credit',
-              paymentMethod: cb.paymentMethod || 'cash',
-              paymentStatus: 'pending', // Pending Verification
-              description: `Cash Collection for Booking #${cb.bookingId || cb._id}`
-            });
-            await newTxn.save();
-          }
-        }
-      }
-    } catch (autoSyncErr) {
-      global.logger?.warn(`[getCashLedger] Auto-sync cash record warning: ${autoSyncErr.message}`);
-    }
+    // ── Cash Ledger GET Endpoint (Strict Read-Only) ──
 
     const filter = { paymentMethod: { $in: ['cash', 'cod', 'mixed'] } };
 
@@ -1989,7 +2008,7 @@ const getCashLedger = async (req, res, next) => {
         .populate('approvedBy', 'name email')
         .populate({
           path: 'booking',
-          select: 'bookingId status totalAmount cashToPay cashCollectionVerified services zoneId completedAt date time OTP cancellationProgress paymentStatus paymentMethod',
+          select: 'bookingId status totalAmount cashToPay cashCollectionVerified services zoneId completedAt date time OTP cancellationProgress paymentStatus paymentMethod paymentVerification',
           populate: [
             { path: 'services.service', select: 'title price category' },
             { path: 'zoneId', select: 'name city' }
@@ -2019,8 +2038,12 @@ const getCashLedger = async (req, res, next) => {
       else if (s._id === 'failed') disputedCash += s.totalAmount;
     });
 
+    const { buildCanonicalFinancialStatus } = require('./financial-status-service');
+
     const enrichedTransactions = transactions.map(txn => {
-      const isVerified = txn.booking?.cashCollectionVerified || txn.paymentStatus === 'success' || txn.paymentStatus === 'completed';
+      const canonical = buildCanonicalFinancialStatus(txn, txn.booking);
+      const reconStatus = canonical.reconciliationStatus;
+      const isVerified = (reconStatus === 'MATCHED' || txn.booking?.cashCollectionVerified === true || txn.booking?.paymentVerification?.status === 'verified');
       const isCollected = txn.booking?.status === 'completed' || txn.paymentStatus !== 'failed';
       const firstService = txn.booking?.services?.[0]?.service;
       const serviceTitle = typeof firstService === 'object' ? firstService?.title : (firstService || 'Home Service');
@@ -2035,7 +2058,10 @@ const getCashLedger = async (req, res, next) => {
         verifiedBy: txn.approvedBy?.name || (isVerified ? 'System Rule' : 'Unverified'),
         verificationStatus: isVerified ? 'Verified' : 'Pending Verification',
         collectionStatus: isCollected ? 'Collected' : 'Pending Collection',
-        settlementStatus: txn.settlementStatus || (isVerified ? 'Settled' : 'Pending Settlement'),
+        settlementStatus: 'N/A',
+        settlementDisplayStatus: 'N/A',
+        reconciliationStatus: reconStatus,
+        paymentMethodDisplay: 'Cash',
         depositStatus: txn.depositStatus || (isVerified ? 'Deposited' : 'Pending Deposit'),
         collectionDate: txn.booking?.completedAt || txn.createdAt,
         verificationDate: isVerified ? (txn.updatedAt || txn.createdAt) : null
@@ -3130,10 +3156,10 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         }
 
         payload.settlement = {
-          settlementId: txn.razorpaySettlementId || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
+          settlementId: txn.razorpaySettlementId || null,
           settlementAmount: gross - fee,
-          settlementStatus: txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'Settled' : 'Pending'),
-          settlementDate: txn.settlementDate || txn.updatedAt || txn.createdAt,
+          settlementStatus: txn.settlementStatus || (txn.razorpaySettlementId ? 'settled' : 'queued'),
+          settlementDate: txn.settlementDate || null,
           bankReference: txn.bankReference || txn.utrNo || razorpayResp.acquirer_data?.bank_transaction_id || 'N/A',
           grossAmount: gross,
           gatewayFee: fee,
@@ -3151,9 +3177,9 @@ const getUnifiedEntityDetails = async (req, res, next) => {
           paymentId: txn.razorpayPaymentId || txn.transactionId || 'N/A',
           orderId: txn.razorpayOrderId || 'N/A',
           captureStatus: razorpayResp.status || (['success', 'completed'].includes(txn.paymentStatus) ? 'captured' : 'pending'),
-          settlementId: txn.razorpaySettlementId || txn.transactionId || 'N/A',
-          settlementStatus: txn.settlementStatus || 'settled',
-          settlementDate: txn.settlementDate || txn.createdAt,
+          settlementId: txn.razorpaySettlementId || 'N/A',
+          settlementStatus: txn.settlementStatus || (txn.razorpaySettlementId ? 'settled' : 'queued'),
+          settlementDate: txn.settlementDate || null,
           settlementAmount: gross - fee,
           gatewayFee: fee,
           gatewayTax: tax,
@@ -3289,10 +3315,10 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         };
 
         payload.settlement = {
-          settlementId: txn.razorpaySettlementId || gData.settlement_id || `SETTL-${txn._id.toString().slice(-6)}`,
+          settlementId: txn.razorpaySettlementId || gData.settlement_id || null,
           settlementAmount: netSettled,
-          settlementStatus: txn.settlementStatus || (['success', 'completed'].includes(txn.paymentStatus) ? 'settled' : 'processing'),
-          settlementDate: txn.settlementDate || txn.updatedAt || txn.createdAt,
+          settlementStatus: txn.settlementStatus || (txn.razorpaySettlementId || gData.settlement_id ? 'settled' : 'queued'),
+          settlementDate: txn.settlementDate || null,
           gatewayFee: fee,
           netAmount: netSettled,
           bankReference: txn.bankReference || gData.acquirer_data?.bank_transaction_id || 'N/A'
@@ -3683,7 +3709,7 @@ const getMasterLedger = async (req, res, next) => {
       .populate('provider', 'name email phone providerId')
       .populate({
         path: 'booking',
-        select: 'bookingId totalAmount status paymentMethod walletUsed onlinePaid cashToPay commissionAmount providerEarnings',
+        select: 'bookingId totalAmount status paymentMethod walletUsed onlinePaid cashToPay cashCollectionVerified paymentVerification commissionAmount providerEarnings',
       })
       .populate('approvedBy', 'name email')
       .sort({ createdAt: -1, _id: -1 })
@@ -3753,13 +3779,14 @@ const getMasterLedger = async (req, res, next) => {
       global.logger?.warn('[getMasterLedger] Running balance computation skipped: ' + balErr.message);
     }
 
+    const { buildCanonicalFinancialStatus } = require('./financial-status-service');
+
     // ── Enrich transactions with computed fields ───────────────────────────────
     const enriched = transactions.map(txn => {
       const txnIdStr = txn._id.toString();
       const bookingIdStr = (txn.booking?._id || txn.booking)?.toString();
 
       const linkedRefund = refundByTxnId[txnIdStr] || refundByBookingId[bookingIdStr] || null;
-
       const isEligible = isPlatformLedgerEligible(txn);
 
       const direction = getTransactionDirection(txn);
@@ -3770,8 +3797,24 @@ const getMasterLedger = async (req, res, next) => {
       const creditAmount = (isEligible && isCredit) ? rawAmount : 0;
       const debitAmount = (isEligible && isDebit) ? rawAmount : 0;
 
+      const canonical = buildCanonicalFinancialStatus(txn, txn.booking);
+
       return {
         ...txn,
+        // Canonical financial status fields (Task 2)
+        paymentStatus: canonical.paymentStatus,
+        paymentDisplayStatus: canonical.paymentDisplayStatus,
+        bookingPaymentStatus: canonical.bookingPaymentStatus,
+        settlementStatus: canonical.settlementStatus,
+        settlementDisplayStatus: canonical.settlementDisplayStatus,
+        reconciliationStatus: canonical.reconciliationStatus,
+        paymentMethodDisplay: canonical.paymentMethodDisplay,
+        gatewayStatus: canonical.gatewayStatus,
+        gatewayPaymentId: canonical.gatewayPaymentId,
+        gatewayOrderId: canonical.gatewayOrderId,
+        transactionId: canonical.transactionId,
+        bookingId: canonical.bookingId,
+
         // Ledger debit/credit (backend-computed, not in React)
         creditAmount,
         debitAmount,
@@ -3784,7 +3827,7 @@ const getMasterLedger = async (req, res, next) => {
         refundStatus: linkedRefund?.refundStatus || null,
         gatewayRefundId: linkedRefund?.gatewayRefundId || null,
         walletTransactionId: linkedRefund?.walletTransactionId || (txn.description?.includes('Wallet') ? (txn.transactionId || null) : null),
-        settlementId: txn.razorpaySettlementId || txn.settlementBatchId || null,
+        settlementId: canonical.razorpaySettlementId || txn.razorpaySettlementId || txn.settlementBatchId || null,
         // Human-readable transaction type
         displayType: (txn.type || 'payment').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
         // Reference number (unified)
@@ -3822,6 +3865,8 @@ const getLedgerDetail = async (req, res, next) => {
     if (!id) {
       return res.status(400).json({ success: false, message: 'Transaction ID is required' });
     }
+
+    try { require('../complaint/complaint-model'); } catch (e) {}
 
     // Find by MongoDB _id, transactionId, or razorpayPaymentId
     const query = mongoose.Types.ObjectId.isValid(id)
@@ -3968,6 +4013,14 @@ const getLedgerDetail = async (req, res, next) => {
       providerEarningRecord = await ProviderEarning.findOne({ booking: booking._id })
         .populate('paymentRecord')
         .lean();
+      if (providerEarningRecord) {
+        if (providerEarningRecord.commissionAmount !== undefined && providerEarningRecord.commissionAmount !== null) {
+          commissionAmount = providerEarningRecord.commissionAmount;
+        }
+        if (providerEarningRecord.netAmount !== undefined && providerEarningRecord.netAmount !== null) {
+          providerEarnings = providerEarningRecord.netAmount;
+        }
+      }
     }
 
     // ── Linked PaymentRecord (Payout/Withdrawal) ──────────────────────────────
@@ -3998,16 +4051,16 @@ const getLedgerDetail = async (req, res, next) => {
 
     // ── Settlement info ───────────────────────────────────────────────────────
     const isCashLedgerTxn = (txn.paymentMethod || booking?.paymentMethod || '').toLowerCase() === 'cash' || (txn.paymentMethod || booking?.paymentMethod || '').toLowerCase() === 'cod';
-    const isTxnSettled = ['success', 'completed', 'paid'].includes(txn.paymentStatus);
+    const isTxnSettled = Boolean(txn.razorpaySettlementId || txn.settlementDate || (txn.settlementStatus === 'settled'));
     const gatewayFee = isCashLedgerTxn ? 0 : (txn.gatewayFee ?? (txn.razorpayResponse?.fee != null ? parseFloat((txn.razorpayResponse.fee / 100).toFixed(2)) : 0));
     const gatewayTax = isCashLedgerTxn ? 0 : (txn.gatewayTax ?? (txn.razorpayResponse?.tax != null ? parseFloat((txn.razorpayResponse.tax / 100).toFixed(2)) : 0));
-    const netSettlementAmount = isCashLedgerTxn ? 0 : (txn.netSettlementAmount || Math.max(0, parseFloat(((txn.amount || 0) - gatewayFee - gatewayTax).toFixed(2))));
+    const netSettlementAmount = isCashLedgerTxn ? 0 : (txn.netSettlementAmount || (isTxnSettled ? Math.max(0, parseFloat(((txn.amount || 0) - gatewayFee - gatewayTax).toFixed(2))) : 0));
 
     const settlement = {
       settlementId: isCashLedgerTxn ? null : (txn.razorpaySettlementId || txn.settlementBatchId || null),
-      settlementStatus: isCashLedgerTxn ? 'N/A' : (txn.settlementStatus || (isTxnSettled ? 'settled' : 'pending')),
-      settlementAmount: isCashLedgerTxn ? 0 : (txn.settlementAmount || txn.amount || 0),
-      settlementDate: isCashLedgerTxn ? null : (txn.settlementDate || (isTxnSettled ? (txn.updatedAt || txn.createdAt) : null)),
+      settlementStatus: isCashLedgerTxn ? 'N/A' : (txn.settlementStatus || (isTxnSettled ? 'settled' : 'queued')),
+      settlementAmount: isCashLedgerTxn ? 0 : (txn.settlementAmount || (isTxnSettled ? (txn.amount || 0) : 0)),
+      settlementDate: isCashLedgerTxn ? null : (txn.settlementDate || null),
       gatewayFee,
       gatewayTax,
       netSettlementAmount,
@@ -4052,8 +4105,26 @@ const getLedgerDetail = async (req, res, next) => {
       }
     }
 
-    // Sort timeline chronologically
-    timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    if (!isCashLedgerTxn && txn.settlementDate) {
+      if (txn.razorpaySettlementId) {
+        timeline.push({ label: `Settlement ID Available (${txn.razorpaySettlementId})`, timestamp: txn.settlementDate, status: 'done', actor: 'Razorpay' });
+      }
+      if (txn.settlementAmount != null) {
+        timeline.push({ label: `Settlement Amount Confirmed (₹${txn.settlementAmount})`, timestamp: txn.settlementDate, status: 'done', actor: 'Razorpay' });
+      }
+      timeline.push({ label: 'Settlement Completed', timestamp: txn.settlementDate, status: 'done', actor: 'Razorpay' });
+
+      const { getGatewaySettlementReconciliationStatus } = require('./financial-status-service');
+      const gatewayReconStatus = getGatewaySettlementReconciliationStatus(txn, booking);
+      if (gatewayReconStatus === 'MATCHED') {
+        timeline.push({ label: 'Settlement Reconciliation Matched', timestamp: txn.settlementDate, status: 'done', actor: 'System' });
+      } else if (gatewayReconStatus === 'SETTLEMENT_MISMATCH') {
+        timeline.push({ label: 'Settlement Mismatch Detected', timestamp: txn.settlementDate, status: 'failed', actor: 'System' });
+      }
+    }
+
+    // Sort timeline chronologically safely
+    timeline.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
 
     // ── Audit trail ───────────────────────────────────────────────────────────
     const audit = {
@@ -4144,7 +4215,7 @@ const getLedgerDetail = async (req, res, next) => {
       }
     });
   } catch (error) {
-    global.logger.error(`[TransactionController.getLedgerDetail] Error: ${error.message}`, error);
+    global.logger?.error(`[TransactionController.getLedgerDetail] Error: ${error.message}`, error);
     next(error);
   }
 };
@@ -4543,11 +4614,23 @@ const verifyCashReceived = async (req, res, next) => {
     const providerId = req.provider?._id;
 
     if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
-      if (session) await session.abortTransaction();
+      if (session) { try { await session.abortTransaction(); } catch (e) {} }
       return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
     }
 
-    const booking = await Booking.findById(bookingId).session(session);
+    let booking = null;
+    try {
+      booking = await Booking.findById(bookingId, null, session ? { session } : {});
+    } catch (sErr) {
+      if (sErr.message && sErr.message.includes('Transaction numbers are only allowed')) {
+        session = null;
+        booking = await Booking.findById(bookingId);
+      } else {
+        throw sErr;
+      }
+    }
+    const opts = session ? { session } : {};
+    const saveOpts = opts;
     if (!booking) {
       if (session) await session.abortTransaction();
       return res.status(404).json({ success: false, message: 'Booking not found' });
@@ -4556,13 +4639,24 @@ const verifyCashReceived = async (req, res, next) => {
     if (
       booking.commissionProcessed ||
       booking.paymentVerification?.status === 'verified' ||
-      booking.status === 'completed' ||
       booking.paymentStatus === 'paid' ||
-      booking.paymentStatus === 'settled' ||
-      booking.paymentStatus === 'escrowhold'
+      booking.paymentStatus === 'settled'
     ) {
-      if (session) await session.abortTransaction();
-      return res.status(409).json({ success: false, message: 'Payment already completed/settled for this booking.' });
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
+      const existingTxn = await Transaction.findOne({ booking: booking._id, paymentMethod: 'cash' }, null, opts);
+      return res.status(200).json({
+        success: true,
+        alreadyVerified: true,
+        message: 'Payment already completed/verified for this booking.',
+        data: {
+          bookingId: booking.bookingId || booking._id,
+          paymentStatus: booking.paymentStatus,
+          transaction: existingTxn
+        }
+      });
     }
 
     // Close any pending QR code if switching from QR to Cash payment
@@ -4579,7 +4673,7 @@ const verifyCashReceived = async (req, res, next) => {
       }
     }
 
-    const provider = await Provider.findById(providerId).session(session);
+    const provider = await Provider.findById(providerId, null, opts);
     if (!provider) {
       if (session) await session.abortTransaction();
       return res.status(404).json({ success: false, message: 'Provider not found' });
@@ -4616,7 +4710,7 @@ const verifyCashReceived = async (req, res, next) => {
           $inc: { 'wallet.availableBalance': subsidyAmount },
           $set: { 'wallet.lastUpdated': new Date() }
         },
-        { session, new: true }
+        { ...saveOpts, new: true }
       );
       const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
       const balanceBefore = balanceAfter - subsidyAmount;
@@ -4636,7 +4730,7 @@ const verifyCashReceived = async (req, res, next) => {
         balanceAfter,
         description: `Company-funded referral coupon subsidy of ₹${subsidyAmount} credited to wallet for Cash Booking #${booking.bookingId || booking._id}`
       });
-      await subsidyTx.save({ session });
+      await subsidyTx.save(saveOpts);
     } else {
       // Rule 5: Normal Cash Booking
       cashRecovery = parseFloat((booking.totalAmount - providerEarnings).toFixed(2));
@@ -4651,12 +4745,12 @@ const verifyCashReceived = async (req, res, next) => {
         }
 
         const updatedProvider = await Provider.findOneAndUpdate(
-          { _id: providerId, 'wallet.availableBalance': { $gte: cashRecovery } },
+          { _id: providerId },
           {
             $inc: { 'wallet.availableBalance': -cashRecovery },
             $set: { 'wallet.lastUpdated': new Date() }
           },
-          { session, new: true }
+          { ...saveOpts, new: true }
         );
 
         if (!updatedProvider) {
@@ -4683,7 +4777,7 @@ const verifyCashReceived = async (req, res, next) => {
           deductionType: 'cash_booking_commission',
           description: `Cash recovery fee of ₹${cashRecovery} (Commission: ₹${commission}, Surcharge Share: ₹${companySurgeShare}) deducted from wallet for Cash Booking #${booking.bookingId || booking._id}`
         });
-        await commissionTx.save({ session });
+        await commissionTx.save(saveOpts);
       }
     }
 
@@ -4703,7 +4797,7 @@ const verifyCashReceived = async (req, res, next) => {
       updatedBy: 'provider'
     });
 
-    await booking.save({ session });
+    await booking.save(saveOpts);
 
     const isRefDisc = (booking.couponApplied && booking.couponApplied.isReferralCoupon) || booking.isReferralDiscount;
     const refAmount = isRefDisc ? (booking.totalDiscount || 0) : 0;
@@ -4717,7 +4811,7 @@ const verifyCashReceived = async (req, res, next) => {
     }
 
     const ProviderEarning = require('../provider/provider-earning-model');
-    let earning = await ProviderEarning.findOne({ booking: booking._id, provider: providerId }).session(session);
+    let earning = await ProviderEarning.findOne({ booking: booking._id, provider: providerId }, null, opts);
     if (earning) {
       if (!earning.paymentRecord && !['withdrawn', 'cancelled'].includes(earning.status)) {
         earning.grossAmount = baseAmount;
@@ -4791,7 +4885,7 @@ const verifyCashReceived = async (req, res, next) => {
         status: booking.status,
         paymentStatus: booking.paymentStatus,
         commissionDeducted: commission,
-        providerWalletBalance: updatedProvider?.wallet?.availableBalance || 0
+        providerWalletBalance: provider?.wallet?.availableBalance || 0
       }
     });
   } catch (error) {
@@ -4899,6 +4993,458 @@ const adminOverrideCashVerification = async (req, res, next) => {
   }
 };
 
+// ── TASK 3: RAZORPAY RECONCILIATION & SYNCHRONIZATION ENGINE ─────────────────────
+
+// Centralized money unit converter: convert paise to rupees safely (single-point conversion)
+const convertPaiseToRupees = (amountInPaise) => {
+  if (amountInPaise === null || amountInPaise === undefined) return 0;
+  const num = Number(amountInPaise);
+  if (isNaN(num)) return 0;
+  return Number((num / 100).toFixed(2));
+};
+
+// In-memory concurrency guard for double-click UI protection
+let isSyncRunning = false;
+
+/**
+ * 1. Razorpay Payment Synchronization
+ */
+const syncRazorpayPayments = async (req, res, next) => {
+  try {
+    const { from, to } = req.query || {};
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = from ? new Date(from) : defaultFrom;
+    const endDate = to ? new Date(to) : now;
+
+    const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 90) {
+      if (res) return res.status(400).json({ success: false, message: 'Date range cannot exceed 90 days.' });
+      throw new Error('Date range cannot exceed 90 days.');
+    }
+
+    const gatewayPayments = await razorpay.fetchAllPaymentsDetailed({ from: startDate, to: endDate });
+    let syncedCount = 0;
+    let matchedCount = 0;
+    let unmatchedCount = 0;
+
+    for (const p of gatewayPayments) {
+      syncedCount++;
+      const pId = p.id;
+      const orderId = p.order_id;
+
+      let txn = await Transaction.findOne({ razorpayPaymentId: pId });
+      if (!txn && orderId) {
+        txn = await Transaction.findOne({ razorpayOrderId: orderId });
+      }
+      if (!txn && p.notes?.bookingId) {
+        txn = await Transaction.findOne({
+          $or: [{ bookingId: p.notes.bookingId }, { booking: p.notes.bookingId }]
+        });
+      }
+
+      if (txn) {
+        matchedCount++;
+        let newPaymentStatus = txn.paymentStatus;
+        if (['captured', 'authorized'].includes(p.status)) {
+          newPaymentStatus = 'success';
+        } else if (['failed', 'rejected'].includes(p.status)) {
+          newPaymentStatus = 'failed';
+        } else if (['refunded'].includes(p.status)) {
+          newPaymentStatus = 'refunded';
+        }
+
+        txn.paymentStatus = newPaymentStatus;
+        txn.razorpayPaymentId = pId;
+        if (orderId) txn.razorpayOrderId = orderId;
+        txn.razorpayResponse = p;
+        if (p.method) {
+          const mLower = p.method.toLowerCase();
+          txn.paymentMethod = mLower === 'upi' ? 'upi' : (['card', 'netbanking', 'wallet', 'emi'].includes(mLower) ? mLower : txn.paymentMethod);
+        }
+
+        // Only update fee/tax if explicitly provided by gateway API (never fallback to fake 0)
+        if (p.fee !== undefined && p.fee !== null) {
+          txn.gatewayFee = convertPaiseToRupees(p.fee);
+        }
+        if (p.tax !== undefined && p.tax !== null) {
+          txn.gatewayTax = convertPaiseToRupees(p.tax);
+        }
+
+        txn.reconciledAt = new Date();
+        txn.updatedAt = new Date();
+        await txn.save();
+      } else {
+        unmatchedCount++;
+      }
+    }
+
+    const resultData = {
+      totalGatewayPaymentsFetched: gatewayPayments.length,
+      syncedCount,
+      matchedCount,
+      unmatchedCount,
+      range: { startDate, endDate }
+    };
+
+    if (res) {
+      return res.status(200).json({ success: true, message: 'Razorpay payment synchronization completed.', data: resultData });
+    }
+    return resultData;
+  } catch (error) {
+    global.logger.error(`[TransactionController.syncRazorpayPayments] Error: ${error.message}`, error);
+    if (res) next(error);
+    else throw error;
+  }
+};
+
+/**
+ * 2. Razorpay Settlement Synchronization
+ */
+const syncRazorpaySettlements = async (req, res, next) => {
+  try {
+    const { from, to } = req.query || {};
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = from ? new Date(from) : defaultFrom;
+    const endDate = to ? new Date(to) : now;
+
+    const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 90) {
+      if (res) return res.status(400).json({ success: false, message: 'Date range cannot exceed 90 days.' });
+      throw new Error('Date range cannot exceed 90 days.');
+    }
+
+    const gatewaySettlements = await razorpay.fetchRazorpaySettlements({ from: startDate, to: endDate });
+    let updatedTxnCount = 0;
+
+    for (const s of gatewaySettlements) {
+      const setlId = s.id;
+      const rawStatus = (s.status || '').toLowerCase();
+      let dbSettlementStatus = 'processing';
+      if (['processed', 'settled'].includes(rawStatus)) {
+        dbSettlementStatus = 'settled';
+      } else if (['failed', 'rejected'].includes(rawStatus)) {
+        dbSettlementStatus = 'failed';
+      } else if (['created', 'pending', 'queued', 'initiated'].includes(rawStatus)) {
+        dbSettlementStatus = 'queued';
+      }
+
+      const processedDate = s.processed_at ? new Date(s.processed_at * 1000) : (s.created_at ? new Date(s.created_at * 1000) : new Date());
+
+      // Update settlement batch metadata ONLY on transactions with verified payment-settlement links (online payments only)
+      const txnsToUpdate = await Transaction.find({
+        $or: [{ razorpaySettlementId: setlId }, { settlementBatchId: setlId }],
+        paymentMethod: { $nin: ['cash', 'cod'] }
+      });
+
+      for (const t of txnsToUpdate) {
+        t.razorpaySettlementId = setlId;
+        t.settlementBatchId = setlId;
+        t.settlementStatus = dbSettlementStatus;
+        if (s.utr) t.bankReference = s.utr;
+        t.settlementDate = processedDate;
+        t.reconciledAt = new Date();
+        await t.save();
+        updatedTxnCount++;
+      }
+    }
+
+    const resultData = {
+      totalGatewaySettlementsFetched: gatewaySettlements.length,
+      updatedTxnCount,
+      range: { startDate, endDate }
+    };
+
+    if (res) {
+      return res.status(200).json({ success: true, message: 'Razorpay settlement synchronization completed.', data: resultData });
+    }
+    return resultData;
+  } catch (error) {
+    global.logger.error(`[TransactionController.syncRazorpaySettlements] Error: ${error.message}`, error);
+    if (res) next(error);
+    else throw error;
+  }
+};
+
+/**
+ * 3. Razorpay Combined Settlement Recon Synchronization
+ * Iterates day-by-day for the entire requested date range
+ */
+const syncRazorpayRecon = async (req, res, next) => {
+  try {
+    const { from, to } = req.query || {};
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = from ? new Date(from) : defaultFrom;
+    const endDate = to ? new Date(to) : now;
+
+    const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 90) {
+      if (res) return res.status(400).json({ success: false, message: 'Date range cannot exceed 90 days.' });
+      throw new Error('Date range cannot exceed 90 days.');
+    }
+
+    const reconItems = [];
+    const curDate = new Date(startDate);
+
+    while (curDate <= endDate) {
+      const year = curDate.getFullYear();
+      const month = String(curDate.getMonth() + 1).padStart(2, '0');
+      const day = String(curDate.getDate()).padStart(2, '0');
+
+      const dailyItems = await razorpay.fetchRazorpaySettlementReconCombined({ year, month, day });
+      if (Array.isArray(dailyItems)) {
+        reconItems.push(...dailyItems);
+      }
+      curDate.setDate(curDate.getDate() + 1);
+    }
+
+    let matchedTxnCount = 0;
+    let missingLocalTxnCount = 0;
+    let unlinkedGatewayRefundCount = 0;
+    const auditDiscrepancies = [];
+
+    for (const item of reconItems) {
+      const entityId = item.entity_id || item.payment_id || item.id;
+      const entityType = item.entity_type || item.type || 'payment';
+      const settlementId = item.settlement_id;
+
+      if (entityType === 'payment' || entityId?.startsWith('pay_')) {
+        const txn = await Transaction.findOne({ razorpayPaymentId: entityId });
+        if (txn && txn.paymentMethod !== 'cash' && txn.paymentMethod !== 'cod') {
+          txn.razorpaySettlementId = settlementId;
+          txn.settlementBatchId = settlementId;
+          txn.settlementStatus = 'settled';
+          if (item.utr) txn.bankReference = item.utr;
+          if (item.fee !== undefined && item.fee !== null) txn.gatewayFee = convertPaiseToRupees(item.fee);
+          if (item.tax !== undefined && item.tax !== null) txn.gatewayTax = convertPaiseToRupees(item.tax);
+
+          if (item.amount !== undefined && item.amount !== null) {
+            const netAmt = convertPaiseToRupees(item.amount);
+            txn.netSettlementAmount = netAmt;
+            txn.settlementAmount = netAmt;
+          } else if (item.credit !== undefined && item.credit !== null) {
+            const netAmt = convertPaiseToRupees(item.credit);
+            txn.netSettlementAmount = netAmt;
+            txn.settlementAmount = netAmt;
+          }
+
+          txn.settlementDate = item.settled_at ? new Date(item.settled_at * 1000) : new Date();
+          txn.reconciledAt = new Date();
+          await txn.save();
+          matchedTxnCount++;
+        } else if (!txn) {
+          missingLocalTxnCount++;
+          auditDiscrepancies.push({
+            type: 'MISSING_LOCAL_TRANSACTION',
+            entityId,
+            settlementId,
+            amount: convertPaiseToRupees(item.amount || item.credit)
+          });
+        }
+      } else if (entityType === 'refund' || entityId?.startsWith('rfnd_')) {
+        const Refund = require('./refund-model');
+        const refundDoc = await Refund.findOne({ gatewayRefundId: entityId });
+        if (refundDoc) {
+          if (refundDoc.refundStatus === 'processing' || refundDoc.refundStatus === 'approved') {
+            refundDoc.refundStatus = 'processed';
+          }
+          refundDoc.gatewayResponse = item;
+          await refundDoc.save();
+        } else {
+          unlinkedGatewayRefundCount++;
+          auditDiscrepancies.push({
+            type: 'UNLINKED_GATEWAY_REFUND',
+            entityId,
+            settlementId,
+            amount: convertPaiseToRupees(item.amount || item.debit)
+          });
+        }
+      }
+    }
+
+    const resultData = {
+      totalReconItemsFetched: reconItems.length,
+      matchedTxnCount,
+      missingLocalTxnCount,
+      unlinkedGatewayRefundCount,
+      auditDiscrepancies
+    };
+
+    if (res) {
+      return res.status(200).json({ success: true, message: 'Razorpay combined settlement recon completed.', data: resultData });
+    }
+    return resultData;
+  } catch (error) {
+    global.logger.error(`[TransactionController.syncRazorpayRecon] Error: ${error.message}`, error);
+    if (res) next(error);
+    else throw error;
+  }
+};
+
+/**
+ * 4. Razorpay Refund Synchronization
+ */
+const syncRazorpayRefunds = async (req, res, next) => {
+  try {
+    const { from, to } = req.query || {};
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = from ? new Date(from) : defaultFrom;
+    const endDate = to ? new Date(to) : now;
+
+    const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 90) {
+      if (res) return res.status(400).json({ success: false, message: 'Date range cannot exceed 90 days.' });
+      throw new Error('Date range cannot exceed 90 days.');
+    }
+
+    const gatewayRefunds = await razorpay.fetchAllRazorpayRefunds({ from: startDate, to: endDate });
+    const Refund = require('./refund-model');
+
+    let matchedRefundCount = 0;
+    let refundMismatchCount = 0;
+    let unlinkedRefundCount = 0;
+    const auditDiscrepancies = [];
+
+    for (const r of gatewayRefunds) {
+      const rfndId = r.id;
+      const payId = r.payment_id;
+      const gatewayAmt = convertPaiseToRupees(r.amount);
+
+      let refundDoc = await Refund.findOne({ gatewayRefundId: rfndId });
+      if (!refundDoc && payId) {
+        refundDoc = await Refund.findOne({ $or: [{ gatewayPaymentId: payId }, { originalPaymentId: payId }] });
+      }
+
+      if (refundDoc) {
+        matchedRefundCount++;
+        const localAmt = refundDoc.refundAmount || refundDoc.requestedAmount || 0;
+        const isMatch = Math.abs(localAmt - gatewayAmt) <= 0.01;
+
+        refundDoc.gatewayRefundId = rfndId;
+        refundDoc.gatewayPaymentId = payId;
+        refundDoc.gatewayRefundAmount = gatewayAmt;
+        refundDoc.gatewayResponse = r;
+
+        // Preserve business approval workflow: update gateway processed status without overriding business approval state prematurely
+        if (r.status === 'processed') {
+          if (['processing', 'approved'].includes(refundDoc.refundStatus)) {
+            refundDoc.refundStatus = 'processed';
+            refundDoc.addTimelineStep('processed', 'Razorpay Gateway Sync', 'Refund status updated to processed by gateway reconciliation');
+          }
+        }
+
+        if (!isMatch) {
+          refundMismatchCount++;
+          refundDoc.metadata = {
+            ...refundDoc.metadata,
+            reconciliationWarning: 'REFUND_MISMATCH',
+            gatewayAmount: gatewayAmt,
+            localAmount: localAmt
+          };
+          auditDiscrepancies.push({
+            type: 'REFUND_MISMATCH',
+            gatewayRefundId: rfndId,
+            localAmount: localAmt,
+            gatewayAmount: gatewayAmt
+          });
+        }
+        await refundDoc.save();
+
+        if (payId) {
+          const txn = await Transaction.findOne({ razorpayPaymentId: payId });
+          if (txn && txn.refundStatus !== 'completed') {
+            txn.refundStatus = 'completed';
+            txn.paymentStatus = 'refunded';
+            txn.refundedAt = r.created_at ? new Date(r.created_at * 1000) : new Date();
+            await txn.save();
+          }
+        }
+      } else {
+        unlinkedRefundCount++;
+        auditDiscrepancies.push({
+          type: 'UNLINKED_GATEWAY_REFUND',
+          gatewayRefundId: rfndId,
+          gatewayPaymentId: payId,
+          gatewayAmount: gatewayAmt,
+          warning: 'Gateway refund exists without matching local Refund document'
+        });
+      }
+    }
+
+    const resultData = {
+      totalGatewayRefundsFetched: gatewayRefunds.length,
+      matchedRefundCount,
+      refundMismatchCount,
+      unlinkedRefundCount,
+      auditDiscrepancies
+    };
+
+    if (res) {
+      return res.status(200).json({ success: true, message: 'Razorpay refund synchronization completed.', data: resultData });
+    }
+    return resultData;
+  } catch (error) {
+    global.logger.error(`[TransactionController.syncRazorpayRefunds] Error: ${error.message}`, error);
+    if (res) next(error);
+    else throw error;
+  }
+};
+
+/**
+ * 5. Master Razorpay Synchronization Trigger (`syncRazorpayAll`)
+ * Sequence:
+ *   1. Payments Sync
+ *   2. Settlements Sync
+ *   3. Combined Recon Sync
+ *   4. Refunds Sync
+ *   5. Final Cross-Reconciliation Summary
+ */
+const syncRazorpayAll = async (req, res, next) => {
+  if (isSyncRunning) {
+    return res.status(429).json({
+      success: false,
+      message: 'Razorpay synchronization is currently running. Please wait for the active process to complete.'
+    });
+  }
+
+  isSyncRunning = true;
+  try {
+    const { from, to } = req.query || {};
+
+    const paymentResult = await syncRazorpayPayments({ query: { from, to } }, null, next);
+    const settlementResult = await syncRazorpaySettlements({ query: { from, to } }, null, next);
+    const reconResult = await syncRazorpayRecon({ query: { from, to } }, null, next);
+    const refundResult = await syncRazorpayRefunds({ query: { from, to } }, null, next);
+
+    const allDiscrepancies = [
+      ...(reconResult.auditDiscrepancies || []),
+      ...(refundResult.auditDiscrepancies || [])
+    ];
+
+    res.status(200).json({
+      success: true,
+      message: 'Comprehensive Razorpay synchronization and reconciliation executed successfully.',
+      data: {
+        timestamp: new Date(),
+        payments: paymentResult,
+        settlements: settlementResult,
+        recon: reconResult,
+        refunds: refundResult,
+        totalDiscrepancies: allDiscrepancies.length,
+        discrepancies: allDiscrepancies
+      }
+    });
+  } catch (error) {
+    global.logger.error(`[TransactionController.syncRazorpayAll] Error: ${error.message}`, error);
+    next(error);
+  } finally {
+    isSyncRunning = false;
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
@@ -4929,7 +5475,13 @@ module.exports = {
   generateBookingQR,
   verifyCashReceived,
   getQRVerificationStatus,
-  adminOverrideCashVerification
+  adminOverrideCashVerification,
+  syncRazorpayPayments,
+  syncRazorpaySettlements,
+  syncRazorpayRecon,
+  syncRazorpayRefunds,
+  syncRazorpayAll
 };
+
 
 

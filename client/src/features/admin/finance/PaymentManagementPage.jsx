@@ -172,12 +172,24 @@ const PaymentManagementPage = () => {
   };
 
   const getPaymentMethodBadge = (txn) => {
+    if (txn.paymentMethodDisplay) {
+      const disp = String(txn.paymentMethodDisplay).toUpperCase();
+      const color = (disp === 'CASH' || disp === 'COD') ? 'bg-emerald-100 text-emerald-800' :
+        disp === 'QR' ? 'bg-teal-100 text-teal-800' :
+        disp === 'UPI' ? 'bg-indigo-100 text-indigo-800' :
+        disp === 'MIXED' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800';
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 ${color} rounded font-bold text-[11px] uppercase`}>
+          {disp}
+        </span>
+      );
+    }
+
     const method = (txn.paymentMethod || '').toLowerCase();
-    // Use real Razorpay method from stored response whenever available
-    const razorpayMethod = (txn.razorpayResponse?.method || txn.gatewayMethod || '').toLowerCase();
+    const razorpayMethod = (txn.razorpayMethod || '').toLowerCase();
 
     if (method === 'cash' || method === 'cod') {
-      return <span className="text-xs font-semibold text-emerald-800">Cash on Delivery</span>;
+      return <span className="text-xs font-semibold text-emerald-800">Cash</span>;
     }
     if (method === 'wallet') {
       return <span className="inline-flex items-center px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[11px]">Customer Wallet</span>;
@@ -218,14 +230,14 @@ const PaymentManagementPage = () => {
   };
 
   const getPaymentStatusBadge = (txn) => {
-    const s = (txn.paymentStatus || txn.status || '').toLowerCase();
-    if (['success', 'completed', 'paid', 'captured'].includes(s))
-      return <span className="inline-flex items-center px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold uppercase"><FiCheckCircle className="mr-1 w-3 h-3" />Success</span>;
-    if (['pending', 'processing', 'authorized'].includes(s))
-      return <span className="inline-flex items-center px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold uppercase"><FiClock className="mr-1 w-3 h-3" />Pending</span>;
+    const s = (txn.paymentDisplayStatus || txn.paymentStatus || txn.status || '').toLowerCase();
+    if (['success', 'completed', 'paid', 'captured', 'matched'].includes(s))
+      return <span className="inline-flex items-center px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold uppercase"><FiCheckCircle className="mr-1 w-3 h-3" />{s === 'matched' ? 'Matched' : 'Success'}</span>;
+    if (['pending', 'processing', 'authorized', 'pending_verification', 'pending_collection'].includes(s))
+      return <span className="inline-flex items-center px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold uppercase"><FiClock className="mr-1 w-3 h-3" />{s.replace(/_/g, ' ')}</span>;
     if (['refunded', 'partial_refund'].includes(s))
       return <span className="inline-flex items-center px-2.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-bold uppercase"><FiRotateCcw className="mr-1 w-3 h-3" />Refunded</span>;
-    return <span className="inline-flex items-center px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-[10px] font-bold uppercase"><FiXCircle className="mr-1 w-3 h-3" />Failed</span>;
+    return <span className="inline-flex items-center px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-[10px] font-bold uppercase"><FiXCircle className="mr-1 w-3 h-3" />{s.replace(/_/g, ' ') || 'Failed'}</span>;
   };
 
   const getCaptureStatusBadge = (txn) => {
@@ -238,18 +250,17 @@ const PaymentManagementPage = () => {
   };
 
   const getSettlementStatusBadge = (txn) => {
-    const s = (txn.settlementStatus || '').toLowerCase();
+    const method = (txn.paymentMethod || '').toLowerCase();
+    if (method === 'wallet' || method === 'cash' || method === 'cod') return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded font-bold text-[10px] uppercase">N/A</span>;
+    const s = (txn.settlementDisplayStatus || txn.settlementStatus || '').toLowerCase();
     if (['settled', 'completed'].includes(s))
       return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px] uppercase">Settled</span>;
-    if (['queued', 'processing'].includes(s))
+    if (['queued', 'processing', 'pending'].includes(s))
       return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px] uppercase">Processing</span>;
     if (['failed', 'reversed'].includes(s))
       return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px] uppercase">Failed</span>;
     if (['refunded', 'partial_refund'].includes(s))
       return <span className="px-2 py-0.5 bg-primary/10 text-primary rounded font-bold text-[10px] uppercase">Refunded</span>;
-    // For wallet/cash — no gateway settlement
-    const method = (txn.paymentMethod || '').toLowerCase();
-    if (method === 'wallet' || method === 'cash') return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded font-bold text-[10px] uppercase">N/A</span>;
     return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-bold text-[10px] uppercase">—</span>;
   };
 

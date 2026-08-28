@@ -651,7 +651,7 @@ class PaymentService {
           processedAt: { type: Date, default: Date.now, expires: 7776000 } // TTL: 90 days (90 * 24 * 60 * 60 = 7,776,000 seconds)
         }));
         if (typeof WebhookIdempotency.syncIndexes === 'function') {
-          WebhookIdempotency.syncIndexes().catch(() => {});
+          WebhookIdempotency.syncIndexes().catch(() => { });
         }
         await WebhookIdempotency.create({ eventId });
       } catch (idempErr) {
@@ -2360,21 +2360,21 @@ class PaymentService {
       // Refund the locked withdrawal amount back to the provider's wallet available balance atomically
       const updatedProvider = session
         ? await Provider.findOneAndUpdate(
-            { _id: provider._id },
-            {
-              $inc: { 'wallet.availableBalance': paymentRecord.amount },
-              $set: { 'wallet.lastUpdated': new Date() }
-            },
-            { new: true, session }
-          )
+          { _id: provider._id },
+          {
+            $inc: { 'wallet.availableBalance': paymentRecord.amount },
+            $set: { 'wallet.lastUpdated': new Date() }
+          },
+          { new: true, session }
+        )
         : await Provider.findOneAndUpdate(
-            { _id: provider._id },
-            {
-              $inc: { 'wallet.availableBalance': paymentRecord.amount },
-              $set: { 'wallet.lastUpdated': new Date() }
-            },
-            { new: true }
-          );
+          { _id: provider._id },
+          {
+            $inc: { 'wallet.availableBalance': paymentRecord.amount },
+            $set: { 'wallet.lastUpdated': new Date() }
+          },
+          { new: true }
+        );
 
       const balanceAfter = updatedProvider?.wallet?.availableBalance || 0;
       const balanceBefore = balanceAfter - paymentRecord.amount;
@@ -4992,7 +4992,7 @@ class PaymentService {
             const payoutAmt = payoutMap[bId] || 0;
 
             // 1. Filter financially effective payment transactions for this booking
-            const effectivePaymentTxns = bTxns.filter(t => 
+            const effectivePaymentTxns = bTxns.filter(t =>
               t.type === 'payment' && successfulStatuses.includes(t.paymentStatus)
             );
 
@@ -5009,15 +5009,15 @@ class PaymentService {
 
             // 3. Calculate gross customer paid amount from transaction history
             const grossPaidFromTxns = uniquePaymentTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
-            const fallbackPaid = (['paid', 'settled', 'completed', 'escrowhold'].includes(b.paymentStatus)) 
-              ? ((b.onlinePaid || 0) + (b.walletUsed || 0) + (b.cashToPay || 0)) 
+            const fallbackPaid = (['paid', 'settled', 'completed', 'escrowhold'].includes(b.paymentStatus))
+              ? ((b.onlinePaid || 0) + (b.walletUsed || 0) + (b.cashToPay || 0))
               : (b.walletUsed || 0);
 
             const customerPaid = grossPaidFromTxns > 0 ? grossPaidFromTxns : fallbackPaid;
 
             // 4. Calculate financially completed refunds for booking (excluding failed/pending/processing)
             const completedStatuses = ['completed', 'success', 'paid', 'approved'];
-            const completedRefunds = bRefunds.filter(r => 
+            const completedRefunds = bRefunds.filter(r =>
               completedStatuses.includes(r.refundStatus || r.status)
             );
 

@@ -114,9 +114,19 @@ providerEarningSchema.index({ isVisibleToProvider: 1 });
 /**
  * Static method to create earning only when booking is completed
  */
-providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
+providerEarningSchema.statics.createFromBooking = async function (bookingDoc, session) {
   if (!bookingDoc || bookingDoc.status !== 'completed') {
     throw new Error('Earnings can only be created for completed bookings.');
+  }
+
+  // Idempotent pre-check: If earning document already exists for this provider and booking, return it
+  const existingEarning = await this.findOne({
+    provider: bookingDoc.provider,
+    booking: bookingDoc._id
+  }).session(session || null);
+
+  if (existingEarning) {
+    return existingEarning;
   }
 
   // grossAmount = service base / commission base = subtotal - discount
@@ -128,7 +138,7 @@ providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
 
   const commissionRate = bookingDoc.commissionRateSnapshot ?? bookingDoc.commissionValueSnapshot ?? 0;
 
-  return this.create({
+  const earningData = {
     provider: bookingDoc.provider,
     booking: bookingDoc._id,
     grossAmount,
@@ -146,7 +156,20 @@ providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
     isVisibleToProvider: true,
     status: bookingDoc.paymentMethod === 'cash' ? 'paid' : 'held',
     availableAfter: bookingDoc.payoutHoldUntil
-  });
+  };
+
+  try {
+    const docs = await this.create([earningData], { session: session || null });
+    return docs[0];
+  } catch (err) {
+    if (err.code === 11000 || err.message?.includes('E11000')) {
+      return await this.findOne({
+        provider: bookingDoc.provider,
+        booking: bookingDoc._id
+      }).session(session || null);
+    }
+    throw err;
+  }
 };
 
 /**

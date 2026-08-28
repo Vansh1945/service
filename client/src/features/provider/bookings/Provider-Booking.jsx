@@ -1950,9 +1950,14 @@ const ProviderBooking = () => {
                       </div>
                       <div className="flex justify-between">
                         <span>Settlement Status</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${(selectedBooking.status === 'completed' && ['paid', 'escrowhold'].includes(normalizeStatus(selectedBooking.paymentStatus))) ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                          {(selectedBooking.status === 'completed' && ['paid', 'escrowhold'].includes(normalizeStatus(selectedBooking.paymentStatus))) ? 'Settled' : 'Pending Settlement'}
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${
+                          selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
+                            ? 'bg-gray-100 text-gray-700'
+                            : (selectedBooking.razorpaySettlementId || selectedBooking.settlementStatus === 'settled' ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700')
+                        }`}>
+                          {selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
+                            ? 'N/A'
+                            : (selectedBooking.razorpaySettlementId || selectedBooking.settlementStatus === 'settled' ? 'Settled' : 'Pending Settlement')}
                         </span>
                       </div>
                     </div>

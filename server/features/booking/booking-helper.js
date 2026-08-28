@@ -284,6 +284,27 @@ const enrichBookingData = (booking, transaction = null) => {
     finalAmount: customerTotal
   };
 
+  const { buildCanonicalFinancialStatus } = require('../payment/financial-status-service');
+  const canonical = buildCanonicalFinancialStatus(transaction, b);
+
+  b.financialStatus = canonical;
+  b.paymentDisplayStatus = canonical.paymentDisplayStatus;
+  b.settlementDisplayStatus = canonical.settlementDisplayStatus;
+  b.reconciliationStatus = canonical.reconciliationStatus;
+  b.paymentMethodDisplay = canonical.paymentMethodDisplay;
+
+  b.payment = {
+    ...(b.payment || {}),
+    method: b.paymentMethod,
+    status: b.paymentStatus,
+    displayStatus: canonical.paymentDisplayStatus,
+    settlementStatus: canonical.settlementStatus,
+    settlementDisplayStatus: canonical.settlementDisplayStatus,
+    reconciliationStatus: canonical.reconciliationStatus,
+    gatewayStatus: canonical.gatewayStatus,
+    paymentMethodDisplay: canonical.paymentMethodDisplay
+  };
+
   if (!b.bookingType) {
     b.bookingType = 'scheduled';
   }

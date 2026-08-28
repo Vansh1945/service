@@ -20,7 +20,8 @@ class RefundEngineService {
    */
   static async getRefundSettings() {
     try {
-      const setting = await SystemSetting.findOne();
+      const SystemConfigModel = SystemSetting.SystemConfig || SystemSetting;
+      const setting = await SystemConfigModel.findOne();
       const ref = setting?.refundSettings || {};
       return {
         autoRefundEnabled: ref.autoRefundEnabled ?? true,
@@ -54,6 +55,62 @@ class RefundEngineService {
   }
 
   /**
+   * Booking-scoped remaining refundable balance calculation.
+   * Deduplicates canonical Refund documents and unlinked legacy Transaction records.
+   * Excludes excludeRefundId when validating an existing refund document.
+   */
+  static async calculateRemainingRefundable(booking, excludeRefundId = null) {
+    const bookingId = booking._id;
+
+    // 1. Query prior Refund records strictly scoped to bookingId
+    const priorRefunds = await Refund.find({
+      bookingId,
+      refundStatus: { $in: ['completed', 'processing', 'approved'] },
+    }).lean();
+
+    // Exclude current refund if validating an existing document
+    const filteredPriorRefunds = excludeRefundId
+      ? priorRefunds.filter(r => r._id.toString() !== excludeRefundId.toString())
+      : priorRefunds;
+
+    const refundDocConsumed = filteredPriorRefunds.reduce((sum, r) => sum + (r.refundAmount || 0), 0);
+
+    // Collect structured linked IDs to avoid double-counting with Transactions
+    const linkedTxIds = filteredPriorRefunds.map(r => r.transactionId?.toString()).filter(Boolean);
+    const linkedRefundIds = filteredPriorRefunds.map(r => r.refundId).filter(Boolean);
+
+    // 2. Query unlinked legacy Transaction records strictly scoped to bookingId
+    const unlinkedTransactions = await Transaction.find({
+      booking: bookingId,
+      type: 'refund',
+      paymentStatus: 'completed',
+      _id: { $nin: linkedTxIds },
+    }).lean();
+
+    const filteredUnlinkedTx = unlinkedTransactions.filter(tx => {
+      if (!tx.description) return true;
+      return !linkedRefundIds.some(rId => tx.description.includes(rId));
+    });
+
+    const unlinkedTxConsumed = filteredUnlinkedTx.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const alreadyRefunded = refundDocConsumed + unlinkedTxConsumed;
+
+    // 3. Derive canonical paid base (reusing existing breakdown without double subtraction)
+    const totalPaid = booking.totalAmount || 0;
+    const totalPaidPaise = Math.round(totalPaid * 100);
+    const alreadyRefundedPaise = Math.round(alreadyRefunded * 100);
+    const remainingRefundablePaise = Math.max(0, totalPaidPaise - alreadyRefundedPaise);
+    const remainingRefundable = remainingRefundablePaise / 100;
+
+    return {
+      totalPaid,
+      alreadyRefunded,
+      remainingRefundable,
+      remainingRefundablePaise,
+    };
+  }
+
+  /**
    * Primary Entry Point for all Refund Requests across the enterprise system
    */
   static async processRefundRequest(params) {
@@ -75,7 +132,10 @@ class RefundEngineService {
     console.log(`[RefundEngine] Processing refund request for Booking ${bookingId} from source: ${refundSource}`);
 
     // 1. Fetch Booking
-    const booking = await Booking.findById(bookingId).populate('customer provider serviceId services.service');
+    const booking = await Booking.findById(bookingId)
+      .populate('customer')
+      .populate('provider')
+      .populate({ path: 'services.service', strictPopulate: false });
     if (!booking) {
       throw new Error(`Booking ${bookingId} not found for refund processing`);
     }
@@ -85,30 +145,25 @@ class RefundEngineService {
       throw new Error(`Customer details missing on booking ${bookingId}`);
     }
 
-    // 2. Idempotency & Cumulative Over-Refund Check
-    const priorRefunds = await Refund.find({
-      bookingId: booking._id,
-      refundStatus: { $in: ['completed', 'processing', 'approved'] },
-    });
-
-    const alreadyRefunded = priorRefunds.reduce((sum, r) => sum + (r.refundAmount || 0), 0);
-    const totalPaid = booking.totalAmount || 0;
-    const remainingRefundable = Math.max(0, totalPaid - alreadyRefunded);
-
-    if (alreadyRefunded >= totalPaid && totalPaid > 0) {
-      console.warn(`Booking ${booking._id} already fully refunded (₹${alreadyRefunded} refunded of ₹${totalPaid})`);
-      return {
-        success: true,
-        alreadyProcessed: true,
-        refund: priorRefunds[0],
-        message: 'Refund has already been fully completed for this booking.',
-      };
-    }
-
     const existingPendingRefund = await Refund.findOne({
       bookingId: booking._id,
       refundStatus: 'pending',
     });
+
+    // 2. Idempotency & Cumulative Over-Refund Check using Canonical Scoped Calculation
+    const { totalPaid, alreadyRefunded, remainingRefundable, remainingRefundablePaise } =
+      await this.calculateRemainingRefundable(booking, existingPendingRefund?._id);
+
+    if (Math.round(alreadyRefunded * 100) >= Math.round(totalPaid * 100) && totalPaid > 0) {
+      console.warn(`Booking ${booking._id} already fully refunded (₹${alreadyRefunded} refunded of ₹${totalPaid})`);
+      const priorRefund = await Refund.findOne({ bookingId: booking._id, refundStatus: 'completed' });
+      return {
+        success: true,
+        alreadyProcessed: true,
+        refund: priorRefund || existingPendingRefund,
+        message: 'Refund has already been fully completed for this booking.',
+      };
+    }
 
     if (existingPendingRefund && !approvedBy) {
       console.warn(`Refund request already pending approval for booking ${booking._id}`);
@@ -121,11 +176,11 @@ class RefundEngineService {
     }
 
     // 3. Determine Original Payment Breakdown & Refund Amount
-    let calculatedRefundAmount = overrideAmount !== undefined && overrideAmount !== null ? Number(overrideAmount) : remainingRefundable;
-
-    if (booking.cancellationProgress && typeof booking.cancellationProgress.refundAmount === 'number') {
-      calculatedRefundAmount = Math.min(booking.cancellationProgress.refundAmount, remainingRefundable);
-    }
+    let calculatedRefundAmount = overrideAmount !== undefined && overrideAmount !== null
+      ? Number(overrideAmount)
+      : (booking.cancellationProgress && typeof booking.cancellationProgress.refundAmount === 'number'
+          ? Math.min(booking.cancellationProgress.refundAmount, remainingRefundable)
+          : remainingRefundable);
 
     if (calculatedRefundAmount <= 0) {
       console.log(`Refund amount is 0 for booking ${booking._id}. Skipping monetary transfer.`);
@@ -136,7 +191,8 @@ class RefundEngineService {
       };
     }
 
-    if (calculatedRefundAmount > remainingRefundable) {
+    const requestedPaise = Math.round(calculatedRefundAmount * 100);
+    if (requestedPaise > remainingRefundablePaise) {
       throw new Error(`Refund amount (₹${calculatedRefundAmount}) exceeds maximum refundable balance (₹${remainingRefundable})`);
     }
 
@@ -232,7 +288,7 @@ class RefundEngineService {
       calculatedRefundAmount <= settings.maxAutoRefundAmount &&
       !booking.cancellationProgress?.penaltyApplied;
 
-    const requiresManualApproval = !approvedBy && (!qualifiesForAutoRefund || settings.manualApprovalEnabled === false ? false : !qualifiesForAutoRefund);
+    const requiresManualApproval = !approvedBy && (!qualifiesForAutoRefund || settings.manualApprovalEnabled === true);
 
     // 6. Extract Original Payment Identifiers
     const originalPaymentMethod = booking.paymentMethod || 'online';
@@ -328,12 +384,14 @@ class RefundEngineService {
     // 8. If manual approval is required and not approved yet, notify admin & return
     if (requiresManualApproval && refundDoc.refundStatus === 'pending') {
       console.log(`Refund ${refundDoc.refundId} queued for manual admin approval.`);
-      notificationHelper.sendAdminNotification({
-        title: 'New Refund Approval Required',
-        message: `Refund of ₹${calculatedRefundAmount} requested for Booking #${booking.bookingId || booking._id}.`,
-        type: 'refund_approval_required',
-        metadata: { refundId: refundDoc.refundId, bookingId: booking._id, amount: calculatedRefundAmount },
-      }).catch(err => console.error('Admin notification error:', err));
+      if (notificationHelper.notifyAdmins) {
+        notificationHelper.notifyAdmins(
+          'New Refund Approval Required',
+          `Refund of ₹${calculatedRefundAmount} requested for Booking #${booking.bookingId || booking._id}.`,
+          'system',
+          refundDoc._id
+        ).catch(err => console.error('Admin notification error:', err));
+      }
 
       return {
         success: true,
@@ -351,6 +409,71 @@ class RefundEngineService {
    * Internal Method: Execute physical money transfer (Wallet credit, Gateway Refund, or Hybrid Split)
    */
   static async executeRefundPayout(refundDoc, booking, settings, ip = '') {
+    if (!refundDoc) {
+      throw new Error('Refund document is missing for payout execution.');
+    }
+
+    // ── RECOVERY ARCHITECTURE FOR PROCESSING STATE ──
+    if (refundDoc.refundStatus === 'processing') {
+      console.log(`[RefundEngine] Processing state recovery check for Refund ${refundDoc.refundId}`);
+      
+      // Verify Razorpay gateway state if gateway refund ID or payment ID exists
+      if (refundDoc.gatewayRefundId || refundDoc.gatewayPaymentId) {
+        const existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, refundDoc.gatewayPaymentId);
+        if (existingRzpRefund && (existingRzpRefund.status === 'processed' || existingRzpRefund.status === 'completed')) {
+          refundDoc.refundStatus = 'completed';
+          refundDoc.completedAt = new Date();
+          refundDoc.gatewayRefundId = existingRzpRefund.id || refundDoc.gatewayRefundId;
+          refundDoc.addTimelineStep('completed', 'Gateway', 'Refund recovered: Gateway refund verified as processed.');
+          await refundDoc.save();
+
+          booking.paymentStatus = 'refunded';
+          if (!booking.cancellationProgress) booking.cancellationProgress = {};
+          booking.cancellationProgress.status = 'refundcompleted';
+          await booking.save();
+
+          return { success: true, refund: refundDoc, message: 'Processing refund recovered and finalized as completed.' };
+        }
+      }
+
+      // Verify Wallet credit state
+      if (refundDoc.walletTransactionId) {
+        const user = await User.findById(refundDoc.customerId);
+        const hasWalletCredit = user?.wallet?.walletTransactions?.some(t => t.transactionId === refundDoc.walletTransactionId);
+        if (hasWalletCredit) {
+          refundDoc.refundStatus = 'completed';
+          refundDoc.completedAt = new Date();
+          refundDoc.addTimelineStep('completed', 'System', 'Refund recovered: Wallet transaction verified.');
+          await refundDoc.save();
+
+          booking.paymentStatus = 'refunded';
+          if (!booking.cancellationProgress) booking.cancellationProgress = {};
+          booking.cancellationProgress.status = 'refundcompleted';
+          await booking.save();
+
+          return { success: true, refund: refundDoc, message: 'Processing refund recovered and finalized as completed.' };
+        }
+      }
+    } else if (refundDoc.refundStatus === 'completed') {
+      return { success: true, refund: refundDoc, message: 'Refund has already been completed.' };
+    } else if (refundDoc.refundStatus === 'rejected') {
+      throw new Error(`Refund payout blocked: Refund ${refundDoc.refundId} is marked as rejected.`);
+    } else if (refundDoc.refundStatus !== 'approved') {
+      throw new Error(`Refund payout blocked: Refund ${refundDoc.refundId} is in '${refundDoc.refundStatus}' status (must be approved).`);
+    }
+
+    if (!refundDoc.approvedBy) {
+      throw new Error(`Refund payout blocked: Refund ${refundDoc.refundId} lacks authorized admin approval.`);
+    }
+
+    // ── PRE-PAYOUT SERIAL BALANCE VERIFICATION ──
+    const { remainingRefundablePaise } = await this.calculateRemainingRefundable(booking, refundDoc._id);
+    const requestedPaise = Math.round(refundDoc.refundAmount * 100);
+    if (requestedPaise > remainingRefundablePaise) {
+      throw new Error(`Refund payout blocked: Requested amount (₹${refundDoc.refundAmount}) exceeds remaining refundable balance (₹${remainingRefundablePaise / 100}).`);
+    }
+
+    // Atomically claim processing status prior to money movement
     refundDoc.refundStatus = 'processing';
     refundDoc.addTimelineStep('processing', 'System', `Initiating payout via ${refundDoc.actualRefundDestination || refundDoc.refundDestination}`);
     await refundDoc.save();
@@ -359,8 +482,8 @@ class RefundEngineService {
     const totalRefund = refundDoc.refundAmount;
 
     try {
-      // A. Process Wallet Credit Portion
-      if (refundDoc.walletRefundAmount > 0 || refundDoc.actualRefundDestination === 'wallet' || refundDoc.refundDestination === 'wallet') {
+      // A. Process Wallet Credit Portion (Guarded by Idempotency check: only if walletTransactionId is NOT set)
+      if ((refundDoc.walletRefundAmount > 0 || refundDoc.actualRefundDestination === 'wallet' || refundDoc.refundDestination === 'wallet') && !refundDoc.walletTransactionId) {
         const walletCreditAmt = refundDoc.walletRefundAmount || (refundDoc.actualRefundDestination === 'wallet' ? totalRefund : 0);
 
         if (walletCreditAmt > 0) {
@@ -387,6 +510,7 @@ class RefundEngineService {
             type: 'credit',
             amount: walletCreditAmt,
             source: 'refund',
+            reason: refundDoc.refundReason || 'Booking cancellation refund',
             description: `Refund credited for Booking #${booking.bookingId || booking._id}`,
             booking: booking._id,
             bookingId: booking.bookingId || null,
@@ -419,34 +543,74 @@ class RefundEngineService {
         }
       }
 
-      // B. Process Gateway Refund Portion (Rule 1 & 4)
-      if (refundDoc.gatewayRefundAmount > 0 || refundDoc.actualRefundDestination === 'original_payment') {
-        const gatewayAmt = refundDoc.gatewayRefundAmount || (refundDoc.actualRefundDestination === 'original_payment' ? totalRefund : 0);
+      // B. Process Gateway Refund Portion (Priority 1: Wallet skips gateway; Priority 2: Original Razorpay payment; Priority 3: Cash skips gateway)
+      const isCashSource = (booking.paymentMethod === 'cash' || booking.paymentMethod === 'cod' || refundDoc.originalPaymentMethod === 'cash' || refundDoc.originalPaymentMethod === 'cod');
+      const isWalletDestination = (refundDoc.refundDestination === 'wallet' || refundDoc.actualRefundDestination === 'wallet');
+      const isOriginalRazorpayPayment = (refundDoc.actualRefundDestination === 'original_payment' && !isWalletDestination && !isCashSource);
+
+      if (isOriginalRazorpayPayment && (refundDoc.gatewayRefundAmount > 0 || totalRefund > 0)) {
+        const gatewayAmt = refundDoc.gatewayRefundAmount || totalRefund;
         const razorpayPaymentId = refundDoc.gatewayPaymentId || booking.razorpayPaymentId;
 
-        if (gatewayAmt > 0 && razorpayPaymentId && process.env.RAZORPAY_KEY_ID && !razorpayPaymentId.startsWith('pay_mock')) {
+        if (gatewayAmt > 0 && razorpayPaymentId && process.env.RAZORPAY_KEY_ID && razorpayPaymentId.startsWith('pay_') && !razorpayPaymentId.startsWith('pay_mock')) {
           console.log(`Initiating Razorpay refund for payment ${razorpayPaymentId}, amount: ₹${gatewayAmt}`);
-          try {
-            const razorpayResponse = await razorpay.payments.refund(razorpayPaymentId, {
-              amount: Math.round(gatewayAmt * 100), // paise
-              notes: {
-                refundId: refundDoc.refundId,
-                bookingId: String(booking._id),
-                reason: refundDoc.refundReason || 'Customer refund',
-                customerChoice: refundDoc.customerChoice || 'original_payment',
-              },
-            });
+          
+          // Ensure persisted idempotency key exists prior to gateway API call (Never generate a new key on retry)
+          if (!refundDoc.idempotencyKey) {
+            refundDoc.idempotencyKey = `IDEMP-REFUND-${refundDoc.refundId || refundDoc._id}`;
+            await refundDoc.save();
+          }
 
-            refundDoc.gatewayRefundId = razorpayResponse.id;
+          // Recovery Pre-check: Check if gateway refund already exists for this payment before making API call
+          let existingRzpRefund = null;
+          if (refundDoc.gatewayRefundId) {
+            existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, null);
+          }
+          if (!existingRzpRefund && razorpayPaymentId) {
+            existingRzpRefund = await razorpay.fetchRazorpayRefund(null, razorpayPaymentId);
+          }
+
+          try {
+            let razorpayResponse;
+            if (existingRzpRefund && existingRzpRefund.id) {
+              console.log(`Gateway refund recovery: Found existing gateway refund ${existingRzpRefund.id}`);
+              razorpayResponse = existingRzpRefund;
+            } else {
+              razorpayResponse = await razorpay.createRefundWithIdempotency(razorpayPaymentId, {
+                amount: Math.round(gatewayAmt * 100), // paise
+                notes: {
+                  refundId: refundDoc.refundId,
+                  bookingId: String(booking._id),
+                  reason: refundDoc.refundReason || 'Customer refund',
+                  customerChoice: refundDoc.customerChoice || 'original_payment',
+                },
+              }, refundDoc.idempotencyKey);
+            }
+
+            refundDoc.gatewayRefundId = razorpayResponse.id || refundDoc.gatewayRefundId;
             refundDoc.gatewayRefundAmount = gatewayAmt;
             refundDoc.gatewayResponse = razorpayResponse;
-            refundDoc.addTimelineStep('completed', 'Gateway', `Gateway refund initiated via Razorpay (ID: ${razorpayResponse.id}) for ₹${gatewayAmt}`);
+            refundDoc.addTimelineStep('completed', 'Gateway', `Gateway refund initiated via Razorpay (ID: ${razorpayResponse.id || 'recovered'}) for ₹${gatewayAmt}`);
             refundDoc.addAuditLog('GATEWAY_REFUND_COMPLETED', refundDoc.approvedBy || customerId, 'gateway', { razorpayRefundId: razorpayResponse.id, gatewayAmt, response: razorpayResponse }, ip);
           } catch (rzpErr) {
             console.error('Razorpay API refund error:', rzpErr);
 
-            // Rule 5: Fallback handling
-            if (settings.allowWalletFallback !== false) {
+            // Rule 5: Fallback handling vs Network Timeout
+            const isTimeoutOrNetworkError = rzpErr.code === 'ECONNABORTED' || rzpErr.message?.includes('timeout') || rzpErr.message?.includes('network');
+            
+            if (isTimeoutOrNetworkError) {
+              // Keep refundStatus = 'processing' (retryable state), do NOT set processed or failed on timeout
+              refundDoc.refundStatus = 'processing';
+              refundDoc.failureReason = `Gateway timeout: ${rzpErr.message}. Preserved as processing for safe retry.`;
+              refundDoc.addTimelineStep('processing', 'Gateway', `Gateway timeout encountered. Saved idempotency key preserved for retry.`);
+              await refundDoc.save();
+              return {
+                success: false,
+                isRetryable: true,
+                refund: refundDoc,
+                error: refundDoc.failureReason
+              };
+            } else if (settings.allowWalletFallback !== false) {
               console.warn('Gateway error fallback: Crediting remaining refund portion to Customer Wallet (Rule 5)');
               const user = await User.findById(customerId);
               if (user) {
@@ -482,13 +646,11 @@ class RefundEngineService {
         }
       }
 
-      // Complete refund status if not explicitly marked failed
-      if (refundDoc.refundStatus !== 'failed') {
-        refundDoc.refundStatus = 'completed';
-        refundDoc.completedAt = new Date();
-        refundDoc.processedBy = refundDoc.approvedBy || customerId;
-        await refundDoc.save();
-      }
+      // Complete refund status upon successful payout dispatches
+      refundDoc.refundStatus = 'completed';
+      refundDoc.completedAt = new Date();
+      refundDoc.processedBy = refundDoc.approvedBy || customerId;
+      await refundDoc.save();
 
       // 10. Update Booking & Cancellation Progress status
       booking.paymentStatus = 'refunded';
@@ -524,7 +686,7 @@ class RefundEngineService {
           role: 'customer',
           title: 'Refund Processed',
           message: refundContext,
-          type: 'refund_completed',
+          type: 'payment',
           eventId: 'refund_completed',
           idempotencyKey: `refund_completed:${customerId}:${refundDoc._id}`,
           metadata: { refundId: refundDoc.refundId, bookingId: booking._id, amount: totalRefund },
@@ -556,12 +718,14 @@ class RefundEngineService {
       refundDoc.addAuditLog('REFUND_FAILED', customerId, 'system', { error: err.message }, ip);
       await refundDoc.save();
 
-      notificationHelper.sendAdminNotification({
-        title: 'Refund Execution Failed',
-        message: `Refund ${refundDoc.refundId} of ₹${totalRefund} failed: ${err.message}`,
-        type: 'refund_failed',
-        metadata: { refundId: refundDoc.refundId, bookingId: booking._id },
-      }).catch(e => console.error('Failure notification error:', e));
+      if (notificationHelper.notifyAdmins) {
+        notificationHelper.notifyAdmins(
+          'Refund Execution Failed',
+          `Refund ${refundDoc.refundId} of ₹${totalRefund} failed: ${err.message}`,
+          'system',
+          refundDoc._id
+        ).catch(e => console.error('Failure notification error:', e));
+      }
 
       return {
         success: false,

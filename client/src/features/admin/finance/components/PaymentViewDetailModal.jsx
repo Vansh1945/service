@@ -342,10 +342,20 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                         const st = (d.settlementStatus || d.settlement?.settlementStatus || 'pending').toLowerCase();
                         return <StatusChip label={st.toUpperCase()} type={st === 'settled' ? 'success' : st === 'processing' ? 'warning' : 'default'} />;
                       })()} />
-                      <InfoRow label="Payment Type" badge={<StatusChip label={d.paymentType || 'Online'} type="info" />} />
-                      <InfoRow label="Payment Method" value={d.paymentMethod || 'Online'} />
+                      {d.gatewayReconciliationStatus && (
+                        <InfoRow label="Gateway Reconciliation" badge={
+                          <StatusChip label={String(d.gatewayReconciliationStatus).toUpperCase()} type={d.gatewayReconciliationStatus === 'MATCHED' ? 'success' : 'warning'} />
+                        } />
+                      )}
+                      {(d.reconciliationStatus || d.reconciliation?.reconciliationStatus) && (
+                        <InfoRow label="Customer Reconciliation" badge={
+                          <StatusChip label={String(d.reconciliationStatus || d.reconciliation?.reconciliationStatus).toUpperCase()} type={(d.reconciliationStatus || d.reconciliation?.reconciliationStatus) === 'MATCHED' ? 'success' : 'warning'} />
+                        } />
+                      )}
+                      <InfoRow label="Payment Type" badge={<StatusChip label={d.paymentMethodDisplay || d.paymentType || 'Online'} type="info" />} />
+                      <InfoRow label="Payment Method" value={d.paymentMethodDisplay || d.paymentMethod || 'Online'} />
                       <InfoRow label="Gateway" value={
-                        d.paymentType === 'cash' ? 'N/A' :
+                        d.paymentType === 'cash' || d.paymentMethod === 'cash' ? 'N/A' :
                           d.paymentType === 'wallet' ? 'Platform Wallet' :
                             d.paymentType === 'mixed' ? 'Razorpay + Wallet' : 'Razorpay'
                       } />

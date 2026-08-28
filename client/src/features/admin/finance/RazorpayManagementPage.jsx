@@ -61,6 +61,20 @@ const RazorpayManagementPage = () => {
     fetchRazorpayLogs();
   }, [fetchRazorpayLogs]);
 
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncAll = async () => {
+    try {
+      setSyncing(true);
+      await TransactionService.syncRazorpayAll();
+      await fetchRazorpayLogs();
+    } catch (err) {
+      console.error("Razorpay Sync Error:", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
 
@@ -77,12 +91,21 @@ const RazorpayManagementPage = () => {
             Real-time Razorpay telemetry tracking order creation, signature validation, payment IDs, bank RRN references, and webhook events.
           </p>
         </div>
-        <button
-          onClick={fetchRazorpayLogs}
-          className="text-xs bg-blue-700 text-white px-4 py-2.5 rounded-xl hover:bg-blue-800 font-bold shadow-xs transition-all flex items-center gap-1.5 self-start md:self-auto"
-        >
-          <FiShield className="w-4 h-4" /> Refresh Gateway Logs
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <button
+            onClick={handleSyncAll}
+            disabled={syncing}
+            className="text-xs bg-emerald-600 text-white px-4 py-2.5 rounded-xl hover:bg-emerald-700 font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <FiZap className="w-4 h-4" /> {syncing ? 'Syncing Gateway...' : 'Sync All Gateway Data'}
+          </button>
+          <button
+            onClick={fetchRazorpayLogs}
+            className="text-xs bg-blue-700 text-white px-4 py-2.5 rounded-xl hover:bg-blue-800 font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <FiShield className="w-4 h-4" /> Refresh Gateway Logs
+          </button>
+        </div>
       </div>
 
       {/* 14-Column Razorpay Table */}

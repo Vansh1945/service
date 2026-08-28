@@ -109,7 +109,7 @@ const FinanceDashboardPage = () => {
         const totalRef = d.totalRefunds ?? (completedRef + pendingRef);
         const platformEarn = d.platformEarnings ?? 0;
         const pendingSet = d.pendingSettlement ?? d.reconciliation?.pendingSettlement ?? 0;
-        const settledAmt = d.settledAmount ?? d.reconciliation?.totalSettled ?? totalRev;
+        const settledAmt = d.settledAmount ?? d.reconciliation?.totalSettled ?? 0;
 
         setOverview({
           totalRevenue: totalRev,

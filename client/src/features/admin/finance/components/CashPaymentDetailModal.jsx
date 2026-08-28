@@ -210,7 +210,7 @@ const CashPaymentDetailModal = ({ isOpen, onClose, entityData, transactionId }) 
                 />
                 <InfoRow
                   label="Settlement Status"
-                  badge={<StatusChip label={formatStatus(data.settlementStatus || (isVerified ? 'Settled' : 'Pending Settlement'))} type={isVerified ? 'success' : 'warning'} />}
+                  badge={<StatusChip label="N/A" type="default" />}
                 />
                 <InfoRow
                   label="Deposit Status"
