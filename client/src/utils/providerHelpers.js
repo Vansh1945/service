@@ -3,6 +3,7 @@ import {
   Timer, CheckCheck, Activity, Check, X
 } from 'lucide-react';
 import { readCachedSystemSettings } from './systemSettingsCache';
+import { getProviderStatusCfg } from './status';
 
 /**
  * Checks if chat is visible for a booking.
@@ -102,40 +103,7 @@ export const calculateNetAmount = (booking) => {
 
 /**
  * Config mapping for various status values used across provider panel.
+ * Delegates directly to the master centralized status architecture in status.jsx.
  */
-export const getStatusConfig = (status) => {
-  const configs = {
-    // Earning & Withdrawal statuses
-    completed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Success' },
-    paid: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Paid' },
-    processing: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Processing' },
-    underreview: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Clock, label: 'Review' },
-    under_review: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Clock, label: 'Review' },
-    pendingrelease: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Pending Release' },
-    pending_release: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Pending Release' },
-    approved: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Approved' },
-    requested: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Requested' },
-    failed: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Failed' },
-    rejected: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Rejected' },
-    withdrawn: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: CheckCircle, label: 'Withdrawn' },
-    disputehold: { color: 'bg-red-50 text-red-700 border border-red-200', icon: ShieldAlert, label: 'Dispute Hold' },
-    'dispute hold': { color: 'bg-red-50 text-red-700 border border-red-200', icon: ShieldAlert, label: 'Dispute Hold' },
-    adminhold: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Admin Hold' },
-    'admin hold': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Admin Hold' },
-    held: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Held' },
-    available: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Ready for withdrawal' },
+export const getStatusConfig = (status) => getProviderStatusCfg(status);
 
-    // Booking statuses
-    pending: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Pending' },
-    searchingprovider: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Searching Provider' },
-    offered: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Timer, label: 'Offered' },
-    accepted: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCheck, label: 'Accepted' },
-    ontheway: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'On The Way' },
-    arrived: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'Arrived' },
-    workstarted: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Activity, label: 'Work Started' },
-    cancelled: { color: 'bg-red-50 text-red-600 border border-red-200', icon: X, label: 'Cancelled' },
-    noshow: { color: 'bg-orange-50 text-orange-700 border border-orange-200', icon: AlertCircle, label: 'No Show' }
-  };
-  const key = status?.toLowerCase()?.replace(/[^a-z0-9]/g, '');
-  return configs[key] || configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-secondary/70 border border-gray-200', icon: AlertCircle, label: status || 'Unknown' };
-};

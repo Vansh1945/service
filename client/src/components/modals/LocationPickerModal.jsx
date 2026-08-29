@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, Marker, Polygon, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { X, MapPin, Navigation, Search } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { toast } from '../ui/Toast';
+
 import 'leaflet/dist/leaflet.css';
 import {
   reverseGeocode,

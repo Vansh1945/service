@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useNavigate } from 'react-router-dom';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import DashboardSkeleton from '../../../components/ui-skeletons/DashboardSkeleton';
 import {
   FiCalendar, FiDollarSign, FiUsers, FiUser,

@@ -5,7 +5,8 @@ import { useSocket } from '../../../socket/SocketContext';
 import {
   MapPin, Phone, Star, Shield, ArrowLeft, Navigation, Clock, ShieldCheck, HelpCircle, PhoneCall, MessageSquare
 } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import Loader from '../../../components/ui/Loader';
 import LiveTrackingMapUI from '../../../components/LiveTrackingMapUI';
 import * as BookingService from '../../../services/BookingService';

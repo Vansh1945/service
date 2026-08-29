@@ -12,6 +12,8 @@ import {
 import Pagination from '../../../components/ui/Pagination';
 import { formatDateTime } from '../../../utils/format';
 import { normalizeStatus } from '../../../utils/status';
+import StatusBadge from '../../../components/ui/StatusBadge';
+
 
 // ── Dropdown Configs ────────────────────────
 const refundStatusOptions = [
@@ -58,31 +60,11 @@ const refundTypeOptions = [
   { value: 'full', label: 'Full Refund' },
 ];
 
-const paymentMethodOptions = [
-  { value: 'all', label: 'All Payment Methods' },
-  { value: 'online', label: 'Online' },
-  { value: 'wallet', label: 'Wallet' },
-  { value: 'cash', label: 'Cash / COD' },
-  { value: 'mixed', label: 'Mixed' }
-];
 
 // ── Status Badges ────────────────────────
-const RefundStatusBadge = ({ status }) => {
-  const cfg = {
-    pending: 'bg-amber-50 text-amber-800 border-amber-200',
-    approved: 'bg-blue-50 text-blue-800 border-blue-200',
-    processing: 'bg-indigo-50 text-indigo-800 border-indigo-200',
-    completed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-    failed: 'bg-red-50 text-red-800 border-red-200',
-    rejected: 'bg-gray-100 text-gray-700 border-gray-200',
-    cancelled: 'bg-gray-100 text-gray-500 border-gray-200',
-  };
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${cfg[status] || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-      {status?.replace('_', ' ')}
-    </span>
-  );
-};
+const RefundStatusBadge = ({ status }) => (
+  <StatusBadge status={status} module="refund" size="sm" />
+);
 
 // ── Create Manual Refund Modal ──────────────────
 const CreateManualRefundModal = ({ onClose, onSuccess }) => {

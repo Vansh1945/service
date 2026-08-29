@@ -4,7 +4,8 @@ import {
   FiRefreshCw, FiSave, FiEye, FiCheckCircle, FiInfo, FiTrash2,
   FiLayout, FiSend, FiLayers, FiActivity, FiAlertCircle
 } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import * as SystemService from '../../../services/SystemService';
 import { useConfirm } from '../../../context/ConfirmContext';
 import StatCard from '../../../components/ui/StatCard';

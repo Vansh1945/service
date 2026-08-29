@@ -7,8 +7,11 @@ import SectionHeader from '../../../components/ui/SectionHeader';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import useDebounce from '../../../hooks/useDebounce';
 import { getStatusColor, normalizeStatus } from '../../../utils/status';
+
 import axiosInstance from '../../../api/axiosInstance';
 import AdminSearchBar from '../../../components/AdminSearchBar';
+import StatusBadge from '../../../components/ui/StatusBadge';
+
 
 
 const getStatusIcon = (status) => {
@@ -242,10 +245,8 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                 </div>
             </td>
             <td className="px-4 py-4 whitespace-nowrap">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
-                    {getStatusIcon(booking.status)}
-                    <span className="ml-1 capitalize">{booking.status}</span>
-                </span>
+                <StatusBadge status={booking.status} module="booking" size="sm" />
+
             </td>
             <td className="px-4 py-4 whitespace-nowrap">
                 <div className="flex items-center space-x-2">
@@ -301,23 +302,10 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
     );
 });
 
-const PayoutStatusBadge = ({ status }) => {
-    const cfg = {
-        'Payout On Hold': 'bg-orange-100 text-orange-700 border-orange-200',
-        'Payout Ready': 'bg-green-100 text-green-700 border-green-200',
-        'Payout Released': 'bg-blue-100 text-blue-700 border-blue-200',
-        'Refund Adjusted': 'bg-gray-100 text-gray-500 border-gray-200',
-        'Dispute Hold': 'bg-red-100 text-red-700 border-red-200',
-        'Not Processed': 'bg-gray-50 text-gray-400 border-gray-100',
-    };
+const PayoutStatusBadge = ({ status }) => (
+    <StatusBadge status={status} module="settlement" size="sm" showDot />
+);
 
-    return (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-            {status === 'Payout On Hold' || status === 'Dispute Hold' ? <Lock size={10} /> : <Unlock size={10} />}
-            {status || 'Unknown'}
-        </span>
-    );
-};
 
 // Dynamic Google script loader
 
@@ -478,13 +466,29 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
     const [complaintId, setComplaintId] = useState('');
     const [adminNotes, setAdminNotes] = useState('');
 
+    const directBookingComplaint = useMemo(() => {
+        if (!complaints || !booking) return null;
+        const bId = (booking._id || booking.id || '').toString();
+        const bRef = (booking.bookingId || '').toString();
+        return complaints.find(c => {
+            if (c.isBookingRelated) return true;
+            const cBId = c.booking?._id?.toString() || c.booking?.toString() || c.bookingId?.toString();
+            return Boolean((bId && cBId === bId) || (bRef && cBId === bRef));
+        });
+    }, [complaints, booking]);
+
     useEffect(() => {
-        if (complaints && complaints.length > 0 && !complaintId) {
-            setComplaintId(complaints[0]._id);
+        if (directBookingComplaint?._id) {
+            setComplaintId(directBookingComplaint._id);
+            setReasonType('Complaint Resolution');
+        } else {
+            setComplaintId('');
         }
-    }, [complaints, complaintId]);
+    }, [directBookingComplaint]);
 
     if (!isOpen || !booking) return null;
+
+    const selectedComplaintObj = complaints?.find(c => c._id === complaintId);
 
     const totalPaid = booking.totalAmount || 0;
     const platformFee = booking.platformFee || 0;
@@ -514,7 +518,7 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                         <select
                             value={reasonType}
                             onChange={(e) => setReasonType(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent font-medium"
                         >
                             <option value="Customer Requested">Customer Requested</option>
                             <option value="Complaint Resolution">Complaint Resolution</option>
@@ -540,15 +544,42 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                         <select
                             value={complaintId}
                             onChange={(e) => setComplaintId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent font-medium"
                         >
                             <option value="">Select Complaint (None)</option>
-                            {complaints && complaints.map(c => (
-                                <option key={c._id} value={c._id}>
-                                    {c.complaintId || c._id?.slice(-8)} - {c.title} ({c.status || 'Open'})
-                                </option>
-                            ))}
+                            {complaints && complaints.map(c => {
+                                const bId = (booking?._id || booking?.id || '').toString();
+                                const bRef = (booking?.bookingId || '').toString();
+                                const cBId = c.booking?._id?.toString() || c.booking?.toString() || c.bookingId?.toString();
+                                const isDirect = c.isBookingRelated || Boolean((bId && cBId === bId) || (bRef && cBId === bRef));
+
+                                return (
+                                    <option key={c._id} value={c._id}>
+                                        {isDirect ? '⭐ [THIS BOOKING] ' : (c.isCustomerRelated ? '👤 [CUSTOMER] ' : '')}
+                                        {c.complaintId || c._id?.slice(-8).toUpperCase()} - {c.title || c.subject || 'Complaint'} ({c.status || 'Open'})
+                                    </option>
+                                );
+                            })}
                         </select>
+
+                        {selectedComplaintObj && (
+                            <div className="mt-2 p-2.5 bg-amber-50/90 border border-amber-200 rounded-lg text-xs space-y-1 text-secondary">
+                                <div className="flex justify-between items-center font-bold text-amber-900">
+                                    <span className="flex items-center gap-1">
+                                        🏷️ Linked: {selectedComplaintObj.complaintId || selectedComplaintObj._id?.slice(-8).toUpperCase()}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 uppercase text-[9px] font-extrabold">
+                                        {selectedComplaintObj.status}
+                                    </span>
+                                </div>
+                                <p className="font-semibold text-gray-800 line-clamp-1">{selectedComplaintObj.title}</p>
+                                {selectedComplaintObj.description && (
+                                    <p className="text-gray-600 text-[11px] line-clamp-2 italic font-normal">
+                                        "{selectedComplaintObj.description}"
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Admin Resolution Notes (Optional)</label>
@@ -590,7 +621,7 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
 };
 
 const AdminBookingsView = () => {
-    const { API, showToast } = useAuth();
+    const { showToast } = useAuth();
     const { socket } = useSocket();
     const navigate = useNavigate();
     const loc = useLocation();
@@ -654,22 +685,34 @@ const AdminBookingsView = () => {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [bookingComplaints, setBookingComplaints] = useState([]);
 
-    const fetchBookingComplaints = useCallback(async (bookingId, customerId = null, attachedComplaint = null) => {
+    const fetchBookingComplaints = useCallback(async (bookingId, customerId = null, attachedComplaint = null, bookingRef = null) => {
         try {
             const list = [];
             const seenIds = new Set();
 
+            const isMatchingBooking = (comp) => {
+                if (!comp) return false;
+                const compBId = comp.booking?._id?.toString() || comp.booking?.toString() || comp.bookingId?.toString();
+                return Boolean(
+                    (bookingId && compBId === bookingId.toString()) ||
+                    (bookingRef && compBId === bookingRef.toString())
+                );
+            };
+
             if (attachedComplaint && attachedComplaint._id) {
+                attachedComplaint.isBookingRelated = true;
                 list.push(attachedComplaint);
                 seenIds.add(attachedComplaint._id.toString());
             }
 
-            if (bookingId) {
+            const bookingIdentifiers = [bookingId, bookingRef].filter(Boolean);
+            for (const bId of bookingIdentifiers) {
                 try {
-                    const response = await axiosInstance.get(`/complaint?booking=${bookingId}&limit=50`);
-                    if (response.data.success && Array.isArray(response.data.data)) {
+                    const response = await axiosInstance.get(`/complaint?booking=${bId}&limit=50`);
+                    if (response.data?.success && Array.isArray(response.data.data)) {
                         response.data.data.forEach(c => {
                             if (c && c._id && !seenIds.has(c._id.toString())) {
+                                c.isBookingRelated = true;
                                 seenIds.add(c._id.toString());
                                 list.push(c);
                             }
@@ -683,9 +726,12 @@ const AdminBookingsView = () => {
             if (customerId) {
                 try {
                     const response = await axiosInstance.get(`/complaint?customerId=${customerId}&limit=50`);
-                    if (response.data.success && Array.isArray(response.data.data)) {
+                    if (response.data?.success && Array.isArray(response.data.data)) {
                         response.data.data.forEach(c => {
                             if (c && c._id && !seenIds.has(c._id.toString())) {
+                                const isDirect = isMatchingBooking(c);
+                                c.isBookingRelated = isDirect;
+                                c.isCustomerRelated = !isDirect;
                                 seenIds.add(c._id.toString());
                                 list.push(c);
                             }
@@ -696,28 +742,11 @@ const AdminBookingsView = () => {
                 }
             }
 
-            // Fallback: fetch open complaints so admin can link any active complaint if desired
-            if (list.length === 0) {
-                try {
-                    const openRes = await axiosInstance.get('/complaint?limit=50');
-                    if (openRes.data.success && Array.isArray(openRes.data.data)) {
-                        openRes.data.data.forEach(c => {
-                            if (c && c._id && !seenIds.has(c._id.toString())) {
-                                seenIds.add(c._id.toString());
-                                list.push(c);
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.error('Error fetching open complaints fallback:', e);
-                }
-            }
-
             setBookingComplaints(list);
         } catch (err) {
             console.error('Error fetching complaints for booking:', err);
         }
-    }, [API]);
+    }, []);
 
     const fetchBookings = useCallback(async (silent = false) => {
         if (fetchAbortControllerRef.current) {
@@ -873,7 +902,7 @@ const AdminBookingsView = () => {
         setSelectedBooking(prev => prev ? { ...prev, booking: { ...prev.booking, status: 'cancelled' } } : null);
 
         try {
-            const res = await API.patch(`/api/admin/bookings/${bookingId}/cancel`, payload);
+            const res = await BookingService.cancelBookingByAdmin(bookingId, payload);
             if (res.data.success) {
                 showToast('Booking cancelled successfully and refund processed to wallet.', 'success');
                 setShowCancelModal(false);
@@ -884,14 +913,15 @@ const AdminBookingsView = () => {
                 setSelectedBooking(prevSelectedBooking);
             }
         } catch (err) {
-            showToast(err.response?.data?.message || 'Failed to cancel booking', 'error');
+            console.error('Error cancelling booking by admin:', err);
+            showToast(err.response?.data?.message || err.message || 'Failed to cancel booking', 'error');
             setBookings(prevBookings);
             setSelectedBooking(prevSelectedBooking);
         } finally {
             setActionLoading(false);
             setRowActionStates(prev => ({ ...prev, [bookingId]: false }));
         }
-    }, [selectedBooking, API, showToast, fetchBookings, bookings, rowActionStates]);
+    }, [selectedBooking, showToast, fetchBookings, bookings, rowActionStates]);
 
 
 
@@ -993,7 +1023,8 @@ const AdminBookingsView = () => {
             const bId = bkData?.booking?._id || booking._id;
             const cId = bkData?.customer?._id || booking.customer?._id || booking.customer;
             const attachedComp = bkData?.complaint;
-            await fetchBookingComplaints(bId, cId, attachedComp);
+            const bRef = bkData?.booking?.bookingId || booking.bookingId;
+            await fetchBookingComplaints(bId, cId, attachedComp, bRef);
             setShowCancelModal(true);
         } catch (error) {
             console.error('Error initiating cancellation:', error);
@@ -1491,10 +1522,8 @@ const AdminBookingsView = () => {
                             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
                                 <div className="flex items-center gap-3">
                                     <h2 className="text-base font-bold text-secondary">Booking Details</h2>
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(bk.status)}`}>
-                                        {getStatusIcon(bk.status)}
-                                        <span className="ml-1 capitalize">{bk.status}</span>
-                                    </span>
+                                    <StatusBadge status={bk.status} module="booking" size="sm" />
+
                                     {bk.isRebook ? (
                                         <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-teal-50 text-teal-750 border border-teal-200 px-2 py-0.5 rounded-full animate-none" title={`Original Booking: ${bk.originalBooking?.bookingId || bk.originalBooking || 'N/A'}`}>
                                             🔄 Rebook
@@ -2017,8 +2046,9 @@ const AdminBookingsView = () => {
                                         onClick={() => {
                                             const bId = bk._id;
                                             const cId = selectedBooking?.customer?._id || bk.customer?._id || bk.customer;
-                                            const attachedComp = selectedBooking?.complaint;
-                                            fetchBookingComplaints(bId, cId, attachedComp);
+                                            const attachedComp = selectedBooking?.complaint || bk.complaint;
+                                            const bRef = bk.bookingId || selectedBooking?.bookingId;
+                                            fetchBookingComplaints(bId, cId, attachedComp, bRef);
                                             setShowCancelModal(true);
                                         }}
                                         className="px-5 py-1.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors"

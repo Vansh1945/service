@@ -16,12 +16,15 @@ import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSke
 import * as BookingService from '../../../services/BookingService';
 import Pagination from '../../../components/ui/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../../utils/format';
-import { getStatusColor as getStatusColorUtil, normalizeStatus } from '../../../utils/status';
+import { getStatusColor as getStatusColorUtil, normalizeStatus, isBookingPending } from '../../../utils/status';
+
 import PriceDisplay from '../../../components/PriceDisplay';
 import { isChatVisible, formatAddress, calculateNetAmount } from '../../../utils/providerHelpers';
 import * as ComplaintService from '../../../services/ComplaintService';
 import L from 'leaflet';
 import ChatModal from '../../../components/chat/ChatModal';
+import StatusBadge from '../../../components/ui/StatusBadge';
+
 
 
 
@@ -458,13 +461,13 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
       const res = await BookingService.verifyCashReceived(booking._id);
       if (res.data?.success) {
         setVerificationStatus('completed');
-        showToast('Cash payment verified!', 'success');
+        showToast('Cash payment has been recorded.', 'success');
         if (typeof onVerificationComplete === 'function') {
           await onVerificationComplete();
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to verify cash payment');
+      setError('Your cash payment is waiting for verification.');
     } finally {
       setLoading(false);
     }
@@ -742,7 +745,8 @@ const ProviderBooking = () => {
 
   const calculateStats = useCallback((allBookings) => {
     const completed = allBookings.filter(b => (b.status || '').toLowerCase().replace(/[^a-z]/g, '') === 'completed');
-    const pending = allBookings.filter(b => ['pending', 'searchingprovider', 'offered', 'assigned', 'reassigned'].includes((b.status || '').toLowerCase().replace(/[^a-z]/g, '')));
+    const pending = allBookings.filter(b => isBookingPending(b.status));
+
     const cashPaid = completed.filter(b => b.paymentMethod === 'cash' && (b.paymentStatus || '').toLowerCase() === 'paid');
     const totalCashCollected = cashPaid.reduce((sum, b) => {
       const sub = b.services ? b.services.reduce((s, i) => s + (i.price * i.quantity) - (i.discountAmount || 0), 0) : 0;
@@ -911,10 +915,13 @@ const ProviderBooking = () => {
 
       const result = response.data;
 
-      // Clear any pending toasts to ensure only the latest one shows if needed
-      // toast.dismiss(); // Optional: uncomment if you want to be extremely aggressive
+      let successMsg = result.message || 'Action completed successfully.';
+      if (action === 'accept') successMsg = 'Booking accepted successfully.';
+      else if (action === 'reject') successMsg = 'Booking rejected successfully.';
+      else if (action === 'start') successMsg = 'Service started successfully.';
+      else if (action === 'complete') successMsg = 'Service marked as completed.';
 
-      showToast(result.message || `Booking ${action}ed successfully`, 'success');
+      showToast(successMsg, 'success');
 
       await refreshData();
       setShowModal(false);
@@ -924,7 +931,15 @@ const ProviderBooking = () => {
       setConfirmDialog({ isOpen: false, type: '', data: null });
       setProofModal({ isOpen: false, action: null, bookingId: null });
     } catch (err) {
-      showToast(err.response?.data?.message || err.message, 'error');
+      let errorMsg = err.response?.data?.message || err.message;
+      if (action === 'accept') {
+        errorMsg = "We couldn't accept this booking right now. It may no longer be available.";
+      } else if (action === 'complete') {
+        errorMsg = "We couldn't complete this booking right now. Please try again.";
+      } else if (!errorMsg || errorMsg.includes('Invalid action') || errorMsg.includes('CastError')) {
+        errorMsg = "This booking can't be updated at its current stage.";
+      }
+      showToast(errorMsg, 'error');
     } finally {
       setActionLoading({ id: null, type: null });
       setUploadProgress(0);
@@ -1185,22 +1200,15 @@ const ProviderBooking = () => {
       borderStyle = "border border-neutral-300 opacity-75";
     }
 
-    const renderStatusBadge = () => {
-      let colorClass = "bg-neutral-100 text-neutral-600 border-neutral-200";
-      if (isEmergency) colorClass = "bg-danger text-white border-danger";
-      else if (isInstant) colorClass = "bg-accent text-white border-accent";
-      else if (isCompleted) colorClass = "bg-success text-white border-success";
-      else if (isCancelled) colorClass = "bg-neutral-300 text-neutral-600 border-neutral-400";
-      else if (isAccepted) colorClass = "bg-primary text-white border-primary";
-      else if (isInProgress) colorClass = "bg-warning text-neutral-900 border-warning";
+    const renderStatusBadge = () => (
+      <StatusBadge
+        status={booking.status}
+        module="booking"
+        size="sm"
+        icon={isEmergency ? AlertCircle : null}
+      />
+    );
 
-      return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${colorClass}`}>
-          {isEmergency && <AlertCircle className="w-3 h-3 animate-pulse" />}
-          {booking.status}
-        </span>
-      );
-    };
 
     return (
       <div key={booking._id} className={`bg-white rounded-xl border ${borderStyle} ${glowStyle} hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col p-4 gap-3`}>
@@ -1619,10 +1627,8 @@ const ProviderBooking = () => {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-base sm:text-lg font-bold text-secondary font-black leading-tight">Booking Details</h2>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold ${getStatusColor(selectedBooking.status)}`}>
-                        {getStatusIcon(selectedBooking.status)}
-                        <span className="capitalize">{selectedBooking.status}</span>
-                      </span>
+                      <StatusBadge status={selectedBooking.status} module="booking" size="sm" />
+
                     </div>
                     <p className="text-[10px] text-gray-400 font-medium mt-0.5">
                       ID: {selectedBooking.bookingId || selectedBooking._id} · <Calendar className="w-3 h-3 inline-block mx-0.5 text-primary align-text-top" /> {formatDate(selectedBooking.date)} · {formatTime(selectedBooking.time)}
@@ -1950,11 +1956,10 @@ const ProviderBooking = () => {
                       </div>
                       <div className="flex justify-between">
                         <span>Settlement Status</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${
-                          selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
                             ? 'bg-gray-100 text-gray-700'
                             : (selectedBooking.razorpaySettlementId || selectedBooking.settlementStatus === 'settled' ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700')
-                        }`}>
+                          }`}>
                           {selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
                             ? 'N/A'
                             : (selectedBooking.razorpaySettlementId || selectedBooking.settlementStatus === 'settled' ? 'Settled' : 'Pending Settlement')}

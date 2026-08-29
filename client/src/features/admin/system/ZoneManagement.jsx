@@ -1698,8 +1698,8 @@ const ZoneManagement = () => {
                           onClick={() => handleToggleStatus(zone.id, zone.status)}
                           title={zone.status === 'active' ? 'Deactivate' : 'Activate'}
                           className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${zone.status === 'active'
-                              ? 'bg-success-light border-success/30 text-success'
-                              : 'bg-neutral-55 border-neutral-200 text-neutral-500'
+                            ? 'bg-success-light border-success/30 text-success'
+                            : 'bg-neutral-55 border-neutral-200 text-neutral-500'
                             }`}
                         >
                           {zone.status === 'active' ? 'Active' : 'Disabled'}

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Grid, Shield, Calendar, ArrowRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getCategories } from '../../../../services/SystemService';
 import { getPublicServices } from '../../../../services/ServiceService';
 import { getCustomerBookings } from '../../../../services/BookingService';
 import { useAuth } from '../../../../context/auth';
+import useCategory from '../../../../hooks/useCategory';
 
 const SearchBar = ({ placeholder = "Search services, categories, bookings..." }) => {
+
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
@@ -27,7 +28,7 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
   }, [location.search, isBookingsPage]);
 
   // Data states
-  const [categories, setCategories] = useState([]);
+  const { categories } = useCategory();
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,17 +45,12 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
     if (hasFetched) return;
     setLoading(true);
     try {
-      const [catRes, svcRes] = await Promise.all([
-        getCategories(),
-        getPublicServices(1, 100)
-      ]);
+      const svcRes = await getPublicServices(1, 100);
 
-      if (catRes.data?.success) {
-        setCategories(catRes.data.data || []);
-      }
       if (svcRes.data?.success) {
         setServices(svcRes.data.data || []);
       }
+
 
       if (isAuthenticated) {
         const bookingsParams = new URLSearchParams({ page: 1, limit: 50 });

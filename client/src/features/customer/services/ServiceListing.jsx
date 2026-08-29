@@ -3,7 +3,8 @@ import {
   Star, Filter, LayoutGrid, ChevronRight, Check, ChevronDown
 } from 'lucide-react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import 'react-toastify/dist/ReactToastify.css';
+
+
 import { getPublicServices } from '../../../services/ServiceService';
 import useCategory from '../../../hooks/useCategory';
 import useSurchargeBooking from '../../../hooks/useSurchargeBooking';

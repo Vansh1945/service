@@ -8,7 +8,9 @@ import * as ProviderService from '../../../../services/ProviderService';
 import * as SystemService from '../../../../services/SystemService';
 import { formatCurrency, formatDate } from '../../../../utils/format';
 import { getWithdrawalStatusBadge } from '../../../../utils/status';
+import StatusBadge from '../../../../components/ui/StatusBadge';
 import { IfscBankDetails } from '../../../../components/IfscBankDetails';
+
 
 import { getProviderPayoutState } from '../../../../utils/payoutState';
 
@@ -832,7 +834,8 @@ const PayoutProfileTab = ({ showToast }) => {
                                             <td className="p-3 font-bold text-slate-900 font-mono">{formatCurrency(w.amount || 0)}</td>
                                             <td className="p-3 uppercase text-[11px] font-bold text-slate-700">{destinationLabel}</td>
                                             <td className="p-3">
-                                                <span className={badge.className}>{badge.label}</span>
+                                                <StatusBadge status={w.status} module="withdrawal" size="sm" />
+
                                             </td>
                                             <td className="p-3 text-right">
                                                 <button
@@ -899,9 +902,8 @@ const PayoutProfileTab = ({ showToast }) => {
                             </div>
                             <div className="flex justify-between py-1 border-b border-slate-100">
                                 <span className="text-slate-500">Status</span>
-                                <span className={getWithdrawalStatusBadge(selectedWithdrawalDetail.status).className}>
-                                    {getWithdrawalStatusBadge(selectedWithdrawalDetail.status).label}
-                                </span>
+                                <StatusBadge status={selectedWithdrawalDetail.status} module="withdrawal" size="sm" />
+
                             </div>
                             <div className="flex justify-between py-1 border-b border-slate-100">
                                 <span className="text-slate-500">UTR / Reference No</span>

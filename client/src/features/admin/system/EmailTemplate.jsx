@@ -5,7 +5,8 @@ import {
   FiSliders, FiCopy, FiExternalLink, FiHelpCircle, FiChevronRight,
   FiLayout, FiMaximize2, FiSmartphone, FiMonitor
 } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import * as SystemService from '../../../services/SystemService';
 import { useConfirm } from '../../../context/ConfirmContext';
 

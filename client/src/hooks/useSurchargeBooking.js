@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from '../components/ui/Toast';
+
 import { useAuth } from '../context/auth';
 import { resolveActiveSurcharges } from '../services/SurgeService';
 import { getMergedPrice as getMergedPriceUtil } from '../utils/surge';

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useConfirm } from '../../../context/ConfirmContext';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import {
   FiUser, FiMail, FiLock, FiX, FiPlus, FiShield, FiUsers,
   FiChevronLeft, FiChevronRight, FiCalendar,

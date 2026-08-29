@@ -10,13 +10,13 @@ const userAuthMiddleware = async (req, res, next) => {
     const token = req.header('Authorization');
 
     if (!token || !token.startsWith('Bearer ')) {
-        return res.status(401).json({ success: false, message: 'Unauthorized. Token not provided.' });
+        return res.status(401).json({ success: false, message: 'Your session has expired. Please sign in again.' });
     }
 
     const jwtToken = token.replace('Bearer ', '').trim();
 
     if (!jwtToken || jwtToken === 'null' || jwtToken === 'undefined') {
-        return res.status(401).json({ success: false, message: 'Unauthorized. Invalid token.' });
+        return res.status(401).json({ success: false, message: 'Your session has expired. Please sign in again.' });
     }
 
     try {
@@ -27,7 +27,7 @@ const userAuthMiddleware = async (req, res, next) => {
             .select('+couponsUsed +customDiscount');
 
         if (!user) {
-            return res.status(401).json({ success: false, message: 'Unauthorized. User not found.' });
+            return res.status(401).json({ success: false, message: "We couldn't find an account with those details." });
         }
 
         // Dynamic Token Invalidation/Revocation check
@@ -44,16 +44,16 @@ const userAuthMiddleware = async (req, res, next) => {
             return res.status(401).json({
                 success: false,
                 tokenExpired: true,
-                message: 'Your session has been logged out or revoked.'
+                message: 'Your session has expired. Please sign in again.'
             });
         }
 
         if (user.role !== 'customer') {
-            return res.status(403).json({ success: false, message: 'Forbidden. Customers only.' });
+            return res.status(403).json({ success: false, message: "You don't have permission to perform this action." });
         }
 
         if (user.isSuspended) {
-            return res.status(403).json({ success: false, message: 'Your account has been blocked. Please contact support.' });
+            return res.status(403).json({ success: false, message: 'Your account is currently unavailable. Please contact support.' });
         }
 
         req.user   = user;
@@ -68,10 +68,10 @@ const userAuthMiddleware = async (req, res, next) => {
             return res.status(401).json({
                 success: false,
                 tokenExpired: true,
-                message: 'Access token expired. Please refresh your session.'
+                message: 'Your session has expired. Please sign in again.'
             });
         }
-        return res.status(401).json({ success: false, message: 'Unauthorized. Invalid token.' });
+        return res.status(401).json({ success: false, message: 'Your session has expired. Please sign in again.' });
     }
 };
 

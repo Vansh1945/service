@@ -3,7 +3,8 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle, Home, Briefcase, ShoppingBag, X, Edit3 } from 'lucide-react';
 import AddressSelector from '../../../components/AddressSelector';
 import AddressModal from '../../../components/modals/AddressModal';
@@ -249,7 +250,7 @@ const BookService = () => {
   // Apply coupon
   const applyCoupon = async () => {
     if (!formData.couponCode.trim()) {
-      toast.error('Please enter a coupon code');
+      toast.error("This coupon code isn't valid.");
       return;
     }
     if (isApplyingCoupon) return;
@@ -269,7 +270,7 @@ const BookService = () => {
       );
 
       if (!response.data.success) {
-        throw new Error(response.data.message || 'Invalid coupon');
+        throw new Error(response.data.message || "This coupon code isn't valid.");
       }
 
       const couponData = response.data.data.coupon;
@@ -287,9 +288,9 @@ const BookService = () => {
         couponCode: couponData.code
       }));
 
-      toast.success('Coupon applied successfully!');
+      toast.success("Coupon applied successfully. Your discount has been added.");
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Failed to apply coupon');
+      toast.error(err.response?.data?.message || err.message || "This coupon code isn't valid.");
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -772,11 +773,16 @@ const BookService = () => {
       const bookingId = response.data._id || response.data.data?._id || response.data.bookingId;
       if (!bookingId) throw new Error('Booking ID not received');
 
+      const isAssigned = response.data.data?.provider || response.data.data?.providerId;
+      const successMessage = isAssigned
+        ? 'Your booking has been created successfully.'
+        : "Your booking has been created. We're finding an available service provider.";
+
       toast.update(toastId, {
-        render: 'Booking created successfully!',
+        render: successMessage,
         type: 'success',
         isLoading: false,
-        autoClose: 2000
+        autoClose: 2500
       });
 
       setTimeout(() => {
@@ -786,14 +792,14 @@ const BookService = () => {
       }, 1000);
     } catch (err) {
       console.error('Booking error:', err);
-      let errorMessage = 'Failed to process booking';
+      let errorMessage = "We couldn't complete your booking right now. Please try again.";
       if (err.code === 'ECONNABORTED') {
-        errorMessage = 'Request timeout. Please try again.';
+        errorMessage = "Connection timeout. Please check your internet and try again.";
       } else if (err.response?.status === 401) {
-        errorMessage = 'Session expired. Please login again.';
+        errorMessage = 'Your session has expired. Please sign in again.';
         setTimeout(() => navigate('/login'), 2000);
-      } else if (err.response?.status === 409) {
-        errorMessage = 'This time slot is no longer available.';
+      } else if (err.response?.status === 409 || err.response?.data?.message?.toLowerCase().includes('provider')) {
+        errorMessage = 'No service provider is currently available for this time slot. Please choose another time.';
       } else if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
       }

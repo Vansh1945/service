@@ -3,7 +3,8 @@ import { MapPin, X } from 'lucide-react';
 import AddressSelector from '../AddressSelector';
 import Processing from '../ui-skeletons/Processing';
 import * as CustomerService from '../../services/CustomerService';
-import { toast } from 'react-toastify';
+import { toast } from '../ui/Toast';
+
 
 const AddressModal = ({
   isOpen,

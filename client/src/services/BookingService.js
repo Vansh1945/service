@@ -117,6 +117,10 @@ export const updateBookingDateTimeAdmin = (id, data) => {
     return axiosInstance.patch(`/booking/admin/${id}/reschedule`, data);
 };
 
+export const cancelBookingByAdmin = (bookingId, data) => {
+    return axiosInstance.patch(`/admin/bookings/${bookingId}/cancel`, data);
+};
+
 export const downloadBookingReport = (params, config) => {
     return axiosInstance.get("/booking/admin/booking-report", { params, ...config });
 };

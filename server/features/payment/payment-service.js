@@ -10,6 +10,7 @@ const Complaint = require('../complaint/complaint-model');
 const { SystemConfig } = require('../system-setting/system-setting-model');
 const cache = require('../../shared/utils/cache');
 const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 const { sendNotification, notifyAdmins } = require('../notification/notification-helper');
 const { sendMail } = require('../../shared/utils/sendmail');
 const bcrypt = require('bcryptjs');
@@ -1869,6 +1870,8 @@ class PaymentService {
           });
         });
 
+        PaymentService.formatWorksheetColumns(worksheet);
+
         // Set headers
         res.setHeader("Content-Disposition", `attachment; filename=withdrawal_report_${startDate}_to_${endDate}.xlsx`);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -2598,6 +2601,8 @@ class PaymentService {
         });
       });
 
+      PaymentService.formatWorksheetColumns(worksheet);
+
       // Send Excel file as response
       res.setHeader(
         'Content-Type',
@@ -2865,6 +2870,8 @@ class PaymentService {
         });
       }
 
+      PaymentService.formatWorksheetColumns(worksheet);
+
       // Send Excel file
       const fileName = `Provider_Earnings_Report_${fromDate}_to_${toDate}.xlsx`;
       res.setHeader(
@@ -3001,6 +3008,8 @@ class PaymentService {
           });
         });
       });
+
+      PaymentService.formatWorksheetColumns(worksheet);
 
       // Header bold
       worksheet.getRow(1).font = { bold: true };
@@ -3457,6 +3466,8 @@ class PaymentService {
         });
       });
 
+      PaymentService.formatWorksheetColumns(worksheet);
+
       res.setHeader('Content-Disposition', `attachment; filename=payout_history_${fromDate}_to_${toDate}.xlsx`);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
@@ -3828,6 +3839,8 @@ class PaymentService {
         });
       });
 
+      PaymentService.formatWorksheetColumns(worksheet);
+
       worksheet.getRow(1).font = { bold: true };
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -3939,6 +3952,8 @@ class PaymentService {
           dateProcessed: r.createdAt ? r.createdAt.toLocaleString() : '-'
         });
       });
+
+      PaymentService.formatWorksheetColumns(worksheet);
 
       worksheet.getRow(1).font = { bold: true };
 
@@ -4444,6 +4459,526 @@ class PaymentService {
   }
 
   /**
+   * Centralized Column Header & Type Formatting Engine
+   */
+  static sanitizePlainHeader(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  static formatReportFilename(reportType, startDate, endDate, extension) {
+    const NAME_MAP = {
+      summary: 'Financial_Summary',
+      booking_revenue: 'Booking_Revenue',
+      customer_payment: 'Customer_Payment',
+      provider_earnings: 'Provider_Earnings',
+      commission: 'Commission',
+      refund: 'Refund',
+      payout: 'Payout',
+      wallet_ledger: 'Wallet_Ledger',
+      cash_recovery: 'Cash_Recovery',
+      coupon: 'Coupon',
+      referral: 'Referral',
+      complaint: 'Complaint',
+      razorpay_reconcile: 'Razorpay_Reconciliation',
+      master_reconcile: 'Master_Reconciliation'
+    };
+
+    let baseName = NAME_MAP[reportType];
+    if (!baseName) {
+      baseName = String(reportType || 'Report')
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .split(/[\s_]+/)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join('_');
+    }
+
+    baseName = baseName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const ext = extension.startsWith('.') ? extension.slice(1) : extension;
+
+    if (startDate && endDate) {
+      const s = String(startDate).split('T')[0];
+      const e = String(endDate).split('T')[0];
+      return `${baseName}_${s}_to_${e}.${ext}`;
+    }
+
+    return `${baseName}.${ext}`;
+  }
+
+  static formatColumnHeader(key) {
+    if (!key) return '';
+    const cleanKey = PaymentService.sanitizePlainHeader(key);
+    const EXPLICIT_HEADER_MAP = {
+      earningId: 'Earning ID',
+      bookingId: 'Booking ID',
+      customerId: 'Customer ID',
+      providerId: 'Provider ID',
+      transactionId: 'Transaction ID',
+      refundId: 'Refund ID',
+      paymentId: 'Payment ID',
+      paymentRecordId: 'Payment Record ID',
+      rewardLogId: 'Reward Log ID',
+      complaintId: 'Complaint ID',
+      gatewayRefundId: 'Gateway Refund ID',
+      razorpayId: 'Razorpay ID',
+      razorpayOrderId: 'Razorpay Order ID',
+      razorpayPaymentId: 'Razorpay Payment ID',
+      utr: 'UTR',
+      utrNo: 'UTR No',
+      ifsc: 'IFSC',
+      gst: 'GST',
+      gstAmount: 'GST Amount',
+      apiStatus: 'API Status',
+      pdfUrl: 'PDF URL',
+      csvUrl: 'CSV URL',
+      createdAt: 'Created At',
+      updatedAt: 'Updated At',
+      completedAt: 'Completed At',
+      requestedAt: 'Requested At',
+      verifiedAt: 'Verified At',
+      availableAfter: 'Available After',
+      grossAmount: 'Gross Amount',
+      commissionRate: 'Commission Rate',
+      commissionAmount: 'Commission Amount',
+      netAmount: 'Net Amount',
+      earningStatus: 'Earning Status',
+      bookingDate: 'Booking Date',
+      completionDate: 'Completion Date',
+      normalDiscount: 'Normal Discount',
+      totalDiscount: 'Total Discount',
+      demandSurge: 'Demand Surge',
+      visitingCharge: 'Visiting Charge',
+      nightCharge: 'Night Charge',
+      rainCharge: 'Rain Charge',
+      trafficCharge: 'Traffic Charge',
+      platformFee: 'Platform Fee',
+      platformCommission: 'Platform Commission',
+      providerEarnings: 'Provider Earnings',
+      attemptedAmount: 'Attempted Amount',
+      actualCollectedAmount: 'Actual Collected Amount',
+      collectionStatus: 'Collection Status',
+      paymentMethod: 'Payment Method',
+      paymentStatus: 'Payment Status',
+      bookingStatus: 'Booking Status',
+      transactionType: 'Transaction Type',
+      razorpayAmount: 'Razorpay Amount',
+      transactionAmount: 'Transaction Amount',
+      bookingAmount: 'Booking Amount',
+      razorpayGatewayStatus: 'Razorpay Gateway Status',
+      transactionPaymentStatus: 'Transaction Payment Status',
+      bookingPaymentStatus: 'Booking Payment Status',
+      reconciliationStatus: 'Reconciliation Status',
+      requestedAmount: 'Requested Amount',
+      refundAmount: 'Refund Amount',
+      walletRefundAmount: 'Wallet Refund Amount',
+      gatewayRefundAmount: 'Gateway Refund Amount',
+      refundStatus: 'Refund Status',
+      refundReason: 'Refund Reason',
+      transactionReference: 'Transaction Reference',
+      withdrawalType: 'Withdrawal Type',
+      walletOwner: 'Wallet Owner',
+      entryDirection: 'Entry Direction',
+      postedFinancialImpact: 'Posted Financial Impact',
+      ledgerStatus: 'Ledger Status',
+      balanceBefore: 'Balance Before',
+      balanceAfter: 'Balance After',
+      cashCollected: 'Cash Collected',
+      verificationStatus: 'Verification Status',
+      couponCode: 'Coupon Code',
+      discountType: 'Discount Type',
+      discountValue: 'Discount Value',
+      finalCustomerPaid: 'Final Customer Paid',
+      isReferralCoupon: 'Is Referral Coupon',
+      usageDate: 'Usage Date',
+      recipientType: 'Recipient Type',
+      rewardType: 'Reward Type',
+      dateRaised: 'Date Raised',
+      dateResolved: 'Date Resolved',
+      resolutionNotes: 'Resolution Notes',
+      bookingTotal: 'Booking Total',
+      customerPaid: 'Customer Paid',
+      providerEarning: 'Provider Earning',
+      walletAmount: 'Wallet Amount',
+      payoutAmount: 'Payout Amount'
+    };
+
+    if (EXPLICIT_HEADER_MAP[key]) return EXPLICIT_HEADER_MAP[key];
+
+    const ACRONYMS = {
+      id: 'ID',
+      utr: 'UTR',
+      ifsc: 'IFSC',
+      gst: 'GST',
+      api: 'API',
+      pdf: 'PDF',
+      csv: 'CSV',
+      url: 'URL',
+      qr: 'QR'
+    };
+
+    const words = key.replace(/([a-z])([A-Z])/g, '$1 $2').split(/[\s_]+/);
+    return words.map(w => {
+      const lower = w.toLowerCase();
+      if (ACRONYMS[lower]) return ACRONYMS[lower];
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    }).join(' ');
+  }
+
+  static getReportColumnDefinitions(reportType, sampleKeys = []) {
+    const EXPLICIT_MAP = {
+      summary: [
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'date', header: 'Booking Date', type: 'date' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
+        { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+        { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' },
+        { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+        { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+        { key: 'bookingStatus', header: 'Booking Status', type: 'status' }
+      ],
+      booking_revenue: [
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'bookingDate', header: 'Booking Date', type: 'date' },
+        { key: 'completionDate', header: 'Completion Date', type: 'date' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'service', header: 'Service', type: 'string' },
+        { key: 'subtotal', header: 'Subtotal', type: 'currency' },
+        { key: 'normalDiscount', header: 'Discount', type: 'currency' },
+        { key: 'surcharges', header: 'Surcharges', type: 'currency' },
+        { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
+        { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+        { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+        { key: 'bookingStatus', header: 'Booking Status', type: 'status' },
+        { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+        { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' }
+      ],
+      customer_payment: [
+        { key: 'transactionId', header: 'Transaction ID', type: 'id' },
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'attemptedAmount', header: 'Attempted Amount', type: 'currency' },
+        { key: 'actualCollectedAmount', header: 'Collected Amount', type: 'currency' },
+        { key: 'collectionStatus', header: 'Collection Status', type: 'status' },
+        { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+        { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+        { key: 'transactionType', header: 'Transaction Type', type: 'string' },
+        { key: 'razorpayOrderId', header: 'Razorpay Order ID', type: 'id' },
+        { key: 'razorpayPaymentId', header: 'Razorpay Payment ID', type: 'id' },
+        { key: 'createdAt', header: 'Created At', type: 'date' }
+      ],
+      provider_earnings: [
+        { key: 'earningId', header: 'Earning ID', type: 'id' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'bookingDate', header: 'Booking Date', type: 'date' },
+        { key: 'grossAmount', header: 'Gross Amount', type: 'currency' },
+        { key: 'commissionRate', header: 'Commission Rate', type: 'percentage' },
+        { key: 'commissionAmount', header: 'Commission Amount', type: 'currency' },
+        { key: 'netAmount', header: 'Net Amount', type: 'currency' },
+        { key: 'earningStatus', header: 'Earning Status', type: 'status' },
+        { key: 'availableAfter', header: 'Available After', type: 'date' }
+      ],
+      commission: [
+        { key: 'earningId', header: 'Earning ID', type: 'id' },
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'bookingDate', header: 'Booking Date', type: 'date' },
+        { key: 'commissionRate', header: 'Commission Rate', type: 'percentage' },
+        { key: 'grossAmount', header: 'Gross Amount', type: 'currency' },
+        { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+        { key: 'providerNetAmount', header: 'Provider Net Amount', type: 'currency' },
+        { key: 'earningStatus', header: 'Earning Status', type: 'status' }
+      ],
+      refund: [
+        { key: 'refundId', header: 'Refund ID', type: 'id' },
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'requestedAmount', header: 'Requested Amount', type: 'currency' },
+        { key: 'refundAmount', header: 'Refund Amount', type: 'currency' },
+        { key: 'walletRefundAmount', header: 'Wallet Refund Amount', type: 'currency' },
+        { key: 'gatewayRefundAmount', header: 'Gateway Refund Amount', type: 'currency' },
+        { key: 'gatewayRefundId', header: 'Gateway Refund ID', type: 'id' },
+        { key: 'refundStatus', header: 'Refund Status', type: 'status' },
+        { key: 'refundReason', header: 'Refund Reason', type: 'string' },
+        { key: 'createdAt', header: 'Created At', type: 'date' }
+      ],
+      payout: [
+        { key: 'paymentRecordId', header: 'Payment Record ID', type: 'id' },
+        { key: 'transactionReference', header: 'Transaction Reference', type: 'id' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'amount', header: 'Amount', type: 'currency' },
+        { key: 'netAmount', header: 'Net Amount', type: 'currency' },
+        { key: 'withdrawalType', header: 'Withdrawal Type', type: 'string' },
+        { key: 'status', header: 'Status', type: 'status' },
+        { key: 'razorpayPayoutId', header: 'Razorpay Payout ID', type: 'id' },
+        { key: 'utrNo', header: 'UTR No', type: 'id' },
+        { key: 'requestedAt', header: 'Requested At', type: 'date' },
+        { key: 'completedAt', header: 'Completed At', type: 'date' }
+      ],
+      wallet_ledger: [
+        { key: 'transactionId', header: 'Transaction ID', type: 'id' },
+        { key: 'walletOwner', header: 'Wallet Owner', type: 'string' },
+        { key: 'role', header: 'Role', type: 'string' },
+        { key: 'entryDirection', header: 'Entry Direction', type: 'string' },
+        { key: 'attemptedAmount', header: 'Attempted Amount', type: 'currency' },
+        { key: 'postedFinancialImpact', header: 'Financial Impact', type: 'currency' },
+        { key: 'ledgerStatus', header: 'Ledger Status', type: 'status' },
+        { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+        { key: 'balanceBefore', header: 'Balance Before', type: 'currency' },
+        { key: 'balanceAfter', header: 'Balance After', type: 'currency' },
+        { key: 'transactionType', header: 'Transaction Type', type: 'string' },
+        { key: 'description', header: 'Description', type: 'string' },
+        { key: 'createdAt', header: 'Created At', type: 'date' }
+      ],
+      cash_recovery: [
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
+        { key: 'cashCollected', header: 'Cash Collected', type: 'currency' },
+        { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+        { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' },
+        { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+        { key: 'verificationStatus', header: 'Verification Status', type: 'status' },
+        { key: 'verifiedAt', header: 'Verified At', type: 'date' }
+      ],
+      coupon: [
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'couponCode', header: 'Coupon Code', type: 'id' },
+        { key: 'discountType', header: 'Discount Type', type: 'string' },
+        { key: 'discountValue', header: 'Discount Value', type: 'currency' },
+        { key: 'totalDiscount', header: 'Total Discount', type: 'currency' },
+        { key: 'subtotal', header: 'Subtotal', type: 'currency' },
+        { key: 'finalCustomerPaid', header: 'Final Customer Paid', type: 'currency' },
+        { key: 'isReferralCoupon', header: 'Is Referral Coupon', type: 'boolean' },
+        { key: 'usageDate', header: 'Usage Date', type: 'date' }
+      ],
+      referral: [
+        { key: 'rewardLogId', header: 'Reward Log ID', type: 'id' },
+        { key: 'recipient', header: 'Recipient', type: 'string' },
+        { key: 'recipientType', header: 'Recipient Type', type: 'string' },
+        { key: 'rewardType', header: 'Reward Type', type: 'string' },
+        { key: 'amount', header: 'Amount', type: 'currency' },
+        { key: 'status', header: 'Status', type: 'status' },
+        { key: 'createdAt', header: 'Created At', type: 'date' }
+      ],
+      complaint: [
+        { key: 'complaintId', header: 'Complaint ID', type: 'id' },
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'customer', header: 'Customer', type: 'string' },
+        { key: 'provider', header: 'Provider', type: 'string' },
+        { key: 'title', header: 'Title', type: 'string' },
+        { key: 'category', header: 'Category', type: 'category' },
+        { key: 'status', header: 'Status', type: 'status' },
+        { key: 'createdAt', header: 'Created At', type: 'date' }
+      ],
+      razorpay_reconcile: [
+        { key: 'transactionId', header: 'Transaction ID', type: 'id' },
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'razorpayOrderId', header: 'Razorpay Order ID', type: 'id' },
+        { key: 'razorpayPaymentId', header: 'Razorpay Payment ID', type: 'id' },
+        { key: 'razorpayAmount', header: 'Razorpay Amount', type: 'currency' },
+        { key: 'transactionAmount', header: 'Transaction Amount', type: 'currency' },
+        { key: 'bookingAmount', header: 'Booking Amount', type: 'currency' },
+        { key: 'razorpayGatewayStatus', header: 'Razorpay Gateway Status', type: 'status' },
+        { key: 'transactionPaymentStatus', header: 'Transaction Payment Status', type: 'status' },
+        { key: 'bookingPaymentStatus', header: 'Booking Payment Status', type: 'status' },
+        { key: 'reconciliationStatus', header: 'Reconciliation Status', type: 'reconciliation_status' }
+      ],
+      master_reconcile: [
+        { key: 'bookingId', header: 'Booking ID', type: 'id' },
+        { key: 'bookingTotal', header: 'Booking Total', type: 'currency' },
+        { key: 'customerPaid', header: 'Customer Paid', type: 'currency' },
+        { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+        { key: 'providerEarning', header: 'Provider Earning', type: 'currency' },
+        { key: 'walletAmount', header: 'Wallet Amount', type: 'currency' },
+        { key: 'refundAmount', header: 'Refund Amount', type: 'currency' },
+        { key: 'payoutAmount', header: 'Payout Amount', type: 'currency' },
+        { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+        { key: 'bookingStatus', header: 'Booking Status', type: 'status' },
+        { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+        { key: 'reconciliationStatus', header: 'Reconciliation Status', type: 'reconciliation_status' }
+      ]
+    };
+
+    let cols = EXPLICIT_MAP[reportType];
+    if (!cols) {
+      cols = sampleKeys.map(key => ({
+        key,
+        header: PaymentService.formatColumnHeader(key)
+      }));
+    }
+
+    return cols.map(c => {
+      const cleanHeader = PaymentService.sanitizePlainHeader(c.header);
+      return {
+        ...c,
+        header: cleanHeader,
+        width: Math.max(cleanHeader.length + 5, 20)
+      };
+    });
+  }
+
+  static isMonetaryColumnKey(key) {
+    if (!key || typeof key !== 'string') return false;
+    const k = key.toLowerCase();
+    return (
+      k.includes('amount') ||
+      k.includes('total') ||
+      k.includes('paid') ||
+      k.includes('earning') ||
+      k.includes('commission') ||
+      k.includes('discount') ||
+      k.includes('surcharge') ||
+      k.includes('fee') ||
+      k.includes('impact') ||
+      k.includes('value') ||
+      k.includes('subtotal') ||
+      k.includes('refund') ||
+      k.includes('payout') ||
+      k.includes('subsidy') ||
+      k.includes('reward') ||
+      k.includes('balance') ||
+      k.includes('collected') ||
+      k.includes('tax') ||
+      k.includes('gst') ||
+      k.includes('receivable') ||
+      k.includes('gross') ||
+      k.includes('net')
+    ) && !k.includes('rate') && !k.includes('percent') && !k.includes('percentage') && !k.includes('id') && !k.includes('count') && !k.includes('date') && !k.includes('status') && !k.includes('type') && !k.includes('code');
+  }
+
+  static isPercentageColumnKey(key) {
+    if (!key || typeof key !== 'string') return false;
+    const k = key.toLowerCase();
+    return k.includes('rate') || k.includes('percent') || k.includes('percentage');
+  }
+
+  static formatLabel(value) {
+    if (value == null || value === '') return '—';
+    if (typeof value !== 'string') return String(value);
+
+    const ACRONYMS = {
+      id: 'ID',
+      utr: 'UTR',
+      ifsc: 'IFSC',
+      gst: 'GST',
+      api: 'API',
+      pdf: 'PDF',
+      csv: 'CSV',
+      xlsx: 'XLSX',
+      url: 'URL',
+      qr: 'QR',
+      upi: 'UPI'
+    };
+
+    const KNOWN_LABELS = {
+      completed: 'Completed',
+      pending: 'Pending',
+      processing: 'Processing',
+      failed: 'Failed',
+      rejected: 'Rejected',
+      cancelled: 'Cancelled',
+      canceled: 'Cancelled',
+      refunded: 'Refunded',
+      paid: 'Paid',
+      success: 'Success',
+      successful: 'Successful',
+      captured: 'Captured',
+      escrowhold: 'Escrow Hold',
+      cash: 'Cash',
+      online: 'Online',
+      wallet: 'Wallet',
+      provider_earnings: 'Provider Earnings',
+      customer_payment: 'Customer Payment',
+      master_reconcile: 'Master Reconcile',
+      booking_revenue: 'Booking Revenue',
+      cash_recovery: 'Cash Recovery',
+      razorpay_reconcile: 'Razorpay Reconcile',
+      amount_mismatch: 'Amount Mismatch',
+      status_mismatch: 'Status Mismatch',
+      payment_failed: 'Payment Failed',
+      refund_mismatch: 'Refund Mismatch',
+      matched: 'Matched',
+      under_review: 'Under Review',
+      transferred: 'Transferred',
+      requested: 'Requested',
+      approved: 'Approved'
+    };
+
+    const lower = value.trim().toLowerCase();
+    if (KNOWN_LABELS[lower]) return KNOWN_LABELS[lower];
+
+    const words = value.replace(/([a-z])([A-Z])/g, '$1 $2').split(/[\s_-]+/);
+    return words
+      .filter(Boolean)
+      .map(w => {
+        const l = w.toLowerCase();
+        if (ACRONYMS[l]) return ACRONYMS[l];
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      })
+      .join(' ');
+  }
+
+  static formatWorksheetColumns(worksheet, colDefs = []) {
+    if (!worksheet) return;
+
+    const colDefMap = {};
+    if (Array.isArray(colDefs)) {
+      colDefs.forEach(c => {
+        if (c && c.key) colDefMap[c.key] = c;
+      });
+    }
+
+    worksheet.columns.forEach((col, idx) => {
+      const key = col.key;
+      const explicitDef = (Array.isArray(colDefs) && colDefs[idx]) || colDefMap[key] || {};
+      const isCurrency = explicitDef.type === 'currency' || PaymentService.isMonetaryColumnKey(key);
+      const isPercentage = explicitDef.type === 'percentage' || PaymentService.isPercentageColumnKey(key);
+      const isStatusOrLabel = key.toLowerCase().includes('status') ||
+        key.toLowerCase().includes('method') ||
+        key.toLowerCase().includes('type') ||
+        key.toLowerCase().includes('category') ||
+        key.toLowerCase().includes('direction') ||
+        key.toLowerCase().includes('role');
+
+      if (isCurrency) {
+        col.numFmt = '#,##0.00';
+      } else if (isPercentage) {
+        col.numFmt = '0.00"%"';
+      }
+
+      col.eachCell({ includeEmpty: false }, (cell, rowNumber) => {
+        if (rowNumber === 1) return; // Skip header row
+        const val = cell.value;
+        if (val !== null && val !== undefined && val !== '') {
+          if ((isCurrency || isPercentage) && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
+            const num = Number(val);
+            cell.value = num; // Retain numeric type so Excel can still sum/filter/sort
+            if (isCurrency) {
+              cell.numFmt = '#,##0.00';
+            } else if (isPercentage) {
+              cell.numFmt = '0.00"%"';
+            }
+          } else if (isStatusOrLabel && typeof val === 'string') {
+            cell.value = PaymentService.formatLabel(val);
+          }
+        }
+      });
+    });
+  }
+
+  /**
    * READ-ONLY Enterprise Financial Report Center Data & Reconciliation Engine
    */
   static async getFinancialReportCenterData(req, res) {
@@ -4592,11 +5127,38 @@ class PaymentService {
       let reportData = [];
       let totalRecords = 0;
 
-      const pNum = Math.max(1, parseInt(page, 10));
-      const pLimit = Math.max(1, Math.min(1000, parseInt(limit, 10)));
+      const isExporting = Boolean(exportFormat);
+      const pNum = isExporting ? 1 : Math.max(1, parseInt(page, 10));
+      const pLimit = isExporting ? 50000 : Math.max(1, Math.min(1000, parseInt(limit, 10)));
       const skip = (pNum - 1) * pLimit;
 
       switch (reportType) {
+        case 'summary': {
+          const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          totalRecords = await Booking.countDocuments(filter);
+          const bookings = await Booking.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pLimit)
+            .populate('customer', 'name')
+            .populate('provider', 'name')
+            .lean();
+
+          reportData = bookings.map(b => ({
+            bookingId: b.bookingId || b._id,
+            date: b.createdAt,
+            customer: b.customer?.name || 'N/A',
+            provider: b.provider?.name || 'N/A',
+            totalAmount: b.totalAmount || 0,
+            platformCommission: b.commissionAmount || 0,
+            providerEarnings: b.providerEarnings || 0,
+            paymentMethod: b.paymentMethod,
+            paymentStatus: b.paymentStatus,
+            bookingStatus: b.status
+          }));
+          break;
+        }
+
         case 'booking_revenue': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
           if (bookingStatus) filter.status = bookingStatus;
@@ -5087,6 +5649,247 @@ class PaymentService {
           });
           break;
         }
+      }
+
+      if (exportFormat === 'excel' || exportFormat === 'xlsx') {
+        const workbook = new ExcelJS.Workbook();
+        const rawSheetName = (reportType || 'Report').replace(/_/g, ' ');
+        const sheetName = rawSheetName.charAt(0).toUpperCase() + rawSheetName.slice(1);
+        const worksheet = workbook.addWorksheet(sheetName.substring(0, 31));
+
+        if (reportData && reportData.length > 0) {
+          const sampleKeys = Object.keys(reportData[0]);
+          const colDefs = PaymentService.getReportColumnDefinitions(reportType, sampleKeys);
+
+          worksheet.columns = colDefs.map(col => ({
+            header: col.type === 'currency' ? `${col.header} (₹)` : (col.type === 'percentage' ? `${col.header} (%)` : col.header),
+            key: col.key,
+            width: col.width
+          }));
+
+          const headerRow = worksheet.getRow(1);
+          headerRow.font = { bold: true, color: { argb: '1E293B' }, size: 11 };
+          headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'F1F5F9' }
+          };
+          headerRow.alignment = { vertical: 'middle' };
+
+          reportData.forEach(row => {
+            const formattedRow = {};
+            colDefs.forEach(col => {
+              const k = col.key;
+              const val = row[k];
+              if (val === null || val === undefined) {
+                formattedRow[k] = '';
+              } else if (val instanceof Date) {
+                formattedRow[k] = val.toISOString().split('T')[0];
+              } else {
+                formattedRow[k] = val;
+              }
+            });
+            worksheet.addRow(formattedRow);
+          });
+
+          PaymentService.formatWorksheetColumns(worksheet, colDefs);
+
+          worksheet.columns.forEach((col, idx) => {
+            let maxLen = col.header ? col.header.length : 15;
+            col.eachCell({ includeEmpty: true }, (cell) => {
+              const strVal = cell.value !== null && cell.value !== undefined ? String(cell.value) : '';
+              if (strVal.length > maxLen) maxLen = strVal.length;
+            });
+            col.width = Math.min(Math.max(maxLen + 4, colDefs[idx]?.width || 15), 50);
+          });
+        } else {
+          worksheet.addRow({ Message: 'No records found for selected filters' });
+        }
+
+        const formattedStart = sDate.toISOString().split('T')[0];
+        const formattedEnd = eDate.toISOString().split('T')[0];
+        const fileName = PaymentService.formatReportFilename(reportType, formattedStart, formattedEnd, 'xlsx');
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+        await workbook.xlsx.write(res);
+        return res.end();
+      }
+
+      if (exportFormat === 'csv') {
+        const formattedStart = sDate.toISOString().split('T')[0];
+        const formattedEnd = eDate.toISOString().split('T')[0];
+        const fileName = PaymentService.formatReportFilename(reportType, formattedStart, formattedEnd, 'csv');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+        if (!reportData || reportData.length === 0) {
+          return res.status(200).send('No data found for selected filters\n');
+        }
+
+        const sampleKeys = Object.keys(reportData[0]);
+        const colDefs = PaymentService.getReportColumnDefinitions(reportType, sampleKeys);
+
+        const headerRow = colDefs.map(col => `"${col.header.replace(/"/g, '""')}"`).join(',');
+
+        const formatValue = (val, colKey, colType) => {
+          if (val === null || val === undefined || val === '') return '""';
+          if (val instanceof Date) return `"${val.toISOString().split('T')[0]}"`;
+
+          const isCurrency = colType === 'currency' || PaymentService.isMonetaryColumnKey(colKey);
+          const isPercentage = colType === 'percentage' || PaymentService.isPercentageColumnKey(colKey);
+          const isStatusOrLabel = colKey.toLowerCase().includes('status') ||
+            colKey.toLowerCase().includes('method') ||
+            colKey.toLowerCase().includes('type') ||
+            colKey.toLowerCase().includes('category') ||
+            colKey.toLowerCase().includes('direction') ||
+            colKey.toLowerCase().includes('role');
+
+          if (isCurrency && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
+            const num = Number(val);
+            return `"${num.toFixed(2)}"`;
+          }
+
+          if (isPercentage && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
+            const num = Number(val);
+            return `"${num.toFixed(2)}%"`;
+          }
+
+          if (isStatusOrLabel && typeof val === 'string') {
+            return `"${PaymentService.formatLabel(val)}"`;
+          }
+
+          let str = String(val);
+          str = str.replace(/\r?\n/g, ' ');
+          return `"${str.replace(/"/g, '""')}"`;
+        };
+
+        const dataRows = reportData.map(row =>
+          colDefs.map(col => formatValue(row[col.key], col.key, col.type)).join(',')
+        );
+
+        const csvContent = [headerRow, ...dataRows].join('\n');
+        return res.status(200).send(csvContent);
+      }
+
+      if (exportFormat === 'pdf') {
+        const formattedStart = sDate.toISOString().split('T')[0];
+        const formattedEnd = eDate.toISOString().split('T')[0];
+        const fileName = PaymentService.formatReportFilename(reportType, formattedStart, formattedEnd, 'pdf');
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+        const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+        doc.pipe(res);
+
+        const rawTitle = (reportType || 'Report').replace(/_/g, ' ');
+        const reportTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1) + ' Report';
+
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#0F172A').text('URBAN SERVICE PLATFORM - FINANCIAL REPORT CENTER', { align: 'center' });
+        doc.moveDown(0.2);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#2563EB').text(reportTitle.toUpperCase(), { align: 'center' });
+        doc.moveDown(0.2);
+        doc.fontSize(8).font('Helvetica').fillColor('#64748B').text(`Period: ${formattedStart} to ${formattedEnd}  |  Generated: ${new Date().toLocaleString()} IST  |  Scope: Complete Filtered Dataset`, { align: 'center' });
+        doc.moveDown(0.6);
+
+        if (summaryCards && Object.keys(summaryCards).length > 0) {
+          doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#1E293B').text('EXECUTIVE SUMMARY METRICS:', { underline: true });
+          doc.moveDown(0.2);
+          let summaryItems = [];
+          if (summaryCards.totalRevenue !== undefined) summaryItems.push(`Total Revenue: INR ${Number(summaryCards.totalRevenue || 0).toFixed(2)}`);
+          if (summaryCards.platformCommission !== undefined) summaryItems.push(`Platform Commission: INR ${Number(summaryCards.platformCommission || 0).toFixed(2)}`);
+          if (summaryCards.providerEarnings !== undefined) summaryItems.push(`Provider Earnings: INR ${Number(summaryCards.providerEarnings || 0).toFixed(2)}`);
+          if (summaryCards.netPlatformRevenue !== undefined) summaryItems.push(`Net Retained Revenue: INR ${Number(summaryCards.netPlatformRevenue || 0).toFixed(2)}`);
+          if (summaryCards.totalRefunds !== undefined) summaryItems.push(`Refunds Paid: INR ${Number(summaryCards.totalRefunds || 0).toFixed(2)}`);
+          if (summaryCards.totalPayouts !== undefined) summaryItems.push(`Payouts Disbursed: INR ${Number(summaryCards.totalPayouts || 0).toFixed(2)}`);
+
+          if (summaryItems.length > 0) {
+            doc.fontSize(8).font('Helvetica').fillColor('#334155').text(summaryItems.join('   |   '));
+            doc.moveDown(0.6);
+          }
+        }
+
+        if (!reportData || reportData.length === 0) {
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#DC2626').text('No financial records found matching the selected filter criteria.', { align: 'center' });
+        } else {
+          const sampleKeys = Object.keys(reportData[0]);
+          const colDefs = PaymentService.getReportColumnDefinitions(reportType, sampleKeys);
+
+          const totalWidth = 732;
+          const colWidth = Math.floor(totalWidth / colDefs.length);
+
+          const drawTableHeader = (yPos) => {
+            doc.rect(30, yPos, totalWidth, 18).fill('#F1F5F9');
+            doc.fillColor('#1E293B').fontSize(7.5).font('Helvetica-Bold');
+            colDefs.forEach((col, idx) => {
+              const cleanH = PaymentService.sanitizePlainHeader(col.header);
+              const isCurr = col.type === 'currency' || PaymentService.isMonetaryColumnKey(col.key);
+              const isPct = col.type === 'percentage' || PaymentService.isPercentageColumnKey(col.key);
+              const headerText = isCurr ? `${cleanH} (INR)` : (isPct ? `${cleanH} (%)` : cleanH);
+              doc.text(headerText, 32 + (idx * colWidth), yPos + 4, {
+                width: colWidth - 4,
+                ellipsis: true
+              });
+            });
+            return yPos + 20;
+          };
+
+          let currentY = drawTableHeader(doc.y);
+          doc.font('Helvetica').fontSize(7).fillColor('#334155');
+
+          reportData.forEach((row, rowIdx) => {
+            if (currentY > 520) {
+              doc.addPage({ margin: 30, size: 'A4', layout: 'landscape' });
+              currentY = drawTableHeader(30);
+              doc.font('Helvetica').fontSize(7).fillColor('#334155');
+            }
+
+            if (rowIdx % 2 === 1) {
+              doc.rect(30, currentY, totalWidth, 15).fill('#F8FAFC');
+              doc.fillColor('#334155');
+            }
+
+            colDefs.forEach((col, idx) => {
+              const val = row[col.key];
+              let displayVal = '—';
+              if (val !== null && val !== undefined && val !== '') {
+                const isCurrency = col.type === 'currency' || PaymentService.isMonetaryColumnKey(col.key);
+                const isPercentage = col.type === 'percentage' || PaymentService.isPercentageColumnKey(col.key);
+                const isStatusOrLabel = col.key.toLowerCase().includes('status') ||
+                  col.key.toLowerCase().includes('method') ||
+                  col.key.toLowerCase().includes('type') ||
+                  col.key.toLowerCase().includes('category') ||
+                  col.key.toLowerCase().includes('direction') ||
+                  col.key.toLowerCase().includes('role');
+
+                if (val instanceof Date) {
+                  displayVal = val.toISOString().split('T')[0];
+                } else if (isCurrency && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
+                  displayVal = `INR ${Number(val).toFixed(2)}`;
+                } else if (isPercentage && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
+                  displayVal = `${Number(val).toFixed(2)}%`;
+                } else if (isStatusOrLabel && typeof val === 'string') {
+                  displayVal = PaymentService.formatLabel(val);
+                } else {
+                  displayVal = String(val);
+                }
+              }
+
+              doc.text(PaymentService.sanitizePlainHeader(displayVal), 32 + (idx * colWidth), currentY + 3, {
+                width: colWidth - 4,
+                ellipsis: true
+              });
+            });
+
+            currentY += 15;
+          });
+        }
+
+        doc.end();
+        return;
       }
 
       res.status(200).json({

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from '../../../../components/ui/Toast';
+
 import { Camera, Edit2, User, Mail, Phone, ShieldCheck, MapPin, ChevronRight, Sparkles } from 'lucide-react';
 import Processing from '../../../../components/ui-skeletons/Processing';
 import { updateProfile, updateprofilepic } from '../../../../services/CustomerService';

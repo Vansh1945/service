@@ -396,6 +396,8 @@ const rawGeneral = multer({
   fileFilter: fileFilterHelper(['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif', 'application/pdf'], ['jpg', 'jpeg', 'png', 'heic', 'heif', 'pdf'])
 });
 
+const { sanitizeErrorMessage } = require('../utils/error-sanitizer');
+
 // Error handler middleware
 const handleUploadErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -406,14 +408,14 @@ const handleUploadErrors = (err, req, res, next) => {
 
     return res.status(400).json({
       success: false,
-      message: `${message}: ${err.message}`,
+      message: message,
       code: err.code
     });
   } else if (err) {
-    const isSecurityError = err.message && err.message.includes('Security Alert');
-    return res.status(isSecurityError ? 400 : 500).json({
+    const userSafeMessage = sanitizeErrorMessage(err);
+    return res.status(400).json({
       success: false,
-      message: err.message || 'File upload failed',
+      message: userSafeMessage,
     });
   }
   next();

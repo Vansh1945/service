@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from '../../../../components/ui/Toast';
+
 import { Star, Heart, ArrowLeft } from 'lucide-react';
 import { getCustomerBookings } from '../../../../services/BookingService';
 import { toggleFavoriteProvider } from '../../../../services/CustomerService';

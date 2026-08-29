@@ -9,7 +9,8 @@ import {
 } from 'react-icons/fi';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import * as ZoneService from '../../../services/ZoneService';
 import HierarchicalZoneSelector from '../../../components/HierarchicalZoneSelector';
 

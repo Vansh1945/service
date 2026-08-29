@@ -6,8 +6,6 @@ import App from "./App";
 import { AuthProvider } from "../src/context/auth";
 import { NotificationProvider } from "../src/context/NotificationContext";
 import { HelmetProvider } from "react-helmet-async";
-import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
 import "leaflet/dist/leaflet.css";
 
@@ -43,17 +41,6 @@ root.render(
                 <App />
               </HelmetProvider>
             </ConfirmProvider>
-            <ToastContainer
-              position="top-right"
-              autoClose={3000}
-              hideProgressBar={false}
-              newestOnTop={false}
-              closeOnClick
-              rtl={false}
-              pauseOnFocusLoss
-              draggable
-              pauseOnHover
-            />
           </NotificationProvider>
         </AuthProvider>
       </BrowserRouter>

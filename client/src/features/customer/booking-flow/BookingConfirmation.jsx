@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import {
   ArrowLeft, CreditCard, Wallet, Calendar, MapPin,
   Clock, AlertTriangle, Shield, Lock, Wrench, Star, IndianRupee,
@@ -18,7 +19,8 @@ import ErrorState from '../../../components/ui/Error';
 import { formatDate, formatTime } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
 import PwaInstallBanner from '../../../components/PwaInstallBanner';
-import { normalizeStatus } from '../../../utils/status';
+import { normalizeStatus, isPaymentSuccessful } from '../../../utils/status';
+
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -44,24 +46,28 @@ const BookingConfirmation = () => {
   // Ref for timer cleanups
   const timeoutRef = useRef(null);
 
-  // Load Razorpay script
+  // Load Razorpay script dynamically on-demand
   useEffect(() => {
     if (window.Razorpay) {
       setRazorpayLoaded(true);
-    } else {
-      // Fallback: check every 100ms for up to 3 seconds if script is loaded from index.html
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (window.Razorpay) {
-          setRazorpayLoaded(true);
-          clearInterval(interval);
-        } else if (attempts >= 30) {
-          clearInterval(interval);
-        }
-      }, 100);
-      return () => clearInterval(interval);
+      return;
     }
+
+    const scriptUrl = 'https://checkout.razorpay.com/v1/checkout.js';
+    const existingScript = document.querySelector(`script[src="${scriptUrl}"]`);
+    if (existingScript) {
+      const handleLoad = () => setRazorpayLoaded(true);
+      existingScript.addEventListener('load', handleLoad);
+      if (window.Razorpay) setRazorpayLoaded(true);
+      return () => existingScript.removeEventListener('load', handleLoad);
+    }
+
+    const script = document.createElement('script');
+    script.src = scriptUrl;
+    script.async = true;
+    script.onload = () => setRazorpayLoaded(true);
+    script.onerror = () => console.error('Failed to load Razorpay Checkout SDK');
+    document.body.appendChild(script);
   }, []);
 
   // Cleanup timers on unmount
@@ -215,15 +221,17 @@ const BookingConfirmation = () => {
       title: 'Service', category: 'General Service', duration: null,
       image: null, basePrice: 0, averageRating: 0, ratingCount: 0,
       serviceType: null, isFeatured: false, warranty: null, tags: [],
-      shortDescription: '', discountPrice: null
     };
   };
 
   const getBookingStatusInfo = () => {
+
+
     if (!bookingDetails) return { message: 'Loading...', color: 'text-gray-500', canPay: false };
 
     const pStatus = normalizeStatus(bookingDetails.paymentStatus);
-    const isPaid = ['paid', 'escrowhold'].includes(pStatus);
+    const isPaid = isPaymentSuccessful(pStatus);
+
     const currentStatus = (bookingDetails.status || 'Pending').toLowerCase().replace(/[^a-z]/g, '');
 
     // BOOKING STATUS STATE MACHINE UPGRADE
@@ -282,14 +290,17 @@ const BookingConfirmation = () => {
   };
 
   const handleWalletPayment = async () => {
-    if (isProcessingPayment) return;
+    if (isProcessingPayment) {
+      showToast('Your payment is already being processed. Please wait.', 'info');
+      return;
+    }
     if (walletBalance < totalAmount) {
       toast.error('Insufficient wallet balance for full wallet payment.');
       return;
     }
     setIsProcessingPayment(true);
-    setPaymentProgressMessage('Processing Wallet Payment...');
-    const toastId = toast.loading('Processing wallet payment...');
+    setPaymentProgressMessage('Your payment is being processed. Please wait.');
+    const toastId = toast.loading('Your payment is being processed. Please wait.');
     try {
       const response = await payBooking(bookingDetails._id, {
         paymentDetails: { paymentMethod: 'wallet' }
@@ -298,7 +309,7 @@ const BookingConfirmation = () => {
       if (!response.data?.success) throw new Error(response.data?.message || 'Payment failed');
 
       toast.update(toastId, {
-        render: 'Payment successful! Booking confirmed.',
+        render: 'Payment successful. Your booking is confirmed.',
         type: 'success',
         isLoading: false,
         autoClose: 2000
@@ -309,7 +320,7 @@ const BookingConfirmation = () => {
     } catch (error) {
       console.error('Wallet payment error:', error);
       toast.update(toastId, {
-        render: error.response?.data?.message || error.message || 'Wallet payment failed',
+        render: "We couldn't complete your payment. Please try again.",
         type: 'error',
         isLoading: false,
         autoClose: 5000
@@ -321,7 +332,10 @@ const BookingConfirmation = () => {
   };
 
   const handleOnlineOrMixedPayment = async (selectedMethod) => {
-    if (isProcessingPayment) return;
+    if (isProcessingPayment) {
+      showToast('Your payment is already being processed. Please wait.', 'info');
+      return;
+    }
 
     // Safety guard: only 'online' and 'mixed' are valid for Razorpay createOrder
     if (!['online', 'mixed'].includes(selectedMethod)) {
@@ -360,7 +374,7 @@ const BookingConfirmation = () => {
           paymentDetails: { paymentMethod: 'wallet' }
         });
         if (!response.data?.success) throw new Error(response.data?.message || 'Payment failed');
-        showToast('Payment successful! Booking confirmed.', 'success');
+        showToast('Payment successful. Your booking is confirmed.', 'success');
         axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
         setTimeout(() => navigate('/customer/bookings'), 2000);
         return;
@@ -390,7 +404,7 @@ const BookingConfirmation = () => {
         order_id: order.id,
         handler: async function (response) {
           setPaymentProgressMessage('Processing Payment...');
-          showToast('Verifying payment, please wait...', 'info');
+          showToast("We're confirming your payment. Please don't make another payment.", 'info');
           try {
             const verifyResponse = await TransactionService.verifyPayment({
               orderId: response.razorpay_order_id,
@@ -403,14 +417,14 @@ const BookingConfirmation = () => {
             if (!verifyResponse.data?.success) throw new Error('Payment verification failed');
 
             clearCheckoutSession();
-            showToast('Payment successful! Booking confirmed.', 'success');
+            showToast('Payment successful. Your booking is confirmed.', 'success');
             axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
             setTimeout(() => navigate('/customer/bookings'), 2000);
           } catch (verificationError) {
             console.error(verificationError);
             setIsProcessingPayment(false);
             setPaymentProgressMessage('');
-            showToast('Payment verification failed. Please contact support.', 'error');
+            showToast("We couldn't complete your payment. Please try again.", 'error');
           }
         },
         prefill: { name: user?.name, email: user?.email, contact: user?.phone },
@@ -436,15 +450,17 @@ const BookingConfirmation = () => {
       const rzp = new window.Razorpay(options);
       window.currentRazorpay = rzp;
 
-      rzp.on('payment.failed', function (_response) {
+      rzp.on('payment.failed', function (response) {
         setIsProcessingPayment(false);
         setPaymentProgressMessage('');
+        showToast("We couldn't complete your payment. Please try again.", 'error');
       });
       rzp.open();
     } catch (error) {
+      console.error('Online payment creation error:', error);
       setIsProcessingPayment(false);
       setPaymentProgressMessage('');
-      showToast(error.response?.data?.message || 'Failed to initialize payment', 'error');
+      showToast("We couldn't complete your payment. Please try again.", 'error');
     }
   };
 
@@ -472,7 +488,10 @@ const BookingConfirmation = () => {
   };
 
   const handleCashPayment = async () => {
-    if (isProcessingPayment) return;
+    if (isProcessingPayment) {
+      showToast('Your payment is already being processed. Please wait.', 'info');
+      return;
+    }
     setIsProcessingPayment(true);
     setPaymentProgressMessage('Confirming Cash Payment...');
     try {
@@ -483,11 +502,11 @@ const BookingConfirmation = () => {
         paymentMethod: 'cash'
       });
       clearCheckoutSession();
-      showToast('Booking Confirmed! Pay after service completion.', 'success');
+      showToast('Cash payment has been recorded.', 'success');
       axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
-      showToast(error.response?.data?.message || error.message || 'Failed to confirm booking', 'error');
+      showToast("We couldn't confirm the cash payment right now. Please try again.", 'error');
     } finally {
       setIsProcessingPayment(false);
       setPaymentProgressMessage('');

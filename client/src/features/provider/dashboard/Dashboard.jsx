@@ -14,6 +14,8 @@ import { formatCurrency, formatDate, formatTime } from '../../../utils/format';
 import { formatAddress } from '../../../utils/providerHelpers';
 import { getProviderPayoutState } from '../../../utils/payoutState';
 import PwaInstallBanner from '../../../components/PwaInstallBanner';
+import StatusBadge from '../../../components/ui/StatusBadge';
+
 const Dashboard = () => {
   const { showToast, user, refreshUser, logoutUser } = useAuth();
   const { socket } = useSocket();
@@ -729,13 +731,8 @@ const Dashboard = () => {
                             {formatDate(booking.date)} • {formatTime(booking.time)}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider border ${booking.status === 'completed' ? 'bg-success/5 text-success border-success/15' :
-                              booking.status === 'accepted' ? 'bg-info/5 text-info border-info/15' :
-                                booking.status === 'pending' ? 'bg-warning/5 text-warning border-warning/15' :
-                                  'bg-neutral-100 text-neutral-500 border-neutral-200'
-                              }`}>
-                              {booking.status === 'in-progress' ? 'In Progress' : booking.status}
-                            </span>
+                            <StatusBadge status={booking.status} module="booking" size="sm" />
+
                             <span className="text-xs sm:text-sm font-extrabold text-neutral-800">{formatCurrency(booking.totalAmount)}</span>
                           </div>
                         </div>

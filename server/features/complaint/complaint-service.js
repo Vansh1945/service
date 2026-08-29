@@ -5,6 +5,9 @@ const mongoose = require('mongoose');
 const { notifyAdmins } = require('../notification/notification-helper');
 const { generateComplaintId } = require('../../shared/utils/generate-unique-id');
 
+const isStrictObjectId = (id) => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id.trim());
+
+
 const ACTIVE_COMPLAINT_STATUSES = [
   'open',
   'underreview',
@@ -42,7 +45,12 @@ const checkAndAutoEscalate = async (complaintId) => {
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) return null;
 
+    if (complaint.category) {
+      complaint.category = complaint.category.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
     const normStatus = (complaint.status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     const isPending = ['open', 'underreview', 'waitingforcustomer', 'waitingforprovider'].includes(normStatus) ||
       ['open', 'underreview', 'waitingforcustomer', 'waitingforprovider'].includes(complaint.status);
     if (isPending && complaint.responseDeadline && new Date() > new Date(complaint.responseDeadline)) {
@@ -555,20 +563,51 @@ class ComplaintService {
         conditions.push({ category: { $in: [normCat, category] } });
       }
       if (userType) conditions.push({ userType });
-      if (providerId) conditions.push({ providerId });
+      if (providerId) {
+        if (isStrictObjectId(providerId)) {
+          conditions.push({ providerId: new mongoose.Types.ObjectId(providerId.trim()) });
+        }
+      }
 
       const bId = req.query.booking || req.query.bookingId;
       if (bId) {
-        conditions.push({
-          $or: [{ booking: bId }, { bookingId: bId }]
-        });
+        const cleanBId = bId.trim();
+        if (isStrictObjectId(cleanBId)) {
+          const targetObjId = new mongoose.Types.ObjectId(cleanBId);
+          conditions.push({
+            $or: [{ booking: targetObjId }, { bookingId: targetObjId }]
+          });
+        } else {
+          // If bId is a human readable booking reference string (e.g. "BK-2026-F1AA8D33")
+          const targetBooking = await Booking.findOne({
+            $or: [
+              { bookingId: cleanBId },
+              { customBookingId: cleanBId }
+            ]
+          }).select('_id').lean();
+
+          if (targetBooking?._id) {
+            conditions.push({
+              $or: [{ booking: targetBooking._id }, { bookingId: targetBooking._id }]
+            });
+          } else {
+            // No booking matches this string reference
+            conditions.push({ booking: new mongoose.Types.ObjectId() });
+          }
+        }
       }
 
       const cId = req.query.customerId || req.query.customer;
       if (cId) {
-        conditions.push({
-          $or: [{ customer: cId }, { userId: cId }]
-        });
+        const cleanCId = cId.trim();
+        if (isStrictObjectId(cleanCId)) {
+          const targetObjId = new mongoose.Types.ObjectId(cleanCId);
+          conditions.push({
+            $or: [{ customer: targetObjId }, { userId: targetObjId }]
+          });
+        } else {
+          conditions.push({ customer: new mongoose.Types.ObjectId() });
+        }
       }
 
       if (search) {

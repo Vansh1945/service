@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from '../../../../components/ui/Toast';
 import {
   FiX, FiAlertTriangle, FiDollarSign, FiUser, FiBriefcase, FiCreditCard,
   FiShield, FiRefreshCw, FiClock, FiFileText, FiExternalLink, FiCheckCircle,
@@ -95,11 +96,11 @@ const FailedPaymentDetailModal = ({ isOpen, onClose, entityData, paymentId }) =>
       setRetrying(true);
       const res = await TransactionService.adminRetryVerify(targetId);
       if (res.data?.success) {
-        alert("Payment verified and reconciled successfully!");
+        toast.success("Payment verified and reconciled successfully!");
         fetchDetail();
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to retry verification with Razorpay.");
+      toast.error("We couldn't confirm the payment right now. Please try again.");
     } finally {
       setRetrying(false);
     }

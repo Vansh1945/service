@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Gift, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../../../context/auth';
-import { toast } from 'react-toastify';
+import { toast } from '../../../../components/ui/Toast';
+
 import { formatCurrency, formatDate } from '../../../../utils/format';
 import { getAvailableCoupons } from '../../../../services/CouponService';
 

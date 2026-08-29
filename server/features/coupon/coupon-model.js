@@ -188,24 +188,24 @@ couponSchema.statics.listAllCoupons = async function (adminId, filters = {}) {
 couponSchema.statics.validateCoupon = async function (userId, couponCode, serviceAmount, bookingZoneId = null) {
   const coupon = await this.findOne({ code: couponCode.toUpperCase() });
 
-  if (!coupon) throw new Error('Invalid Coupon ');
-  if (!coupon.isActive) throw new Error('Coupon is not active');
-  if (coupon.expiryDate && new Date() > coupon.expiryDate) throw new Error('Coupon expired');
+  if (!coupon) throw new Error("This coupon code isn't valid.");
+  if (!coupon.isActive) throw new Error("This coupon code isn't valid.");
+  if (coupon.expiryDate && new Date() > coupon.expiryDate) throw new Error("This coupon has expired.");
   if (coupon.minBookingValue && serviceAmount < coupon.minBookingValue) {
-    throw new Error(`Booking amount must be at least ₹${coupon.minBookingValue}`);
+    throw new Error(`This coupon requires a higher booking amount of \`₹${coupon.minBookingValue}.\``);
   }
   if (coupon.usageLimit && coupon.usedBy.length >= coupon.usageLimit) {
-    throw new Error('Usage limit reached');
+    throw new Error("This coupon has reached its usage limit.");
   }
 
   // Check if user has already used this coupon
   const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === userId.toString());
-  if (alreadyUsed) throw new Error('You have already used this coupon');
+  if (alreadyUsed) throw new Error("This coupon isn't available for this booking.");
 
   // STEP 3, 4 & 5: Hierarchical Zone Applicability Validation
   if (!coupon.isGlobal && coupon.scope !== 'global') {
     if (!bookingZoneId || !coupon.applicableZones || coupon.applicableZones.length === 0) {
-      throw new Error('Service coupon not eligible');
+      throw new Error("This coupon isn't available for this service.");
     }
 
     let currentZoneId = bookingZoneId;
@@ -224,7 +224,7 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
     }
 
     if (!matched) {
-      throw new Error('Service not eligible');
+      throw new Error("This coupon isn't available for this service.");
     }
 
     // Temporarily attach the matched zone ID for controllers/booking use

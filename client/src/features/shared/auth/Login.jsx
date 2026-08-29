@@ -146,13 +146,13 @@ const LoginPage = () => {
           const response = await firebaseLogin({ firebaseToken, role: 'customer' });
           const data = response.data;
           if (data.token && data.user) {
-            showToast(data.message || 'Login successful', 'success');
+            showToast('Welcome back.', 'success');
             loginUser(data.token, data.user.role, data.user, data.refreshToken);
           }
         }
       } catch (err) {
         console.error("Redirect login error:", err);
-        showToast(err.response?.data?.message || err.message, 'error');
+        showToast(err.response?.data?.message || 'The email/phone or password you entered is incorrect.', 'error');
       } finally {
         setIsLoading(false);
       }
@@ -181,14 +181,14 @@ const LoginPage = () => {
       const data = response.data;
 
       if (data.token && data.user) {
-        showToast(data.message || 'Login successful', 'success');
+        showToast('Welcome back.', 'success');
         loginUser(data.token, data.user.role || 'customer', data.user, data.refreshToken);
       } else {
-        throw new Error('Invalid response from server');
+        throw new Error('The email/phone or password you entered is incorrect.');
       }
     } catch (err) {
       const errorData = err.response?.data;
-      const errorMsg = errorData?.message || err.message;
+      const errorMsg = errorData?.message || 'The email/phone or password you entered is incorrect.';
       showToast(errorMsg, 'error');
     } finally {
       setIsLoading(false);
@@ -207,7 +207,7 @@ const LoginPage = () => {
         const data = response.data;
 
         if (data.token && data.user) {
-          showToast(data.message || 'Login successful', 'success');
+          showToast('Welcome back.', 'success');
           loginUser(data.token, data.user.role, data.user, data.refreshToken);
         }
       } catch (popupErr) {
@@ -220,7 +220,7 @@ const LoginPage = () => {
       }
     } catch (err) {
       console.error(err);
-      showToast(err.response?.data?.message || err.message, 'error');
+      showToast(err.response?.data?.message || 'The email/phone or password you entered is incorrect.', 'error');
     } finally {
       setIsLoading(false);
     }

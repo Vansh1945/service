@@ -15,14 +15,15 @@ const PriceDisplay = ({
   type = 'default',
   prefix = '',
   className = '',
-  freeText = 'Free'
+  freeText = null
 }) => {
-  const numericAmount = parseFloat(amount);
+  const numericAmount = parseFloat(amount || 0);
   
-  if (numericAmount === 0 && freeText) {
+  if (numericAmount === 0 && freeText !== null) {
     const freeClasses = 'text-green-600 font-semibold italic';
     return <span className={`${freeClasses} ${className}`}>{freeText}</span>;
   }
+
 
   let typeClass = '';
   switch (type) {

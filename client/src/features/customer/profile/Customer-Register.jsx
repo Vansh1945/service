@@ -304,7 +304,7 @@ const CustomerRegistration = () => {
 
     try {
       const response = await register(formData);
-      showToast(response.data.message || 'Registration successful! Welcome to ' + (systemSettings.companyName || 'Raj Electrical Services') + '.');
+      showToast('Your account has been created successfully.', 'success');
       navigate('/login');
     } catch (err) {
       const errorData = err.response?.data;

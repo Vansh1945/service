@@ -19,7 +19,11 @@ import FeaturesTab from './components/FeaturesTab';
 import ReferralTab from './components/ReferralTab';
 import MaintenanceTab from './components/MaintenanceTab';
 
+import useCategory from '../../../hooks/useCategory';
+
 const SystemSetting = () => {
+  const { categories } = useCategory(true);
+
   const [systemSettings, setSystemSettings] = useState({
     companyName: '',
     tagline: '',
@@ -167,25 +171,23 @@ const SystemSetting = () => {
   const [previewSignature, setPreviewSignature] = useState('');
   const [previewSeal, setPreviewSeal] = useState('');
 
-  const [categories, setCategories] = useState([]);
   const [zones, setZones] = useState([]);
   const { showToast } = useAuth();
 
   useEffect(() => {
     fetchSystemSettings();
-    fetchCategoriesAndZones();
+    fetchZones();
   }, []);
 
-  const fetchCategoriesAndZones = async () => {
+  const fetchZones = async () => {
     try {
-      const catRes = await SystemService.getCategoriesAdmin();
-      if (catRes.data?.success) setCategories(catRes.data.data || []);
       const zoneRes = await ZoneService.getAllZones();
       if (zoneRes.data?.success) setZones(zoneRes.data.data || []);
     } catch (e) {
       console.error(e);
     }
   };
+
 
   useEffect(() => {
     if (logoFile) {
@@ -332,13 +334,6 @@ const SystemSetting = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary" />
-      </div>
-    );
-  }
 
   const tabs = [
     { id: 'general', name: 'General', icon: Settings, desc: 'Identity, branding, currencies, timezone, and social channels' },

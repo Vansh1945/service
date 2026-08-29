@@ -25,6 +25,8 @@ import PaymentViewDetailModal from './components/PaymentViewDetailModal';
 import { fmtDate, fmtDateTime } from '../../../utils/format';
 import usePagination from '../../../hooks/usePagination';
 import useDebounce from '../../../hooks/useDebounce';
+import StatusBadge from '../../../components/ui/StatusBadge';
+
 
 const PaymentManagementPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -230,39 +232,26 @@ const PaymentManagementPage = () => {
   };
 
   const getPaymentStatusBadge = (txn) => {
-    const s = (txn.paymentDisplayStatus || txn.paymentStatus || txn.status || '').toLowerCase();
-    if (['success', 'completed', 'paid', 'captured', 'matched'].includes(s))
-      return <span className="inline-flex items-center px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold uppercase"><FiCheckCircle className="mr-1 w-3 h-3" />{s === 'matched' ? 'Matched' : 'Success'}</span>;
-    if (['pending', 'processing', 'authorized', 'pending_verification', 'pending_collection'].includes(s))
-      return <span className="inline-flex items-center px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold uppercase"><FiClock className="mr-1 w-3 h-3" />{s.replace(/_/g, ' ')}</span>;
-    if (['refunded', 'partial_refund'].includes(s))
-      return <span className="inline-flex items-center px-2.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-bold uppercase"><FiRotateCcw className="mr-1 w-3 h-3" />Refunded</span>;
-    return <span className="inline-flex items-center px-2.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-[10px] font-bold uppercase"><FiXCircle className="mr-1 w-3 h-3" />{s.replace(/_/g, ' ') || 'Failed'}</span>;
+
+    const s = txn.paymentDisplayStatus || txn.paymentStatus || txn.status;
+    return <StatusBadge status={s} module="payment" size="sm" />;
   };
 
   const getCaptureStatusBadge = (txn) => {
     const s = (txn.paymentStatus || '').toLowerCase();
-    if (['success', 'completed', 'paid'].includes(s))
-      return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px] uppercase">Captured</span>;
-    if (s === 'failed')
-      return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px] uppercase">Failed</span>;
-    return <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px] uppercase">Authorized</span>;
+    const targetStatus = ['success', 'completed', 'paid'].includes(s) ? 'completed' : s;
+    return <StatusBadge status={targetStatus} module="payment" size="sm" />;
   };
 
   const getSettlementStatusBadge = (txn) => {
     const method = (txn.paymentMethod || '').toLowerCase();
-    if (method === 'wallet' || method === 'cash' || method === 'cod') return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded font-bold text-[10px] uppercase">N/A</span>;
-    const s = (txn.settlementDisplayStatus || txn.settlementStatus || '').toLowerCase();
-    if (['settled', 'completed'].includes(s))
-      return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px] uppercase">Settled</span>;
-    if (['queued', 'processing', 'pending'].includes(s))
-      return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px] uppercase">Processing</span>;
-    if (['failed', 'reversed'].includes(s))
-      return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-bold text-[10px] uppercase">Failed</span>;
-    if (['refunded', 'partial_refund'].includes(s))
-      return <span className="px-2 py-0.5 bg-primary/10 text-primary rounded font-bold text-[10px] uppercase">Refunded</span>;
-    return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-bold text-[10px] uppercase">—</span>;
+    if (method === 'wallet' || method === 'cash' || method === 'cod') {
+      return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded font-bold text-[10px] uppercase">N/A</span>;
+    }
+    const s = txn.settlementDisplayStatus || txn.settlementStatus || 'pending';
+    return <StatusBadge status={s} module="settlement" size="sm" />;
   };
+
 
   // Format INR amounts from booking fields (already in rupees — no paise conversion needed)
   const formatAmount = (amount) => {

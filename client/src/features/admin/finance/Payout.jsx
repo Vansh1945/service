@@ -6,12 +6,12 @@ import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';
 import * as PaymentService from '../../../services/PaymentService';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
 import DatePicker from 'react-datepicker';
 import TimePicker from 'react-time-picker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-time-picker/dist/TimePicker.css';
-import 'react-toastify/dist/ReactToastify.css';
+
 import {
   DollarSign, Clock, CheckCircle, BarChart3,
   Eye, Check, X, RefreshCw, ChevronLeft, ChevronRight,
@@ -388,7 +388,7 @@ const AdminPayout = () => {
       });
       toast.success('Withdrawal approved successfully');
       setShowApproveModal(false); setSelectedWithdrawal(null); fetchWithdrawals();
-    } catch (err) { toast.error(err.message || 'Failed to approve withdrawal'); }
+    } catch (err) { toast.error("The payout could not be processed. Review the payout details and try again."); }
     finally { setSubmitting(false); }
   };
 
@@ -399,7 +399,7 @@ const AdminPayout = () => {
         setProviders(response.data.providers || []);
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to load providers list');
+      toast.error("Unable to load the requested record. Please refresh and try again.");
     }
   };
 
@@ -440,7 +440,7 @@ const AdminPayout = () => {
         fetchWithdrawals();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Failed to process direct payout');
+      toast.error("The payout could not be processed. Review the payout details and try again.");
     } finally {
       setSubmitting(false);
     }

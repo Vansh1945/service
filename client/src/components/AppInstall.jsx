@@ -202,7 +202,7 @@ const AppInstall = () => {
         if (showToast) {
           showToast(`${appName} install link copied to clipboard!`, 'success');
         } else {
-          alert(`${appName} install link copied to clipboard!`);
+          toast.success(`${appName} install link copied to clipboard!`);
         }
       } catch (copyErr) {
         console.error("Failed to copy link:", copyErr);

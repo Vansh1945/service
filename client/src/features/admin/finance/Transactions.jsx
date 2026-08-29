@@ -35,15 +35,6 @@ const TXN_TYPE_CONFIG = {
   escrow_release: { label: 'Escrow Release', bg: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
 };
 
-const PAY_STATUS_CONFIG = {
-  success: { label: 'Success', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  completed: { label: 'Completed', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  paid: { label: 'Paid', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  pending: { label: 'Pending', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  processing: { label: 'Processing', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  failed: { label: 'Failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  refunded: { label: 'Refunded', cls: 'bg-primary/10 text-primary border-primary/20' },
-};
 
 const TypeBadge = ({ type, paymentMethod }) => {
   const key = type || (paymentMethod === 'cash' ? 'cash' : paymentMethod === 'mixed' ? 'mixed' : 'payment');
@@ -55,14 +46,12 @@ const TypeBadge = ({ type, paymentMethod }) => {
   );
 };
 
-const StatusBadge = ({ status }) => {
-  const cfg = PAY_STATUS_CONFIG[(status || '').toLowerCase()] || { label: status, cls: 'bg-gray-100 text-gray-600 border-gray-200' };
-  return (
-    <span className={`px-2.5 py-0.5 ${cfg.cls} border rounded-full text-[10px] font-bold uppercase`}>
-      {cfg.label}
-    </span>
-  );
-};
+import GlobalStatusBadge from '../../../components/ui/StatusBadge';
+
+const StatusBadge = ({ status }) => (
+  <GlobalStatusBadge status={status} module="payment" size="sm" />
+);
+
 
 const MethodBadge = ({ method, paymentMethodDisplay }) => {
   const label = paymentMethodDisplay || method || 'N/A';
@@ -88,14 +77,6 @@ const MethodBadge = ({ method, paymentMethodDisplay }) => {
   );
 };
 
-const EntryIcon = ({ entryType, type }) => {
-  const isDebit = entryType === 'debit' || ['refund', 'withdrawal', 'withdrawalrejection', 'penalty', 'commissiondeduction', 'refundrecovery', 'escrow_hold'].includes(type);
-  const isCredit = entryType === 'credit' || ['payment', 'settlement', 'wallet_topup', 'referralreward', 'cashback', 'escrow_release'].includes(type);
-
-  if (isDebit && !isCredit) return <ArrowDownLeft className="w-3.5 h-3.5 text-rose-500" />;
-  if (isCredit && !isDebit) return <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />;
-  return <Minus className="w-3.5 h-3.5 text-gray-400" />;
-};
 
 const EntityLink = ({ label, title, onClick, mono = false, truncate = true }) => (
   <button
@@ -129,14 +110,7 @@ const AdminTransactions = () => {
 
   const {
     getMergedQuery,
-    searchQuery,
-    filterType,
-    year,
-    financialYear,
-    month,
-    quarter,
-    zoneIds
-  } = useAdminFilter();
+    searchQuery } = useAdminFilter();
 
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -236,15 +210,9 @@ const AdminTransactions = () => {
   const goToBooking = (bookingId) => {
     if (bookingId) navigate(`/admin/bookings?search=${encodeURIComponent(bookingId)}&openDetail=true`);
   };
-  const goToPayment = (txnId) => {
-    if (txnId) navigate(`/admin/payments?search=${encodeURIComponent(txnId)}&openDetail=true`);
-  };
   const goToRefund = (refundId) => navigate(`/admin/refunds?search=${encodeURIComponent(refundId || '')}&openDetail=true`);
-  const goToSettlement = (settlementId) => navigate(`/admin/settlements?search=${encodeURIComponent(settlementId || '')}&openDetail=true`);
   const goToCustomer = (customerId) => navigate(`/admin/customers?search=${encodeURIComponent(customerId || '')}&openDetail=true`);
   const goToProvider = (providerId) => navigate(`/admin/approve-providers?search=${encodeURIComponent(providerId || '')}&openDetail=true`);
-  const goToCustomerWallet = (walletId) => navigate(`/admin/customer-wallets?search=${encodeURIComponent(walletId || '')}&openDetail=true`);
-  const goToProviderWallet = (walletId) => navigate(`/admin/provider-wallets?search=${encodeURIComponent(walletId || '')}&openDetail=true`);
   const goToPayout = (payoutId) => navigate(`/admin/payout?search=${encodeURIComponent(payoutId || '')}&openDetail=true`);
 
   // ── Summary stats ──────────────────────────────────────────────────────────
@@ -322,8 +290,8 @@ const AdminTransactions = () => {
             key={tab.id}
             onClick={() => handleTabChange(tab.id)}
             className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${activeLedger === tab.id
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
               }`}
           >
             {tab.label}

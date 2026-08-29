@@ -25,21 +25,18 @@ import {
   AlertCircle,
   FileText
 } from 'lucide-react';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
-import { formatDate } from '../../../utils/format';
+import { formatDate, formatAddress as formatAddressUtil } from '../../../utils/format';
 import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
 // ─── Pure helpers at module scope ───────────────────────────────────────────
 
-const formatAddress = (address) => {
-  if (!address) return 'N/A';
-  const { street, city, state, postalCode, country } = address;
-  return [street, city, state, postalCode, country].filter(Boolean).join(', ');
-};
+const formatAddress = (address) => formatAddressUtil(address);
+
 
 const getServiceBadges = (services) => {
   if (!services || services.length === 0) return null;
@@ -256,9 +253,9 @@ const AdminProviders = () => {
       const data = res.data;
 
       if (data.success) {
-        let msg = `Provider status updated to "${action}" successfully`;
-        if (action === 'approved') msg = 'Bank details verified successfully';
-        if (action === 'rejected') msg = 'Bank details rejected successfully';
+        let msg = 'Provider approval updated successfully.';
+        if (action === 'approved') msg = 'Your provider account has been approved. You can now receive service requests.';
+        if (action === 'rejected') msg = 'Your provider application could not be approved at this time. Please review the information provided or contact support.';
 
         showToast(msg, 'success');
         fetchProviders(true);
@@ -272,11 +269,11 @@ const AdminProviders = () => {
         }
         setShowConfirmModal({ show: false, action: null });
       } else {
-        showToast(data.message || 'Failed to update status', 'error');
+        showToast(data.message || 'Unable to update provider status. Please refresh and try again.', 'error');
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      showToast(error.response?.data?.message || 'Failed to update status', 'error');
+      showToast(error.response?.data?.message || 'Unable to update provider status. Please refresh and try again.', 'error');
     } finally {
       setProcessingAction(null);
     }

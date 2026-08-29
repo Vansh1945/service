@@ -5,8 +5,8 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import { forgetpassword, verifyotp, resendotp, resetpassword } from '../../../services/AuthService';
 import Processing from '../../../components/ui-skeletons/Processing';
 
@@ -180,9 +180,9 @@ const ForgotPassword = () => {
       setIsTimerActive(true);
       setTimer(60);
       setStep(2);
-      toast.success('OTP sent to your email');
+      toast.success("We've sent a verification code to your registered contact.");
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to send OTP';
+      const errorMsg = err.response?.data?.message || "We couldn't find an account with those details.";
       toast.error(errorMsg);
     } finally {
       setLoading(false);
@@ -192,16 +192,23 @@ const ForgotPassword = () => {
   // Verify OTP
   const verifyOTP = async () => {
     if (otp.length !== 6) {
-      toast.error('Please enter 6-digit OTP');
+      toast.error('The verification code is incorrect. Please try again.');
       return;
     }
     setLoading(true);
     try {
       await verifyotp({ email, otp });
       setStep(3);
-      toast.success('OTP verified successfully');
+      toast.success('Verification successful.');
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Verification failed';
+      let errorMsg = err.response?.data?.message || err.message || '';
+      if (errorMsg.toLowerCase().includes('expire')) {
+        errorMsg = 'This verification code has expired. Please request a new code.';
+      } else if (errorMsg.toLowerCase().includes('attempt') || errorMsg.toLowerCase().includes('limit')) {
+        errorMsg = 'Too many verification attempts. Please wait before trying again.';
+      } else {
+        errorMsg = 'The verification code is incorrect. Please try again.';
+      }
       toast.error(errorMsg);
     } finally {
       setLoading(false);
@@ -216,9 +223,9 @@ const ForgotPassword = () => {
       setTimer(60);
       setIsTimerActive(true);
       setOtp('');
-      toast.success('New OTP sent successfully');
+      toast.success("We've sent a verification code to your registered contact.");
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to resend';
+      const errorMsg = err.response?.data?.message || "Too many verification attempts. Please wait before trying again.";
       toast.error(errorMsg);
     } finally {
       setLoading(false);

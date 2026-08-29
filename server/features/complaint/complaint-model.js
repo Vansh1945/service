@@ -92,6 +92,8 @@ const complaintSchema = new mongoose.Schema(
       }
     },
 
+
+
     // 5. File Storage (Cloudinary)
     images: [{
       secure_url: { type: String, required: true },
@@ -163,8 +165,20 @@ const complaintSchema = new mongoose.Schema(
   }
 );
 
+// Pre-validate hook to normalize category and status before Mongoose enum validation
+complaintSchema.pre("validate", function (next) {
+  if (this.category) {
+    this.category = this.category.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+  if (this.status) {
+    this.status = this.status.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+  next();
+});
+
 // Middleware to track status changes and initial creation
 complaintSchema.pre("save", function (next) {
+
   const now = new Date();
   if (this.isNew) {
     // Initial status history entry on creation

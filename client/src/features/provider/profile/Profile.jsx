@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import 'react-toastify/dist/ReactToastify.css';
+
 import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard, Bell, Shield, Package, Wallet, User, MapPin, ArrowLeft, ChevronRight, Star, LogOut } from 'lucide-react';
 import * as ProviderService from '../../../services/ProviderService';
 import * as NotificationService from '../../../services/NotificationService';

@@ -4,7 +4,9 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../context/auth';
 import { getProviderReferralDetails } from '../../../services/referralApi';
 import LoadingSpinner from '../../../components/ui/Loader';
+import InfoCard from '../../../components/ui/InfoCard';
 import { normalizeStatus } from '../../../utils/status';
+
 
 const ReferProviders = () => {
   const [details, setDetails] = useState(null);
@@ -145,23 +147,21 @@ const ReferProviders = () => {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { title: 'Released Rewards', value: `₹${details?.totalEarnings ?? 0}`, sub: 'Credited to Wallet', icon: <FiGift className="w-4.5 h-4.5" />, colorBg: 'bg-success/10', colorText: 'text-success' },
-            { title: 'Pending/Held Rewards', value: `₹${details?.pendingEarnings ?? 0}`, sub: 'Awaiting Settlement', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' },
-            { title: 'Partners Referred', value: `${details?.referralsCount ?? 0}`, sub: 'Signed up providers', icon: <FiUsers className="w-4.5 h-4.5" />, colorBg: 'bg-info/10', colorText: 'text-info' },
-            { title: 'Maximum Reward', value: `₹${totalRewardAmount}`, sub: 'Per referral limit', icon: <FiAward className="w-4.5 h-4.5" />, colorBg: 'bg-primary/10', colorText: 'text-primary' }
+            { title: 'Released Rewards', value: `₹${details?.totalEarnings ?? 0}`, sub: 'Credited to Wallet', variant: 'success' },
+            { title: 'Pending/Held Rewards', value: `₹${details?.pendingEarnings ?? 0}`, sub: 'Awaiting Settlement', variant: 'warning' },
+            { title: 'Partners Referred', value: `${details?.referralsCount ?? 0}`, sub: 'Signed up providers', variant: 'primary' },
+            { title: 'Maximum Reward', value: `₹${totalRewardAmount}`, sub: 'Per referral limit', variant: 'neutral' }
           ].map((stat, i) => (
-            <div key={i} className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-poppins">{stat.title}</span>
-                <div className={`p-2 rounded-xl ${stat.colorBg} ${stat.colorText}`}>{stat.icon}</div>
-              </div>
-              <div>
-                <p className="text-xl font-black text-neutral-800 leading-tight font-poppins">{stat.value}</p>
-                <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">{stat.sub}</p>
-              </div>
-            </div>
+            <InfoCard
+              key={i}
+              label={stat.title}
+              value={stat.value}
+              subtext={stat.sub}
+              variant={stat.variant}
+            />
           ))}
         </div>
+
 
         {/* Credentials */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100 space-y-6 text-left">

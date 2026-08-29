@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../socket/socket';
 
 import * as NotificationService from '../services/NotificationService';
+import { toast, ToastContainer } from '../components/ui/Toast';
 
 const NotificationContext = createContext(null);
 
@@ -493,10 +494,25 @@ export const NotificationProvider = ({ children }) => {
                 if ('vibrate' in navigator && hasUserInteractedRef.current) {
                     try { navigator.vibrate([500, 200, 500, 200, 500]); } catch (e) { /* blocked */ }
                 }
+                toast.info(payload.message || payload.title || 'New Booking Request', { title: payload.title || 'New Alert' });
             } else {
                 // Non-booking notifications (chat, payment, etc.) — always play via socket.
                 const soundUrl = payload.soundUrl || '/assets/sounds/notification.mp3';
                 playNormalNotificationSound(soundUrl);
+
+                const notifTitle = payload.title || 'Notification';
+                const notifBody = payload.message || payload.body || payload.title || '';
+                const type = (payload.type || '').toLowerCase();
+
+                if (type === 'error' || type === 'danger') {
+                    toast.error(notifBody, { title: notifTitle });
+                } else if (type === 'warning') {
+                    toast.warning(notifBody, { title: notifTitle });
+                } else if (type === 'success') {
+                    toast.success(notifBody, { title: notifTitle });
+                } else {
+                    toast.info(notifBody, { title: notifTitle });
+                }
             }
         };
 
@@ -512,14 +528,25 @@ export const NotificationProvider = ({ children }) => {
         requestPermission,
         initFCMToken,
         stopBookingAlert,
-        isAlertRinging
+        isAlertRinging,
+        showSuccess: (msg, opts) => toast.success(msg, opts),
+        showError: (msg, opts) => toast.error(msg, opts),
+        showWarning: (msg, opts) => toast.warning(msg, opts),
+        showInfo: (msg, opts) => toast.info(msg, opts),
+        showLoading: (msg, opts) => toast.loading(msg, opts),
+        dismissToast: (id) => toast.dismiss(id),
+        updateToast: (id, opts) => toast.update(id, opts),
+        toast
     };
 
     return (
         <NotificationContext.Provider value={contextValue}>
             {children}
+            <ToastContainer position="top-right" />
         </NotificationContext.Provider>
     );
 };
 
 export const useNotification = () => useContext(NotificationContext);
+
+export default NotificationProvider;

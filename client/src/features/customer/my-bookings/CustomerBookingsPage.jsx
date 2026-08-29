@@ -53,8 +53,10 @@ const getBookingTypeBadge = (bookingType) => {
   );
 };
 
-import { getBookingStatusCfg } from '../../../components/ui/StatusConfig';
+import { getBookingStatusCfg } from '../../../utils/status';
+import StatusBadge from '../../../components/ui/StatusBadge';
 const getStatusCfg = getBookingStatusCfg;
+
 
 
 const needsPayment = (b) => {
@@ -837,12 +839,11 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
               <div className="flex items-center gap-1 text-xs text-gray-500">
                 <Clock className="w-3.5 h-3.5" /> {booking.time ? formatTime(booking.time) : (booking.createdAt ? formatTime(booking.createdAt) : (booking.date ? formatTime(booking.date) : 'Flexible'))}
               </div>
-              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200 capitalize">{booking.status}</span>
+              <StatusBadge status={booking.status} module="booking" />
               {booking.paymentStatus === 'refunded' && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                  <Wallet className="w-3 h-3" /> Refunded
-                </span>
+                <StatusBadge status="refunded" module="refund" icon={Wallet} />
               )}
+
               {booking.disputeRaised && !booking.adminRefundDecision && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
                   <ShieldAlert className="w-3 h-3" /> Under Review
@@ -998,11 +999,11 @@ const CustomerBookingsPage = () => {
       }
 
       await cancelBooking(b._id, { reason, refundDestination, customerChoice });
-      showToast('Booking cancelled successfully', 'success');
+      showToast('Your booking has been cancelled successfully.', 'success');
       setCancelModalState({ isOpen: false, booking: null, loading: false });
       fetchBookings(true);
     } catch (err) {
-      showToast(`Error: ${err.message}`, 'error');
+      showToast("We couldn't cancel this booking right now. Please try again.", 'error');
       setBookings(prevBookings);
       if (prevSelected) setSelectedBooking(prevSelected);
       setCancelModalState(prev => ({ ...prev, loading: false }));
@@ -1181,7 +1182,7 @@ const CustomerBookingsPage = () => {
         state: { booking, service: booking.services?.[0]?.serviceDetails || booking.services?.[0]?.service, coupon: booking.couponApplied, isReachingFromBookings: true }
       });
     } else {
-      showToast('Payment is not pending for this booking.', 'info');
+      showToast('Your payment is still being confirmed. Please wait before trying again.', 'info');
     }
   };
 

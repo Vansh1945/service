@@ -1431,8 +1431,7 @@ class BookingService {
       const statusCode = error.status || (isDomainError ? 400 : 500);
       res.status(statusCode).json({
         success: false,
-        message: error.message || 'Failed to create booking',
-        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: isDomainError ? error.message : "We couldn't complete your booking right now. Please try again."
       });
     }
   }
@@ -1681,8 +1680,7 @@ class BookingService {
       console.error('Error confirming booking:', error);
       res.status(500).json({
         success: false,
-        message: error.message || 'Failed to confirm booking',
-        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: "We couldn't confirm your booking right now. Please try again."
       });
     }
   }

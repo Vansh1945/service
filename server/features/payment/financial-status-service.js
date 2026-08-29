@@ -4,6 +4,199 @@
  * Transactions, Bookings, and Reconciliations.
  */
 
+const STATUS = Object.freeze({
+  BOOKING: Object.freeze({
+    PENDING: 'pending',
+    SEARCHING_PROVIDER: 'searchingprovider',
+    OFFERED: 'offered',
+    ACCEPTED: 'accepted',
+    ON_THE_WAY: 'ontheway',
+    ARRIVED: 'arrived',
+    WORK_STARTED: 'workstarted',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+    REJECTED: 'rejected',
+    NO_SHOW: 'noshow',
+  }),
+  ASSIGNMENT: Object.freeze({
+    WAITING: 'waiting',
+    AUTO_ASSIGNING: 'autoassigning',
+    AUTO_ASSIGNED: 'autoassigned',
+    MANUAL_ASSIGNED: 'manualassigned',
+    REJECTED: 'rejected',
+    TIMEOUT: 'timeout',
+    REASSIGNED: 'reassigned',
+  }),
+  PAYMENT: Object.freeze({
+    BOOKING_PENDING: 'pending',
+    BOOKING_PAID: 'paid',
+    BOOKING_ESCROW_HOLD: 'escrowhold',
+    BOOKING_SETTLEMENT_PENDING: 'settlementpending',
+    BOOKING_SETTLED: 'settled',
+    BOOKING_REFUND_PENDING: 'refundpending',
+    BOOKING_REFUND_APPROVED: 'refundapproved',
+    BOOKING_REFUNDED: 'refunded',
+    BOOKING_FAILED: 'failed',
+    BOOKING_PROCESSING: 'processing',
+
+    TXN_PENDING: 'pending',
+    TXN_SUCCESS: 'success',
+    TXN_FAILED: 'failed',
+    TXN_PROCESSING: 'processing',
+    TXN_COMPLETED: 'completed',
+    TXN_REFUNDED: 'refunded',
+  }),
+  REFUND: Object.freeze({
+    DRAFT: 'draft',
+    PENDING: 'pending',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    PROCESSING: 'processing',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    CANCELLED: 'cancelled',
+  }),
+  COMPLAINT: Object.freeze({
+    OPEN: 'open',
+    UNDER_REVIEW: 'underreview',
+    WAITING_CUSTOMER: 'waitingforcustomer',
+    WAITING_PROVIDER: 'waitingforprovider',
+    ESCALATED: 'escalated',
+    RESOLUTION_PROPOSED: 'resolutionproposed',
+    RESOLVED: 'resolved',
+    REJECTED: 'rejected',
+    CANCELLED: 'cancelled',
+    CLOSED: 'closed',
+    REOPENED: 'reopened',
+  }),
+  DISPUTE: Object.freeze({
+    ESCALATED: 'escalated',
+    UNDER_REVIEW: 'underreview',
+    RESOLUTION_PROPOSED: 'resolutionproposed',
+  }),
+  EARNING: Object.freeze({
+    HELD: 'held',
+    AVAILABLE: 'available',
+    PAID: 'paid',
+    WITHDRAWN: 'withdrawn',
+    CANCELLED: 'cancelled',
+    UNDER_REVIEW: 'underreview',
+    PENDING_RELEASE: 'pendingrelease',
+  }),
+  WITHDRAWAL: Object.freeze({
+    REQUESTED: 'requested',
+    UNDER_REVIEW: 'underreview',
+    APPROVED: 'approved',
+    TRANSFERRED: 'transferred',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    PROCESSING: 'processing',
+    REJECTED: 'rejected',
+  }),
+  SETTLEMENT: Object.freeze({
+    QUEUED: 'queued',
+    SETTLED: 'settled',
+    FAILED: 'failed',
+    NOT_APPLICABLE: 'N/A',
+  }),
+  PROVIDER: Object.freeze({
+    ONLINE: 'online',
+    BUSY: 'busy',
+    BREAK: 'break',
+    LEAVE: 'leave',
+  }),
+  VERIFICATION: Object.freeze({
+    KYC_PENDING: 'pending',
+    KYC_APPROVED: 'approved',
+    KYC_REJECTED: 'rejected',
+    BANK_PENDING: 'pending',
+    BANK_VERIFIED: 'verified',
+    BANK_REJECTED: 'rejected',
+    TEST_ACTIVE: 'active',
+    TEST_SUBMITTED: 'submitted',
+    TEST_EXPIRED: 'expired',
+  }),
+  REFERRAL: Object.freeze({
+    PENDING: 'pending',
+    QUALIFIED: 'qualified',
+    APPROVED: 'approved',
+    RELEASED: 'released',
+    REJECTED: 'rejected',
+    FRAUD_FLAGGED: 'fraudflagged',
+    EXPIRED: 'expired',
+  }),
+  SLA: Object.freeze({
+    ON_TIME: 'on_time',
+    NEAR_BREACH: 'near_breach',
+    BREACHED: 'breached',
+    EXPIRED: 'expired',
+  }),
+});
+
+const STATUS_GROUPS = Object.freeze({
+  BOOKING: Object.freeze({
+    PENDING: Object.freeze(['pending', 'searchingprovider', 'offered']),
+    ACTIVE: Object.freeze(['accepted', 'ontheway', 'arrived', 'workstarted']),
+    TERMINAL: Object.freeze(['completed', 'cancelled', 'rejected', 'noshow']),
+  }),
+  PAYMENT: Object.freeze({
+    SUCCESSFUL: Object.freeze(['success', 'completed', 'paid', 'captured']),
+    FAILED: Object.freeze(['failed', 'rejected', 'cancelled']),
+    PENDING: Object.freeze(['pending', 'unpaid', 'processing']),
+  }),
+  COMPLAINT: Object.freeze({
+    OPEN: Object.freeze(['open', 'reopened']),
+    INVESTIGATION: Object.freeze(['underreview', 'waitingforcustomer', 'waitingforprovider', 'escalated', 'resolutionproposed']),
+    CLOSED: Object.freeze(['resolved', 'rejected', 'cancelled', 'closed']),
+  }),
+});
+
+function isBookingPending(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.BOOKING.PENDING.includes(s);
+}
+
+function isBookingActive(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.BOOKING.ACTIVE.includes(s);
+}
+
+function isBookingTerminal(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.BOOKING.TERMINAL.includes(s);
+}
+
+function isPaymentSuccessful(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.PAYMENT.SUCCESSFUL.includes(s);
+}
+
+function isPaymentFailed(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.PAYMENT.FAILED.includes(s);
+}
+
+function isPaymentPending(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.PAYMENT.PENDING.includes(s);
+}
+
+function isComplaintOpen(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.COMPLAINT.OPEN.includes(s);
+}
+
+function isComplaintInInvestigation(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.COMPLAINT.INVESTIGATION.includes(s);
+}
+
+function isComplaintClosed(status) {
+  const s = String(status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return STATUS_GROUPS.COMPLAINT.CLOSED.includes(s);
+}
+
+
 /**
  * Normalizes values to integer paise for exact financial comparisons.
  */
@@ -286,6 +479,17 @@ function buildCanonicalFinancialStatus(txn, booking) {
 }
 
 module.exports = {
+  STATUS,
+  STATUS_GROUPS,
+  isBookingPending,
+  isBookingActive,
+  isBookingTerminal,
+  isPaymentSuccessful,
+  isPaymentFailed,
+  isPaymentPending,
+  isComplaintOpen,
+  isComplaintInInvestigation,
+  isComplaintClosed,
   toPaise,
   getPaymentDisplayStatus,
   getSettlementInfo,
@@ -296,3 +500,5 @@ module.exports = {
   getReconciliationStatus,
   buildCanonicalFinancialStatus
 };
+
+

@@ -7,10 +7,13 @@ import {
     FiEdit2, FiTrash2, FiXCircle, FiPlay, FiSettings
 } from 'react-icons/fi';
 import { AnimatePresence } from 'framer-motion';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import Modal from '../../../components/ui/Modal';
+import useCategory from '../../../hooks/useCategory';
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
+
 
 const STANDARD_EVENT_LABELS = {
     booking_created: 'Booking Created (booking_created)',
@@ -50,8 +53,9 @@ const RuleBasedTemplates = () => {
     const [templates, setTemplates] = useState([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [templateModal, setTemplateModal] = useState({ open: false, item: null, isEdit: false });
-    const [categories, setCategories] = useState([]);
+    const { categories } = useCategory();
     const [systemSettings, setSystemSettings] = useState(null);
+
     const [uploadingRingtone, setUploadingRingtone] = useState(false);
     const [showIconEmojiPicker, setShowIconEmojiPicker] = useState(false);
 
@@ -120,17 +124,6 @@ const RuleBasedTemplates = () => {
         }
     };
 
-    const fetchCategories = async () => {
-        try {
-            const res = await SystemService.getCategories();
-            if (res.data?.success) {
-                setCategories(res.data.data || []);
-            }
-        } catch (error) {
-            console.error('Error fetching categories:', error);
-        }
-    };
-
     const fetchSystemSettings = async () => {
         try {
             const res = await SystemService.getSystemSettingAdmin();
@@ -144,9 +137,10 @@ const RuleBasedTemplates = () => {
 
     useEffect(() => {
         fetchTemplates();
-        fetchCategories();
         fetchSystemSettings();
     }, []);
+
+
 
     const handleTemplateSubmit = async (e) => {
         e.preventDefault();

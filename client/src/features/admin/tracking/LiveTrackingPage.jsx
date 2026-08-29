@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useSocket } from '../../../socket/SocketContext';
 import * as AdminService from '../../../services/AdminService';
@@ -6,10 +6,12 @@ import * as ZoneService from '../../../services/ZoneService';
 import * as BookingService from '../../../services/BookingService';
 import * as ComplaintService from '../../../services/ComplaintService';
 
-import Loader from '../../../components/ui/Loader';
 import { normalizeStatus } from '../../../utils/status';
-import TimelineSkeleton from '../../../components/ui-skeletons/TimelineSkeleton';
-import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon, ZoomControl, LayersControl, Circle, FeatureGroup } from 'react-leaflet';
+import { formatRelativeTime as formatRelativeTimeUtil } from '../../../utils/format';
+
+import Loader from '../../../components/ui/Loader';
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon, ZoomControl, LayersControl, FeatureGroup } from 'react-leaflet';
+
 import L from 'leaflet';
 import 'leaflet.heat';
 import { useNavigate } from 'react-router-dom';
@@ -138,16 +140,9 @@ const isPointInPolygon = (lat, lng, polygon) => {
 };
 
 // Relative relative time formatter
-const formatRelativeTime = (timestamp) => {
-  if (!timestamp) return 'Never';
-  const diffMs = Date.now() - new Date(timestamp).getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 5) return '5 sec ago';
-  if (diffSec < 60) return `${diffSec} sec ago`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} min ago`;
-  return `${Math.floor(diffMin / 60)} hr ago`;
-};
+const formatRelativeTime = (timestamp) => formatRelativeTimeUtil(timestamp);
+
+
 
 // Custom component to handle smooth center updates
 const MapCenterer = ({ center, zoom }) => {

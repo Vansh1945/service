@@ -9,7 +9,8 @@ import {
     FiCopy, FiTrash2, FiFilter
 } from 'react-icons/fi';
 import { formatDate } from '../../../utils/format';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 
 import Modal from '../../../components/ui/Modal';
 import StatusBadge from '../../../components/ui/StatusBadge';

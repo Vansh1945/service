@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaImage, FaTag, FaBullhorn, FaCalendar, FaUpload } from 'react-icons/fa';
 import * as SystemService from '../../../services/SystemService';
 import useCategory from '../../../hooks/useCategory';

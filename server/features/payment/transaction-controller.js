@@ -3139,10 +3139,11 @@ const getUnifiedEntityDetails = async (req, res, next) => {
 
         const gross = txn.amount || booking.totalAmount || 0;
         const razorpayResp = txn.razorpayResponse || {};
-        const fee = razorpayResp.fee ? Math.round(razorpayResp.fee / 100) : Math.round(gross * 0.02);
-        const tax = razorpayResp.tax ? Math.round(razorpayResp.tax / 100) : Math.round(fee * 0.18);
-        const netPlatform = txn.commission || booking.commissionAmount || Math.round(gross * 0.1);
-        const providerNet = txn.providerEarning || booking.providerEarnings || (gross - fee - netPlatform);
+        const fee = razorpayResp.fee ? parseFloat((razorpayResp.fee / 100).toFixed(2)) : parseFloat((gross * 0.02).toFixed(2));
+        const tax = razorpayResp.tax ? parseFloat((razorpayResp.tax / 100).toFixed(2)) : parseFloat((fee * 0.18).toFixed(2));
+        const netPlatform = txn.commission || booking.commissionAmount || parseFloat((gross * 0.1).toFixed(2));
+        const providerNet = txn.providerEarning || booking.providerEarnings || parseFloat((gross - fee - netPlatform).toFixed(2));
+
 
         const isTxnSettled = Boolean(txn.razorpaySettlementId || txn.settlementDate);
         const expectedCustomerPaid = gross;
@@ -3274,9 +3275,10 @@ const getUnifiedEntityDetails = async (req, res, next) => {
 
         const gData = liveGatewayData || txn.razorpayResponse || {};
         const amount = (gData.amount ? gData.amount / 100 : txn.amount) || 0;
-        const fee = gData.fee ? Math.round(gData.fee / 100) : Math.round(amount * 0.02);
-        const tax = gData.tax ? Math.round(gData.tax / 100) : Math.round(fee * 0.18);
-        const netSettled = amount - fee;
+        const fee = gData.fee ? parseFloat((gData.fee / 100).toFixed(2)) : parseFloat((amount * 0.02).toFixed(2));
+        const tax = gData.tax ? parseFloat((gData.tax / 100).toFixed(2)) : parseFloat((fee * 0.18).toFixed(2));
+        const netSettled = parseFloat((amount - fee).toFixed(2));
+
 
         payload.paymentSummary = {
           paymentId: txn.razorpayPaymentId || gData.id || txn.transactionId || `#${txn._id.toString().slice(-6)}`,
@@ -3867,7 +3869,7 @@ const getLedgerDetail = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Transaction ID is required' });
     }
 
-    try { require('../complaint/complaint-model'); } catch (e) {}
+    try { require('../complaint/complaint-model'); } catch (e) { }
 
     // Find by MongoDB _id, transactionId, or razorpayPaymentId
     const query = mongoose.Types.ObjectId.isValid(id)
@@ -4615,7 +4617,7 @@ const verifyCashReceived = async (req, res, next) => {
     const providerId = req.provider?._id;
 
     if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
-      if (session) { try { await session.abortTransaction(); } catch (e) {} }
+      if (session) { try { await session.abortTransaction(); } catch (e) { } }
       return res.status(400).json({ success: false, message: 'Valid bookingId is required' });
     }
 

@@ -3,7 +3,8 @@ import {
   FiFileText, FiSave, FiRotateCcw, FiEye, FiSliders,
   FiChevronRight, FiCheck, FiCopy, FiInfo, FiTrash2, FiExternalLink, FiX
 } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import * as SystemService from '../../../services/SystemService';
 import { useConfirm } from '../../../context/ConfirmContext';
 

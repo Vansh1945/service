@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import {
   MessageSquare, Phone, Plus,
   Clock, AlertCircle, CheckCircle, Check, X, Upload,
@@ -14,7 +14,12 @@ import { getSystemSetting } from '../../../services/SystemService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../../services/ComplaintService';
 
 import { formatDate, formatTime, formatDateTime, compressImage } from '../../../utils/format';
-import { normalizeStatus } from '../../../utils/status';
+import {
+  normalizeStatus,
+  getComplaintStatusStyle,
+  COMPLAINT_CATEGORIES,
+  getComplaintCategoryInfo
+} from '../../../utils/status';
 import CDNImage from '../../../components/CDNImage';
 import LoadingSpinner from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
@@ -22,61 +27,18 @@ import ChatModal from '../../../components/chat/ChatModal';
 import Select from '../../../components/ui/Select';
 import Input from '../../../components/ui/Input';
 import Textarea from '../../../components/ui/Textarea';
-import { getComplaintStatusStyle } from '../../../components/ui/StatusConfig';
+import StatusBadge from '../../../components/ui/StatusBadge';
 
-const COMPLAINT_CATEGORIES = [
-  { value: 'serviceissue', label: 'Service Issue', icon: '🛠' },
-  { value: 'paymentissue', label: 'Payment Issue', icon: '💳' },
-  { value: 'refundrequest', label: 'Refund Request', icon: '💰' },
-  { value: 'suggestion', label: 'Suggestion', icon: '💡' },
-  { value: 'other', label: 'Other', icon: '📞' }
-];
-
-const CATEGORY_MAP = {
-  serviceissue: { label: "Service Issue", icon: "🛠" },
-  paymentissue: { label: "Payment Issue", icon: "💳" },
-  refundrequest: { label: "Refund Request", icon: "💰" },
-  suggestion: { label: "Suggestion", icon: "💡" },
-  other: { label: "Other", icon: "📞" },
-  "Service issue": { label: "Service Issue", icon: "🛠" },
-  "Payment issue": { label: "Payment Issue", icon: "💳" },
-  "Refund request": { label: "Refund Request", icon: "💰" },
-  "Suggestion": { label: "Suggestion", icon: "💡" },
-  "Other": { label: "Other", icon: "📞" },
-};
-
-const getCategoryInfo = (cat) => {
-  if (!cat) return { label: "Other", icon: "📞" };
-  const norm = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return CATEGORY_MAP[norm] || CATEGORY_MAP[cat] || { label: cat, icon: "📞" };
-};
-
+const getCategoryInfo = getComplaintCategoryInfo;
 const getCustomStatusStyle = getComplaintStatusStyle;
 
-const getStatusEmoji = (status) => {
-  const norm = (status || '').toLowerCase();
-  if (['resolved', 'solved', 'refunded'].includes(norm)) return '🟢';
-  if (['rejected'].includes(norm)) return '🔴';
-  if (['closed'].includes(norm)) return '⚫';
-  return '🟡';
-};
 
-const formatCustomDateTime = (dateString) => {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return '';
-  const day = d.getDate();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[d.getMonth()];
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  return `${day} ${month} • ${hours}:${minutes} ${ampm}`;
-};
+
+const formatCustomDateTime = (dateString) => formatDateTime(dateString);
+
 
 const ComplaintsPage = () => {
-  const { token, user, logoutUser, isAuthenticated, API, API_URL_IMAGE } = useAuth();
+  const { user, logoutUser, isAuthenticated, API_URL_IMAGE } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -306,12 +268,18 @@ const ComplaintsPage = () => {
       if (formData.complaintType) fd.append('complaintType', formData.complaintType);
       compressedImages.forEach(img => fd.append('images', img));
       await submitComplaintAPI(fd);
-      toast.success('Complaint submitted successfully!');
+      toast.success('Your complaint has been submitted successfully.');
       setOpenNewComplaint(false);
       resetForm();
       fetchComplaints();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to submit');
+      let errorMsg = err.response?.data?.message || err.message || '';
+      if (errorMsg.toLowerCase().includes('already')) {
+        errorMsg = 'A complaint for this booking has already been submitted.';
+      } else {
+        errorMsg = "We couldn't submit your complaint right now. Please try again.";
+      }
+      toast.error(errorMsg);
       if (err.response?.status === 401) logoutUser();
     } finally {
       setSubmittingComplaint(false);
@@ -418,7 +386,6 @@ const ComplaintsPage = () => {
         ) : (
           <div className="flex flex-col gap-3.5">
             {complaints.map((complaint) => {
-              const s = getStatusStyle(complaint.status);
 
               // Priority / Category Badge mapping
               let catBadgeColor = "bg-neutral-100 text-neutral-600 border-neutral-200";
@@ -451,9 +418,8 @@ const ComplaintsPage = () => {
                         <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border ${catBadgeColor}`}>
                           {catInfo.label}
                         </span>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${s.bg} ${s.text} ${s.border}`}>
-                          {s.label}
-                        </span>
+                        <StatusBadge status={complaint.status} module="complaint" size="sm" />
+
                       </div>
                     </div>
 
@@ -645,12 +611,6 @@ const ComplaintsPage = () => {
                 <div>
                   <label className="block text-xs font-semibold text-secondary mb-1.5">Select Booking *</label>
                   {(() => {
-                    const activeComplaintBookingIds = new Set(
-                      complaints
-                        .filter(c => ['Open', 'In-Progress', 'Reopened', 'submitted', 'under_review', 'provider_responded', 'admin_review'].includes(c.status))
-                        .map(c => typeof c.booking === 'object' ? c.booking?._id : c.booking)
-                        .filter(Boolean)
-                    );
 
                     const configuredDays = systemSettings?.bookingSettings?.complaintWindowDays ?? 7;
                     const complaintWindowMs = configuredDays * 24 * 60 * 60 * 1000;
@@ -776,14 +736,15 @@ const ComplaintsPage = () => {
 
               {/* Description */}
               <Textarea
-                label={formData.category === 'Refund request' ? 'Reason for Refund *' : 'Description *'}
+                label={(formData.category || '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'refundrequest' ? 'Reason for Refund *' : 'Description *'}
                 name="description"
                 rows={4}
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder={formData.category === 'Refund request' ? "Please provide the reason for your refund request (min 20 chars)" : "Please provide detailed information about your issue (min 20 chars)"}
+                placeholder={(formData.category || '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'refundrequest' ? "Please provide the reason for your refund request (min 20 chars)" : "Please provide detailed information about your issue (min 20 chars)"}
                 error={formErrors.description}
               />
+
 
               {/* Images */}
               <div>
@@ -846,10 +807,8 @@ const ComplaintsPage = () => {
               {/* ── Support Status Card ── */}
               <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 shadow-sm space-y-3">
                 <div className="flex items-center gap-1.5 border-b border-neutral-200/50 pb-2">
-                  <span className="text-sm">{getStatusEmoji(selectedComplaint.status)}</span>
-                  <span className={`text-xs font-extrabold uppercase tracking-wider ${getStatusStyle(selectedComplaint.status).text}`}>
-                    {getStatusStyle(selectedComplaint.status).label}
-                  </span>
+                  <StatusBadge status={selectedComplaint.status} module="complaint" size="sm" showDot />
+
                 </div>
                 <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-[10px]">
                   <div>

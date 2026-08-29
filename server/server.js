@@ -333,13 +333,14 @@ app.use((req, res, next) => {
   });
 });
 
+const { sanitizeErrorMessage } = require('./shared/utils/error-sanitizer');
+
 // Error handling middleware
 app.use((err, req, res, next) => {
-  global.logger.error("Error: " + err.message, err);
-  res.status(err.status || 500).json({
+  const userSafeMessage = sanitizeErrorMessage(err);
+  res.status(err.status || err.statusCode || 500).json({
     success: false,
-    message: err.message || "Internal server error",
-    error: process.env.NODE_ENV === "development" ? err.stack : undefined
+    message: userSafeMessage
   });
 });
 

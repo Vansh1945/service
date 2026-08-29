@@ -8,7 +8,10 @@ import * as PaymentService from '../../../services/PaymentService';
 import * as BookingService from '../../../services/BookingService';
 import { useAuth } from '../../../context/auth';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
-import { normalizeStatus } from '../../../utils/status';
+import { normalizeStatus, formatStatus } from '../../../utils/status';
+import StatusBadge from '../../../components/ui/StatusBadge';
+import { formatCurrency, formatAmount, formatFinancialReportAmount, isMonetaryField, isPercentageField, formatDate } from '../../../utils/format';
+
 
 const REPORT_CATEGORIES = [
   { id: 'REVENUE', label: 'Revenue & Sales', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -23,22 +26,342 @@ const REPORT_CATEGORIES = [
   { id: 'RECONCILIATION', label: 'Reconciliation', color: 'bg-slate-100 text-slate-800 border-slate-300' }
 ];
 
-const REPORT_TYPES = [
-  { id: 'summary', category: 'REVENUE', title: 'Financial Summary Report', desc: 'Overall period revenue, commission, and net platform metrics' },
-  { id: 'booking_revenue', category: 'REVENUE', title: 'Booking Revenue Report', desc: 'Detailed booking breakdown with subtotals, surcharges, and discounts' },
-  { id: 'customer_payment', category: 'PAYMENTS', title: 'Customer Payment Report', desc: 'Payment transactions by method (Online, Razorpay, QR, Cash, Wallet, Mixed)' },
-  { id: 'provider_earnings', category: 'PROVIDER', title: 'Provider Earnings Report', desc: 'Provider earnings lifecycle (held, available, paid)' },
-  { id: 'commission', category: 'PROVIDER', title: 'Commission Report', desc: 'Booking commission rates, platform commission, and company retained earnings' },
-  { id: 'refund', category: 'REFUNDS', title: 'Refund Report', desc: 'Wallet vs Gateway refund execution and balance tracking' },
-  { id: 'payout', category: 'PAYOUTS', title: 'Provider Payout Report', desc: 'Manual bulk and RazorpayX automatic payout histories & UTRs' },
-  { id: 'wallet_ledger', category: 'WALLETS', title: 'Wallet Ledger Report', desc: 'Provider & Customer wallet debits, credits, and balances' },
-  { id: 'cash_recovery', category: 'PAYMENTS', title: 'Cash Recovery Report', desc: 'Cash collected vs platform commission recovery' },
-  { id: 'coupon', category: 'COUPONS', title: 'Coupon Financial Report', desc: 'Coupon discounts, company subsidies, and usage' },
-  { id: 'referral', category: 'REFERRALS', title: 'Referral Reward Report', desc: 'Customer & Provider referral logs, commission shares, and cash rewards' },
-  { id: 'complaint', category: 'COMPLAINTS', title: 'Complaint Financial Report', desc: 'Complaints, compensation costs, and refund references' },
-  { id: 'razorpay_reconcile', category: 'RECONCILIATION', title: 'Razorpay Reconciliation Report', desc: 'Match Razorpay gateway payments with database transactions' },
-  { id: 'master_reconcile', category: 'RECONCILIATION', title: 'Master Reconciliation Report', desc: 'Complete Booking -> Txn -> Razorpay -> Earning -> Payout audit chain' }
+const REPORT_DEFINITIONS = [
+  {
+    id: 'summary',
+    category: 'REVENUE',
+    title: 'Financial Summary Report',
+    desc: 'Overall period revenue, commission, and net platform metrics',
+    filenamePrefix: 'Financial_Summary',
+    supportedFilters: ['startDate', 'endDate', 'paymentMethod', 'paymentStatus', 'bookingStatus', 'providerId', 'customerId', 'bookingId', 'reconciliationStatus', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'date', header: 'Booking Date', type: 'date' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
+      { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+      { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' },
+      { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+      { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+      { key: 'bookingStatus', header: 'Booking Status', type: 'status' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'booking_revenue',
+    category: 'REVENUE',
+    title: 'Booking Revenue Report',
+    desc: 'Detailed booking breakdown with subtotals, surcharges, and discounts',
+    filenamePrefix: 'Booking_Revenue',
+    supportedFilters: ['startDate', 'endDate', 'bookingStatus', 'paymentStatus', 'paymentMethod', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'bookingDate', header: 'Booking Date', type: 'date' },
+      { key: 'completionDate', header: 'Completion Date', type: 'date' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'service', header: 'Service', type: 'string' },
+      { key: 'subtotal', header: 'Subtotal', type: 'currency' },
+      { key: 'normalDiscount', header: 'Discount', type: 'currency' },
+      { key: 'surcharges', header: 'Surcharges', type: 'currency' },
+      { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
+      { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+      { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+      { key: 'bookingStatus', header: 'Booking Status', type: 'status' },
+      { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+      { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'customer_payment',
+    category: 'PAYMENTS',
+    title: 'Customer Payment Report',
+    desc: 'Payment transactions by method (Online, Razorpay, QR, Cash, Wallet, Mixed)',
+    filenamePrefix: 'Customer_Payment',
+    supportedFilters: ['startDate', 'endDate', 'paymentMethod', 'paymentStatus', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'transactionId', header: 'Transaction ID', type: 'id' },
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'attemptedAmount', header: 'Attempted Amount', type: 'currency' },
+      { key: 'actualCollectedAmount', header: 'Collected Amount', type: 'currency' },
+      { key: 'collectionStatus', header: 'Collection Status', type: 'status' },
+      { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+      { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+      { key: 'transactionType', header: 'Transaction Type', type: 'string' },
+      { key: 'razorpayOrderId', header: 'Razorpay Order ID', type: 'id' },
+      { key: 'razorpayPaymentId', header: 'Razorpay Payment ID', type: 'id' },
+      { key: 'createdAt', header: 'Created At', type: 'date' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'provider_earnings',
+    category: 'PROVIDER',
+    title: 'Provider Earnings Report',
+    desc: 'Provider earnings lifecycle (held, available, paid)',
+    filenamePrefix: 'Provider_Earnings',
+    supportedFilters: ['startDate', 'endDate', 'providerId', 'customerId', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'earningId', header: 'Earning ID', type: 'id' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'bookingDate', header: 'Booking Date', type: 'date' },
+      { key: 'grossAmount', header: 'Gross Amount', type: 'currency' },
+      { key: 'commissionRate', header: 'Commission Rate', type: 'percentage' },
+      { key: 'commissionAmount', header: 'Commission Amount', type: 'currency' },
+      { key: 'netAmount', header: 'Net Amount', type: 'currency' },
+      { key: 'earningStatus', header: 'Earning Status', type: 'status' },
+      { key: 'availableAfter', header: 'Available After', type: 'date' }
+    ],
+    exportHandler: (params, config) => {
+      if (params.exportFormat === 'excel') return PaymentService.generateProviderEarningsReport(params, config);
+      return PaymentService.downloadReportCenterExport(params, config);
+    }
+  },
+  {
+    id: 'commission',
+    category: 'PROVIDER',
+    title: 'Commission Report',
+    desc: 'Booking commission rates, platform commission, and company retained earnings',
+    filenamePrefix: 'Commission',
+    supportedFilters: ['startDate', 'endDate', 'providerId', 'customerId', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'earningId', header: 'Earning ID', type: 'id' },
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'bookingDate', header: 'Booking Date', type: 'date' },
+      { key: 'commissionRate', header: 'Commission Rate', type: 'percentage' },
+      { key: 'grossAmount', header: 'Gross Amount', type: 'currency' },
+      { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+      { key: 'providerNetAmount', header: 'Provider Net Amount', type: 'currency' },
+      { key: 'earningStatus', header: 'Earning Status', type: 'status' }
+    ],
+    exportHandler: (params, config) => {
+      if (params.exportFormat === 'excel') return PaymentService.getCommissionReport(params, config);
+      return PaymentService.downloadReportCenterExport(params, config);
+    }
+  },
+  {
+    id: 'refund',
+    category: 'REFUNDS',
+    title: 'Refund Report',
+    desc: 'Wallet vs Gateway refund execution and balance tracking',
+    filenamePrefix: 'Refund',
+    supportedFilters: ['startDate', 'endDate', 'providerId', 'customerId', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'refundId', header: 'Refund ID', type: 'id' },
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'requestedAmount', header: 'Requested Amount', type: 'currency' },
+      { key: 'refundAmount', header: 'Refund Amount', type: 'currency' },
+      { key: 'walletRefundAmount', header: 'Wallet Refund Amount', type: 'currency' },
+      { key: 'gatewayRefundAmount', header: 'Gateway Refund Amount', type: 'currency' },
+      { key: 'gatewayRefundId', header: 'Gateway Refund ID', type: 'id' },
+      { key: 'refundStatus', header: 'Refund Status', type: 'status' },
+      { key: 'refundReason', header: 'Refund Reason', type: 'string' },
+      { key: 'createdAt', header: 'Created At', type: 'date' }
+    ],
+    exportHandler: (params, config) => {
+      if (params.exportFormat === 'excel') return PaymentService.generateRefundReport(params, config);
+      return PaymentService.downloadReportCenterExport(params, config);
+    }
+  },
+  {
+    id: 'payout',
+    category: 'PAYOUTS',
+    title: 'Provider Payout Report',
+    desc: 'Manual bulk and RazorpayX automatic payout histories & UTRs',
+    filenamePrefix: 'Payout',
+    supportedFilters: ['startDate', 'endDate', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'paymentRecordId', header: 'Payment Record ID', type: 'id' },
+      { key: 'transactionReference', header: 'Transaction Reference', type: 'id' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'amount', header: 'Amount', type: 'currency' },
+      { key: 'netAmount', header: 'Net Amount', type: 'currency' },
+      { key: 'withdrawalType', header: 'Withdrawal Type', type: 'string' },
+      { key: 'status', header: 'Status', type: 'status' },
+      { key: 'razorpayPayoutId', header: 'Razorpay Payout ID', type: 'id' },
+      { key: 'utrNo', header: 'UTR No', type: 'id' },
+      { key: 'requestedAt', header: 'Requested At', type: 'date' },
+      { key: 'completedAt', header: 'Completed At', type: 'date' }
+    ],
+    exportHandler: (params, config) => {
+      if (params.exportFormat === 'excel') return PaymentService.payoutHistoryReport(params, config);
+      return PaymentService.downloadReportCenterExport(params, config);
+    }
+  },
+  {
+    id: 'wallet_ledger',
+    category: 'WALLETS',
+    title: 'Wallet Ledger Report',
+    desc: 'Provider & Customer wallet debits, credits, and balances',
+    filenamePrefix: 'Wallet_Ledger',
+    supportedFilters: ['startDate', 'endDate', 'paymentStatus', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'transactionId', header: 'Transaction ID', type: 'id' },
+      { key: 'walletOwner', header: 'Wallet Owner', type: 'string' },
+      { key: 'role', header: 'Role', type: 'string' },
+      { key: 'entryDirection', header: 'Entry Direction', type: 'string' },
+      { key: 'attemptedAmount', header: 'Attempted Amount', type: 'currency' },
+      { key: 'postedFinancialImpact', header: 'Financial Impact', type: 'currency' },
+      { key: 'ledgerStatus', header: 'Ledger Status', type: 'status' },
+      { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+      { key: 'balanceBefore', header: 'Balance Before', type: 'currency' },
+      { key: 'balanceAfter', header: 'Balance After', type: 'currency' },
+      { key: 'transactionType', header: 'Transaction Type', type: 'string' },
+      { key: 'description', header: 'Description', type: 'string' },
+      { key: 'createdAt', header: 'Created At', type: 'date' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'cash_recovery',
+    category: 'PAYMENTS',
+    title: 'Cash Recovery Report',
+    desc: 'Cash collected vs platform commission recovery',
+    filenamePrefix: 'Cash_Recovery',
+    supportedFilters: ['startDate', 'endDate', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
+      { key: 'cashCollected', header: 'Cash Collected', type: 'currency' },
+      { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+      { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' },
+      { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+      { key: 'verificationStatus', header: 'Verification Status', type: 'status' },
+      { key: 'verifiedAt', header: 'Verified At', type: 'date' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'coupon',
+    category: 'COUPONS',
+    title: 'Coupon Financial Report',
+    desc: 'Coupon discounts, company subsidies, and usage',
+    filenamePrefix: 'Coupon',
+    supportedFilters: ['startDate', 'endDate', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'couponCode', header: 'Coupon Code', type: 'id' },
+      { key: 'discountType', header: 'Discount Type', type: 'string' },
+      { key: 'discountValue', header: 'Discount Value', type: 'currency' },
+      { key: 'totalDiscount', header: 'Total Discount', type: 'currency' },
+      { key: 'subtotal', header: 'Subtotal', type: 'currency' },
+      { key: 'finalCustomerPaid', header: 'Final Customer Paid', type: 'currency' },
+      { key: 'isReferralCoupon', header: 'Is Referral Coupon', type: 'boolean' },
+      { key: 'usageDate', header: 'Usage Date', type: 'date' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'referral',
+    category: 'REFERRALS',
+    title: 'Referral Reward Report',
+    desc: 'Customer & Provider referral logs, commission shares, and cash rewards',
+    filenamePrefix: 'Referral',
+    supportedFilters: ['startDate', 'endDate', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'rewardLogId', header: 'Reward Log ID', type: 'id' },
+      { key: 'recipient', header: 'Recipient', type: 'string' },
+      { key: 'recipientType', header: 'Recipient Type', type: 'string' },
+      { key: 'rewardType', header: 'Reward Type', type: 'string' },
+      { key: 'amount', header: 'Amount', type: 'currency' },
+      { key: 'status', header: 'Status', type: 'status' },
+      { key: 'createdAt', header: 'Created At', type: 'date' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'complaint',
+    category: 'COMPLAINTS',
+    title: 'Complaint Financial Report',
+    desc: 'Complaints, compensation costs, and refund references',
+    filenamePrefix: 'Complaint',
+    supportedFilters: ['startDate', 'endDate', 'providerId', 'customerId', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'complaintId', header: 'Complaint ID', type: 'id' },
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'title', header: 'Title', type: 'string' },
+      { key: 'category', header: 'Category', type: 'category' },
+      { key: 'status', header: 'Status', type: 'status' },
+      { key: 'createdAt', header: 'Created At', type: 'date' }
+    ],
+    exportHandler: (params, config) => {
+      if (params.exportFormat === 'excel') return PaymentService.generateComplaintReport(params, config);
+      return PaymentService.downloadReportCenterExport(params, config);
+    }
+  },
+  {
+    id: 'razorpay_reconcile',
+    category: 'RECONCILIATION',
+    title: 'Razorpay Reconciliation Report',
+    desc: 'Match Razorpay gateway payments with database transactions',
+    filenamePrefix: 'Razorpay_Reconciliation',
+    supportedFilters: ['startDate', 'endDate', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'transactionId', header: 'Transaction ID', type: 'id' },
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'razorpayOrderId', header: 'Razorpay Order ID', type: 'id' },
+      { key: 'razorpayPaymentId', header: 'Razorpay Payment ID', type: 'id' },
+      { key: 'razorpayAmount', header: 'Razorpay Amount', type: 'currency' },
+      { key: 'transactionAmount', header: 'Transaction Amount', type: 'currency' },
+      { key: 'bookingAmount', header: 'Booking Amount', type: 'currency' },
+      { key: 'razorpayGatewayStatus', header: 'Razorpay Gateway Status', type: 'status' },
+      { key: 'transactionPaymentStatus', header: 'Transaction Payment Status', type: 'status' },
+      { key: 'bookingPaymentStatus', header: 'Booking Payment Status', type: 'status' },
+      { key: 'reconciliationStatus', header: 'Reconciliation Status', type: 'reconciliation_status' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  },
+  {
+    id: 'master_reconcile',
+    category: 'RECONCILIATION',
+    title: 'Master Reconciliation Report',
+    desc: 'Complete Booking -> Txn -> Razorpay -> Earning -> Payout audit chain',
+    filenamePrefix: 'Master_Reconciliation',
+    supportedFilters: ['startDate', 'endDate', 'zoneIds'],
+    supportedFormats: ['csv', 'excel', 'pdf'],
+    columns: [
+      { key: 'bookingId', header: 'Booking ID', type: 'id' },
+      { key: 'bookingTotal', header: 'Booking Total', type: 'currency' },
+      { key: 'customerPaid', header: 'Customer Paid', type: 'currency' },
+      { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
+      { key: 'providerEarning', header: 'Provider Earning', type: 'currency' },
+      { key: 'walletAmount', header: 'Wallet Amount', type: 'currency' },
+      { key: 'refundAmount', header: 'Refund Amount', type: 'currency' },
+      { key: 'payoutAmount', header: 'Payout Amount', type: 'currency' },
+      { key: 'paymentMethod', header: 'Payment Method', type: 'payment_method' },
+      { key: 'bookingStatus', header: 'Booking Status', type: 'status' },
+      { key: 'paymentStatus', header: 'Payment Status', type: 'status' },
+      { key: 'reconciliationStatus', header: 'Reconciliation Status', type: 'reconciliation_status' }
+    ],
+    exportHandler: (params, config) => PaymentService.downloadReportCenterExport(params, config)
+  }
 ];
+
+const REPORT_TYPES = REPORT_DEFINITIONS;
 
 const AdminFinancialReportCenter = () => {
   const { showToast } = useAuth();
@@ -160,67 +483,82 @@ const AdminFinancialReportCenter = () => {
     showToast?.('Filters synchronized and reset to global defaults', 'info');
   };
 
-  // Export handlers
-  const exportToCSV = () => {
-    if (!reportRows || reportRows.length === 0) {
-      showToast?.('No records available to export', 'warning');
+  // Centralized Export Handler based on REPORT_DEFINITIONS registry
+  const handleExportFormat = async (format) => {
+    const reportDef = REPORT_DEFINITIONS.find(r => r.id === selectedReport);
+    if (!reportDef) {
+      showToast?.(`Report definition not found for: ${selectedReport}`, 'error');
       return;
     }
-    const headers = Object.keys(reportRows[0]).join(',');
-    const rows = reportRows.map(row => Object.values(row).map(v => typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : v).join(','));
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${selectedReport}-report-${filters.startDate}-to-${filters.endDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast?.('CSV Export downloaded successfully', 'success');
-  };
 
-  const exportToExcel = async () => {
+    if (!reportDef.supportedFormats.includes(format)) {
+      showToast?.(`${format.toUpperCase()} export is not supported for ${reportDef.title}`, 'warning');
+      return;
+    }
+
+
+
     try {
+      showToast?.(`Preparing ${format.toUpperCase()} export for ${reportDef.title}...`, 'info');
       const config = { responseType: 'blob' };
-      const params = { ...filters, reportType: selectedReport };
-      let res;
-      if (selectedReport === 'commission') res = await PaymentService.getCommissionReport(params, config);
-      else if (selectedReport === 'refund') res = await PaymentService.generateRefundReport(params, config);
-      else if (selectedReport === 'complaint') res = await PaymentService.generateComplaintReport(params, config);
-      else res = await PaymentService.generateProviderEarningsReport(params, config);
+      const mergedQuery = getMergedQuery ? getMergedQuery() : {};
+      const sDate = filters.startDate || mergedQuery.startDate;
+      const eDate = filters.endDate || mergedQuery.endDate;
 
-      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const params = {
+        reportType: selectedReport,
+        startDate: sDate,
+        endDate: eDate,
+        fromDate: sDate,
+        toDate: eDate,
+        zoneIds: mergedQuery.zoneIds || undefined,
+        providerId: filters.providerId || undefined,
+        customerId: filters.customerId || undefined,
+        bookingId: filters.bookingId || undefined,
+        paymentMethod: filters.paymentMethod || undefined,
+        paymentStatus: filters.paymentStatus || undefined,
+        bookingStatus: filters.bookingStatus || undefined,
+        reconciliationStatus: filters.reconciliationStatus || undefined,
+        exportFormat: format
+      };
+
+      const res = await reportDef.exportHandler(params, config);
+
+      if (!res || !res.data) {
+        showToast?.('Failed to download report: Empty response', 'error');
+        return;
+      }
+
+      const mimeType = format === 'csv'
+        ? 'text/csv;charset=utf-8'
+        : format === 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      const ext = format === 'excel' ? 'xlsx' : format;
+      const blob = new Blob([res.data], { type: mimeType });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
-      link.download = `${selectedReport}-report-${filters.startDate}.xlsx`;
+      link.download = `${reportDef.filenamePrefix}_${params.startDate}_to_${params.endDate}.${ext}`;
+      document.body.appendChild(link);
       link.click();
-      showToast?.('Excel report downloaded', 'success');
+      document.body.removeChild(link);
+      showToast?.(`${reportDef.title} ${format.toUpperCase()} exported successfully!`, 'success');
     } catch (e) {
-      exportToCSV();
+      console.error(`Export error for ${selectedReport}:`, e);
+      showToast?.(`Export failed for ${reportDef.title}`, 'error');
     }
   };
 
-  const printPDF = () => {
-    window.print();
-  };
+  const exportToCSV = () => handleExportFormat('csv');
+  const exportToExcel = () => handleExportFormat('excel');
+  const printPDF = () => handleExportFormat('pdf');
 
-  const renderStatusBadge = (status) => {
-    const s = String(status || '').toLowerCase();
-    let color = 'bg-gray-100 text-gray-700';
-    if (s.includes('captured') || s.includes('paid') || s.includes('completed') || s.includes('success') || s.includes('transferred') || s.includes('matched')) {
-      color = 'bg-emerald-100 text-emerald-800';
-    } else if (s.includes('failed') || s.includes('rejected') || s.includes('cancelled') || s.includes('mismatch')) {
-      color = 'bg-rose-100 text-rose-800';
-    } else if (s.includes('pending') || s.includes('held') || s.includes('review') || s.includes('escrow')) {
-      color = 'bg-amber-100 text-amber-800';
-    }
+  const renderStatusBadge = (status) => (
 
-    return (
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${color}`}>
-        {status || '—'}
-      </span>
-    );
-  };
+    <StatusBadge status={status} module="earning" size="sm" />
+  );
+
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-gray-50/50 min-h-screen">
@@ -251,57 +589,57 @@ const AdminFinancialReportCenter = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Booking Value</p>
-            <p className="text-base md:text-lg font-black text-gray-900 mt-0.5">₹{summaryData.totalBookingValue?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-gray-900 mt-0.5">{formatCurrency(summaryData.totalBookingValue || 0)}</p>
             <p className="text-[9px] font-medium text-gray-400 mt-1">Gross Order / Service Demand</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Collected Payments</p>
-            <p className="text-base md:text-lg font-black text-blue-600 mt-0.5">₹{summaryData.totalCustomerPayments?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-blue-600 mt-0.5">{formatCurrency(summaryData.totalCustomerPayments || 0)}</p>
             <p className="text-[9px] font-medium text-blue-400 mt-1">Actual Customer Collections</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Platform Commission</p>
-            <p className="text-base md:text-lg font-black text-purple-600 mt-0.5">₹{summaryData.platformCommission?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-purple-600 mt-0.5">{formatCurrency(summaryData.platformCommission || 0)}</p>
             <p className="text-[9px] font-medium text-purple-400 mt-1">Gross Commission Share</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Earnings</p>
-            <p className="text-base md:text-lg font-black text-emerald-600 mt-0.5">₹{summaryData.providerEarnings?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-emerald-600 mt-0.5">{formatCurrency(summaryData.providerEarnings || 0)}</p>
             <p className="text-[9px] font-medium text-emerald-400 mt-1">Provider Net Payable</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Actual Refunded</p>
-            <p className="text-base md:text-lg font-black text-rose-600 mt-0.5">₹{summaryData.totalRefunds?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-rose-600 mt-0.5">{formatCurrency(summaryData.totalRefunds || 0)}</p>
             <p className="text-[9px] font-medium text-rose-400 mt-1">Financially Completed Refunds</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Payouts</p>
-            <p className="text-base md:text-lg font-black text-indigo-600 mt-0.5">₹{summaryData.totalPayouts?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-indigo-600 mt-0.5">{formatCurrency(summaryData.totalPayouts || 0)}</p>
             <p className="text-[9px] font-medium text-indigo-400 mt-1">Disbursed Provider Payouts</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Referral Rewards</p>
-            <p className="text-base md:text-lg font-black text-cyan-600 mt-0.5">₹{summaryData.referralRewards?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-cyan-600 mt-0.5">{formatCurrency(summaryData.referralRewards || 0)}</p>
             <p className="text-[9px] font-medium text-cyan-400 mt-1">User Referral Subsidies</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Coupon Subsidy</p>
-            <p className="text-base md:text-lg font-black text-amber-600 mt-0.5">₹{summaryData.couponSubsidy?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black text-amber-600 mt-0.5">{formatCurrency(summaryData.couponSubsidy || 0)}</p>
             <p className="text-[9px] font-medium text-amber-400 mt-1">Platform Discount Subsidies</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Cash Collection</p>
-            <p className="text-base md:text-lg font-black text-slate-700 mt-0.5">₹{summaryData.providerCollectedCash?.toLocaleString() || '0'}</p>
+            <p className="text-base md:text-lg font-black text-slate-700 mt-0.5">{formatCurrency(summaryData.providerCollectedCash || 0)}</p>
             <p className="text-[9px] font-medium text-slate-400 mt-1">Cash Collected by Providers</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cash Recovery</p>
-            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">₹{summaryData.cashRecovery?.toLocaleString() || '0'}</p>
+            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">{formatCurrency(summaryData.cashRecovery || 0)}</p>
             <p className="text-[9px] font-medium text-teal-400 mt-1">Cash Booking Commission</p>
           </div>
           <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Net Platform Revenue</p>
-            <p className="text-base md:text-lg font-black mt-0.5">₹{summaryData.netPlatformRevenue?.toLocaleString()}</p>
+            <p className="text-base md:text-lg font-black mt-0.5">{formatCurrency(summaryData.netPlatformRevenue || 0)}</p>
             <p className="text-[9px] font-medium text-emerald-200 mt-1">Net Retained Earnings</p>
           </div>
         </div>
@@ -317,9 +655,8 @@ const AdminFinancialReportCenter = () => {
               const firstRep = REPORT_TYPES.find(r => r.category === cat.id);
               if (firstRep) setSelectedReport(firstRep.id);
             }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all border ${
-              activeCategory === cat.id ? 'bg-secondary text-white border-secondary shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all border ${activeCategory === cat.id ? 'bg-secondary text-white border-secondary shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
           >
             {cat.label}
           </button>
@@ -332,9 +669,8 @@ const AdminFinancialReportCenter = () => {
           <div
             key={rep.id}
             onClick={() => setSelectedReport(rep.id)}
-            className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-              selectedReport === rep.id ? 'bg-primary/5 border-primary shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'
-            }`}
+            className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedReport === rep.id ? 'bg-primary/5 border-primary shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'
+              }`}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-gray-900">{rep.title}</h3>
@@ -424,12 +760,12 @@ const AdminFinancialReportCenter = () => {
               <span className="text-[10px] text-gray-400 font-semibold block mt-0.5">
                 Date Filter Basis: <span className="text-primary font-bold">{
                   selectedReport === 'booking_revenue' ? 'Booking Creation Date' :
-                  selectedReport === 'customer_payment' ? 'Payment Transaction Event Date' :
-                  (selectedReport === 'provider_earnings' || selectedReport === 'commission') ? 'Earning Ledger Date' :
-                  selectedReport === 'refund' ? 'Refund Event Date' :
-                  selectedReport === 'payout' ? 'Payout Execution Date' :
-                  selectedReport === 'wallet_ledger' ? 'Wallet Transaction Date' :
-                  'Financial Audit Timestamp'
+                    selectedReport === 'customer_payment' ? 'Payment Transaction Event Date' :
+                      (selectedReport === 'provider_earnings' || selectedReport === 'commission') ? 'Earning Ledger Date' :
+                        selectedReport === 'refund' ? 'Refund Event Date' :
+                          selectedReport === 'payout' ? 'Payout Execution Date' :
+                            selectedReport === 'wallet_ledger' ? 'Wallet Transaction Date' :
+                              'Financial Audit Timestamp'
                 }</span> ({filters.startDate} to {filters.endDate})
               </span>
             </div>
@@ -442,34 +778,91 @@ const AdminFinancialReportCenter = () => {
         ) : reportRows.length === 0 ? (
           <div className="p-12 text-center text-gray-400 text-xs font-bold">No financial records found for selected filters</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-100 font-bold text-gray-500 uppercase text-[10px]">
-                  {Object.keys(reportRows[0] || {}).map(col => (
-                    <th key={col} className="p-3 whitespace-nowrap">{col.replace(/([A-Z])/g, ' $1')}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {reportRows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                    {Object.entries(row).map(([k, val], i) => (
-                      <td key={i} className="p-3 whitespace-nowrap font-medium text-gray-700">
-                        {k.toLowerCase().includes('status') ? (
-                          renderStatusBadge(val)
-                        ) : typeof val === 'number' && k.toLowerCase().includes('amount') ? (
-                          `₹${val.toLocaleString()}`
-                        ) : (
-                          String(val ?? '—')
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {
+            ...(() => {
+              const activeReportDef = REPORT_DEFINITIONS.find(r => r.id === selectedReport);
+              const explicitCols = activeReportDef?.columns;
+              const sampleKeys = reportRows.length > 0 ? Object.keys(reportRows[0]) : [];
+              const displayCols = explicitCols || sampleKeys.map(k => ({ key: k, header: k.replace(/([A-Z])/g, ' $1') }));
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/80 border-b border-gray-100 font-bold text-gray-500 uppercase text-[10px]">
+                        {displayCols.map(col => (
+                          <th key={col.key} className="p-3 whitespace-nowrap">{col.header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {reportRows.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                          {displayCols.map(col => {
+                            const val = row[col.key];
+                            const k = col.key.toLowerCase();
+                            const explicitType = col.type || (
+                              k.includes('phone') || k.includes('mobile') ? 'phone' :
+                              k.includes('id') || k.includes('reference') || k.includes('utr') || k.includes('code') ? 'id' :
+                              k.includes('status') ? 'status' :
+                              k.includes('method') ? 'payment_method' :
+                              k.includes('category') ? 'category' :
+                              isMonetaryField(col.key) ? 'currency' :
+                              isPercentageField(col.key) ? 'percentage' :
+                              k.includes('date') || k.includes('time') || k === 'createdat' ? 'date' :
+                              typeof val === 'boolean' ? 'boolean' :
+                              'text'
+                            );
+
+                            return (
+                              <td key={col.key} className="p-3 whitespace-nowrap font-medium text-gray-700">
+                                {val === null || val === undefined || val === '' ? (
+                                  <span className="text-gray-300">—</span>
+                                ) : explicitType === 'currency' ? (
+                                  formatFinancialReportAmount(val)
+                                ) : explicitType === 'percentage' ? (
+                                  (typeof val === 'number' || !isNaN(Number(val))) ? `${Number(val).toFixed(2)}%` : String(val)
+                                ) : explicitType === 'date' ? (
+                                  formatDate(val)
+                                ) : explicitType === 'status' || explicitType === 'reconciliation_status' ? (
+                                  renderStatusBadge(val)
+                                ) : explicitType === 'payment_method' || explicitType === 'category' ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-800 font-semibold text-[11px]">{formatStatus(val)}</span>
+                                ) : explicitType === 'id' ? (
+                                  <span className="font-mono text-gray-800 font-bold">{String(val)}</span>
+                                ) : explicitType === 'phone' ? (
+                                  <span className="font-mono text-gray-700">{String(val)}</span>
+                                ) : explicitType === 'boolean' ? (
+                                  val ? <span className="text-emerald-600 font-bold">Yes</span> : <span className="text-gray-400">No</span>
+                                ) : (
+                                  String(val)
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                    {reportRows.length > 0 && (
+                      <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold text-gray-800 uppercase text-[10px]">
+                        <tr>
+                          {displayCols.map((col, colIdx) => {
+                            const k = col.key;
+                            if (colIdx === 0) return <td key={col.key} className="p-3 whitespace-nowrap font-black">Page Subtotal</td>;
+                            if (isMonetaryField(k)) {
+                              const pageTotal = reportRows.reduce((sum, row) => sum + (Number(row[k]) || 0), 0);
+                              return <td key={col.key} className="p-3 whitespace-nowrap font-black text-primary">{formatCurrency(pageTotal)}</td>;
+                            }
+                            return <td key={col.key} className="p-3 whitespace-nowrap text-gray-300">—</td>;
+                          })}
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              );
+            })()
+          }
         )}
       </div>
     </div>

@@ -295,7 +295,7 @@ const applyCoupon = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Coupon applied successfully',
+      message: 'Coupon applied successfully. Your discount has been added.',
       data: {
         coupon: {
           code: coupon.code,

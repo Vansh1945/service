@@ -19,8 +19,8 @@ import {
   Save,
   X
 } from 'lucide-react';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import { useAuth } from '../../../context/auth';
 import * as CouponService from '../../../services/CouponService';
 import * as AdminService from '../../../services/AdminService';

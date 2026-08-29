@@ -10,7 +10,7 @@ const adminAuthMiddleware = require('./admin-middleware');
 const sharedAuthMiddleware = (req, res, next) => {
   const token = req.header('Authorization');
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Authorization token required' });
+    return res.status(401).json({ success: false, message: 'Your session has expired. Please sign in again.' });
   }
 
   try {
@@ -29,10 +29,10 @@ const sharedAuthMiddleware = (req, res, next) => {
       return res.status(401).json({
         success: false,
         tokenExpired: true,
-        message: 'Access token expired. Please login again.'
+        message: 'Your session has expired. Please sign in again.'
       });
     }
-    return res.status(401).json({ success: false, message: 'Invalid or unauthorized token.' });
+    return res.status(401).json({ success: false, message: 'Your session has expired. Please sign in again.' });
   }
 };
 

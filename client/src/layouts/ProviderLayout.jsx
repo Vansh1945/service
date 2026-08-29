@@ -11,7 +11,8 @@ import { DEFAULT_COMPANY_NAME, DEFAULT_PROVIDER_APP_NAME, useClickOutside, UserA
 import NotificationBell from '../components/NotificationBell';
 import { useSocket } from '../socket/SocketContext';
 import { useNotification } from '../context/NotificationContext';
-import { toast } from 'react-toastify';
+import { toast } from '../components/ui/Toast';
+
 import axiosInstance from '../api/axiosInstance';
 import { getProviderAverageRating } from '../services/FeedbackService';
 import { getBookingsByStatus } from '../services/BookingService';

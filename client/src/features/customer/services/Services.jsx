@@ -4,9 +4,8 @@ import {
   RefreshCw, X, LayoutGrid, ShieldCheck,
   ThumbsUp, ChevronRight, ChevronDown
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import ServiceCardSkeleton from '../../../components/ui-skeletons/ServiceCardSkeleton';
 import HeroSection from '../../../components/HeroSection';
 import ErrorState from '../../../components/ui/Error';

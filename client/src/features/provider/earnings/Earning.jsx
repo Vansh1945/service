@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import {
   X, Eye, Building, BarChart3, FileText, Download,
@@ -8,30 +8,24 @@ import {
 import * as PaymentService from '../../../services/PaymentService';
 import * as ProviderService from '../../../services/ProviderService';
 import { formatDate, formatCurrency, formatTime } from '../../../utils/format';
-import { getStatusConfig } from '../../../utils/providerHelpers';
-import DashboardSkeleton from '../../../components/ui-skeletons/DashboardSkeleton';
-import StatCard from '../../../components/ui/StatCard';
-import Pagination from '../../../components/ui/Pagination';
 import usePagination from '../../../hooks/usePagination';
+import DashboardSkeleton from '../../../components/ui-skeletons/DashboardSkeleton';
+import Pagination from '../../../components/ui/Pagination';
+
+
+import StatCard from '../../../components/ui/StatCard';
+import StatusBadge from '../../../components/ui/StatusBadge';
 
 // ── Shared UI Badge ─────────────────────
-const Badge = ({ status, className = "" }) => {
-  const cfg = getStatusConfig(status);
-  const Icon = cfg.icon;
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${cfg.color} ${className}`}>
-      <Icon className="w-3.5 h-3.5" />
-      {cfg.label}
-    </span>
-  );
-};
+const Badge = ({ status, className = "" }) => (
+  <StatusBadge status={status} module="earning" className={className} />
+);
+
 
 // ── Main Dashboard Component ─────────────────────────────────────────────────
 const ProviderEarningsDashboard = () => {
   const { showToast, systemSettings } = useAuth();
   const navigate = useNavigate();
-  // NOTE: No surge-split percentages here — providerSurgeShare is returned
-  // directly by the backend API and must never be recalculated in the frontend.
 
   const tabs = [
     { id: 'dashboard', label: 'Overview', icon: BarChart3 },
@@ -43,8 +37,8 @@ const ProviderEarningsDashboard = () => {
 
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState({
-    grossBilled: 0,          // SUM(grossAmount) — service base billed; NOT net
-    totalEarnings: 0,        // SUM(netAmount) for period
+    grossBilled: 0,
+    totalEarnings: 0,
     todayEarnings: 0,
     totalWithdrawn: 0,
     availableBalance: 0,
@@ -112,14 +106,14 @@ const ProviderEarningsDashboard = () => {
       if (data.success) {
         setSummary({
           // grossBilled: separate SUM(grossAmount) aggregate from backend — MUST NOT fall back to totalEarnings
-          grossBilled:            data.grossBilled            ?? null,
-          totalEarnings:          data.totalEarnings          ?? 0,
-          todayEarnings:          data.todayEarnings          ?? 0,
-          availableBalance:       data.availableBalance       ?? 0,
-          heldAmount:             data.heldAmount             ?? 0,
-          totalWithdrawn:         data.totalWithdrawn         ?? 0,
-          totalPendingWithdrawals: data.pendingWithdrawals    ?? 0,
-          minWithdrawalLimit:     data.minWithdrawalLimit     ?? 500
+          grossBilled: data.grossBilled ?? null,
+          totalEarnings: data.totalEarnings ?? 0,
+          todayEarnings: data.todayEarnings ?? 0,
+          availableBalance: data.availableBalance ?? 0,
+          heldAmount: data.heldAmount ?? 0,
+          totalWithdrawn: data.totalWithdrawn ?? 0,
+          totalPendingWithdrawals: data.pendingWithdrawals ?? 0,
+          minWithdrawalLimit: data.minWithdrawalLimit ?? 500
         });
       } else {
         setHasError(true);
@@ -444,8 +438,8 @@ const ProviderEarningsDashboard = () => {
                       {commissionStatus.eligibleForRatingCommission
                         ? '⭐ Qualified for Rating Tier'
                         : (commissionStatus.currentRule?.conditionType === 'rating'
-                            ? 'Rating Tier Active'
-                            : `${badgeFormatted} Tier (${commissionStatus.ratingCount || 0}/${commissionStatus.currentRule?.minimumRatings || 5} reviews)`)}
+                          ? 'Rating Tier Active'
+                          : `${badgeFormatted} Tier (${commissionStatus.ratingCount || 0}/${commissionStatus.currentRule?.minimumRatings || 5} reviews)`)}
                     </p>
                   </div>
                 </div>
@@ -703,8 +697,8 @@ const ProviderEarningsDashboard = () => {
                         // e.commissionAmount  = platform commission
                         // e.providerSurgeShare = provider's surcharge/bonus share
                         // e.netAmount         = final net receivable
-                        const servicePrice   = e.baseAmount;
-                        const commission     = e.commissionAmount;
+                        const servicePrice = e.baseAmount;
+                        const commission = e.commissionAmount;
                         const surchargeBonus = e.providerSurgeShare;
 
                         return (
@@ -715,7 +709,7 @@ const ProviderEarningsDashboard = () => {
                             <td className="px-4 py-3 text-right text-xs font-medium text-neutral-700">
                               {servicePrice != null ? formatCurrency(servicePrice) : '—'}
                             </td>
-                             <td className="px-4 py-3 text-right text-xs font-medium text-danger">
+                            <td className="px-4 py-3 text-right text-xs font-medium text-danger">
                               <span>{commission != null ? `-${formatCurrency(commission)}` : '—'}</span>
                               {e.paymentMethod === 'cash' && commission > 0 && (
                                 <span className="text-[10px] text-danger font-bold ml-1.5 whitespace-nowrap bg-danger/5 px-1.5 py-0.5 rounded">
@@ -764,8 +758,8 @@ const ProviderEarningsDashboard = () => {
                   <>
                     {earningsReport.filter(e => e.isWithdrawable).map((e, idx) => {
                       // Backend-authoritative fields — no frontend recalculation.
-                      const servicePrice   = e.baseAmount;
-                      const commission     = e.commissionAmount;
+                      const servicePrice = e.baseAmount;
+                      const commission = e.commissionAmount;
                       const surchargeBonus = e.providerSurgeShare;
 
                       return (

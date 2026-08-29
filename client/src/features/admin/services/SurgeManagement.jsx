@@ -26,8 +26,8 @@ import {
   ToggleRight,
   Coins
 } from 'lucide-react';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import { useAuth } from '../../../context/auth';
 import { useConfirm } from '../../../context/ConfirmContext';
 import * as SurgeService from '../../../services/SurgeService';

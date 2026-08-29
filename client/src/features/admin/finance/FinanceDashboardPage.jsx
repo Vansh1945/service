@@ -704,203 +704,203 @@ const FinanceDashboardPage = () => {
         ) : (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
-            {/* CHART 1: REVENUE TREND (8 Cols) */}
-          <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
-                  <FiBarChart2 className="w-4 h-4 text-primary" />
-                  1. Revenue Trend
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Gross Revenue vs Platform Commission Trajectory</p>
+              {/* CHART 1: REVENUE TREND (8 Cols) */}
+              <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                      <FiBarChart2 className="w-4 h-4 text-primary" />
+                      1. Revenue Trend
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">Gross Revenue vs Platform Commission Trajectory</p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-neutral-100 text-neutral-700 font-bold text-[10px] uppercase rounded-lg">
+                    Last 30 Days
+                  </span>
+                </div>
+
+                <div className="h-72 w-full pt-2 min-w-0" style={{ minHeight: '280px' }}>
+                  {isReady ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240} debounce={50} initialDimension={{ width: 600, height: 280 }}>
+                      <AreaChart data={revenueTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
+                          </linearGradient>
+                          <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        <Area type="monotone" dataKey="revenue" name="Gross Revenue (₹)" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
+                        <Area type="monotone" dataKey="earnings" name="Platform Earnings (₹)" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorEarnings)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartSkeleton />
+                  )}
+                </div>
               </div>
-              <span className="px-2.5 py-1 bg-neutral-100 text-neutral-700 font-bold text-[10px] uppercase rounded-lg">
-                Last 30 Days
-              </span>
-            </div>
 
-            <div className="h-72 w-full pt-2 min-w-0" style={{ minHeight: '280px' }}>
-              {isReady ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240} debounce={50} initialDimension={{ width: 600, height: 280 }}>
-                  <AreaChart data={revenueTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0}/>
-                      </linearGradient>
-                      <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Area type="monotone" dataKey="revenue" name="Gross Revenue (₹)" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
-                    <Area type="monotone" dataKey="earnings" name="Platform Earnings (₹)" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorEarnings)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
-            </div>
-          </div>
-
-          {/* CHART 2: PAYMENT METHOD SPLIT (4 Cols) */}
-          <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
-                  <FiPieChart className="w-4 h-4 text-purple-600" />
-                  2. Payment Method Split
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Online vs Cash vs Wallet vs Mixed</p>
-              </div>
-            </div>
-
-            <div className="h-56 w-full relative flex items-center justify-center min-w-0" style={{ minHeight: '220px' }}>
-              {isReady ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180} debounce={50} initialDimension={{ width: 300, height: 220 }}>
-                  <PieChart>
-                    <Pie
-                      data={paymentSplitData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={80}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {paymentSplitData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
-            </div>
-
-            {/* Legend Pills */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              {paymentSplitData.map((item, idx) => (
-                <div key={idx} className="flex items-center space-x-2 bg-neutral-50 p-2 rounded-xl border border-neutral-100">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold text-neutral-400 block uppercase">{item.name}</span>
-                    <span className="text-xs font-extrabold text-neutral-900 block truncate">
-                      ₹{item.value.toLocaleString('en-IN')}
-                    </span>
+              {/* CHART 2: PAYMENT METHOD SPLIT (4 Cols) */}
+              <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                      <FiPieChart className="w-4 h-4 text-purple-600" />
+                      2. Payment Method Split
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">Online vs Cash vs Wallet vs Mixed</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* Row 2: Charts 3, 4, 5 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* CHART 3: REFUND TREND */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
-                  <FiRotateCcw className="w-4 h-4 text-rose-600" />
-                  3. Refund Trend
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Completed vs Pending Refunds</p>
+                <div className="h-56 w-full relative flex items-center justify-center min-w-0" style={{ minHeight: '220px' }}>
+                  {isReady ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180} debounce={50} initialDimension={{ width: 300, height: 220 }}>
+                      <PieChart>
+                        <Pie
+                          data={paymentSplitData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={80}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {paymentSplitData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartSkeleton />
+                  )}
+                </div>
+
+                {/* Legend Pills */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {paymentSplitData.map((item, idx) => (
+                    <div key={idx} className="flex items-center space-x-2 bg-neutral-50 p-2 rounded-xl border border-neutral-100">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold text-neutral-400 block uppercase">{item.name}</span>
+                        <span className="text-xs font-extrabold text-neutral-900 block truncate">
+                          ₹{item.value.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
-              {isReady ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
-                  <BarChart data={refundTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
-                    <Bar dataKey="completed" name="Completed (₹)" fill="#10B981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="pending" name="Pending (₹)" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
-            </div>
-          </div>
+            {/* Row 2: Charts 3, 4, 5 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* CHART 3: REFUND TREND */}
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                      <FiRotateCcw className="w-4 h-4 text-rose-600" />
+                      3. Refund Trend
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">Completed vs Pending Refunds</p>
+                  </div>
+                </div>
 
-          {/* CHART 4: BOOKING VS REVENUE */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
-                  <FiLayers className="w-4 h-4 text-indigo-600" />
-                  4. Booking vs Revenue
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Booking Count vs Revenue (₹)</p>
+                <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
+                  {isReady ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
+                      <BarChart data={refundTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
+                        <Bar dataKey="completed" name="Completed (₹)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="pending" name="Pending (₹)" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartSkeleton />
+                  )}
+                </div>
+              </div>
+
+              {/* CHART 4: BOOKING VS REVENUE */}
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                      <FiLayers className="w-4 h-4 text-indigo-600" />
+                      4. Booking vs Revenue
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">Booking Count vs Revenue (₹)</p>
+                  </div>
+                </div>
+
+                <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
+                  {isReady ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
+                      <ComposedChart data={bookingVsRevenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                        <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                        <YAxis yAxisId="left" stroke="#6366F1" fontSize={11} tickLine={false} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#10B981" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
+                        <Bar yAxisId="left" dataKey="bookings" name="Bookings Count" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                        <Line yAxisId="right" type="monotone" dataKey="revenue" name="Revenue (₹)" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartSkeleton />
+                  )}
+                </div>
+              </div>
+
+              {/* CHART 5: SETTLEMENT STATUS */}
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                      <FiShield className="w-4 h-4 text-emerald-600" />
+                      5. Settlement Status
+                    </h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">Batch Settlement Lifecycle</p>
+                  </div>
+                </div>
+
+                <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
+                  {isReady ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
+                      <BarChart data={settlementStatusData} layout="vertical" margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
+                        <XAxis type="number" stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                        <YAxis dataKey="status" type="category" stroke="#9CA3AF" fontSize={10} tickLine={false} width={80} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="amount" name="Amount (₹)" radius={[0, 4, 4, 0]}>
+                          {settlementStatusData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartSkeleton />
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
-              {isReady ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
-                  <ComposedChart data={bookingVsRevenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                    <YAxis yAxisId="left" stroke="#6366F1" fontSize={11} tickLine={false} />
-                    <YAxis yAxisId="right" orientation="right" stroke="#10B981" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
-                    <Bar yAxisId="left" dataKey="bookings" name="Bookings Count" fill="#6366F1" radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="revenue" name="Revenue (₹)" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
-            </div>
-          </div>
-
-          {/* CHART 5: SETTLEMENT STATUS */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
-                  <FiShield className="w-4 h-4 text-emerald-600" />
-                  5. Settlement Status
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Batch Settlement Lifecycle</p>
-              </div>
-            </div>
-
-            <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
-              {isReady ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
-                  <BarChart data={settlementStatusData} layout="vertical" margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
-                    <XAxis type="number" stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                    <YAxis dataKey="status" type="category" stroke="#9CA3AF" fontSize={10} tickLine={false} width={80} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="amount" name="Amount (₹)" radius={[0, 4, 4, 0]}>
-                      {settlementStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
-            </div>
-          </div>
-        </div>
-        </>
+          </>
         )}
       </div>
 
@@ -956,13 +956,12 @@ const FinanceDashboardPage = () => {
                       )}
                     </td>
                     <td className="py-3.5 px-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                        ['SETTLED', 'SUCCESS', 'COMPLETED', 'CAPTURED'].includes(row.status)
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${['SETTLED', 'SUCCESS', 'COMPLETED', 'CAPTURED'].includes(row.status)
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : (['FAILED', 'REJECTED', 'DECLINED', 'CANCELLED'].includes(row.status)
                             ? 'bg-rose-50 text-rose-700 border-rose-200'
                             : 'bg-amber-50 text-amber-700 border-amber-200')
-                      }`}>
+                        }`}>
                         {row.status}
                       </span>
                     </td>

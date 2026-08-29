@@ -581,7 +581,7 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
 
                 _io.to(room).emit('new_notification', socketPayload);
 
-                const unreadCount = await Notification.countDocuments({ userId, isRead: false });
+                const unreadCount = await Notification.countDocuments({ userId: uId, isRead: false });
                 _io.to(room).emit('unread_count_updated', { unreadCount });
             } else {
                 console.warn('[Socket] _io not set — socket notification skipped');
@@ -593,19 +593,20 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
                     isPushAllowed = false;
                 } else if (isInQuietHours(recipient.notificationPreferences)) {
                     isPushAllowed = false;
-                    console.log(`[NotificationHelper] Silence push due to Quiet Hours for User ${userId}`);
+                    console.log(`[NotificationHelper] Silence push due to Quiet Hours for User ${uId}`);
                 }
             }
 
+
             if (isPushAllowed) {
                 try {
-                    console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
+                    console.log(`[NotificationHelper] Calling notifyUser for: ${uId}, role: ${role}`);
                     const bookingAlertTone = true;
                     const bookingVibration = true;
                     const bookingAlertDuration = 60;
                     const bookingRepeatAlert = true;
 
-                    await notificationService.notifyUser(userId, role, {
+                    await notificationService.notifyUser(uId, role, {
                         title: finalTitle,
                         body: finalMessage,
                         url: generatedUrl,
@@ -613,7 +614,7 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
                         sound: isBookingAlert && bookingAlertTone ? soundUrl : undefined,
                         data: {
                             bookingId: referenceId ? referenceId.toString() : '',
-                            userId: userId.toString(),
+                            userId: uId.toString(),
                             type: type,
                             url: generatedUrl,
                             role: role,
@@ -632,8 +633,9 @@ const sendNotification = async (userIdOrOpts, role, title, message, type = 'syst
                     console.error(`[NotificationHelper] FCM Error:`, fcmError);
                 }
             } else {
-                console.log(`[NotificationHelper] FCM Push skipped/silenced for user ${userId}`);
+                console.log(`[NotificationHelper] FCM Push skipped/silenced for user ${uId}`);
             }
+
         } else if (role && _io) {
             _io.to(`role_${role}`).emit('new_notification', {
                 title: finalTitle,

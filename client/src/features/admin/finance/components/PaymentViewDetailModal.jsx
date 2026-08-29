@@ -553,7 +553,8 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                           {(d.settlement?.settlementStatus === 'settled' || d.settlementStatus === 'settled') && (
                             <InfoRow label="Settlement Date" value={d.settlement?.settlementDate ? fmtDateTime(d.settlement.settlementDate) : '—'} />
                           )}
-                          <InfoRow label="Settlement ID" value={d.settlement?.razorpaySettlementId || (d.settlement?.settlementStatus === 'processing' ? 'Awaiting Batch (T+2 Days)' : 'N/A')} mono={Boolean(d.settlement?.razorpaySettlementId)} />
+                          <InfoRow label="Settlement ID" value={d.settlement?.razorpaySettlementId || (d.settlement?.settlementStatus === 'processing' ? 'Awaiting Settlement Batch' : 'N/A')} mono={Boolean(d.settlement?.razorpaySettlementId)} />
+
                           <InfoRow label="Bank Reference (UTR)" value={d.settlement?.bankReference || (d.settlement?.settlementStatus === 'processing' ? 'Awaiting Bank Transfer' : 'N/A')} mono={Boolean(d.settlement?.bankReference)} />
                         </SectionCard>
                       </div>
@@ -862,7 +863,8 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                         {d.settlement.settlementStatus === 'settled' && (
                           <InfoRow label="Settlement Date" value={d.settlement.settlementDate ? fmtDateTime(d.settlement.settlementDate) : '—'} />
                         )}
-                        <InfoRow label="Settlement ID" value={d.settlement.razorpaySettlementId || (d.settlement.settlementStatus === 'processing' ? 'Awaiting Batch (T+2 Days)' : 'N/A')} mono={Boolean(d.settlement.razorpaySettlementId)} />
+                        <InfoRow label="Settlement ID" value={d.settlement.razorpaySettlementId || (d.settlement.settlementStatus === 'processing' ? 'Awaiting Settlement Batch' : 'N/A')} mono={Boolean(d.settlement.razorpaySettlementId)} />
+
                         <InfoRow label="Bank Reference" value={d.settlement.bankReference || (d.settlement.settlementStatus === 'processing' ? 'Awaiting Bank Transfer' : 'N/A')} mono={Boolean(d.settlement.bankReference)} />
                         <InfoRow label="Gateway Fee" value={<AmtCell amount={d.settlement.gatewayFee || 0} colorClass="text-rose-600" />} />
                         <InfoRow label="Gateway Tax" value={<AmtCell amount={d.settlement.gatewayTax || 0} colorClass="text-rose-600" />} />

@@ -11,11 +11,10 @@ import { IfscBankDetails } from '../../../components/IfscBankDetails';
 import { ProviderPolicy } from '../../../components/ProviderPolicy';
 import Processing from '../../../components/ui-skeletons/Processing';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/auth';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import 'react-toastify/dist/ReactToastify.css';
+
 import useCategory from '../../../hooks/useCategory';
 import * as ProviderService from '../../../services/ProviderService';
 import { formatTime, compressImage, buildStreetAddress, smartAddressBuilder } from '../../../utils/format';
@@ -820,7 +819,7 @@ const ProviderRegistration = () => {
         setCookie('token', data.token, 7);
 
         setStep(3);
-        return 'Registration successful! Please login to complete your profile.';
+        return 'Your provider account has been created. Complete the required verification steps to continue.';
       } catch (err) {
         const msg = err.response?.data?.message || err.response?.data?.error || (typeof err === 'string' ? err : err.message) || 'Registration failed';
         throw msg;
@@ -850,7 +849,7 @@ const ProviderRegistration = () => {
         await loginUser(data.token, 'provider', data.provider);
 
         setStep(4);
-        return 'Login successful! Please complete your profile.';
+        return 'Welcome back. Please complete your profile verification.';
       } catch (err) {
         throw err.response?.data?.message || err.message;
       } finally {
@@ -957,7 +956,6 @@ const ProviderRegistration = () => {
         };
 
         const response = await ProviderService.completeProfile(fd, config);
-        const data = response.data;
 
         // Clear all auth cookies before navigating to prevent stale auth state
         setCookie('token', '', -1);
@@ -970,7 +968,7 @@ const ProviderRegistration = () => {
           navigate('/login', { replace: true });
         }, 1500);
 
-        return 'Profile completed successfully!\nYour account is pending approval. Please contact support for assistance.';
+        return 'Your verification documents have been submitted successfully. Your provider account is waiting for approval.';
       } catch (err) {
         throw err.response?.data?.message || err.message;
       } finally {

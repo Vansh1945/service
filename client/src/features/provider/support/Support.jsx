@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from '../../../components/ui/Toast';
+
 import {
   HelpCircle, MessageSquare,
   X, Upload,
@@ -11,7 +11,8 @@ import {
 import { getBookingsByStatus } from '../../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, replyToComplaint } from '../../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../../utils/format';
-import { normalizeStatus } from '../../../utils/status';
+import { normalizeStatus, isComplaintResolved } from '../../../utils/status';
+
 import CDNImage from '../../../components/CDNImage';
 import ChatModal from '../../../components/chat/ChatModal';
 import LoadingSpinner from '../../../components/ui/Loader';
@@ -19,13 +20,18 @@ import Processing from '../../../components/ui-skeletons/Processing';
 import Select from '../../../components/ui/Select';
 import Input from '../../../components/ui/Input';
 import Textarea from '../../../components/ui/Textarea';
+import StatusBadge from '../../../components/ui/StatusBadge';
+import Tabs from '../../../components/ui/Tabs';
+
+
 
 import {
   COMPLAINT_STATUS_CONFIG,
   COMPLAINT_STATUS_LABELS,
   COMPLAINT_STATUS_DETAIL_LABELS,
   getComplaintStatusStyle
-} from '../../../components/ui/StatusConfig';
+} from '../../../utils/status';
+
 
 const SUPPORT_CATEGORIES = [
   { value: 'payment', label: 'Payment' },
@@ -181,12 +187,18 @@ const ProviderSupportPage = () => {
       compressedImages.forEach(img => fd.append('images', img));
 
       await submitComplaintAPI(fd);
-      toast.success('Support ticket submitted successfully!');
+      toast.success('Your complaint has been submitted successfully.');
       setOpenNewComplaint(false);
       resetForm();
       fetchComplaints();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to submit ticket');
+      let errorMsg = err.response?.data?.message || err.message || '';
+      if (errorMsg.toLowerCase().includes('already')) {
+        errorMsg = 'A complaint for this booking has already been submitted.';
+      } else {
+        errorMsg = "We couldn't submit your complaint right now. Please try again.";
+      }
+      toast.error(errorMsg);
     } finally {
       setSubmittingTicket(false);
     }
@@ -219,14 +231,14 @@ const ProviderSupportPage = () => {
       compressedImages.forEach(img => fd.append('images', img));
 
       await replyToComplaint(selectedComplaint._id, fd);
-      toast.success('Reply submitted successfully!');
+      toast.success('Your message has been sent successfully.');
       setReplyText('');
       setReplyImages([]);
       setReplyPreviews([]);
       // Refresh details
       viewComplaintDetails(selectedComplaint._id);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to submit reply');
+      toast.error("We couldn't send your message right now. Please try again.");
     } finally {
       setSubmittingReply(false);
     }
@@ -285,29 +297,25 @@ const ProviderSupportPage = () => {
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
         {/* Navigation Tabs */}
-        <div className="flex border border-neutral-100 bg-white rounded-xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <button
-            onClick={() => setActiveTab('tickets')}
-            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'tickets' ? 'bg-primary text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
-          >
-            <FileText className="h-4 w-4" />
-            My Tickets
-          </button>
-          <button
-            onClick={() => setActiveTab('faqs')}
-            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'faqs' ? 'bg-primary text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50'}`}
-          >
-            <HelpCircle className="h-4 w-4" />
-            FAQs & Help
-          </button>
+        <div className="flex items-center justify-between gap-3 border border-neutral-100 bg-white rounded-xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+          <Tabs
+            tabs={[
+              { id: 'tickets', label: 'My Tickets', icon: FileText, count: complaints.length },
+              { id: 'faqs', label: 'FAQs & Help', icon: HelpCircle }
+            ]}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            className="flex-1"
+          />
           <button
             onClick={() => setChatOpen(true)}
-            className="flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50 flex items-center justify-center gap-2"
+            className="py-2 px-3 text-xs font-semibold rounded-lg transition-all text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50 flex items-center gap-1.5 shrink-0"
           >
             <MessageSquare className="h-4 w-4" />
             Direct Chat
           </button>
         </div>
+
 
         {activeTab === 'tickets' && (
           <div className="space-y-5">
@@ -349,9 +357,8 @@ const ProviderSupportPage = () => {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <p className="text-sm font-bold text-secondary truncate">{complaint.title}</p>
-                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${s.bg} ${s.text} border ${s.border}`}>
-                                 {COMPLAINT_STATUS_LABELS[complaint.status] || complaint.status}
-                              </span>
+                              <StatusBadge status={complaint.status} module="complaint" size="sm" />
+
                             </div>
                             <p className="text-xs text-neutral-400">#{complaint.complaintId || complaint._id.slice(-8)} • {getCategoryLabel(complaint.category)}</p>
                             <p className="text-[11px] text-neutral-400 mt-1">{formatDateTime(complaint.createdAt)}</p>
@@ -515,14 +522,13 @@ const ProviderSupportPage = () => {
             </div>
 
             <div className="overflow-y-auto flex-1 px-5 py-5 space-y-5">
-              <div className={`p-4 rounded-xl ${getStatusStyle(selectedComplaint.status).bg} border ${getStatusStyle(selectedComplaint.status).border}`}>
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-secondary">Status</span>
-                  <span className={`text-sm font-bold uppercase tracking-wider ${getStatusStyle(selectedComplaint.status).text}`}>
-                    {COMPLAINT_STATUS_DETAIL_LABELS[selectedComplaint.status] || selectedComplaint.status}
-                  </span>
+                  <StatusBadge status={selectedComplaint.status} module="complaint" size="sm" showDot />
                 </div>
               </div>
+
               <div>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Subject</h4>
                 <p className="text-sm font-bold text-secondary">{selectedComplaint.title}</p>
@@ -618,7 +624,8 @@ const ProviderSupportPage = () => {
               )}
 
               {/* Reply Form (Only if ticket is not closed) */}
-              {!['resolved', 'closed', 'solved'].includes(normalizeStatus(selectedComplaint.status)) && (
+              {!isComplaintResolved(selectedComplaint.status) && (
+
                 <div className="border-t border-neutral-100 pt-5 mt-5">
                   <h4 className="text-[10px] font-bold uppercase tracking-wider text-primary mb-3">Submit Your Response</h4>
                   <div className="space-y-3">

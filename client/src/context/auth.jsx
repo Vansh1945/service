@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from "../components/ui/Toast";
+
 
 import * as AdminService from "../services/AdminService";
 import * as ProviderService from "../services/ProviderService";
@@ -204,7 +204,7 @@ export const AuthProvider = ({ children }) => {
         }
         toast[type](message, {
             position: "top-right",
-            autoClose: 3000,
+            autoClose: 2000,
             hideProgressBar: false,
             closeOnClick: true,
             pauseOnHover: true,

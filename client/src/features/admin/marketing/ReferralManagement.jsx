@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiUsers, FiAward, FiAlertTriangle, FiList, FiTrash2, FiPlus, FiCheck, FiTrendingUp, FiDollarSign, FiPercent, FiUserCheck, FiFilter } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import {
   getAdminDashboard,
   getMilestones,
@@ -16,8 +17,10 @@ import LoadingSpinner from '../../../components/ui/Loader';
 import { normalizeStatus } from '../../../utils/status';
 import StatCard from '../../../components/ui/StatCard';
 import Button from '../../../components/ui/Button';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 const ReferralManagement = () => {
+  const confirm = useConfirm();
   // 5 Top-Level Tabs: overview, provider, customer, fraud, ledger
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
@@ -103,7 +106,13 @@ const ReferralManagement = () => {
   };
 
   const handleDeleteMilestone = async (id) => {
-    if (!window.confirm('Delete this milestone?')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Milestone',
+      message: 'Are you sure you want to delete this milestone?',
+      confirmText: 'Delete',
+      confirmVariant: 'danger'
+    });
+    if (!isConfirmed) return;
     try {
       const res = await deleteMilestone(id);
       if (res.data.success) {
@@ -116,7 +125,13 @@ const ReferralManagement = () => {
   };
 
   const handleManualRelease = async (referralId) => {
-    if (!window.confirm('Are you sure you want to dismiss the fraud warning and manually release the reward(s)?')) return;
+    const isConfirmed = await confirm({
+      title: 'Release Held Reward',
+      message: 'Are you sure you want to dismiss the fraud warning and manually release the reward(s)?',
+      confirmText: 'Release Reward',
+      confirmVariant: 'warning'
+    });
+    if (!isConfirmed) return;
     try {
       const res = await releaseHeldReward(referralId);
       if (res.data.success) {

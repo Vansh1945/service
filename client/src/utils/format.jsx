@@ -187,7 +187,10 @@ export const formatCurrency = (amount, options = {}) => {
     const settings = readCachedSystemSettings();
     const currency = options.currency || settings.defaultCurrency || "INR";
     const locale = options.locale || settings.locale || (currency === "INR" ? "en-IN" : "en-US");
-    const minDecimals = options.minDecimals ?? options.decimalPrecision ?? (Number.isInteger(Number(amount)) ? 0 : 2);
+    const num = Number(amount);
+    if (isNaN(num)) return FALLBACK;
+
+    const minDecimals = options.minDecimals ?? options.decimalPrecision ?? (options.alwaysShowDecimals === false ? 0 : 2);
     const maxDecimals = options.maxDecimals ?? options.decimalPrecision ?? 2;
 
     const cacheKey = `${locale}-${currency}-${minDecimals}-${maxDecimals}`;
@@ -202,13 +205,17 @@ export const formatCurrency = (amount, options = {}) => {
       });
       currencyFormatters.set(cacheKey, formatter);
     }
-    let formatted = formatter.format(Number(amount));
+    let formatted = formatter.format(num);
 
     if (settings.currencySymbol && !formatted.includes(settings.currencySymbol)) {
+      const formattedNum = num.toLocaleString(locale, {
+        minimumFractionDigits: minDecimals,
+        maximumFractionDigits: maxDecimals,
+      });
       if (settings.currencyPosition === "suffix") {
-        formatted = `${amount} ${settings.currencySymbol}`;
+        formatted = `${formattedNum} ${settings.currencySymbol}`;
       } else if (settings.currencyPosition === "prefix") {
-        formatted = `${settings.currencySymbol}${amount}`;
+        formatted = `${settings.currencySymbol}${formattedNum}`;
       }
     }
 
@@ -226,14 +233,117 @@ export const formatCurrency = (amount, options = {}) => {
  */
 export const formatAmount = (amount, options = {}) => {
   if (amount === null || amount === undefined || amount === "" || isNaN(amount)) return FALLBACK;
-  if (options.raw) {
-    return Number(amount).toLocaleString(options.locale || "en-IN", {
-      minimumFractionDigits: options.decimals ?? 2,
-      maximumFractionDigits: options.decimals ?? 2,
+  const num = Number(amount);
+  if (isNaN(num)) return FALLBACK;
+
+  const minDec = options.minDecimals ?? options.decimalPrecision ?? options.decimals ?? 2;
+  const maxDec = options.maxDecimals ?? options.decimalPrecision ?? options.decimals ?? 2;
+  const locale = options.locale || "en-IN";
+
+  if (options.raw || options.noSymbol) {
+    const useGrouping = options.useGrouping ?? (!options.noCommas);
+    return num.toLocaleString(locale, {
+      minimumFractionDigits: minDec,
+      maximumFractionDigits: maxDec,
+      useGrouping,
     });
   }
-  return formatCurrency(amount, options);
+
+  return formatCurrency(amount, {
+    minDecimals: minDec,
+    maxDecimals: maxDec,
+    ...options
+  });
 };
+
+/**
+ * Universal Financial Report Amount Formatter.
+ * Formats any financial report field (grossAmount, totalAmount, subtotal, discount, surcharge,
+ * commissionAmount, commission, netAmount, providerEarnings, platformFee, visitingCharge,
+ * rainCharge, trafficCharge, nightCharge, demandSurge, providerSurgeShare, companySurgeShare,
+ * refundAmount, walletRefund, gatewayRefund, payoutAmount, withdrawnAmount, outstandingBalance,
+ * collectedAmount, attemptedAmount, cashCollected, couponSubsidy, referralReward, tax, etc.)
+ * consistently displaying exactly 2 decimal places.
+ *
+ * Respects project conventions:
+ * - If showSymbol: true (default for currency displays), formats with currency symbol (e.g. ₹71.00).
+ * - If showSymbol: false or raw: true or noSymbol: true (used when table headers include currency symbol),
+ *   formats as raw 2-decimal string (e.g. 71.00 or 1,000.00).
+ *
+ * @param {number|string|Object} input - Financial value or object containing financial field
+ * @param {string|Object} [fieldOrOptions] - Field name if input is object, or options object
+ * @param {Object} [options] - Additional formatting options
+ * @returns {string} Formatted 2-decimal financial report display string
+ */
+export const formatFinancialReportAmount = (input, fieldOrOptions = {}, options = {}) => {
+  let val = input;
+  let opts = {};
+
+  if (input && typeof input === 'object' && typeof fieldOrOptions === 'string') {
+    val = input[fieldOrOptions];
+    opts = options || {};
+  } else if (typeof fieldOrOptions === 'object') {
+    opts = fieldOrOptions || {};
+  }
+
+  if (val === null || val === undefined || val === "" || isNaN(val)) return FALLBACK;
+
+  const showSymbol = opts.showSymbol ?? (!opts.raw && !opts.noSymbol);
+
+  if (!showSymbol) {
+    return formatAmount(val, { raw: true, decimals: 2, ...opts });
+  }
+
+  return formatCurrency(val, { alwaysShowDecimals: true, minDecimals: 2, maxDecimals: 2, ...opts });
+};
+
+export const fmtFinancialReport = formatFinancialReportAmount;
+export const formatFinancialValue = formatFinancialReportAmount;
+
+/**
+ * Utility to identify monetary column field names
+ */
+export const isMonetaryField = (key) => {
+  if (!key || typeof key !== 'string') return false;
+  const k = key.toLowerCase();
+  return (
+    k.includes('amount') ||
+    k.includes('total') ||
+    k.includes('paid') ||
+    k.includes('earning') ||
+    k.includes('commission') ||
+    k.includes('discount') ||
+    k.includes('surcharge') ||
+    k.includes('fee') ||
+    k.includes('impact') ||
+    k.includes('value') ||
+    k.includes('subtotal') ||
+    k.includes('refund') ||
+    k.includes('payout') ||
+    k.includes('subsidy') ||
+    k.includes('reward') ||
+    k.includes('balance') ||
+    k.includes('collected') ||
+    k.includes('tax') ||
+    k.includes('gst') ||
+    k.includes('receivable') ||
+    k.includes('gross') ||
+    k.includes('net')
+  ) && !k.includes('rate') && !k.includes('percent') && !k.includes('percentage') && !k.includes('id') && !k.includes('count') && !k.includes('date') && !k.includes('status') && !k.includes('type') && !k.includes('code');
+};
+
+export const isMonetaryColumnKey = isMonetaryField;
+
+/**
+ * Utility to identify percentage column field names
+ */
+export const isPercentageField = (key) => {
+  if (!key || typeof key !== 'string') return false;
+  const k = key.toLowerCase();
+  return k.includes('rate') || k.includes('percent') || k.includes('percentage');
+};
+
+export const isPercentageColumnKey = isPercentageField;
 
 /**
  * Format numbers with comma separators or compact notation (1.2K, 2.5L, 3.2Cr / 100K)
@@ -244,6 +354,7 @@ export const formatAmount = (amount, options = {}) => {
 export const formatNumber = (num, options = {}) => {
   if (num === null || num === undefined || num === "" || isNaN(num)) return FALLBACK;
   const n = Number(num);
+  if (isNaN(n)) return FALLBACK;
   const settings = readCachedSystemSettings();
   const currency = settings.defaultCurrency || "INR";
   const locale = options.locale || settings.locale || (currency === "INR" ? "en-IN" : "en-US");
@@ -264,9 +375,16 @@ export const formatNumber = (num, options = {}) => {
     }
   }
 
-  let formatter = numberFormatters.get(locale);
+  const minDecimals = options.minDecimals ?? options.decimals ?? (options.forceDecimals ? 2 : 0);
+  const maxDecimals = options.maxDecimals ?? options.decimals ?? (options.forceDecimals ? 2 : 2);
+
+  const cacheKey = `${locale}-${minDecimals}-${maxDecimals}`;
+  let formatter = numberFormatters.get(cacheKey);
   if (!formatter) {
-    formatter = new Intl.NumberFormat(locale);
+    formatter = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: minDecimals,
+      maximumFractionDigits: maxDecimals,
+    });
     numberFormatters.set(locale, formatter);
   }
   return formatter.format(n);
@@ -414,13 +532,20 @@ export const capitalize = (str) => {
  * @param {string} str
  * @returns {string}
  */
+const TITLE_CASE_ACRONYMS = new Set(['ID', 'UTR', 'IFSC', 'GST', 'API', 'PDF', 'CSV', 'XLSX', 'URL', 'UPI', 'QR']);
+
 export const titleCase = (str) => {
   if (!str || typeof str !== "string") return "";
   return str
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, " ")
     .split(" ")
     .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map((word) => {
+      const upper = word.toUpperCase();
+      if (TITLE_CASE_ACRONYMS.has(upper)) return upper;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
     .join(" ");
 };
 

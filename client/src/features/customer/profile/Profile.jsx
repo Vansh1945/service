@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import ProfileSkeleton from '../../../components/ui-skeletons/ProfileSkeleton';
-import { useAuth } from '../../../context/auth';
-import { toast } from 'react-toastify';
+import { toast } from '../../../components/ui/Toast';
+
 import { useNavigate } from 'react-router-dom';
 import {
     getProfile,
