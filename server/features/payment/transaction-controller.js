@@ -6,6 +6,7 @@ const Service = require('../catalog/service-model');
 const CommissionRule = require('./commission-rule-model');
 const Refund = require('./refund-model');
 const PaymentRecord = require('./payment-record-model');
+const { toPaise } = require('./financial-status-service');
 try { require('../admin/admin-model'); } catch (e) { }
 try { require('../zone/zone-model'); } catch (e) { }
 const mongoose = require('mongoose');
@@ -2701,7 +2702,7 @@ const getUnifiedEntityDetails = async (req, res, next) => {
 
     const type = (entityType || '').toLowerCase();
 
-    if (['transaction', 'payment', 'razorpay', 'cash_payment', 'mixed'].includes(type)) {
+    if (['transaction', 'payment', 'cash_payment', 'mixed'].includes(type)) {
       let query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { $or: [{ transactionId: id }, { razorpayPaymentId: id }] };
       let txn = await Transaction.findOne(query)
         .populate('user', 'name email phone wallet customerId')

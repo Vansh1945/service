@@ -51,6 +51,7 @@ const FinanceDashboardPage = () => {
   const { refresh } = useAdminFilter();
   const [selectedEntity, setSelectedEntity] = useState({ isOpen: false, type: null, data: null });
   const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('Fetching live data...');
 
   // Real dynamic overview state from Backend API
@@ -205,6 +206,16 @@ const FinanceDashboardPage = () => {
   useEffect(() => {
     loadOverview();
   }, []);
+
+  // Delay chart mounting slightly after initial load to ensure container box dimensions are painted
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => setIsReady(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setIsReady(false);
+    }
+  }, [loading]);
 
   const openModal = (type, title, amount, extra = {}) => {
     setSelectedEntity({
@@ -709,27 +720,31 @@ const FinanceDashboardPage = () => {
             </div>
 
             <div className="h-72 w-full pt-2 min-w-0" style={{ minHeight: '280px' }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
-                <AreaChart data={revenueTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0}/>
-                    </linearGradient>
-                    <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  <Area type="monotone" dataKey="revenue" name="Gross Revenue (₹)" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
-                  <Area type="monotone" dataKey="earnings" name="Platform Earnings (₹)" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorEarnings)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {isReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240} debounce={50} initialDimension={{ width: 600, height: 280 }}>
+                  <AreaChart data={revenueTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0}/>
+                      </linearGradient>
+                      <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                    <Area type="monotone" dataKey="revenue" name="Gross Revenue (₹)" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
+                    <Area type="monotone" dataKey="earnings" name="Platform Earnings (₹)" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorEarnings)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartSkeleton />
+              )}
             </div>
           </div>
 
@@ -746,24 +761,28 @@ const FinanceDashboardPage = () => {
             </div>
 
             <div className="h-56 w-full relative flex items-center justify-center min-w-0" style={{ minHeight: '220px' }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
-                <PieChart>
-                  <Pie
-                    data={paymentSplitData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {paymentSplitData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
+              {isReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180} debounce={50} initialDimension={{ width: 300, height: 220 }}>
+                  <PieChart>
+                    <Pie
+                      data={paymentSplitData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {paymentSplitData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartSkeleton />
+              )}
             </div>
 
             {/* Legend Pills */}
@@ -798,17 +817,21 @@ const FinanceDashboardPage = () => {
             </div>
 
             <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
-                <BarChart data={refundTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
-                  <Bar dataKey="completed" name="Completed (₹)" fill="#10B981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="pending" name="Pending (₹)" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {isReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
+                  <BarChart data={refundTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
+                    <Bar dataKey="completed" name="Completed (₹)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="pending" name="Pending (₹)" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartSkeleton />
+              )}
             </div>
           </div>
 
@@ -825,18 +848,22 @@ const FinanceDashboardPage = () => {
             </div>
 
             <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
-                <ComposedChart data={bookingVsRevenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="left" stroke="#6366F1" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="right" orientation="right" stroke="#10B981" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
-                  <Bar yAxisId="left" dataKey="bookings" name="Bookings Count" fill="#6366F1" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="right" type="monotone" dataKey="revenue" name="Revenue (₹)" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
-                </ComposedChart>
-              </ResponsiveContainer>
+              {isReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
+                  <ComposedChart data={bookingVsRevenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                    <YAxis yAxisId="left" stroke="#6366F1" fontSize={11} tickLine={false} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#10B981" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
+                    <Bar yAxisId="left" dataKey="bookings" name="Bookings Count" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="revenue" name="Revenue (₹)" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartSkeleton />
+              )}
             </div>
           </div>
 
@@ -853,19 +880,23 @@ const FinanceDashboardPage = () => {
             </div>
 
             <div className="h-60 w-full min-w-0" style={{ minHeight: '240px' }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
-                <BarChart data={settlementStatusData} layout="vertical" margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
-                  <XAxis type="number" stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <YAxis dataKey="status" type="category" stroke="#9CA3AF" fontSize={10} tickLine={false} width={80} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="amount" name="Amount (₹)" radius={[0, 4, 4, 0]}>
-                    {settlementStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {isReady ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} debounce={50} initialDimension={{ width: 300, height: 240 }}>
+                  <BarChart data={settlementStatusData} layout="vertical" margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
+                    <XAxis type="number" stroke="#9CA3AF" fontSize={11} tickLine={false} tickFormatter={(v) => `₹${v}`} />
+                    <YAxis dataKey="status" type="category" stroke="#9CA3AF" fontSize={10} tickLine={false} width={80} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="amount" name="Amount (₹)" radius={[0, 4, 4, 0]}>
+                      {settlementStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartSkeleton />
+              )}
             </div>
           </div>
         </div>
