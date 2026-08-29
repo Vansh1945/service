@@ -15,29 +15,27 @@ import SectionHeader from '../../../components/ui/SectionHeader';
 import ImagePreviewModal from '../../../components/modals/ImagePreviewModal';
 import { formatDate, formatDateTime } from '../../../utils/format';
 import CDNImage from '../../../components/CDNImage';
+import Select from '../../../components/ui/Select';
+import Textarea from '../../../components/ui/Textarea';
+import StatusBadge from '../../../components/ui/StatusBadge';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
-// ── Status Badge ──────────────────────────────────────────────
-const StatusBadge = ({ status }) => {
-  const cfg = {
-    'Open': 'bg-amber-100 text-amber-700 border-amber-200',
-    'Under Review': 'bg-indigo-100 text-indigo-700 border-indigo-200',
-    'Waiting for Customer': 'bg-purple-100 text-purple-700 border-purple-200',
-    'Waiting for Provider': 'bg-blue-100 text-blue-700 border-blue-200',
-    'Escalated': 'bg-red-100 text-red-700 border-red-200',
-    'Resolution Proposed': 'bg-cyan-100 text-cyan-700 border-cyan-200',
-    'Resolved': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    'Rejected': 'bg-rose-100 text-rose-700 border-rose-200',
-    'Cancelled': 'bg-slate-100 text-slate-600 border-slate-200',
-    'Closed': 'bg-gray-100 text-gray-500 border-gray-200'
+const getCategoryLabel = (cat) => {
+  if (!cat) return '—';
+  const norm = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const labels = {
+    serviceissue: 'Service Issue',
+    paymentissue: 'Payment Issue',
+    refundrequest: 'Refund Request',
+    suggestion: 'Suggestion',
+    other: 'Other',
+    booking: 'Booking',
+    account: 'Account',
+    deliveryissue: 'Delivery Issue',
+    payment: 'Payment'
   };
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg[status] || cfg.Open}`}>
-      <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-current opacity-70" />
-      {status || 'Open'}
-    </span>
-  );
+  return labels[norm] || cat;
 };
 
 // ── UserType Badge ─────────────────────────────────────────────
@@ -806,23 +804,29 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
                 <h4 className="text-sm font-bold text-secondary mb-1">Update Status</h4>
                 <div className="flex flex-col gap-3">
-                  <select
+                  <Select
                     value={statusUpdate}
                     onChange={e => setStatusUpdate(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm text-secondary"
-                  >
-                    <option value="">Select Status</option>
-                    {['Open', 'In-Progress', 'resolved', 'Reopened', 'Closed', 'request_more_evidence', 'under_review'].map(s => (
-                      <option key={s} value={s}>{s === 'resolved' ? 'Resolved' : s.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: 'Select Status' },
+                      { value: 'open', label: 'Open' },
+                      { value: 'underreview', label: 'Under Review' },
+                      { value: 'waitingforcustomer', label: 'Waiting for Customer' },
+                      { value: 'waitingforprovider', label: 'Waiting for Provider' },
+                      { value: 'escalated', label: 'Escalated' },
+                      { value: 'resolutionproposed', label: 'Resolution Proposed' },
+                      { value: 'resolved', label: 'Resolved' },
+                      { value: 'rejected', label: 'Rejected' },
+                      { value: 'cancelled', label: 'Cancelled' },
+                      { value: 'closed', label: 'Closed' }
+                    ]}
+                  />
 
-                  <textarea
+                  <Textarea
                     value={resolutionNotes}
                     onChange={e => setResolutionNotes(e.target.value)}
                     placeholder="Admin Remarks (Required)"
-                    rows="3"
-                    className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-secondary"
+                    rows={3}
                   />
 
                   <button
@@ -1205,11 +1209,16 @@ const ComplaintsPage = () => {
 
   const statusOptions = [
     { value: '', label: 'All Status' },
-    { value: 'Open', label: 'Open' },
-    { value: 'In-Progress', label: 'In Progress' },
+    { value: 'open', label: 'Open' },
+    { value: 'underreview', label: 'Under Review' },
+    { value: 'waitingforcustomer', label: 'Waiting for Customer' },
+    { value: 'waitingforprovider', label: 'Waiting for Provider' },
+    { value: 'escalated', label: 'Escalated' },
+    { value: 'resolutionproposed', label: 'Resolution Proposed' },
     { value: 'resolved', label: 'Resolved' },
-    { value: 'Reopened', label: 'Reopened' },
-    { value: 'Closed', label: 'Closed' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'closed', label: 'Closed' },
   ];
 
   const userTypeOptions = [
@@ -1523,7 +1532,7 @@ const ComplaintsPage = () => {
                         </td>
                         <td className="px-4 py-3.5 max-w-[180px]">
                           <p className="text-sm font-semibold text-secondary truncate">{c.title || 'No Title'}</p>
-                          <p className="text-xs text-gray-450 truncate mt-0.5">{c.category || '—'}</p>
+                          <p className="text-xs text-gray-450 truncate mt-0.5">{getCategoryLabel(c.category)}</p>
                         </td>
                         <td className="px-4 py-3.5"><TypeBadge type={actualUserType} /></td>
                         <td className="px-4 py-3.5 max-w-[140px]">

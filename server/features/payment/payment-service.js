@@ -362,6 +362,33 @@ const executePaymentFailedOperations = async (payment, session) => {
   transaction.paymentStatus = 'failed';
   await transaction.save({ session });
 
+  // Rollback wallet deduction if part of a failed mixed payment
+  if (transaction.walletAmountDeducted > 0 && transaction.customer) {
+    try {
+      const User = mongoose.model('User');
+      const customer = await User.findById(transaction.customer).session(session);
+      if (customer) {
+        customer.walletBalance = (customer.walletBalance || 0) + transaction.walletAmountDeducted;
+        await customer.save(session ? { session } : {});
+
+        // Record wallet refund transaction in ledger
+        await Transaction.create([{
+          transactionId: `TXN-REFUND-WAL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+          booking: transaction.booking,
+          customer: transaction.customer,
+          amount: transaction.walletAmountDeducted,
+          paymentMethod: 'wallet',
+          paymentStatus: 'completed',
+          type: 'credit',
+          purpose: 'wallet_refund_on_failed_gateway_payment',
+          notes: `Wallet refund for failed mixed payment on order ${razorpayOrderId}`
+        }], session ? { session } : {});
+      }
+    } catch (refundErr) {
+      console.error("Error refunding wallet balance on failed payment:", refundErr);
+    }
+  }
+
   const booking = await Booking.findById(transaction.booking).session(session);
   if (booking) {
     booking.paymentStatus = 'failed';
@@ -369,7 +396,7 @@ const executePaymentFailedOperations = async (payment, session) => {
       booking.statusHistory.push({
         status: booking.status,
         timestamp: new Date(),
-        note: `Razorpay payment failed for order ${razorpayOrderId}`,
+        note: `Razorpay payment failed for order ${razorpayOrderId}. Wallet refund applied if applicable.`,
         updatedBy: 'system'
       });
     }

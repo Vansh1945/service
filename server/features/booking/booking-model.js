@@ -251,9 +251,15 @@ const bookingSchema = new Schema({
       type: Date,
       default: null
     },
+    checkoutSessionId: {
+      type: String,
+      default: null,
+      index: true
+    },
     idempotencyKey: {
       type: String,
-      default: null
+      default: null,
+      index: true
     }
   },
 
@@ -1362,6 +1368,9 @@ bookingSchema.methods.recalculateFinancials = async function (options = {}) {
     this.commissionRateSnapshot = defaultCommPercent;
   }
 };
+
+bookingSchema.index({ customer: 1, checkoutSessionId: 1 }, { sparse: true });
+bookingSchema.index({ customer: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

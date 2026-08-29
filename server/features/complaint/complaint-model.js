@@ -8,9 +8,27 @@ const statusHistorySchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  timestamp: {
+    type: Date,
+    default: Date.now
+  },
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  note: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  updatedBy: {
+    type: String,
+    enum: ['customer', 'provider', 'admin', 'system'],
+    default: 'system'
+  },
+  updatedById: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null
   }
 });
 
@@ -30,12 +48,12 @@ const complaintSchema = new mongoose.Schema(
     booking: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",
-      required: function () { return this.category === 'Service issue'; },
+      required: function () { return (this.category || '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'serviceissue'; },
     },
     provider: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Provider", // Assuming you have a Provider model
-      required: function () { return this.category === 'Service issue'; },
+      required: function () { return (this.category || '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'serviceissue'; },
     },
 
     // New Fields for Role-Based Complaints
@@ -67,7 +85,11 @@ const complaintSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ["serviceissue", "paymentissue", "deliveryissue", "suggestion", "payment", "booking", "account", "other"],
+      enum: ["serviceissue", "paymentissue", "refundrequest", "suggestion", "other", "booking", "account", "deliveryissue", "payment"],
+      set: function (v) {
+        if (!v) return v;
+        return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
     },
 
     // 5. File Storage (Cloudinary)
@@ -79,7 +101,7 @@ const complaintSchema = new mongoose.Schema(
     // Complaint Status
     status: {
       type: String,
-      enum: ["open", "underreview", "waitingforcustomer", "waitingforprovider", "escalated", "resolutionproposed", "resolved", "rejected", "cancelled", "closed"],
+      enum: ["open", "underreview", "waitingforcustomer", "waitingforprovider", "escalated", "resolutionproposed", "resolved", "rejected", "cancelled", "closed", "reopened"],
       default: "open",
       set: function (v) {
         if (!v) return v;
@@ -141,25 +163,42 @@ const complaintSchema = new mongoose.Schema(
   }
 );
 
-// Middleware to track status changes
+// Middleware to track status changes and initial creation
 complaintSchema.pre("save", function (next) {
-  if (this.isModified("status")) {
-    this.statusHistory.push({ status: this.status });
+  const now = new Date();
+  if (this.isNew) {
+    // Initial status history entry on creation
+    if (!this.statusHistory || this.statusHistory.length === 0) {
+      this.statusHistory = [{
+        status: this.status || 'open',
+        timestamp: now,
+        updatedAt: now,
+        note: this._statusNote || null,
+        updatedBy: this._statusUpdatedBy || (this.userType || 'customer'),
+        updatedById: this._statusUpdatedById || this.customer || this.userId || null
+      }];
+    }
+  } else if (this.isModified("status")) {
+    // Status transition history entry
+    const lastHistory = this.statusHistory && this.statusHistory.length > 0 ? this.statusHistory[this.statusHistory.length - 1] : null;
 
-    if (["Solved", "resolved"].includes(this.status)) {
-      this.resolvedAt = new Date();
-    } else if (!["Solved", "resolved"].includes(this.status)) {
-      this.resolvedAt = null;
-      this.resolvedBy = null;
+    if (!lastHistory || lastHistory.status !== this.status || (now.getTime() - new Date(lastHistory.timestamp || lastHistory.updatedAt || 0).getTime() > 1000)) {
+      this.statusHistory.push({
+        status: this.status,
+        timestamp: now,
+        updatedAt: now,
+        note: this._statusNote || null,
+        updatedBy: this._statusUpdatedBy || 'system',
+        updatedById: this._statusUpdatedById || null
+      });
     }
   }
-  next();
-});
 
-// Initialize status history on creation
-complaintSchema.pre("save", function (next) {
-  if (this.isNew) {
-    this.statusHistory.push({ status: this.status || 'Open' });
+  if (this.isModified("status")) {
+    const normS = (this.status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (["solved", "resolved"].includes(normS)) {
+      this.resolvedAt = this.resolvedAt || now;
+    }
   }
   next();
 });

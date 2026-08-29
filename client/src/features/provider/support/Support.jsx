@@ -16,6 +16,9 @@ import CDNImage from '../../../components/CDNImage';
 import ChatModal from '../../../components/chat/ChatModal';
 import LoadingSpinner from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
+import Select from '../../../components/ui/Select';
+import Input from '../../../components/ui/Input';
+import Textarea from '../../../components/ui/Textarea';
 
 import {
   COMPLAINT_STATUS_CONFIG,
@@ -24,7 +27,29 @@ import {
   getComplaintStatusStyle
 } from '../../../components/ui/StatusConfig';
 
-const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
+const SUPPORT_CATEGORIES = [
+  { value: 'payment', label: 'Payment' },
+  { value: 'booking', label: 'Booking' },
+  { value: 'account', label: 'Account' },
+  { value: 'other', label: 'Other' }
+];
+
+const getCategoryLabel = (cat) => {
+  if (!cat) return 'General';
+  const norm = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const labels = {
+    payment: 'Payment',
+    booking: 'Booking',
+    account: 'Account',
+    other: 'Other',
+    serviceissue: 'Service Issue',
+    paymentissue: 'Payment Issue',
+    refundrequest: 'Refund Request',
+    suggestion: 'Suggestion',
+    deliveryissue: 'Delivery Issue'
+  };
+  return labels[norm] || cat;
+};
 
 const ProviderSupportPage = () => {
   const { user, isAuthenticated, API_URL_IMAGE } = useAuth();
@@ -328,7 +353,7 @@ const ProviderSupportPage = () => {
                                  {COMPLAINT_STATUS_LABELS[complaint.status] || complaint.status}
                               </span>
                             </div>
-                            <p className="text-xs text-neutral-400">#{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}</p>
+                            <p className="text-xs text-neutral-400">#{complaint.complaintId || complaint._id.slice(-8)} • {getCategoryLabel(complaint.category)}</p>
                             <p className="text-[11px] text-neutral-400 mt-1">{formatDateTime(complaint.createdAt)}</p>
                           </div>
                         </div>
@@ -382,50 +407,64 @@ const ProviderSupportPage = () => {
             </div>
 
             <div className="overflow-y-auto flex-1 px-5 py-5 space-y-5">
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">Issue Type *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {SUPPORT_CATEGORIES.map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => { setFormData(prev => ({ ...prev, category: cat, bookingId: '' })); setFormErrors(prev => ({ ...prev, category: '' })); }}
-                      className={`text-xs font-semibold py-2.5 px-3 rounded-xl border transition-all ${formData.category === cat ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary/25' : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50'}`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-                {formErrors.category && <p className="text-xs text-danger mt-1.5">{formErrors.category}</p>}
-              </div>
+              {/* Category Dropdown */}
+              <Select
+                label="Issue Type *"
+                name="category"
+                value={formData.category}
+                onChange={e => {
+                  const val = e.target.value;
+                  setFormData(prev => ({ ...prev, category: val, bookingId: '' }));
+                  setFormErrors(prev => ({ ...prev, category: '' }));
+                }}
+                options={[
+                  { value: '', label: 'Select Issue Type' },
+                  ...SUPPORT_CATEGORIES.map(cat => ({
+                    value: cat.value,
+                    label: cat.label
+                  }))
+                ]}
+                error={formErrors.category}
+              />
 
               {/* Booking selection */}
-              {formData.category === 'Booking' && (
-                <div>
-                  <label className="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">Related Booking (Optional)</label>
-                  <select name="bookingId" value={formData.bookingId} onChange={handleInputChange} className="w-full px-4 py-2.5 text-sm border border-neutral-200 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none bg-white text-secondary">
-                    <option value="">Select a booking</option>
-                    {bookings.map(b => (
-                      <option key={b._id} value={b._id}>{b.services?.[0]?.service?.title || 'Service'} - {formatDate(b.date)}</option>
-                    ))}
-                  </select>
-                </div>
+              {formData.category === 'booking' && (
+                <Select
+                  label="Related Booking (Optional)"
+                  name="bookingId"
+                  value={formData.bookingId}
+                  onChange={handleInputChange}
+                  options={[
+                    { value: '', label: 'Select a booking' },
+                    ...bookings.map(b => ({
+                      value: b._id,
+                      label: `${b.services?.[0]?.service?.title || 'Service'} - ${formatDate(b.date)}`
+                    }))
+                  ]}
+                />
               )}
 
               {/* Title */}
-              <div>
-                <label className="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">Subject *</label>
-                <input type="text" name="title" value={formData.title} onChange={handleInputChange} placeholder="e.g., Payment delayed, App error" className="w-full px-4 py-2.5 text-sm border border-neutral-200 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-secondary" />
-                {formErrors.title && <p className="text-xs text-danger mt-1.5">{formErrors.title}</p>}
-              </div>
+              <Input
+                label="Subject *"
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleInputChange}
+                placeholder="e.g., Payment delayed, App error"
+                error={formErrors.title}
+              />
 
               {/* Description */}
-              <div>
-                <label className="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">Description *</label>
-                <textarea name="description" rows="4" value={formData.description} onChange={handleInputChange} placeholder="Please provide details about your issue" className="w-full px-4 py-2.5 text-sm border border-neutral-200 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-secondary resize-none" />
-                {formErrors.description && <p className="text-xs text-danger mt-1.5">{formErrors.description}</p>}
-              </div>
+              <Textarea
+                label="Description *"
+                name="description"
+                rows={4}
+                value={formData.description}
+                onChange={handleInputChange}
+                placeholder="Please provide details about your issue"
+                error={formErrors.description}
+              />
 
               {/* Images */}
               <div>

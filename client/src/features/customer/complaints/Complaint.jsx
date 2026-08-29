@@ -19,32 +19,39 @@ import CDNImage from '../../../components/CDNImage';
 import LoadingSpinner from '../../../components/ui/Loader';
 import Processing from '../../../components/ui-skeletons/Processing';
 import ChatModal from '../../../components/chat/ChatModal';
+import Select from '../../../components/ui/Select';
+import Input from '../../../components/ui/Input';
+import Textarea from '../../../components/ui/Textarea';
+import { getComplaintStatusStyle } from '../../../components/ui/StatusConfig';
 
-const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
+const COMPLAINT_CATEGORIES = [
+  { value: 'serviceissue', label: 'Service Issue', icon: '🛠' },
+  { value: 'paymentissue', label: 'Payment Issue', icon: '💳' },
+  { value: 'refundrequest', label: 'Refund Request', icon: '💰' },
+  { value: 'suggestion', label: 'Suggestion', icon: '💡' },
+  { value: 'other', label: 'Other', icon: '📞' }
+];
+
 const CATEGORY_MAP = {
+  serviceissue: { label: "Service Issue", icon: "🛠" },
+  paymentissue: { label: "Payment Issue", icon: "💳" },
+  refundrequest: { label: "Refund Request", icon: "💰" },
+  suggestion: { label: "Suggestion", icon: "💡" },
+  other: { label: "Other", icon: "📞" },
   "Service issue": { label: "Service Issue", icon: "🛠" },
-  "Payment issue": { label: "Payment", icon: "💳" },
-  "Refund request": { label: "Refund", icon: "💰" },
+  "Payment issue": { label: "Payment Issue", icon: "💳" },
+  "Refund request": { label: "Refund Request", icon: "💰" },
   "Suggestion": { label: "Suggestion", icon: "💡" },
   "Other": { label: "Other", icon: "📞" },
 };
 
-const getCustomStatusStyle = (status) => {
-  const norm = (status || '').toLowerCase();
-  if (['pending', 'open', 'reopened', 'submitted'].includes(norm)) {
-    return { bg: 'bg-warning/10', text: 'text-warning', border: 'border-warning/20', dot: 'bg-warning', label: 'Pending' };
-  }
-  if (['under_review', 'in-progress', 'under-review', 'provider_responded', 'admin_review'].includes(norm)) {
-    return { bg: 'bg-info/10', text: 'text-info', border: 'border-info/20', dot: 'bg-info', label: 'Under Review' };
-  }
-  if (['resolved', 'solved', 'refunded'].includes(norm)) {
-    return { bg: 'bg-success/10', text: 'text-success', border: 'border-success/20', dot: 'bg-success', label: 'Resolved' };
-  }
-  if (['rejected'].includes(norm)) {
-    return { bg: 'bg-danger/10', text: 'text-danger', border: 'border-danger/20', dot: 'bg-danger', label: 'Rejected' };
-  }
-  return { bg: 'bg-neutral-100', text: 'text-neutral-600', border: 'border-neutral-200', dot: 'bg-neutral-400', label: 'Closed' };
+const getCategoryInfo = (cat) => {
+  if (!cat) return { label: "Other", icon: "📞" };
+  const norm = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return CATEGORY_MAP[norm] || CATEGORY_MAP[cat] || { label: cat, icon: "📞" };
 };
+
+const getCustomStatusStyle = getComplaintStatusStyle;
 
 const getStatusEmoji = (status) => {
   const norm = (status || '').toLowerCase();
@@ -104,7 +111,7 @@ const ComplaintsPage = () => {
       setFormData(prev => ({
         ...prev,
         bookingId: location.state.prefilledBookingId,
-        category: 'Service issue'
+        category: 'serviceissue'
       }));
       setOpenNewComplaint(true);
       window.history.replaceState({}, document.title);
@@ -218,7 +225,7 @@ const ComplaintsPage = () => {
   const validateForm = () => {
     let valid = true;
     const newErrors = { bookingId: '', title: '', description: '', category: '', complaintType: '' };
-    if ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) {
+    if ((formData.category === 'serviceissue' || formData.category === 'refundrequest') && !formData.bookingId.trim()) {
       newErrors.bookingId = 'Booking ID is required for service or refund-related complaints';
       valid = false;
     }
@@ -227,7 +234,7 @@ const ComplaintsPage = () => {
     if (!formData.description.trim()) { newErrors.description = 'Description is required'; valid = false; }
     else if (formData.description.trim().length < 20) { newErrors.description = 'Minimum 20 characters'; valid = false; }
     if (!formData.category) { newErrors.category = 'Category is required'; valid = false; }
-    if (formData.category === 'Service issue' && !formData.complaintType) {
+    if (formData.category === 'serviceissue' && !formData.complaintType) {
       newErrors.complaintType = 'Please select a reason for complaint';
       valid = false;
     }
@@ -342,8 +349,8 @@ const ComplaintsPage = () => {
   const selectedBooking = bookings.find(b => b._id === formData.bookingId);
 
   const isFormDisabled =
-    ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) ||
-    (formData.category === 'Service issue' && !formData.complaintType) ||
+    ((formData.category === 'serviceissue' || formData.category === 'refundrequest') && !formData.bookingId.trim()) ||
+    (formData.category === 'serviceissue' && !formData.complaintType) ||
     !formData.title.trim() || !formData.description.trim() || !formData.category || submittingComplaint;
 
   return (
@@ -415,11 +422,13 @@ const ComplaintsPage = () => {
 
               // Priority / Category Badge mapping
               let catBadgeColor = "bg-neutral-100 text-neutral-600 border-neutral-200";
-              if (complaint.category === "Refund request" || complaint.category === "Payment issue") {
+              const catInfo = getCategoryInfo(complaint.category);
+              const normCat = (complaint.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (normCat === "refundrequest" || normCat === "paymentissue") {
                 catBadgeColor = "bg-danger/10 text-danger border-danger/20";
-              } else if (complaint.category === "Service issue") {
+              } else if (normCat === "serviceissue") {
                 catBadgeColor = "bg-primary/10 text-primary border-primary/20";
-              } else if (complaint.category === "Suggestion") {
+              } else if (normCat === "suggestion") {
                 catBadgeColor = "bg-success/10 text-success border-success/20";
               }
 
@@ -440,7 +449,7 @@ const ComplaintsPage = () => {
                       </span>
                       <div className="flex items-center gap-1">
                         <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border ${catBadgeColor}`}>
-                          {complaint.category}
+                          {catInfo.label}
                         </span>
                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${s.bg} ${s.text} ${s.border}`}>
                           {s.label}
@@ -532,7 +541,7 @@ const ComplaintsPage = () => {
                     <p className="text-xs text-gray-400">{formatDate(booking.date)}</p>
                   </div>
                   <button
-                    onClick={() => { setFormData(prev => ({ ...prev, bookingId: booking._id, category: 'Service issue' })); setOpenNewComplaint(true); }}
+                    onClick={() => { setFormData(prev => ({ ...prev, bookingId: booking._id, category: 'serviceissue' })); setOpenNewComplaint(true); }}
                     className="text-primary text-xs font-medium"
                   >
                     Get Help →
@@ -592,31 +601,28 @@ const ComplaintsPage = () => {
             </div>
 
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">Category *</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {COMPLAINT_CATEGORIES.map(cat => {
-                    const item = CATEGORY_MAP[cat] || { label: cat, icon: "❓" };
-                    const isSelected = formData.category === cat;
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => { setFormData(prev => ({ ...prev, category: cat, bookingId: '' })); setFormErrors(prev => ({ ...prev, category: '' })); }}
-                        className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${isSelected ? 'border-primary bg-primary/5 text-primary shadow-sm font-semibold scale-[1.02]' : 'border-neutral-200 hover:border-neutral-300 text-neutral-600'}`}
-                      >
-                        <span className="text-xl">{item.icon}</span>
-                        <span className="text-[10px] md:text-xs tracking-tight">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {formErrors.category && <p className="text-xs text-red-500 mt-1">{formErrors.category}</p>}
-              </div>
+              {/* Category Dropdown */}
+              <Select
+                label="Category *"
+                name="category"
+                value={formData.category}
+                onChange={e => {
+                  const val = e.target.value;
+                  setFormData(prev => ({ ...prev, category: val, bookingId: '' }));
+                  setFormErrors(prev => ({ ...prev, category: '' }));
+                }}
+                options={[
+                  { value: '', label: 'Select Category' },
+                  ...COMPLAINT_CATEGORIES.map(cat => ({
+                    value: cat.value,
+                    label: cat.label
+                  }))
+                ]}
+                error={formErrors.category}
+              />
 
               {/* Complaint Type */}
-              {formData.category === 'Service issue' && (
+              {formData.category === 'serviceissue' && (
                 <div>
                   <label className="block text-xs font-semibold text-secondary mb-1.5">Reason for Complaint *</label>
                   <select
@@ -635,7 +641,7 @@ const ComplaintsPage = () => {
               )}
 
               {/* Booking selection */}
-              {(formData.category === 'Service issue' || formData.category === 'Refund request') && (
+              {(formData.category === 'serviceissue' || formData.category === 'refundrequest') && (
                 <div>
                   <label className="block text-xs font-semibold text-secondary mb-1.5">Select Booking *</label>
                   {(() => {
@@ -758,20 +764,26 @@ const ComplaintsPage = () => {
               )}
 
               {/* Title */}
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">Title *</label>
-                <input type="text" name="title" value={formData.title} onChange={handleInputChange} placeholder="Brief summary of your issue" className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20" />
-                {formErrors.title && <p className="text-xs text-red-500 mt-1">{formErrors.title}</p>}
-              </div>
+              <Input
+                label="Title *"
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleInputChange}
+                placeholder="Brief summary of your issue"
+                error={formErrors.title}
+              />
 
               {/* Description */}
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">
-                  {formData.category === 'Refund request' ? 'Reason for Refund *' : 'Description *'}
-                </label>
-                <textarea name="description" rows="4" value={formData.description} onChange={handleInputChange} placeholder={formData.category === 'Refund request' ? "Please provide the reason for your refund request (min 20 chars)" : "Please provide detailed information about your issue (min 20 chars)"} className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 resize-none" />
-                {formErrors.description && <p className="text-xs text-red-500 mt-1">{formErrors.description}</p>}
-              </div>
+              <Textarea
+                label={formData.category === 'Refund request' ? 'Reason for Refund *' : 'Description *'}
+                name="description"
+                rows={4}
+                value={formData.description}
+                onChange={handleInputChange}
+                placeholder={formData.category === 'Refund request' ? "Please provide the reason for your refund request (min 20 chars)" : "Please provide detailed information about your issue (min 20 chars)"}
+                error={formErrors.description}
+              />
 
               {/* Images */}
               <div>

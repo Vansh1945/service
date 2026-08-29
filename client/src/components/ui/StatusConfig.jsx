@@ -40,6 +40,7 @@ export const COMPLAINT_STATUS_CONFIG = {
   'Cancelled': { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
   'Closed': { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
   'Reopened': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+  reopened: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
   submitted: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
   under_review: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
   provider_responded: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
@@ -80,6 +81,13 @@ export const getComplaintStatusStyle = (status) => {
 };
 
 export const COMPLAINT_STATUS_LABELS = {
+  'open': 'Open',
+  'underreview': 'Under Review',
+  'waitingforcustomer': 'Waiting for Customer',
+  'waitingforprovider': 'Waiting for Provider',
+  'escalated': 'Escalated',
+  'resolutionproposed': 'Resolution Proposed',
+  'reopened': 'Reopened',
   'Open': 'Open',
   'Under Review': 'Under Review',
   'In-Progress': 'In Review',
@@ -103,6 +111,13 @@ export const COMPLAINT_STATUS_LABELS = {
 };
 
 export const COMPLAINT_STATUS_DETAIL_LABELS = {
+  'open': '○ Open',
+  'underreview': '⏳ Under Review',
+  'waitingforcustomer': '⌛ Waiting for Customer',
+  'waitingforprovider': '⌛ Waiting for Provider',
+  'escalated': '⚠️ Escalated',
+  'resolutionproposed': '💡 Resolution Proposed',
+  'reopened': '↩ Reopened',
   'Open': '○ Open',
   'Under Review': '⏳ Under Review',
   'In-Progress': '⏳ Being Reviewed',

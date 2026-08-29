@@ -5,15 +5,48 @@ const mongoose = require('mongoose');
 const { notifyAdmins } = require('../notification/notification-helper');
 const { generateComplaintId } = require('../../shared/utils/generate-unique-id');
 
+const ACTIVE_COMPLAINT_STATUSES = [
+  'open',
+  'underreview',
+  'waitingforcustomer',
+  'waitingforprovider',
+  'escalated',
+  'resolutionproposed',
+  'reopened',
+  'Open',
+  'In-Progress',
+  'Reopened',
+  'submitted',
+  'under_review',
+  'provider_responded',
+  'admin_review'
+];
+
+const CANONICAL_STATUS_TRANSITIONS = {
+  open: ['underreview', 'waitingforcustomer', 'waitingforprovider', 'escalated', 'resolutionproposed', 'resolved', 'rejected', 'cancelled', 'closed', 'reopened'],
+  underreview: ['waitingforcustomer', 'waitingforprovider', 'escalated', 'resolutionproposed', 'resolved', 'rejected', 'closed', 'open', 'reopened'],
+  waitingforcustomer: ['underreview', 'waitingforprovider', 'escalated', 'resolutionproposed', 'resolved', 'rejected', 'closed', 'open', 'reopened'],
+  waitingforprovider: ['underreview', 'waitingforcustomer', 'escalated', 'resolutionproposed', 'resolved', 'rejected', 'closed', 'open', 'reopened'],
+  escalated: ['underreview', 'waitingforcustomer', 'waitingforprovider', 'resolutionproposed', 'resolved', 'rejected', 'closed', 'open', 'reopened'],
+  resolutionproposed: ['resolved', 'rejected', 'underreview', 'closed', 'open', 'reopened'],
+  resolved: ['open', 'underreview', 'closed', 'reopened'],
+  rejected: ['open', 'underreview', 'closed', 'reopened'],
+  cancelled: ['open', 'reopened'],
+  closed: ['open', 'underreview', 'reopened'],
+  reopened: ['underreview', 'waitingforcustomer', 'waitingforprovider', 'escalated', 'resolutionproposed', 'resolved', 'rejected', 'closed', 'open']
+};
+
 
 const checkAndAutoEscalate = async (complaintId) => {
   try {
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) return null;
 
-    const isPending = ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider'].includes(complaint.status);
+    const normStatus = (complaint.status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isPending = ['open', 'underreview', 'waitingforcustomer', 'waitingforprovider'].includes(normStatus) ||
+      ['open', 'underreview', 'waitingforcustomer', 'waitingforprovider'].includes(complaint.status);
     if (isPending && complaint.responseDeadline && new Date() > new Date(complaint.responseDeadline)) {
-      complaint.status = 'Escalated';
+      complaint.status = 'escalated';
       await complaint.save();
 
       if (complaint.booking) {
@@ -112,12 +145,13 @@ class ComplaintService {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-      const { title, description, category, bookingId, complaintType } = req.body;
+      const { title, description, category: rawCategory, bookingId, complaintType } = req.body;
+      const category = (rawCategory || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const userId = req.user._id;
       const userRole = req.user.role;
 
       // 1. Validation
-      if (!title || !description || !category) {
+      if (!title || !description || !rawCategory) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({ message: 'Please provide title, description, and category.' });
@@ -163,7 +197,7 @@ class ComplaintService {
           { userId: userId },
           { providerId: userId }
         ],
-        status: { $in: ['Open', 'In-Progress', 'Reopened', 'submitted', 'under_review', 'provider_responded', 'admin_review'] }
+        status: { $in: ACTIVE_COMPLAINT_STATUSES }
       }).session(session);
 
       if (activeCount >= 3) {
@@ -185,7 +219,7 @@ class ComplaintService {
         customer = userId;
       }
 
-      if (category === 'Service issue' && userRole === 'customer') {
+      if (category === 'serviceissue' && userRole === 'customer') {
         if (!bookingId) {
           await session.abortTransaction();
           session.endSession();
@@ -215,7 +249,7 @@ class ComplaintService {
         const bookingStatusNorm = (booking.status || '').toLowerCase().replace(/[^a-z]/g, '');
 
         // If cancel booking is requested, automatically route to BookingService.cancelBooking
-        if (category === 'Service issue' && userRole === 'customer' && complaintType === 'cancel_booking') {
+        if (category === 'serviceissue' && userRole === 'customer' && complaintType === 'cancel_booking') {
           const BookingService = require('../booking/booking-service');
           req.params.id = bookingId;
           await session.abortTransaction();
@@ -298,7 +332,7 @@ class ComplaintService {
         const existingComplaint = await Complaint.findOne({
           booking: bookingId,
           userType: userRole,
-          status: { $in: ['Open', 'In-Progress', 'Reopened', 'submitted', 'under_review', 'provider_responded', 'admin_review'] }
+          status: { $in: ACTIVE_COMPLAINT_STATUSES }
         }).session(session);
 
         if (existingComplaint) {
@@ -336,7 +370,7 @@ class ComplaintService {
 
       // Proof image requirements check
       const proofRequiredTypes = ['poor_quality', 'incomplete_work'];
-      if (category === 'Service issue' && userRole === 'customer' && complaintType && proofRequiredTypes.includes(complaintType)) {
+      if (category === 'serviceissue' && userRole === 'customer' && complaintType && proofRequiredTypes.includes(complaintType)) {
         if (images.length === 0) {
           await session.abortTransaction();
           session.endSession();
@@ -387,7 +421,7 @@ class ComplaintService {
       }
 
       // Set provider response deadline only for refund eligible service issues
-      const responseDeadline = (category === 'Service issue' && userRole === 'customer' && isRefundEligible)
+      const responseDeadline = (category === 'serviceissue' && userRole === 'customer' && isRefundEligible)
         ? new Date(Date.now() + providerSla * 60 * 60 * 1000)
         : null;
 
@@ -426,7 +460,7 @@ class ComplaintService {
         };
 
         // If customer raises service issue, mark as dispute ONLY if refund eligible
-        if (category === 'Service issue' && userRole === 'customer' && isRefundEligible) {
+        if (category === 'serviceissue' && userRole === 'customer' && isRefundEligible) {
           updateData.disputeRaised = true;
           updateData.disputeStatus = 'underreview';
 
@@ -494,7 +528,7 @@ class ComplaintService {
     try {
       // Auto-escalate any overdue complaints before fetching
       const overdueComplaints = await Complaint.find({
-        status: { $in: ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider'] },
+        status: { $in: ['open', 'underreview', 'waitingforcustomer', 'waitingforprovider', 'Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider'] },
         responseDeadline: { $ne: null, $lt: new Date() }
       }).select('_id').lean();
       for (const c of overdueComplaints) {
@@ -516,7 +550,10 @@ class ComplaintService {
       // Build the query conditions safely
       const conditions = [];
       if (status) conditions.push({ status });
-      if (category) conditions.push({ category });
+      if (category) {
+        const normCat = category.toLowerCase().replace(/[^a-z0-9]/g, '');
+        conditions.push({ category: { $in: [normCat, category] } });
+      }
       if (userType) conditions.push({ userType });
       if (providerId) conditions.push({ providerId });
 
@@ -577,7 +614,7 @@ class ComplaintService {
 
       const customerCount = await Complaint.countDocuments({ ...query, userType: 'customer' });
       const providerCount = await Complaint.countDocuments({ ...query, userType: 'provider' });
-      const pendingCount = await Complaint.countDocuments({ ...query, status: { $in: ['Open', 'Under Review', 'Waiting for Customer', 'Waiting for Provider', 'Escalated'] } });
+      const pendingCount = await Complaint.countDocuments({ ...query, status: { $in: ACTIVE_COMPLAINT_STATUSES } });
 
       // Extract all provider IDs to batch-count complaints in a single aggregate query
       const providerIds = complaints.map(c => c.provider?._id || c.provider).filter(Boolean);
@@ -744,52 +781,33 @@ class ComplaintService {
         return res.status(404).json({ success: false, message: 'Complaint not found' });
       }
 
-      let resolvedStatus = complaint.status || 'submitted';
-      if (['approve_refund', 'full_refund', 'partial_refund', 'platform_credit'].includes(decision)) {
-        resolvedStatus = 'refunded';
-      } else if (['reject_refund', 'reject'].includes(decision)) {
+      let resolvedStatus = 'resolved';
+      if (['approve_refund', 'full_refund', 'partial_refund', 'platform_credit', 'resolve', 'resolved', 'Solved', 're_service'].includes(decision)) {
+        resolvedStatus = 'resolved';
+      } else if (['reject_refund', 'reject', 'provider_warning', 'provider_penalty'].includes(decision)) {
         resolvedStatus = 'rejected';
       } else if (decision === 'request_more_evidence') {
-        resolvedStatus = 'request_more_evidence';
-      } else if (decision === 'close' || decision === 'Close' || decision === 'Closed') {
-        resolvedStatus = 'Closed';
+        resolvedStatus = 'waitingforcustomer';
+      } else if (['close', 'Close', 'Closed'].includes(decision)) {
+        resolvedStatus = 'closed';
       } else if (decision === 'escalate') {
-        resolvedStatus = 'admin_review';
-      } else if (decision === 'resolve' || decision === 'resolved' || decision === 'Solved') {
-        resolvedStatus = 'resolved';
+        resolvedStatus = 'escalated';
       } else if (decision === 'reply') {
-        // reply action maintains the current status
-        resolvedStatus = complaint.status;
+        resolvedStatus = (complaint.status || 'open').toLowerCase().replace(/[^a-z0-9]/g, '');
       } else {
         resolvedStatus = 'resolved';
       }
 
-      // --- STATE MACHINE VALIDATION ---
-      const VALID_TRANSITIONS = {
-        'submitted': ['under_review', 'Closed', 'request_more_evidence', 'admin_review', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
-        'under_review': ['provider_responded', 'admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
-        'provider_responded': ['admin_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
-        'admin_review': ['resolved', 'rejected', 'refunded', 'Closed', 'request_more_evidence', 'In-Progress', 'Open'],
-        'resolved': ['Reopened', 'Closed'],
-        'rejected': ['Reopened', 'Closed'],
-        'refunded': [],
-        'Closed': ['Reopened'],
-        'Reopened': ['under_review', 'Closed', 'request_more_evidence', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
-        'request_more_evidence': ['under_review', 'Closed', 'resolved', 'rejected', 'refunded', 'In-Progress', 'Open'],
-
-        'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
-        'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded', 'request_more_evidence'],
-        'Solved': ['Reopened', 'Closed'],
-      };
-
-      const currentStatus = complaint.status || 'submitted';
-      const allowed = VALID_TRANSITIONS[currentStatus] || [];
-      if (decision !== 'reply' && !allowed.includes(resolvedStatus) && currentStatus !== resolvedStatus) {
+      // --- CANONICAL STATE MACHINE VALIDATION ---
+      const currentNorm = (complaint.status || 'open').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetNorm = (resolvedStatus || 'resolved').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const allowed = CANONICAL_STATUS_TRANSITIONS[currentNorm] || Object.keys(CANONICAL_STATUS_TRANSITIONS);
+      if (decision !== 'reply' && !allowed.includes(targetNorm) && currentNorm !== targetNorm) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({
           success: false,
-          message: `Invalid status transition: cannot change status from '${currentStatus}' to '${resolvedStatus}' by resolving.`
+          message: `Invalid status transition: cannot change status from '${complaint.status}' to '${resolvedStatus}' by resolving.`
         });
       }
 
@@ -854,7 +872,7 @@ class ComplaintService {
 
       if (
         ['approve_refund', 'full_refund', 'partial_refund'].includes(decision) &&
-        complaint.category === 'Service issue' &&
+        (complaint.category || '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'serviceissue' &&
         complaintType &&
         qualityIssues.includes(complaintType)
       ) {
@@ -874,6 +892,9 @@ class ComplaintService {
         }
       }
 
+      complaint._statusNote = resolutionNotes;
+      complaint._statusUpdatedBy = 'admin';
+      complaint._statusUpdatedById = req.admin?._id || req.user?._id;
       complaint.status = resolvedStatus;
       complaint.resolvedBy = req.admin?._id || req.user?._id;
       complaint.resolutionNotes = resolutionNotes;
@@ -1382,9 +1403,10 @@ class ComplaintService {
   static async updateComplaintStatus(req, res) {
     try {
       const { status, resolutionNotes } = req.body;
-      const validStatuses = ["Open", "Under Review", "Waiting for Customer", "Waiting for Provider", "Escalated", "Resolution Proposed", "Resolved", "Rejected", "Cancelled", "Closed"];
+      const validNorms = Object.keys(CANONICAL_STATUS_TRANSITIONS);
+      const normStatus = (status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-      if (!status || !validStatuses.includes(status)) {
+      if (!status || !validNorms.includes(normStatus)) {
         return res.status(400).json({
           success: false,
           message: 'Valid status is required'
@@ -1400,32 +1422,22 @@ class ComplaintService {
       }
 
       // --- STATE MACHINE VALIDATION ---
-      const VALID_TRANSITIONS = {
-        'Open': ['Under Review', 'Waiting for Customer', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Cancelled', 'Closed'],
-        'Under Review': ['Waiting for Customer', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
-        'Waiting for Customer': ['Under Review', 'Waiting for Provider', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
-        'Waiting for Provider': ['Under Review', 'Waiting for Customer', 'Escalated', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
-        'Escalated': ['Under Review', 'Resolution Proposed', 'Resolved', 'Rejected', 'Closed'],
-        'Resolution Proposed': ['Resolved', 'Rejected', 'Under Review', 'Closed'],
-        'Resolved': ['Open', 'Closed'],
-        'Rejected': ['Open', 'Closed'],
-        'Cancelled': ['Open'],
-        'Closed': ['Open']
-      };
-
-      const currentStatus = complaint.status || 'Open';
-      const allowed = VALID_TRANSITIONS[currentStatus] || validStatuses;
-      if (!allowed.includes(status) && currentStatus !== status) {
+      const currentNorm = (complaint.status || 'open').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const allowed = CANONICAL_STATUS_TRANSITIONS[currentNorm] || validNorms;
+      if (!allowed.includes(normStatus) && currentNorm !== normStatus) {
         return res.status(400).json({
           success: false,
-          message: `Invalid status transition: cannot change status from '${currentStatus}' to '${status}'.`
+          message: `Invalid status transition: cannot change status from '${complaint.status}' to '${status}'.`
         });
       }
 
-      complaint.status = status;
+      complaint._statusNote = resolutionNotes || null;
+      complaint._statusUpdatedBy = req.admin ? 'admin' : 'system';
+      complaint._statusUpdatedById = req.admin?._id || req.user?._id;
+      complaint.status = normStatus;
       complaint.resolutionNotes = resolutionNotes;
       complaint.resolvedBy = req.admin?._id || req.user?._id;
-      if (['Resolved'].includes(status)) {
+      if (['resolved'].includes(normStatus)) {
         complaint.resolvedAt = new Date();
       }
 
@@ -1511,7 +1523,10 @@ class ComplaintService {
         });
       }
 
-      complaint.status = 'Reopened';
+      complaint._statusNote = reason;
+      complaint._statusUpdatedBy = isCustomerOwner ? 'customer' : (isProviderOwner ? 'provider' : 'system');
+      complaint._statusUpdatedById = req.user._id;
+      complaint.status = 'reopened';
 
       complaint.reopenHistory.push({ reason: reason });
 
@@ -1682,9 +1697,13 @@ class ComplaintService {
         }
       }
 
-      // Auto status transition: if provider replies, transition to Waiting for Customer
-      if (userRole === 'provider' && ['Open', 'Under Review', 'Waiting for Provider'].includes(complaint.status)) {
-        complaint.status = 'Waiting for Customer';
+      // Auto status transition: if provider replies, transition to waitingforcustomer
+      const normReplyStatus = (complaint.status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (userRole === 'provider' && ['open', 'underreview', 'waitingforprovider'].includes(normReplyStatus)) {
+        complaint._statusNote = 'Provider submitted reply';
+        complaint._statusUpdatedBy = 'provider';
+        complaint._statusUpdatedById = userId;
+        complaint.status = 'waitingforcustomer';
         await complaint.save();
       }
 
@@ -1819,36 +1838,36 @@ class ComplaintService {
       // Track seen statuses to deduplicate (same status within 60s = duplicate)
       const seenStatuses = new Map();
       complaint.statusHistory.forEach((h, index) => {
-        // Skip 'submitted' entries — already covered by "Complaint Created"
-        if (h.status === 'submitted') {
+        const normHStatus = (h.status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normHStatus === 'submitted') {
           return;
         }
 
-        // Deduplicate: skip if same status was already added within 60 seconds
-        const ts = new Date(h.updatedAt || h.timestamp).getTime();
-        const prevTs = seenStatuses.get(h.status);
+        const entryTime = h.timestamp || h.updatedAt;
+        const ts = new Date(entryTime || Date.now()).getTime();
+        const prevTs = seenStatuses.get(normHStatus);
         if (prevTs && Math.abs(ts - prevTs) < 60000) {
           return;
         }
-        seenStatuses.set(h.status, ts);
+        seenStatuses.set(normHStatus, ts);
 
-        const isFinalStatus = ['resolved', 'Solved', 'rejected', 'refunded', 'Closed'].includes(h.status);
+        const isFinalStatus = ['resolved', 'solved', 'rejected', 'refunded', 'closed'].includes(normHStatus);
         const isLatest = index === (complaint.statusHistory.length - 1);
 
-        let note = undefined;
-        let by = 'Support Team';
+        let note = h.note || undefined;
+        let by = h.updatedBy ? (h.updatedBy.charAt(0).toUpperCase() + h.updatedBy.slice(1)) : 'Support Team';
 
-        if ((isFinalStatus || isLatest) && (isLatest || h.status === complaint.status)) {
+        if (!note && (isFinalStatus || isLatest) && (isLatest || normHStatus === (complaint.status || '').toLowerCase().replace(/[^a-z0-9]/g, ''))) {
           note = complaint.resolutionNotes;
-          by = complaint.resolvedBy?.name || 'Support Admin';
-        } else if (h.status === 'Reopened' && complaint.reopenHistory?.length > 0) {
+          by = complaint.resolvedBy?.name || by;
+        } else if (!note && normHStatus === 'reopened' && complaint.reopenHistory?.length > 0) {
           note = complaint.reopenHistory[complaint.reopenHistory.length - 1]?.reason;
           by = complaint.userType === 'customer' ? 'Customer' : 'Provider';
         }
 
         resolutionHistory.push({
           event: `Status updated to ${h.status.replace(/_/g, ' ')}`,
-          timestamp: h.updatedAt || h.timestamp,
+          timestamp: entryTime,
           by: by,
           note: note
         });
@@ -2226,10 +2245,11 @@ class ComplaintService {
 
     let slaThreshold = configHours; // Admin Review SLA dynamically loaded from System Settings
     let stage = 'Escalated';
-    if (['Open', 'Under Review', 'Waiting for Provider'].includes(complaint.status)) {
+    const normStatus = (complaint.status || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (['open', 'underreview', 'waitingforprovider', 'inprogress'].includes(normStatus)) {
       slaThreshold = providerSlaHours; // Provider Response SLA
       stage = 'Waiting for Provider';
-    } else if (['Resolved'].includes(complaint.status)) {
+    } else if (['resolved', 'solved'].includes(normStatus)) {
       slaThreshold = refundSlaHours; // Refund Processing SLA
       stage = 'Resolved';
     }

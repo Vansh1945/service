@@ -496,10 +496,22 @@ const BookService = () => {
         }
 
         if (prefillBooking) {
+          const restoredDate = prefillBooking.date ? new Date(prefillBooking.date) : new Date();
+          const restoredTime = prefillBooking.time || (prefillBooking.date ? new Date(prefillBooking.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
+          const isEmergency = prefillBooking.isEmergency || prefillBooking.bookingType === 'emergency';
+          const isInstant = prefillBooking.isInstant || prefillBooking.bookingType === 'instant';
+
           setFormData(prev => ({
             ...prev,
+            date: restoredDate,
+            time: restoredTime,
             notes: prefillBooking.notes || '',
             quantity: prefillBooking.quantity || 1,
+            isEmergency: !!isEmergency,
+            isInstant: !!isInstant,
+            paymentMethod: prefillBooking.paymentMethod || 'online',
+            couponCode: prefillBooking.couponCode || prefillBooking.appliedCoupon?.code || '',
+            appliedCoupon: prefillBooking.appliedCoupon || null,
             useCustomAddress: true,
             customAddress: {
               ...prev.customAddress,
@@ -739,7 +751,9 @@ const BookService = () => {
         paymentMethod: formData.paymentMethod,
         subtotal: baseAmount,
         totalAmount: totalAmount,
-        isRebook: !!prefillBooking,
+        checkoutBookingId: location.state?.checkoutBookingId || null,
+        existingBookingId: location.state?.checkoutBookingId || null,
+        isRebook: !!prefillBooking && !location.state?.checkoutBookingId,
         originalBooking: prefillBooking ? prefillBooking._id : null,
         isFavoriteProviderBooking: bookingPreference === 'favorite' && !!selectedFavoriteProviderId,
         preferredProviderId: (bookingPreference === 'favorite' && selectedFavoriteProviderId) ? selectedFavoriteProviderId : null,

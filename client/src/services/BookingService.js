@@ -21,9 +21,9 @@ export const getUserBookings = () => {
     return axiosInstance.get("/booking/user");
 };
 
-export const getCustomerBookings = (params) => {
+export const getCustomerBookings = (params, config = {}) => {
     const queryString = params ? params.toString() : '';
-    return axiosInstance.get(`/booking/customer?${queryString}`);
+    return axiosInstance.get(`/booking/customer?${queryString}`, config);
 };
 
 export const updateBookingPayment = (id, data) => {

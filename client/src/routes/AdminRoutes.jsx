@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
 import LoadingSpinner from "../components/ui/Loader";
@@ -66,9 +66,10 @@ const AdminRoutes = () => {
                             <Route path="customers" element={<AdminCustomersView />} />
                             <Route path="bookings" element={<AdminBookingsView />} />
                             <Route path="commission" element={<AdminCommissionPage />} />
-                            <Route path="commision" element={<AdminCommissionPage />} />
+                            <Route path="commision" element={<Navigate to="/admin/commission" replace />} />
                             <Route path="coupons" element={<AdminCoupons />} />
                             <Route path="surge" element={<SurgeManagement />} />
+                            <Route path="surge-management" element={<Navigate to="/admin/surge" replace />} />
                             <Route path="add-questions" element={<AdminQuestions />} />
                             <Route path="add-services" element={<AdminServices />} />
                             <Route path="complaints" element={<AdminComplaints />} />

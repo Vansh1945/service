@@ -828,6 +828,8 @@ class BookingService {
   static async createBooking(req, res) {
     try {
       const targetBookingId = req.body.bookingId || req.body.checkoutBookingId;
+      const checkoutSessionId = req.body.checkoutSessionId || req.body.checkoutBookingId;
+      const idempotencyKey = req.body.idempotencyKey || req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
       const {
         serviceId,
         date,
@@ -1136,9 +1138,28 @@ class BookingService {
           totalAmount
         } = priceDetails;
 
-        // CHECKOUT EDIT: Check if an existing checkout booking ID is passed or an unconfirmed checkout draft exists for this customer & service
+        // CHECKOUT EDIT & IDEMPOTENCY: Check if an existing checkout session / idempotency key / booking ID exists
         let existingDraft = null;
-        if (targetBookingId && mongoose.Types.ObjectId.isValid(targetBookingId)) {
+        if (idempotencyKey) {
+          const draftQuery = Booking.findOne({
+            customer: req.user._id,
+            idempotencyKey: idempotencyKey
+          });
+          existingDraft = session ? await draftQuery.session(session) : await draftQuery;
+        }
+
+        if (!existingDraft && checkoutSessionId) {
+          const draftQuery = Booking.findOne({
+            customer: req.user._id,
+            $or: [
+              { checkoutSessionId: checkoutSessionId },
+              { _id: mongoose.Types.ObjectId.isValid(checkoutSessionId) ? checkoutSessionId : null }
+            ]
+          });
+          existingDraft = session ? await draftQuery.session(session) : await draftQuery;
+        }
+
+        if (!existingDraft && targetBookingId && mongoose.Types.ObjectId.isValid(targetBookingId)) {
           const draftQuery = Booking.findOne({
             _id: targetBookingId,
             customer: req.user._id
@@ -1146,7 +1167,7 @@ class BookingService {
           existingDraft = session ? await draftQuery.session(session) : await draftQuery;
         }
 
-        // Fallback safety net: If targetBookingId was not passed or found, find any active unconfirmed checkout draft for this customer & service
+        // Fallback safety net: If targetBookingId/session was not passed or found, find any active unconfirmed checkout draft for this customer & service
         if (!existingDraft) {
           const draftQuery = Booking.findOne({
             customer: req.user._id,
@@ -1160,8 +1181,17 @@ class BookingService {
 
         if (existingDraft) {
           if (existingDraft.confirmedBooking === true || existingDraft.paymentStatus === 'paid' || existingDraft.paymentStatus === 'escrowhold' || ['cancelled', 'completed', 'workstarted', 'ontheway', 'arrived'].includes(existingDraft.status)) {
-            throw new Error('Cannot modify booking: Checkout already completed or booking is in active workflow.');
+            return {
+              isAlreadyConfirmed: true,
+              isUpdated: false,
+              data: existingDraft.toObject(),
+              bookingId: existingDraft.bookingId || existingDraft._id,
+              _id: existingDraft._id
+            };
           }
+
+          if (checkoutSessionId) existingDraft.checkoutSessionId = checkoutSessionId;
+          if (idempotencyKey) existingDraft.idempotencyKey = idempotencyKey;
 
           existingDraft.services = [{
             service: serviceId,
@@ -1247,6 +1277,8 @@ class BookingService {
         const booking = new Booking({
           bookingId: generateBookingId(),
           customer: req.user._id,
+          checkoutSessionId: checkoutSessionId || undefined,
+          idempotencyKey: idempotencyKey || undefined,
           services: [{
             service: serviceId,
             quantity,
@@ -1356,6 +1388,35 @@ class BookingService {
 
     } catch (error) {
       console.error('Error creating booking:', error);
+
+      if (error.code === 11000 && (req.body?.idempotencyKey || req.body?.checkoutSessionId || req.body?.checkoutBookingId)) {
+        try {
+          const key = req.body?.idempotencyKey;
+          const sessionId = req.body?.checkoutSessionId || req.body?.checkoutBookingId;
+          const existing = await Booking.findOne({
+            customer: req.user._id,
+            $or: [
+              { idempotencyKey: key || null },
+              { checkoutSessionId: sessionId || null }
+            ]
+          }).lean();
+
+          if (existing) {
+            return res.status(200).json({
+              success: true,
+              message: 'Existing booking retrieved via DB idempotency.',
+              data: enrichBookingData(existing),
+              bookingId: existing.bookingId || existing._id,
+              _id: existing._id,
+              isDuplicate: true,
+              isIdempotent: true
+            });
+          }
+        } catch (idempErr) {
+          console.error('Error recovering idempotent booking:', idempErr);
+        }
+      }
+
       const isDomainError = error.message && (
         error.message.includes('outside our active service') ||
         error.message.includes('unavailable') ||
@@ -1726,10 +1787,16 @@ class BookingService {
         }
       }
 
-      // Search: match by bookingId (always) or service title (via populate below)
+      // Search: match by bookingId, service ID, or service title
       if (searchTerm) {
+        const Service = mongoose.model('Service');
+        const matchingServices = await Service.find({ title: { $regex: searchTerm, $options: 'i' } }).select('_id').lean();
+        const matchingServiceIds = matchingServices.map(s => s._id);
+
         query.$or = [
-          { bookingId: { $regex: searchTerm, $options: 'i' } }
+          { bookingId: { $regex: searchTerm, $options: 'i' } },
+          { 'services.service': { $in: matchingServiceIds } },
+          { 'services.serviceDetails.title': { $regex: searchTerm, $options: 'i' } }
         ];
       }
 
@@ -1743,8 +1810,7 @@ class BookingService {
             populate: {
               path: 'category',
               select: 'name'
-            },
-            match: searchTerm ? { title: { $regex: searchTerm, $options: 'i' } } : {}
+            }
           })
           .populate({
             path: 'provider',
@@ -1757,13 +1823,7 @@ class BookingService {
           .lean()
       ]);
 
-      // Keep bookings where service title matched OR bookingId matched the search term
-      const filteredBookings = bookings.filter(b => {
-        const serviceMatch = b.services && b.services.length > 0 && b.services[0].service;
-        const bookingIdMatch = searchTerm && b.bookingId &&
-          new RegExp(searchTerm, 'i').test(b.bookingId);
-        return serviceMatch || bookingIdMatch;
-      });
+      const filteredBookings = bookings;
 
       const bookingIds = filteredBookings.map(b => b._id);
 
