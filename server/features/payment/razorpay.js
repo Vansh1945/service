@@ -156,8 +156,11 @@ razorpay.createRefundWithIdempotency = async function (paymentId, payload, idemp
       });
       return res.data;
     } catch (err) {
-      console.error('[Razorpay.createRefundWithIdempotency] API Error:', err.message);
-      if (err.response?.data) return err.response.data;
+      console.error('[Razorpay.createRefundWithIdempotency] API Error:', err.response?.data || err.message);
+      if (err.response?.data?.error) {
+        const rzpMsg = err.response.data.error.description || err.response.data.error.code || 'Razorpay refund error';
+        throw new Error(`Razorpay Refund API Error: ${rzpMsg}`);
+      }
       throw err;
     }
   }

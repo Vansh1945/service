@@ -905,10 +905,32 @@ const getAllTransactions = async (req, res, next) => {
       .limit(parseInt(limit))
       .lean();
 
-    const total = await Transaction.countDocuments(filter);
+    // Deduplicate: If multiple transactions exist for the exact same booking, prioritize the completed/success transaction with Razorpay ID
+    const uniqueMap = new Map();
+    for (const t of transactions) {
+      const bKey = t.booking?._id?.toString() || t.bookingId || t._id.toString();
+      const existing = uniqueMap.get(bKey);
+      
+      if (!existing) {
+        uniqueMap.set(bKey, t);
+      } else {
+        const isCurrentSuccess = ['completed', 'paid', 'success', 'captured'].includes(t.paymentStatus);
+        const isExistingSuccess = ['completed', 'paid', 'success', 'captured'].includes(existing.paymentStatus);
+        
+        if (isCurrentSuccess && !isExistingSuccess) {
+          uniqueMap.set(bKey, t);
+        } else if (isCurrentSuccess && isExistingSuccess) {
+          // If both are completed, pick the one with online payment ID or more recent timestamp
+          if ((t.razorpayPaymentId || t.paymentMethod === 'online') && (!existing.razorpayPaymentId && existing.paymentMethod !== 'online')) {
+            uniqueMap.set(bKey, t);
+          }
+        }
+      }
+    }
+    const deduplicatedTransactions = Array.from(uniqueMap.values());
 
     const { buildCanonicalFinancialStatus } = require('./financial-status-service');
-    const enrichedTransactions = transactions.map(t => {
+    const enrichedTransactions = deduplicatedTransactions.map(t => {
       const canonical = buildCanonicalFinancialStatus(t, t.booking);
       return {
         ...t,
@@ -928,9 +950,9 @@ const getAllTransactions = async (req, res, next) => {
     res.status(200).json({
       success: true,
       count: enrichedTransactions.length,
-      total,
+      total: deduplicatedTransactions.length,
       page: parseInt(page),
-      pages: Math.ceil(total / limit),
+      pages: Math.ceil(deduplicatedTransactions.length / limit) || 1,
       data: enrichedTransactions
     });
   } catch (error) {

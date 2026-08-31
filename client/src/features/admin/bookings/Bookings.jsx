@@ -11,6 +11,7 @@ import { getStatusColor, normalizeStatus } from '../../../utils/status';
 import axiosInstance from '../../../api/axiosInstance';
 import AdminSearchBar from '../../../components/AdminSearchBar';
 import StatusBadge from '../../../components/ui/StatusBadge';
+import { getSystemSetting } from '../../../services/SystemService';
 
 
 
@@ -465,6 +466,19 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
     const [reasonText, setReasonText] = useState('');
     const [complaintId, setComplaintId] = useState('');
     const [adminNotes, setAdminNotes] = useState('');
+    const [refundDestination, setRefundDestination] = useState('wallet');
+    const [forceWalletOnly, setForceWalletOnly] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            getSystemSetting()
+                .then(res => {
+                    const isForceWallet = Boolean(res.data?.data?.walletSettings?.refundToWalletOnly);
+                    setForceWalletOnly(isForceWallet);
+                })
+                .catch(err => console.warn('[CancelBookingModal] Error fetching system data:', err));
+        }
+    }, [isOpen]);
 
     const directBookingComplaint = useMemo(() => {
         if (!complaints || !booking) return null;
@@ -494,12 +508,23 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
     const platformFee = booking.platformFee || 0;
     const refundableAmount = ['cash'].includes(booking.paymentMethod) ? 0 : Math.max(0, totalPaid - platformFee);
 
+    const walletPaid = booking.walletUsed || (booking.paymentMethod === 'wallet' ? totalPaid : 0);
+    const onlinePaid = booking.onlinePaid || (booking.paymentMethod === 'online' ? totalPaid : Math.max(0, totalPaid - walletPaid));
+    const isMixed = booking.paymentMethod === 'mixed' || (walletPaid > 0 && onlinePaid > 0);
+    const isPureWallet = booking.paymentMethod === 'wallet' || onlinePaid <= 0;
+    const isPureOnline = (booking.paymentMethod === 'online' || onlinePaid > 0) && !isMixed && !isPureWallet;
+
+    const canChooseOriginalPayment = isPureOnline && !forceWalletOnly;
+    const finalDestination = canChooseOriginalPayment ? refundDestination : 'wallet';
+
     const handleConfirm = () => {
         onConfirm({
             reasonType,
             reasonText,
             complaintId,
-            adminNotes
+            adminNotes,
+            refundDestination: finalDestination,
+            customerChoice: finalDestination
         });
     };
 
@@ -539,6 +564,56 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                         />
                     </div>
+
+                    {refundableAmount > 0 && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Select Refund Destination</label>
+                            
+                            {!canChooseOriginalPayment ? (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
+                                    <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                                        ⚡ Customer Wallet (Instant Credit)
+                                    </p>
+                                    <p className="text-[11px] text-amber-800 leading-normal">
+                                        {forceWalletOnly && isPureOnline
+                                            ? "System Setting 'Force Refund to Wallet Only' is active. Razorpay gateway refund is disabled; refund will be credited to Customer Wallet."
+                                            : isMixed
+                                            ? "Mixed Payment (Wallet + Online) booking -> Entire refund will be credited to Customer Wallet."
+                                            : "Wallet Payment booking -> Refund will be credited to Customer Wallet."
+                                        }
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRefundDestination('wallet')}
+                                        className={`p-2.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                                            refundDestination === 'wallet'
+                                                ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold ring-1 ring-emerald-600'
+                                                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <CreditCard className="w-4 h-4 text-emerald-600" />
+                                        Customer Wallet
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRefundDestination('original_payment')}
+                                        className={`p-2.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                                            refundDestination === 'original_payment'
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-800 font-bold ring-1 ring-indigo-600'
+                                                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <CreditCard className="w-4 h-4 text-indigo-600" />
+                                        Original Gateway (Razorpay)
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Link Complaint (Optional)</label>
                         <select
@@ -596,8 +671,18 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                         <div className="flex justify-between"><span>Total Paid:</span><PriceDisplay amount={totalPaid} type="default" /></div>
                         <div className="flex justify-between"><span>Platform Fee Retained:</span><PriceDisplay amount={platformFee} type="red-semibold" /></div>
                         <div className="flex justify-between border-t border-gray-200 pt-1 font-bold"><span>Refundable Amount:</span><PriceDisplay amount={refundableAmount} type="teal" /></div>
-                        <div className="flex justify-between pt-1"><span>Refund Destination:</span><span className="font-bold text-teal-700">Customer Wallet</span></div>
-                        <div className="flex justify-between"><span>Expected Refund Method:</span><span className="font-semibold text-teal-700">Wallet Transfer</span></div>
+                        <div className="flex justify-between pt-1">
+                            <span>Refund Destination:</span>
+                            <span className="font-bold text-teal-700">
+                                {refundDestination === 'original_payment' ? 'Original Payment Method' : 'Customer Wallet'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>Expected Refund Method:</span>
+                            <span className="font-semibold text-teal-700">
+                                {refundDestination === 'original_payment' ? 'Razorpay Gateway Refund' : 'Wallet Credit'}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div className="px-5 py-3 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50">

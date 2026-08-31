@@ -319,7 +319,7 @@ const bookingSchema = new Schema({
   },
   refundDestination: {
     type: String,
-    enum: ['wallet', 'none'],
+    enum: ['original_payment', 'wallet', 'hybrid', 'none'],
     default: 'none'
   },
   refundAmount: {

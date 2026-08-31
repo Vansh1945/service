@@ -81,7 +81,7 @@ class AdminService {
 
         try {
             const { bookingId } = req.params;
-            const { reasonType, reasonText, complaintId, adminNotes } = req.body;
+            const { reasonType, reasonText, complaintId, adminNotes, refundDestination, customerChoice } = req.body;
 
             if (!reasonType || !reasonText) {
                 throw new Error('Cancellation reason type and text are required');
@@ -96,8 +96,8 @@ class AdminService {
             if (booking.status === 'completed') {
                 throw new Error('Cannot cancel completed booking.');
             }
-            if (booking.status === 'cancelled' || booking.paymentStatus === 'refunded') {
-                throw new Error('Booking is already cancelled or refunded.');
+            if (booking.status === 'cancelled') {
+                throw new Error('Booking is already cancelled.');
             }
             if (booking.disputeStatus === 'resolved' || booking.status === 'dispute_closed') {
                 throw new Error('Cannot cancel booking with resolved dispute.');
@@ -112,12 +112,14 @@ class AdminService {
             const nonRefundableAmount = platformFeeRetained;
             const refundableAmount = ['cash', 'cod'].includes(booking.paymentMethod) ? 0 : Math.max(0, booking.totalAmount - platformFeeRetained);
 
+            const chosenDestination = refundDestination || customerChoice || 'wallet';
+
             // Update booking cancellation details
             booking.status = 'cancelled';
             booking.cancelledBy = 'admin';
             booking.cancellationReason = `${reasonType}: ${reasonText}`;
             booking.cancelledAt = new Date();
-            booking.refundDestination = refundableAmount > 0 ? 'wallet' : 'none';
+            booking.refundDestination = refundableAmount > 0 ? chosenDestination : 'none';
             booking.refundAmount = refundableAmount;
             booking.nonRefundableAmount = nonRefundableAmount;
             booking.platformFeeRetained = platformFeeRetained;
@@ -133,38 +135,62 @@ class AdminService {
                 timestamp: new Date()
             });
 
-            // Wallet Update (if refund is required)
+            // Process Refund & Create Canonical Refund Record via RefundEngineService
             if (refundableAmount > 0) {
-                if (!customer.wallet) {
-                    customer.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date(), walletTransactions: [] };
-                }
-                customer.wallet.availableBalance += refundableAmount;
-                customer.wallet.totalRefunded += refundableAmount;
-                customer.wallet.walletTransactions.push({
-                    type: 'credit',
-                    amount: refundableAmount,
-                    reason: `Booking Refund (Admin Cancellation): ${reasonText}`,
-                    source: 'booking_refund',
-                    status: 'success',
-                    booking: booking._id
-                });
-                customer.wallet.lastUpdated = new Date();
-                await customer.save({ session });
+                const RefundEngineService = require('../payment/refund-engine-service');
+                try {
+                    const refundResult = await RefundEngineService.processRefundRequest({
+                        bookingId: booking._id,
+                        refundSource: 'admin_cancellation',
+                        refundDestination: chosenDestination,
+                        customerChoice: chosenDestination,
+                        refundAmount: refundableAmount,
+                        refundReason: `Admin Cancellation: ${reasonText}`,
+                        cancellationReason: `${reasonType}: ${reasonText}`,
+                        requestedBy: req.user?._id || req.user?.id || customer._id,
+                        approvedBy: req.user?._id || req.user?.id || customer._id,
+                        complaintId: complaintId || null,
+                        isAutoTrigger: true,
+                        session: session,
+                    });
+                    if (refundResult?.refund) {
+                        booking.refundReference = refundResult.refund.refundId;
+                        if (!booking.cancellationProgress) booking.cancellationProgress = {};
+                        booking.cancellationProgress.refundId = refundResult.refund.refundId;
+                    }
+                } catch (refundErr) {
+                    console.error('[Admin Cancel Refund Engine Error]:', refundErr);
+                    // Fallback to manual wallet update if RefundEngine fails unexpectedly
+                    if (!customer.wallet) {
+                        customer.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date(), walletTransactions: [] };
+                    }
+                    customer.wallet.availableBalance += refundableAmount;
+                    customer.wallet.totalRefunded += refundableAmount;
+                    customer.wallet.walletTransactions.push({
+                        type: 'credit',
+                        amount: refundableAmount,
+                        reason: `Booking Refund (Admin Cancellation): ${reasonText}`,
+                        source: 'booking_refund',
+                        status: 'success',
+                        booking: booking._id
+                    });
+                    customer.wallet.lastUpdated = new Date();
+                    await customer.save({ session });
 
-                // Create Transaction record for the refund
-                const refundTransaction = new Transaction({
-                    booking: booking._id,
-                    bookingId: booking.bookingId || booking._id.toString(),
-                    user: customer._id,
-                    amount: refundableAmount,
-                    paymentStatus: 'completed',
-                    paymentMethod: 'wallet',
-                    type: 'refund',
-                    entryType: 'debit',
-                    description: `Admin cancelled booking - Refund to wallet. Reason: ${reasonText}`,
-                    refundReason: reasonText
-                });
-                await refundTransaction.save({ session });
+                    const refundTransaction = new Transaction({
+                        booking: booking._id,
+                        bookingId: booking.bookingId || booking._id.toString(),
+                        user: customer._id,
+                        amount: refundableAmount,
+                        paymentStatus: 'completed',
+                        paymentMethod: 'wallet',
+                        type: 'refund',
+                        entryType: 'debit',
+                        description: `Admin cancelled booking - Refund to wallet. Reason: ${reasonText}`,
+                        refundReason: reasonText
+                    });
+                    await refundTransaction.save({ session });
+                }
             }
 
             // Create Transaction record for the Platform Fee Retained
