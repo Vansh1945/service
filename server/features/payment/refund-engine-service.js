@@ -154,16 +154,16 @@ class RefundEngineService {
       throw new Error(`Customer details missing on booking ${bookingId}`);
     }
 
-    let pendingRefundQuery = Refund.findOne({
+    let activeRefundQuery = Refund.findOne({
       bookingId: booking._id,
-      refundStatus: 'pending',
-    });
-    if (session) pendingRefundQuery = pendingRefundQuery.session(session);
-    const existingPendingRefund = await pendingRefundQuery;
+      refundStatus: { $in: ['draft', 'pending', 'approved', 'processing', 'completed'] },
+    }).sort({ createdAt: -1 });
+    if (session) activeRefundQuery = activeRefundQuery.session(session);
+    const existingActiveRefund = await activeRefundQuery;
 
     // 2. Idempotency & Cumulative Over-Refund Check using Canonical Scoped Calculation
     const { totalPaid, alreadyRefunded, remainingRefundable, remainingRefundablePaise } =
-      await this.calculateRemainingRefundable(booking, existingPendingRefund?._id, session);
+      await this.calculateRemainingRefundable(booking, existingActiveRefund?._id, session);
 
     if (Math.round(alreadyRefunded * 100) >= Math.round(totalPaid * 100) && totalPaid > 0) {
       console.warn(`Booking ${booking._id} already fully refunded (₹${alreadyRefunded} refunded of ₹${totalPaid})`);
@@ -173,19 +173,24 @@ class RefundEngineService {
       return {
         success: true,
         alreadyProcessed: true,
-        refund: priorRefund || existingPendingRefund,
+        refund: priorRefund || existingActiveRefund,
         message: 'Refund has already been fully completed for this booking.',
       };
     }
 
-    if (existingPendingRefund && !approvedBy) {
+    if (existingActiveRefund && existingActiveRefund.refundStatus === 'pending' && !approvedBy) {
       console.warn(`Refund request already pending approval for booking ${booking._id}`);
       return {
         success: true,
         alreadyPending: true,
-        refund: existingPendingRefund,
+        refund: existingActiveRefund,
         message: 'Refund request is already pending admin approval.',
       };
+    }
+
+    if (existingActiveRefund && existingActiveRefund.refundStatus === 'processing') {
+      console.warn(`Refund request currently processing for booking ${booking._id}`);
+      return await this.executeRefundPayout(existingActiveRefund, booking, await this.getRefundSettings(), ip, session);
     }
 
     // 3. Determine Original Payment Breakdown & Refund Amount
@@ -209,79 +214,68 @@ class RefundEngineService {
       throw new Error(`Refund amount (₹${calculatedRefundAmount}) exceeds maximum refundable balance (₹${remainingRefundable})`);
     }
 
-    // Proportional breakdown for Mixed / Wallet / Online Payments
-    const walletPaid = booking.walletUsed || (booking.paymentMethod === 'wallet' ? totalPaid : 0);
-    const onlinePaid = booking.onlinePaid || (booking.paymentMethod === 'online' ? totalPaid : Math.max(0, totalPaid - walletPaid));
-    const ratio = totalPaid > 0 ? (calculatedRefundAmount / totalPaid) : 1;
-
-    let walletRefundAmount = Math.round((walletPaid * ratio) * 100) / 100;
-    let gatewayRefundAmount = Math.round((onlinePaid * ratio) * 100) / 100;
-
-    // Adjust any rounding residue to match exact calculatedRefundAmount
-    const totalSplit = walletRefundAmount + gatewayRefundAmount;
-    if (totalSplit !== calculatedRefundAmount && calculatedRefundAmount > 0) {
-      if (gatewayRefundAmount > 0) {
-        gatewayRefundAmount = calculatedRefundAmount - walletRefundAmount;
-      } else {
-        walletRefundAmount = calculatedRefundAmount;
-      }
-    }
-
     // 4. Load System Settings & Evaluate Business Rules & Destination Choice
     const settings = await this.getRefundSettings();
 
-    // Determine explicitly declared customer choice
+    // Determine explicitly declared customer/admin choice
     let customerChoice = userChoiceParam || (requestedDestination === 'wallet' ? 'wallet' : (requestedDestination === 'original_payment' ? 'original_payment' : 'none'));
-
     let destination = requestedDestination || customerChoice;
+
+    const walletPaid = booking.walletUsed || (booking.paymentMethod === 'wallet' ? totalPaid : 0);
+    const onlinePaid = booking.onlinePaid || (booking.paymentMethod === 'online' ? totalPaid : Math.max(0, totalPaid - walletPaid));
 
     const isMixed = booking.paymentMethod === 'mixed' || (walletPaid > 0 && onlinePaid > 0);
     const isPureWallet = booking.paymentMethod === 'wallet' || onlinePaid <= 0;
-    const isPureOnline = (booking.paymentMethod === 'online' || onlinePaid > 0) && !isMixed && !isPureWallet;
+    const isCashSource = (booking.paymentMethod === 'cash' || booking.paymentMethod === 'cod');
+    const isPureOnline = (booking.paymentMethod === 'online' || ['card', 'netbanking', 'upi', 'emi'].includes(booking.paymentMethod) || onlinePaid > 0) && !isMixed && !isPureWallet && !isCashSource;
 
-    // Rule 1: Wallet Payment -> Always Refund to Wallet
-    if (isPureWallet) {
+    let walletRefundAmount = 0;
+    let gatewayRefundAmount = 0;
+
+    // Rule B: Explicit wallet selection by user/admin
+    if (destination === 'wallet' || customerChoice === 'wallet') {
       destination = 'wallet';
       customerChoice = customerChoice === 'none' ? 'wallet' : customerChoice;
       walletRefundAmount = calculatedRefundAmount;
       gatewayRefundAmount = 0;
     }
-    // Rule 2: Mixed Payment (Wallet + Online) -> Always Refund to Customer Wallet (as requested by user)
+    // Rule A.2: Original payment is Pure Wallet
+    else if (isPureWallet) {
+      destination = 'wallet';
+      customerChoice = customerChoice === 'none' ? 'wallet' : customerChoice;
+      walletRefundAmount = calculatedRefundAmount;
+      gatewayRefundAmount = 0;
+    }
+    // Rule A.3: Original payment is Mixed (Wallet + Online) -> 100% Refund to Customer Wallet (No split/hybrid, no Razorpay API call)
     else if (isMixed) {
       destination = 'wallet';
       customerChoice = customerChoice === 'none' ? 'wallet' : customerChoice;
       walletRefundAmount = calculatedRefundAmount;
       gatewayRefundAmount = 0;
     }
-    // Enforce Admin Restriction: Wallet Only Policy
+    // Rule A.5: Cash / COD
+    else if (isCashSource) {
+      destination = 'wallet';
+      walletRefundAmount = calculatedRefundAmount;
+      gatewayRefundAmount = 0;
+    }
+    // Admin Policy Restriction: Wallet Only Policy
     else if (settings.allowedDestinations === 'wallet_only' || settings.refundToWalletOnly || !settings.allowOriginalPaymentRefund) {
       destination = 'wallet';
       walletRefundAmount = calculatedRefundAmount;
       gatewayRefundAmount = 0;
     }
-    // Rule 3: Pure Online Payment (Razorpay)
-    else if (isPureOnline) {
-      if (customerChoice === 'wallet' || destination === 'wallet') {
-        destination = 'wallet';
-        walletRefundAmount = calculatedRefundAmount;
-        gatewayRefundAmount = 0;
-      } else {
-        destination = 'original_payment';
-        gatewayRefundAmount = calculatedRefundAmount;
-        walletRefundAmount = 0;
-      }
+    // Rule A.1: Pure Online Payment (Razorpay) with "original_payment" selected
+    else if (isPureOnline && (destination === 'original_payment' || customerChoice === 'original_payment' || destination !== 'wallet')) {
+      destination = 'original_payment';
+      gatewayRefundAmount = calculatedRefundAmount;
+      walletRefundAmount = 0;
     }
-    // Rule 4: Default Fallback
+    // Rule A.4 / Default Fallback: Wallet refund
     else {
-      if (destination === 'original_payment' && onlinePaid > 0) {
-        destination = 'original_payment';
-        gatewayRefundAmount = calculatedRefundAmount;
-        walletRefundAmount = 0;
-      } else {
-        destination = 'wallet';
-        walletRefundAmount = calculatedRefundAmount;
-        gatewayRefundAmount = 0;
-      }
+      destination = 'wallet';
+      walletRefundAmount = calculatedRefundAmount;
+      gatewayRefundAmount = 0;
     }
 
     // 5. Evaluate Auto vs Manual Approval Requirement
@@ -330,7 +324,7 @@ class RefundEngineService {
     }
 
     // 7. Create or Update Refund Document
-    let refundDoc = existingPendingRefund;
+    let refundDoc = existingActiveRefund;
     if (!refundDoc) {
       const refundId = this.generateRefundId();
       refundDoc = new Refund({
@@ -440,7 +434,12 @@ class RefundEngineService {
       
       // Verify Razorpay gateway state if gateway refund ID or payment ID exists
       if (refundDoc.gatewayRefundId || refundDoc.gatewayPaymentId) {
-        const existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, refundDoc.gatewayPaymentId);
+        const existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, refundDoc.gatewayPaymentId, {
+          amount: refundDoc.gatewayRefundAmount || refundDoc.refundAmount,
+          localRefundId: refundDoc.refundId,
+          idempotencyKey: refundDoc.idempotencyKey,
+          createdAt: refundDoc.createdAt
+        });
         if (existingRzpRefund && (existingRzpRefund.status === 'processed' || existingRzpRefund.status === 'completed')) {
           refundDoc.refundStatus = 'completed';
           refundDoc.completedAt = new Date();
@@ -497,17 +496,55 @@ class RefundEngineService {
     }
 
     // Atomically claim processing status prior to money movement
-    refundDoc.refundStatus = 'processing';
-    refundDoc.addTimelineStep('processing', 'System', `Initiating payout via ${refundDoc.actualRefundDestination || refundDoc.refundDestination}`);
-    await refundDoc.save(saveOpts);
+    let claimedRefundDoc = await Refund.findOneAndUpdate(
+      {
+        _id: refundDoc._id,
+        refundStatus: { $in: ['pending', 'approved'] }
+      },
+      {
+        $set: {
+          refundStatus: 'processing',
+          updatedAt: new Date()
+        },
+        $push: {
+          timeline: {
+            status: 'processing',
+            actor: 'System',
+            notes: `Initiating payout via ${refundDoc.actualRefundDestination || refundDoc.refundDestination}`,
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true, ...(session ? { session } : {}) }
+    );
+
+    if (!claimedRefundDoc) {
+      // Re-read current state from DB because another request claimed or completed it
+      let latestRefundQuery = Refund.findById(refundDoc._id);
+      if (session) latestRefundQuery = latestRefundQuery.session(session);
+      const latestRefund = await latestRefundQuery;
+
+      if (latestRefund?.refundStatus === 'completed') {
+        return { success: true, alreadyProcessed: true, refund: latestRefund, message: 'Refund has already been completed.' };
+      } else if (latestRefund?.refundStatus === 'processing') {
+        return { success: true, processing: true, refund: latestRefund, message: 'Refund is currently being processed.' };
+      } else {
+        throw new Error(`Refund payout blocked: Refund ${refundDoc._id} is in status '${latestRefund?.refundStatus || 'unknown'}'.`);
+      }
+    }
+
+    refundDoc = claimedRefundDoc;
 
     const customerId = refundDoc.customerId;
     const totalRefund = refundDoc.refundAmount;
 
     try {
-      // A. Process Wallet Credit Portion (Guarded by Idempotency check: only if walletTransactionId is NOT set)
-      if ((refundDoc.walletRefundAmount > 0 || refundDoc.actualRefundDestination === 'wallet' || refundDoc.refundDestination === 'wallet') && !refundDoc.walletTransactionId) {
-        const walletCreditAmt = refundDoc.walletRefundAmount || (refundDoc.actualRefundDestination === 'wallet' ? totalRefund : 0);
+      // A. Process Wallet Credit Portion (Only if isWalletDestination AND walletTransactionId is NOT set)
+      const isWalletDestination = (refundDoc.refundDestination === 'wallet' || refundDoc.actualRefundDestination === 'wallet' || refundDoc.walletRefundAmount > 0);
+      const isOriginalRazorpayPayment = (refundDoc.actualRefundDestination === 'original_payment' || refundDoc.refundDestination === 'original_payment') && refundDoc.gatewayRefundAmount > 0 && !isWalletDestination;
+
+      if (isWalletDestination && !refundDoc.walletTransactionId) {
+        const walletCreditAmt = refundDoc.walletRefundAmount || totalRefund;
 
         if (walletCreditAmt > 0) {
           let userQuery = User.findById(customerId);
@@ -561,19 +598,18 @@ class RefundEngineService {
           });
           await transaction.save(saveOpts);
 
+          refundDoc.walletRefundAmount = walletCreditAmt;
+          refundDoc.gatewayRefundAmount = 0;
+          refundDoc.refundDestination = 'wallet';
+          refundDoc.actualRefundDestination = 'wallet';
           refundDoc.walletTransactionId = walletTxId;
           refundDoc.transactionId = transaction._id;
           refundDoc.addTimelineStep('completed', 'System', `₹${walletCreditAmt} credited to Customer Wallet`);
           refundDoc.addAuditLog('WALLET_REFUND_COMPLETED', customerId, 'system', { walletCreditAmt, walletTxId, balanceBefore, balanceAfter: newBalance }, ip);
         }
       }
-
-      // B. Process Gateway Refund Portion (Priority 1: Wallet skips gateway; Priority 2: Original Razorpay payment; Priority 3: Cash skips gateway)
-      const isCashSource = (booking.paymentMethod === 'cash' || booking.paymentMethod === 'cod' || refundDoc.originalPaymentMethod === 'cash' || refundDoc.originalPaymentMethod === 'cod');
-      const isWalletDestination = (refundDoc.refundDestination === 'wallet' || refundDoc.actualRefundDestination === 'wallet');
-      const isOriginalRazorpayPayment = (refundDoc.actualRefundDestination === 'original_payment' && !isWalletDestination && !isCashSource);
-
-      if (isOriginalRazorpayPayment && (refundDoc.gatewayRefundAmount > 0 || totalRefund > 0)) {
+      // B. Process Gateway Refund Portion (Only if isOriginalRazorpayPayment AND NOT a wallet destination)
+      else if (isOriginalRazorpayPayment) {
         const gatewayAmt = refundDoc.gatewayRefundAmount || totalRefund;
         let razorpayPaymentId = refundDoc.gatewayPaymentId || 
                                 refundDoc.originalPaymentId || 
@@ -614,10 +650,20 @@ class RefundEngineService {
           // Recovery Pre-check: Check if gateway refund already exists for this payment before making API call
           let existingRzpRefund = null;
           if (refundDoc.gatewayRefundId) {
-            existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, null);
+            existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, null, {
+              amount: gatewayAmt,
+              localRefundId: refundDoc.refundId,
+              idempotencyKey: refundDoc.idempotencyKey,
+              createdAt: refundDoc.createdAt
+            });
           }
           if (!existingRzpRefund && razorpayPaymentId) {
-            existingRzpRefund = await razorpay.fetchRazorpayRefund(null, razorpayPaymentId);
+            existingRzpRefund = await razorpay.fetchRazorpayRefund(null, razorpayPaymentId, {
+              amount: gatewayAmt,
+              localRefundId: refundDoc.refundId,
+              idempotencyKey: refundDoc.idempotencyKey,
+              createdAt: refundDoc.createdAt
+            });
           }
 
           try {
@@ -714,6 +760,33 @@ class RefundEngineService {
       booking.cancellationProgress.refundCompletedAt = new Date();
       booking.cancellationProgress.refundId = refundDoc.refundId;
       await booking.save(saveOpts);
+
+      // Expose refund state directly on the canonical original payment Transaction record
+      try {
+        let origTxnQuery = Transaction.findOne({ booking: booking._id, type: 'payment' });
+        if (session) origTxnQuery = origTxnQuery.session(session);
+        const origTxn = await origTxnQuery;
+
+        if (origTxn) {
+          const newRefundAmount = refundDoc.refundAmount || 0;
+          const currentRefunded = (origTxn.refundedAmount || 0) + newRefundAmount;
+          const totalPaidBase = origTxn.totalPaidAmount || origTxn.amount || booking.totalAmount || 0;
+          const isFullRefund = Math.round(currentRefunded * 100) >= Math.round(totalPaidBase * 100);
+
+          origTxn.refundedAmount = currentRefunded;
+          origTxn.refundStatus = isFullRefund ? 'completed' : 'partial';
+          if (isFullRefund) {
+            origTxn.paymentStatus = 'refunded';
+          }
+          origTxn.refundedAt = new Date();
+          origTxn.refundReason = refundDoc.refundReason || origTxn.refundReason;
+          if (refundDoc.gatewayRefundId) origTxn.gatewayRefundId = refundDoc.gatewayRefundId;
+          if (refundDoc.walletTransactionId) origTxn.walletRefundReference = refundDoc.walletTransactionId;
+          await origTxn.save(saveOpts);
+        }
+      } catch (txErr) {
+        console.warn('[RefundEngine] Original transaction refund state update error:', txErr.message);
+      }
 
       // 11. Re-align Provider Earnings & Escrow
       await this.realignProviderEarningsAndEscrow(booking, refundDoc, session);

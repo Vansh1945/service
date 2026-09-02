@@ -131,20 +131,82 @@ razorpay.fetchRazorpaySettlementReconCombined = async function ({ year, month, d
 };
 
 /**
- * Fetch single refund details
+ * Fetch and reconcile Razorpay refund details without using naive items[0]
  */
-razorpay.fetchRazorpayRefund = async function (refundId, paymentId) {
+razorpay.fetchRazorpayRefund = async function (refundId, paymentId, options = {}) {
   try {
+    // 1. Direct Razorpay Refund ID Match (Exact Match)
+    if (refundId && typeof refundId === 'string' && refundId.startsWith('rfnd_')) {
+      try {
+        const directRefund = await razorpay.refunds.fetch(refundId);
+        if (directRefund && directRefund.id === refundId) {
+          return directRefund;
+        }
+      } catch (e) {
+        // If direct fetch fails, fall through to payment refunds list reconciliation
+      }
+    }
+
+    if (!paymentId) {
+      return null;
+    }
+
+    // 2. Fetch all refunds for the payment using Razorpay client API wrapper
+    const list = await razorpay.payments.fetchRefunds(paymentId);
+    const items = list?.items || (Array.isArray(list) ? list : []);
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return null;
+    }
+
+    // 3. Exact target refundId match in items list
     if (refundId) {
-      return await razorpay.refunds.fetch(refundId);
+      const matchById = items.find(r => r.id === refundId);
+      if (matchById) return matchById;
     }
-    if (paymentId) {
-      const list = await razorpay.payments.fetchRefunds(paymentId);
-      return (list?.items && list.items.length > 0) ? list.items[0] : null;
+
+    // Prepare reconciliation signals from options
+    const targetAmountPaise = options.amount !== undefined && options.amount !== null
+      ? (options.amount > 10000 ? Math.round(options.amount) : Math.round(options.amount * 100))
+      : null;
+    const localRefundId = options.localRefundId || options.refundId;
+    const idempotencyKey = options.idempotencyKey;
+
+    // 4. Match by Razorpay Notes / Reference signals (strongest signal)
+    const matchByNotes = items.find(r => {
+      if (!r.notes) return false;
+      if (localRefundId && (r.notes.refundId === localRefundId || r.notes.localRefundId === localRefundId)) return true;
+      if (idempotencyKey && r.notes.idempotencyKey === idempotencyKey) return true;
+      return false;
+    });
+    if (matchByNotes) return matchByNotes;
+
+    // 5. Match by Exact Amount (in paise)
+    if (targetAmountPaise !== null) {
+      const matchesByAmount = items.filter(r => Math.abs((r.amount || 0) - targetAmountPaise) <= 1);
+      if (matchesByAmount.length === 1) {
+        return matchesByAmount[0];
+      }
+      if (matchesByAmount.length > 1 && options.createdAt) {
+        // Pick the item created closest to local refund creation timestamp
+        const targetTime = new Date(options.createdAt).getTime() / 1000;
+        matchesByAmount.sort((a, b) => Math.abs((a.created_at || 0) - targetTime) - Math.abs((b.created_at || 0) - targetTime));
+        return matchesByAmount[0];
+      }
     }
+
+    // 6. Safe Single Refund Fallback
+    if (items.length === 1) {
+      const single = items[0];
+      if (targetAmountPaise === null || Math.abs((single.amount || 0) - targetAmountPaise) <= 1) {
+        return single;
+      }
+    }
+
+    // If multiple refunds exist and none of the safe signals matched, NEVER arbitrarily return items[0]
     return null;
   } catch (err) {
-    console.error(`[Razorpay.fetchRazorpayRefund] Error fetching refund ${refundId}:`, err.message);
+    console.error(`[Razorpay.fetchRazorpayRefund] Error reconciling refund for payment ${paymentId}:`, err.message);
     return null;
   }
 };

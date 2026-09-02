@@ -374,20 +374,20 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
             {(d.discount || 0) > 0 && <AmtRow label="Discount Applied" amount={d.discount} colorClass="text-amber-600" indent />}
             {(d.subtotal || 0) > 0 && <AmtRow label="Subtotal" amount={d.subtotal} indent />}
             <div className="pt-2 mt-1">
-              {(d.onlinePaid || 0) > 0 && <AmtRow label="Online (Razorpay / UPI)" amount={d.onlinePaid} colorClass="text-blue-700" indent />}
-              {(d.walletPaid || 0) > 0 && <AmtRow label="Wallet Used" amount={d.walletPaid} colorClass="text-amber-700" indent />}
-              {(d.cashPaid || 0) > 0 && <AmtRow label="Cash Paid" amount={d.cashPaid} colorClass="text-lime-700" indent />}
+              {(d.onlinePaid || d.onlineAmount || 0) > 0 && <AmtRow label="Online (Razorpay / UPI)" amount={d.onlinePaid || d.onlineAmount} colorClass="text-blue-700" indent />}
+              {(d.walletPaid || d.walletAmount || 0) > 0 && <AmtRow label="Wallet Used" amount={d.walletPaid || d.walletAmount} colorClass="text-amber-700" indent />}
+              {(d.cashPaid || d.cashAmount || 0) > 0 && <AmtRow label="Cash Paid" amount={d.cashPaid || d.cashAmount} colorClass="text-lime-700" indent />}
             </div>
             <div className="pt-1 space-y-1">
               <AmtRow label="Attempted Amount" amount={d.attemptedAmount != null ? d.attemptedAmount : (d.amount || 0)} colorClass="text-slate-600" indent />
-              <AmtRow label="Actually Paid" amount={d.finalPaid ?? 0} bold colorClass={(d.finalPaid || 0) > 0 ? "text-emerald-700 font-black" : "text-rose-600 font-bold"} />
+              <AmtRow label="Actually Paid" amount={d.finalPaid ?? (d.totalPaidAmount || d.amount || 0)} bold colorClass={(d.finalPaid || d.totalPaidAmount || d.amount || 0) > 0 ? "text-emerald-700 font-black" : "text-rose-600 font-bold"} />
             </div>
           </div>
         </SectionCard>
 
         {/* Commission & Earnings */}
         <SectionCard title="Commission & Provider Earnings" icon={TrendingUp} iconColor="text-emerald-600">
-          <AmtRow label="Gross Amount" amount={d.totalAmount || 0} bold />
+          <AmtRow label="Gross Amount" amount={d.totalAmount || d.totalPaidAmount || d.amount || 0} bold />
           <AmtRow label="Commission Deducted" amount={d.commissionAmount || 0} colorClass="text-orange-600" indent />
           <AmtRow label="Provider Earnings (Net)" amount={d.providerEarnings || 0} colorClass="text-emerald-600" bold />
           <div className="border-t border-slate-100 mt-2 pt-2">
@@ -407,11 +407,11 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
 
         {/* Gateway & Settlement */}
         <SectionCard title="Gateway & Settlement" icon={Banknote} iconColor="text-sky-600">
-          <InfoRow label="Gateway" value={d.razorpayPaymentId ? 'Razorpay' : d.paymentMethod === 'cash' ? 'Cash' : 'N/A'} />
+          <InfoRow label="Gateway" value={d.razorpayPaymentId ? 'Razorpay' : d.paymentMethod === 'cash' ? 'Cash' : d.paymentMethod === 'wallet' ? 'Platform Wallet' : 'N/A'} />
           <InfoRow label="Settlement Status" badge={
             <StatusChip
-              label={d.settlement?.settlementStatus || 'pending'}
-              type={['settled', 'completed'].includes(d.settlement?.settlementStatus) ? 'success' : 'warning'}
+              label={d.settlement?.settlementStatus || d.settlementStatus || 'pending'}
+              type={['settled', 'completed'].includes(d.settlement?.settlementStatus || d.settlementStatus) ? 'success' : 'warning'}
             />
           } />
           <AmtRow label="Settlement Amount" amount={d.settlement?.settlementAmount || 0} />
@@ -427,24 +427,38 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
         </SectionCard>
 
         {/* Refund Breakdown */}
-        {d.refund && (
-          <SectionCard title="Refund Breakdown" icon={RefreshCw} iconColor="text-rose-500">
-            <InfoRow label="Refund ID" value={d.refund.refundId} mono />
-            <InfoRow label="Status" badge={
-              <StatusChip label={d.refund.refundStatus} type={d.refund.refundStatus === 'completed' ? 'success' : d.refund.refundStatus === 'failed' ? 'danger' : 'warning'} />
-            } />
-            <AmtRow label="Requested Amount" amount={d.refund.requestedAmount || 0} />
-            <AmtRow label="Refund Amount" amount={d.refund.refundAmount || 0} bold colorClass="text-rose-600" />
-            <AmtRow label="Gateway Refund" amount={d.refund.gatewayRefundAmount || 0} indent />
-            <AmtRow label="Wallet Refund" amount={d.refund.walletRefundAmount || 0} indent />
-            {d.refund.feeDeducted > 0 && (
-              <AmtRow label="Fee Deducted" amount={d.refund.feeDeducted} colorClass="text-orange-600" indent />
-            )}
-            <InfoRow label="Refund Type" value={d.refund.refundType} />
-            <InfoRow label="Source" value={d.refund.refundSource?.replace(/_/g, ' ')} />
-            <InfoRow label="Destination" value={d.refund.refundDestination?.replace(/_/g, ' ')} />
-          </SectionCard>
-        )}
+        {(d.refund || d.refundedAmount > 0 || ['completed', 'partial'].includes(d.refundStatus)) && (() => {
+          const rf = d.refund || {
+            refundId: d.gatewayRefundId || `RFND-${String(d._id).slice(-6)}`,
+            refundStatus: d.refundStatus || 'completed',
+            requestedAmount: d.refundedAmount || 0,
+            refundAmount: d.refundedAmount || 0,
+            gatewayRefundAmount: d.gatewayRefundId ? (d.refundedAmount || 0) : 0,
+            walletRefundAmount: d.gatewayRefundId ? 0 : (d.refundedAmount || 0),
+            feeDeducted: 0,
+            refundType: 'cancellation',
+            refundSource: 'cancellation',
+            refundDestination: d.gatewayRefundId ? 'original_payment' : 'wallet'
+          };
+          return (
+            <SectionCard title="Refund Breakdown" icon={RefreshCw} iconColor="text-rose-500">
+              <InfoRow label="Refund ID" value={rf.refundId} mono />
+              <InfoRow label="Status" badge={
+                <StatusChip label={rf.refundStatus} type={rf.refundStatus === 'completed' ? 'success' : rf.refundStatus === 'failed' ? 'danger' : 'warning'} />
+              } />
+              <AmtRow label="Requested Amount" amount={rf.requestedAmount || rf.refundAmount || 0} />
+              <AmtRow label="Refund Amount" amount={rf.refundAmount || 0} bold colorClass="text-rose-600" />
+              <AmtRow label="Gateway Refund" amount={rf.gatewayRefundAmount || 0} indent />
+              <AmtRow label="Wallet Refund" amount={rf.walletRefundAmount || 0} indent />
+              {rf.feeDeducted > 0 && (
+                <AmtRow label="Fee Deducted" amount={rf.feeDeducted} colorClass="text-orange-600" indent />
+              )}
+              {rf.refundType && <InfoRow label="Refund Type" value={rf.refundType} />}
+              {rf.refundSource && <InfoRow label="Source" value={rf.refundSource?.replace(/_/g, ' ')} />}
+              {rf.refundDestination && <InfoRow label="Destination" value={rf.refundDestination?.replace(/_/g, ' ')} />}
+            </SectionCard>
+          );
+        })()}
 
         {/* Booking ledger entries */}
         {d.ledgerEntries && d.ledgerEntries.length > 0 && (

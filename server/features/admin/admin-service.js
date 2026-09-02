@@ -157,39 +157,11 @@ class AdminService {
                         booking.refundReference = refundResult.refund.refundId;
                         if (!booking.cancellationProgress) booking.cancellationProgress = {};
                         booking.cancellationProgress.refundId = refundResult.refund.refundId;
+                        booking.cancellationProgress.refundStatus = refundResult.refund.refundStatus;
                     }
                 } catch (refundErr) {
-                    console.error('[Admin Cancel Refund Engine Error]:', refundErr);
-                    // Fallback to manual wallet update if RefundEngine fails unexpectedly
-                    if (!customer.wallet) {
-                        customer.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date(), walletTransactions: [] };
-                    }
-                    customer.wallet.availableBalance += refundableAmount;
-                    customer.wallet.totalRefunded += refundableAmount;
-                    customer.wallet.walletTransactions.push({
-                        type: 'credit',
-                        amount: refundableAmount,
-                        reason: `Booking Refund (Admin Cancellation): ${reasonText}`,
-                        source: 'booking_refund',
-                        status: 'success',
-                        booking: booking._id
-                    });
-                    customer.wallet.lastUpdated = new Date();
-                    await customer.save({ session });
-
-                    const refundTransaction = new Transaction({
-                        booking: booking._id,
-                        bookingId: booking.bookingId || booking._id.toString(),
-                        user: customer._id,
-                        amount: refundableAmount,
-                        paymentStatus: 'completed',
-                        paymentMethod: 'wallet',
-                        type: 'refund',
-                        entryType: 'debit',
-                        description: `Admin cancelled booking - Refund to wallet. Reason: ${reasonText}`,
-                        refundReason: reasonText
-                    });
-                    await refundTransaction.save({ session });
+                    console.error('[Admin Cancel Refund Engine Error]:', refundErr.message);
+                    throw new Error(`Cancellation refund processing failed: ${refundErr.message}`);
                 }
             }
 
@@ -1827,7 +1799,7 @@ class AdminService {
                     }
                 ]),
                 Transaction.aggregate([
-                    { $match: { paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
+                    { $match: { type: 'payment', paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
                     { $group: { _id: '$paymentMethod', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
                     { $project: { paymentMethod: '$_id', count: 1, totalAmount: 1, _id: 0 } }
                 ]),
@@ -1845,9 +1817,9 @@ class AdminService {
                 ]),
                 Booking.countDocuments({ disputeRaised: true }),
                 Booking.countDocuments({ adminRefundDecision: { $in: ['approved', 'partial'] } }),
-                Transaction.aggregate([
-                    { $match: { type: 'refund', paymentMethod: 'wallet', paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
-                    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+                Refund.aggregate([
+                    { $match: { refundStatus: 'completed' } },
+                    { $group: { _id: null, totalAmount: { $sum: '$refundAmount' } } }
                 ]),
                 Booking.countDocuments({ $or: [{ paymentStatus: 'refunded' }, { refundProcessed: true }] }),
                 Booking.countDocuments({ disputeStatus: 'underreview' }),
@@ -3106,6 +3078,7 @@ class AdminService {
                     .populate('approvedBy', 'name email')
                     .populate('requestedBy', 'name email')
                     .populate('processedBy', 'name email')
+                    .populate('transactionId')
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(Number(limit)),
@@ -3130,6 +3103,49 @@ class AdminService {
                 ])
             ]);
 
+            // Batch fetch linked original payment Transaction records to prevent N+1 queries
+            const Transaction = require('../payment/transaction-model');
+            const bookingIds = refunds.map(r => r.bookingId?._id || r.bookingId).filter(Boolean);
+            const txns = await Transaction.find({ booking: { $in: bookingIds }, type: 'payment' }).lean();
+
+            const txnMap = new Map();
+            for (const t of txns) {
+                if (t.booking) txnMap.set(t.booking.toString(), t);
+            }
+
+            const enrichedRefunds = refunds.map(rf => {
+                const r = rf.toObject ? rf.toObject() : rf;
+                const bId = r.bookingId?._id?.toString() || r.bookingId?.toString();
+                const origTxn = (r.transactionId && typeof r.transactionId === 'object') ? r.transactionId : (bId ? txnMap.get(bId) : null);
+
+                const paymentBreakup = origTxn ? {
+                    transactionId: origTxn.transactionId || origTxn._id,
+                    paymentMethod: origTxn.paymentMethod || r.originalPaymentMethod,
+                    totalPaidAmount: origTxn.totalPaidAmount || origTxn.amount || r.bookingId?.totalAmount || 0,
+                    walletAmount: origTxn.walletAmount || r.bookingId?.walletUsed || 0,
+                    onlineAmount: origTxn.onlineAmount || r.bookingId?.onlinePaid || 0,
+                    cashAmount: origTxn.cashAmount || 0,
+                    razorpayPaymentId: origTxn.razorpayPaymentId || r.gatewayPaymentId || r.originalPaymentId || null,
+                    razorpayOrderId: origTxn.razorpayOrderId || r.gatewayOrderId || null
+                } : {
+                    transactionId: null,
+                    paymentMethod: r.originalPaymentMethod || r.bookingId?.paymentMethod || 'online',
+                    totalPaidAmount: r.bookingId?.totalAmount || 0,
+                    walletAmount: r.bookingId?.walletUsed || 0,
+                    onlineAmount: r.bookingId?.onlinePaid || 0,
+                    cashAmount: 0,
+                    razorpayPaymentId: r.gatewayPaymentId || r.originalPaymentId || null,
+                    razorpayOrderId: r.gatewayOrderId || null
+                };
+
+                return {
+                    ...r,
+                    originalTransaction: paymentBreakup,
+                    gatewayPaymentId: r.gatewayPaymentId || paymentBreakup.razorpayPaymentId,
+                    gatewayOrderId: r.gatewayOrderId || paymentBreakup.razorpayOrderId
+                };
+            });
+
             const stats = kpiStats.length > 0 ? kpiStats[0] : {
                 totalRefundAmount: 0,
                 pendingAmount: 0,
@@ -3146,7 +3162,7 @@ class AdminService {
 
             return res.status(200).json({
                 success: true,
-                data: refunds,
+                data: enrichedRefunds,
                 stats,
                 pagination: {
                     total,
@@ -3165,6 +3181,7 @@ class AdminService {
         try {
             const { id } = req.params;
             const Refund = require('../payment/refund-model');
+            const Transaction = require('../payment/transaction-model');
 
             const refund = await Refund.findById(id)
                 .populate('customerId', 'name email phone avatar wallet')
@@ -3181,7 +3198,24 @@ class AdminService {
                 return res.status(404).json({ success: false, message: 'Refund record not found' });
             }
 
-            return res.status(200).json({ success: true, data: refund });
+            const rObj = refund.toObject ? refund.toObject() : refund;
+            const bId = rObj.bookingId?._id?.toString() || rObj.bookingId?.toString();
+            const origTxn = (rObj.transactionId && typeof rObj.transactionId === 'object')
+                ? rObj.transactionId
+                : (bId ? await Transaction.findOne({ booking: bId, type: 'payment' }).lean() : null);
+
+            const paymentBreakup = origTxn ? {
+                transactionId: origTxn.transactionId || origTxn._id,
+                paymentMethod: origTxn.paymentMethod || rObj.originalPaymentMethod,
+                totalPaidAmount: origTxn.totalPaidAmount || origTxn.amount || rObj.bookingId?.totalAmount || 0,
+                walletAmount: origTxn.walletAmount || rObj.bookingId?.walletUsed || 0,
+                onlineAmount: origTxn.onlineAmount || rObj.bookingId?.onlinePaid || 0,
+                cashAmount: origTxn.cashAmount || 0,
+                razorpayPaymentId: origTxn.razorpayPaymentId || rObj.gatewayPaymentId || rObj.originalPaymentId || null,
+                razorpayOrderId: origTxn.razorpayOrderId || rObj.gatewayOrderId || null
+            } : null;
+
+            return res.status(200).json({ success: true, data: { ...rObj, originalTransaction: paymentBreakup } });
         } catch (error) {
             console.error('[AdminService.getRefundById] Error:', error);
             return res.status(500).json({ success: false, message: error.message });

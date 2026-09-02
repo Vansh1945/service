@@ -43,6 +43,31 @@ const transactionSchema = new Schema({
     required: true,
     min: 0
   },
+  walletAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  onlineAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  cashAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalPaidAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  walletAmountDeducted: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   commission: {
     type: Number,
     default: 0
@@ -174,12 +199,25 @@ const transactionSchema = new Schema({
   description: String,
   refundStatus: {
     type: String,
-    enum: ['none', 'pending', 'completed'],
+    enum: ['none', 'pending', 'partial', 'completed', 'failed'],
     default: 'none',
     set: function (v) {
       if (!v) return v;
       return v.toLowerCase().replace(/[^a-z0-9]/g, '');
     }
+  },
+  refundedAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  gatewayRefundId: {
+    type: String,
+    default: null
+  },
+  walletRefundReference: {
+    type: String,
+    default: null
   },
   refundReason: String,
   refundedAt: Date,

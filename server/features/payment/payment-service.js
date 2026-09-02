@@ -407,20 +407,28 @@ const executePaymentFailedOperations = async (payment, session) => {
   await transaction.save({ session });
 
   // Rollback wallet deduction if part of a failed mixed payment
-  if (transaction.walletAmountDeducted > 0 && transaction.customer) {
+  const walletDeducted = (transaction.walletAmount !== undefined && transaction.walletAmount !== null && transaction.walletAmount > 0)
+    ? transaction.walletAmount
+    : (transaction.walletAmountDeducted || 0);
+
+  const targetUserId = transaction.customer || transaction.user;
+  if (walletDeducted > 0 && targetUserId) {
     try {
       const User = mongoose.model('User');
-      const customer = await User.findById(transaction.customer).session(session);
+      const customer = await User.findById(targetUserId).session(session);
       if (customer) {
-        customer.walletBalance = (customer.walletBalance || 0) + transaction.walletAmountDeducted;
+        customer.walletBalance = (customer.walletBalance || 0) + walletDeducted;
         await customer.save(session ? { session } : {});
 
         // Record wallet refund transaction in ledger
         await Transaction.create([{
           transactionId: `TXN-REFUND-WAL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
           booking: transaction.booking,
-          customer: transaction.customer,
-          amount: transaction.walletAmountDeducted,
+          user: transaction.user || transaction.customer,
+          customerId: transaction.customerId || (transaction.customer ? transaction.customer.toString() : null),
+          amount: walletDeducted,
+          walletAmount: walletDeducted,
+          totalPaidAmount: walletDeducted,
           paymentMethod: 'wallet',
           paymentStatus: 'completed',
           type: 'credit',
@@ -5113,7 +5121,7 @@ class PaymentService {
           }
         ]),
         Transaction.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate }, paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } } },
+          { $match: { createdAt: { $gte: sDate, $lte: eDate }, type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } } },
           {
             $group: {
               _id: '$type',

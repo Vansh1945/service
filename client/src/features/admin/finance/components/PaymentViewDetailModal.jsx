@@ -740,44 +740,55 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
               )}
 
               {/* ══ TAB 5: REFUND ════════════════════════════════════════════ */}
-              {activeTab === 'refund' && (
-                <div className="space-y-5">
-                  {d.refund ? (
-                    <>
-                      <SectionCard title="Refund Summary" icon={FiRotateCcw} iconColor="text-purple-600">
-                        <InfoRow label="Refund ID" value={d.refund.refundId || 'N/A'} mono />
-                        <InfoRow label="Refund Status" badge={
-                          <StatusChip label={d.refund.refundStatus || 'Pending'} type={d.refund.refundStatus === 'completed' ? 'success' : d.refund.refundStatus === 'failed' ? 'danger' : 'warning'} />
-                        } />
-                        <InfoRow label="Refund Amount" value={<AmtCell amount={d.refund.refundAmount || 0} colorClass="text-purple-700" />} />
-                        <InfoRow label="Gateway Refund" value={<AmtCell amount={d.refund.gatewayRefundAmount || 0} colorClass="text-blue-700" />} />
-                        <InfoRow label="Wallet Refund" value={<AmtCell amount={d.refund.walletRefundAmount || 0} colorClass="text-amber-700" />} />
-                        <InfoRow label="Refund Source" value={d.refund.refundSource?.replace(/_/g, ' ') || 'N/A'} />
-                        <InfoRow label="Refund Destination" badge={
-                          <StatusChip label={d.refund.refundDestination?.replace(/_/g, ' ') || 'N/A'} type="info" />
-                        } />
-                        <InfoRow label="Gateway Refund ID" value={d.refund.gatewayRefundId || 'N/A'} mono />
-                        <InfoRow label="Wallet Txn ID" value={d.refund.walletTransactionId || 'N/A'} mono />
-                        <InfoRow label="Requested At" value={fmtDateTime(d.refund.createdAt)} />
-                        <InfoRow label="Completed At" value={fmtDateTime(d.refund.completedAt)} />
-                        {d.refund.approvedBy && (
-                          <InfoRow label="Approved By" value={d.refund.approvedBy.name || 'N/A'} />
-                        )}
-                        {d.refund.failureReason && (
-                          <InfoRow label="Failure Reason" value={d.refund.failureReason} />
-                        )}
-                      </SectionCard>
+              {activeTab === 'refund' && (() => {
+                const rf = d.refund || ((d.mongoData?.refundedAmount > 0 || ['completed', 'partial'].includes(d.mongoData?.refundStatus)) ? {
+                  refundId: d.mongoData.gatewayRefundId || `RFND-${String(d.mongoData._id).slice(-6)}`,
+                  refundStatus: d.mongoData.refundStatus || 'completed',
+                  refundAmount: d.mongoData.refundedAmount || 0,
+                  gatewayRefundAmount: d.mongoData.gatewayRefundId ? (d.mongoData.refundedAmount || 0) : 0,
+                  walletRefundAmount: d.mongoData.gatewayRefundId ? 0 : (d.mongoData.refundedAmount || 0),
+                  refundSource: 'cancellation',
+                  refundDestination: d.mongoData.gatewayRefundId ? 'original_payment' : 'wallet',
+                  gatewayRefundId: d.mongoData.gatewayRefundId || 'N/A',
+                  walletTransactionId: d.mongoData.walletRefundReference || 'N/A',
+                  createdAt: d.mongoData.refundedAt || d.mongoData.updatedAt,
+                  completedAt: d.mongoData.refundedAt || d.mongoData.updatedAt
+                } : null);
 
-                      {d.refund.timeline?.length > 0 && (
-                        <SectionCard title="Refund Timeline" icon={FiClock}>
-                          <div className="space-y-0">
-                            {d.refund.timeline.map((t, i) => (
-                              <TimelineItem
-                                key={i}
-                                label={`${t.status?.replace(/_/g, ' ').toUpperCase()} — ${t.actor || 'System'}`}
-                                timestamp={t.timestamp}
-                                status={t.status === 'completed' ? 'done' : t.status === 'failed' ? 'failed' : 'pending'}
-                                isLast={i === d.refund.timeline.length - 1}
+                return (
+                  <div className="space-y-5">
+                    {rf ? (
+                      <>
+                        <SectionCard title="Refund Summary" icon={FiRotateCcw} iconColor="text-purple-600">
+                          <InfoRow label="Refund ID" value={rf.refundId || 'N/A'} mono />
+                          <InfoRow label="Refund Status" badge={
+                            <StatusChip label={rf.refundStatus || 'Pending'} type={rf.refundStatus === 'completed' ? 'success' : rf.refundStatus === 'failed' ? 'danger' : 'warning'} />
+                          } />
+                          <InfoRow label="Refund Amount" value={<AmtCell amount={rf.refundAmount || 0} colorClass="text-purple-700" />} />
+                          <InfoRow label="Gateway Refund" value={<AmtCell amount={rf.gatewayRefundAmount || 0} colorClass="text-blue-700" />} />
+                          <InfoRow label="Wallet Refund" value={<AmtCell amount={rf.walletRefundAmount || 0} colorClass="text-amber-700" />} />
+                          <InfoRow label="Refund Source" value={rf.refundSource?.replace(/_/g, ' ') || 'N/A'} />
+                          <InfoRow label="Refund Destination" badge={
+                            <StatusChip label={rf.refundDestination?.replace(/_/g, ' ') || 'N/A'} type="info" />
+                          } />
+                          <InfoRow label="Gateway Refund ID" value={rf.gatewayRefundId || 'N/A'} mono />
+                          <InfoRow label="Wallet Txn ID" value={rf.walletTransactionId || 'N/A'} mono />
+                          <InfoRow label="Requested At" value={fmtDateTime(rf.createdAt)} />
+                          <InfoRow label="Completed At" value={fmtDateTime(rf.completedAt)} />
+                          {rf.approvedBy && (
+                            <InfoRow label="Approved By" value={rf.approvedBy.name || 'N/A'} />
+                          )}
+                          {rf.failureReason && (
+                            <InfoRow label="Failure Reason" value={rf.failureReason} />
+                          )}
+                        </SectionCard>
+                      </>
+                    ) : (
+                      <EmptyState icon={FiRotateCcw} title="No Refund Associated" message="This transaction does not have any refund records." />
+                    )}
+                  </div>
+                );
+              })()}
                               />
                             ))}
                           </div>

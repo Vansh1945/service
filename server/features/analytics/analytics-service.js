@@ -63,7 +63,7 @@ const refreshAnalytics = async () => {
                 { $group: { _id: null, totalAdminEarnings: { $sum: { $add: [{ $ifNull: ["$commissionAmount", 0] }, { $ifNull: ["$companySurgeShare", 0] }] } } } }
             ]),
             Transaction.aggregate([
-                { $match: { paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
+                { $match: { type: 'payment', paymentStatus: { $in: ['completed', 'paid', 'success'] } } },
                 { $group: { _id: '$paymentMethod', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
                 { $project: { paymentMethod: '$_id', count: 1, totalAmount: 1, _id: 0 } }
             ]),

@@ -550,8 +550,8 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                     <div>
                       <span className="text-gray-500 text-[10px] uppercase font-semibold block">Refund Destination</span>
                       <span className="font-bold text-gray-800 flex items-center gap-1">
-                        {booking.walletUsed > 0 && booking.onlinePaid > 0
-                          ? '🔀 Hybrid Split (Wallet + Gateway)'
+                        {booking.paymentMethod === 'mixed' || (booking.walletUsed > 0 && booking.onlinePaid > 0)
+                          ? '⚡ Customer Wallet (Instant)'
                           : (booking.paymentMethod === 'wallet' || booking.refundDestination === 'wallet' ? '⚡ Customer Wallet (Instant)' : '💳 Payment Gateway (2-5 Days)')}
                       </span>
                     </div>

@@ -2298,26 +2298,79 @@ class BookingService {
       }
       await booking.save({ session });
 
-      // Record/Update Transaction
+      // Check for existing canonical payment transaction for this booking
+      const Transaction = mongoose.model('Transaction');
+      let canonicalTxn = await Transaction.findOne({
+        booking: booking._id,
+        type: 'payment'
+      }).session(session);
+
+      if (canonicalTxn && ['success', 'completed', 'paid', 'escrowhold'].includes(canonicalTxn.paymentStatus)) {
+        booking.paymentStatus = 'escrowhold';
+        booking.confirmedBooking = true;
+        if (!['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'].includes(booking.status)) {
+          booking.status = 'pending';
+        }
+        await booking.save({ session });
+        await safeCommit(session);
+        safeEnd(session);
+        emitBookingUpdate(booking._id, booking, 'payment_updated');
+
+        return res.status(200).json({
+          success: true,
+          message: 'Payment already verified',
+          data: booking
+        });
+      }
+
+      // Calculate payment breakdown for canonical fields
+      let walletAmountVal = 0;
+      let onlineAmountVal = 0;
+      if (booking.paymentMethod === 'wallet') {
+        walletAmountVal = booking.totalAmount;
+        onlineAmountVal = 0;
+      } else if (booking.paymentMethod === 'mixed') {
+        walletAmountVal = booking.walletUsed || 0;
+        onlineAmountVal = booking.totalAmount - walletAmountVal;
+      } else if (booking.paymentMethod === 'online') {
+        walletAmountVal = 0;
+        onlineAmountVal = booking.totalAmount;
+      }
+
+      // Record/Update Canonical Payment Transaction specifically for type: 'payment'
+      const txnData = {
+        user: userId,
+        customerId: userId.toString(),
+        booking: booking._id,
+        bookingId: booking.bookingId,
+        provider: booking.provider,
+        providerId: booking.provider ? booking.provider.toString() : undefined,
+        amount: booking.totalAmount,
+        totalPaidAmount: booking.totalAmount,
+        walletAmount: walletAmountVal,
+        onlineAmount: onlineAmountVal,
+        cashAmount: 0,
+        paymentMethod: booking.paymentMethod,
+        paymentStatus: 'success',
+        type: 'payment',
+        ledgerType: booking.paymentMethod === 'wallet' ? 'wallet' : 'payment',
+        entryType: 'credit',
+        commission: booking.commissionAmount || 0,
+        providerEarning: booking.providerEarnings || 0,
+        transactionId: paymentResult.transactionId || `TXN_${Date.now()}`,
+        completedAt: new Date()
+      };
+
+      if (paymentResult.razorpayOrderId) {
+        txnData.razorpayOrderId = paymentResult.razorpayOrderId;
+      }
+      if (paymentResult.razorpayPaymentId) {
+        txnData.razorpayPaymentId = paymentResult.razorpayPaymentId;
+      }
+
       await Transaction.findOneAndUpdate(
-        { booking: booking._id },
-        {
-          user: userId,
-          customerId: userId.toString(),
-          booking: booking._id,
-          amount: booking.totalAmount,
-          paymentMethod: booking.paymentMethod,
-          paymentStatus: 'success',
-          bookingId: booking.bookingId,
-          provider: booking.provider,
-          providerId: booking.provider ? booking.provider.toString() : undefined,
-          commission: booking.commissionAmount || 0,
-          providerEarning: booking.providerEarnings || 0,
-          transactionId: paymentResult.transactionId,
-          razorpayOrderId: paymentResult.razorpayOrderId,
-          razorpayPaymentId: paymentResult.razorpayPaymentId,
-          completedAt: new Date()
-        },
+        { booking: booking._id, type: 'payment' },
+        { $set: txnData },
         { upsert: true, new: true, session }
       );
 
