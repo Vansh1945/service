@@ -1881,8 +1881,17 @@ class ProviderService {
                 await deleteFile(provider.bankDetails.passbookImagePublicId);
             }
 
-            // Permanent delete
-            await Provider.findByIdAndDelete(req.params.id);
+            const isPermanent = req.query.permanent === 'true' || req.query.force === 'true';
+            if (isPermanent) {
+                await Provider.findByIdAndDelete(req.params.id);
+            } else {
+                await Provider.findByIdAndUpdate(req.params.id, {
+                    isDeleted: true,
+                    deletedAt: new Date(),
+                    deletedBy: req.user?._id || req.admin?._id || null,
+                    isActive: false
+                });
+            }
 
             try {
                 const { getIO } = require('../../shared/socket/socket-server');
@@ -1893,12 +1902,12 @@ class ProviderService {
                     io.to('admin_live_room').emit('provider-status-changed', payload);
                 }
             } catch (e) {
-                console.error("Failed to emit provider permanent delete event:", e);
+                console.error("Failed to emit provider status changed event:", e);
             }
 
             res.status(200).json({
                 success: true,
-                message: 'Account permanently deleted'
+                message: isPermanent ? 'Account permanently deleted' : 'Account soft-deleted successfully'
             });
         } catch (error) {
             console.error('Permanent delete error:', error);

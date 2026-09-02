@@ -1,4 +1,6 @@
 import axios from "axios";
+import { normalizeApiError } from "../utils/messages";
+import { toast } from "../components/ui/Toast";
 
 // Track pending requests to prevent duplicates
 const pendingRequests = new Map();
@@ -155,6 +157,27 @@ const optimizeCloudinaryUrls = (data) => {
     return data;
 };
 
+const handleSessionExpiry = () => {
+    eraseCookie("token");
+    eraseCookie("refreshToken");
+    eraseCookie("role");
+    eraseCookie("user");
+    const persistentDeviceId = localStorage.getItem("persistentDeviceId");
+    const tempFcmToken = localStorage.getItem("tempFcmToken");
+    const fcmToken = localStorage.getItem("fcmToken");
+    localStorage.clear();
+    sessionStorage.clear();
+    if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
+    if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
+    if (fcmToken) localStorage.setItem("fcmToken", fcmToken);
+
+    toast.error("Session expired. Please log in again.", { title: "Session Expired" });
+
+    if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+    }
+};
+
 // Cleanup pending requests on response
 api.interceptors.response.use(
     (response) => {
@@ -178,59 +201,71 @@ api.interceptors.response.use(
             pendingRequests.delete(getRequestKey(error.config));
         }
 
-        // Check if error is due to token expiration and we haven't retried yet
-        if (error.response?.status === 401 && error.response?.data?.tokenExpired && !originalRequest._retry) {
-            if (isRefreshing) {
+        // Attach normalized error object to error instance for caller consumption
+        const normalized = normalizeApiError(error);
+        error.normalizedError = normalized;
+
+        const skipToast = originalRequest?.skipErrorToast || originalRequest?.headers?.['x-skip-error-toast'];
+
+        // Global toast handlers for 403, 429, and 500-599 errors if not explicitly suppressed
+        if (!skipToast) {
+            if (normalized.isForbidden) {
+                toast.error(normalized.message, { title: normalized.title });
+            } else if (normalized.isRateLimited) {
+                toast.warning(normalized.message, { title: normalized.title });
+            } else if (normalized.isServerError && !originalRequest?._retry) {
+                toast.error(normalized.message, { title: normalized.title });
+            }
+        }
+
+        // Standardized 401 Unauthenticated Handling
+        if (error.response?.status === 401) {
+            const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || originalRequest?.url?.includes('/auth/register');
+
+            if (!originalRequest._retry && !isAuthEndpoint) {
+                if (isRefreshing) {
+                    try {
+                        const token = await new Promise((resolve, reject) => {
+                            failedQueue.push({ resolve, reject });
+                        });
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        return api(originalRequest);
+                    } catch (err) {
+                        return Promise.reject(err);
+                    }
+                }
+
+                originalRequest._retry = true;
+                isRefreshing = true;
+
                 try {
-                    const token = await new Promise((resolve, reject) => {
-                        failedQueue.push({ resolve, reject });
-                    });
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                    return api(originalRequest);
+                    // Use standard axios with credentials to pass HttpOnly refresh cookie
+                    const { data } = await axios.post(
+                        `${import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api")}/auth/refresh-token`,
+                        {},
+                        { withCredentials: true }
+                    );
+                    if (data.success && data.token) {
+                        setCookie("token", data.token, 7);
+                        eraseCookie("refreshToken");
+
+                        api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+                        originalRequest.headers.Authorization = `Bearer ${data.token}`;
+
+                        processQueue(null, data.token);
+                        isRefreshing = false;
+                        return api(originalRequest);
+                    } else {
+                        throw new Error("Refresh failed");
+                    }
                 } catch (err) {
+                    processQueue(err, null);
+                    isRefreshing = false;
+                    handleSessionExpiry();
                     return Promise.reject(err);
                 }
-            }
-
-            originalRequest._retry = true;
-            isRefreshing = true;
-
-            try {
-                // Use standard axios with credentials to pass HttpOnly refresh cookie
-                const { data } = await axios.post(
-                    `${import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api")}/auth/refresh-token`,
-                    {},
-                    { withCredentials: true }
-                );
-                if (data.success && data.token) {
-                    setCookie("token", data.token, 7);
-                    eraseCookie("refreshToken");
-
-                    api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-                    originalRequest.headers.Authorization = `Bearer ${data.token}`;
-
-                    processQueue(null, data.token);
-                    isRefreshing = false;
-                    return api(originalRequest);
-                }
-            } catch (err) {
-                processQueue(err, null);
-                isRefreshing = false;
-                // If refresh fails, they must login again
-                eraseCookie("token");
-                eraseCookie("refreshToken");
-                eraseCookie("role");
-                eraseCookie("user");
-                const persistentDeviceId = localStorage.getItem("persistentDeviceId");
-                const tempFcmToken = localStorage.getItem("tempFcmToken");
-                const fcmToken = localStorage.getItem("fcmToken");
-                localStorage.clear();
-                sessionStorage.clear();
-                if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
-                if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
-                if (fcmToken) localStorage.setItem("fcmToken", fcmToken);
-                window.location.href = '/login';
-                return Promise.reject(err);
+            } else if (!isAuthEndpoint && originalRequest._retry) {
+                handleSessionExpiry();
             }
         }
 

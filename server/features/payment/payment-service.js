@@ -72,6 +72,49 @@ const safeEnd = (session) => {
 
 const syncEarningsStatus = async (providerId) => {
   try {
+    // ── Auto-release earnings for resolved complaints / disputes ─────────────
+    const Booking = mongoose.model('Booking');
+    const Complaint = mongoose.model('Complaint');
+
+    const heldEarnings = await ProviderEarning.find({
+      provider: providerId,
+      status: { $in: ['held', 'underreview', 'pendingrelease'] }
+    }).select('_id booking status netAmount').lean();
+
+    if (heldEarnings.length > 0) {
+      const bookingIds = heldEarnings.map(e => e.booking).filter(Boolean);
+      const bookings = await Booking.find({
+        _id: { $in: bookingIds }
+      }).select('_id disputeRaised disputeStatus hasComplaint status').lean();
+
+      for (const earning of heldEarnings) {
+        if (!earning.booking) continue;
+        const bk = bookings.find(b => b._id.toString() === earning.booking.toString());
+        if (bk) {
+          const isDisputeResolved = bk.disputeStatus === 'resolved' || bk.disputeRaised === false;
+          const activeComplaint = await Complaint.findOne({
+            booking: bk._id,
+            status: { $in: ['open', 'under_review', 'underreview', 'in_progress', 'escalated', 'waiting_for_customer', 'waiting_for_provider'] }
+          }).select('_id').lean();
+
+          if ((isDisputeResolved || bk.disputeStatus === 'resolved') && !activeComplaint) {
+            if (bk.disputeRaised || bk.hasComplaint) {
+              await Booking.updateOne(
+                { _id: bk._id },
+                { $set: { disputeRaised: false, hasComplaint: false, disputeStatus: 'resolved' } }
+              );
+            }
+            if (earning.netAmount > 0) {
+              await ProviderEarning.updateOne(
+                { _id: earning._id, status: { $in: ['held', 'underreview', 'pendingrelease'] } },
+                { $set: { status: 'available', isHeldByAdmin: false, holdReason: null } }
+              );
+            }
+          }
+        }
+      }
+    }
+
     // ── Four parallel aggregations as single source of truth ─────────────────
     // 1. ProviderEarning: earning lifecycle (held, available, paid, withdrawn…)
     // 2. PaymentRecord:   actual provider payout lifecycle (requested → completed)
@@ -872,6 +915,7 @@ class PaymentService {
       const disputeCount = await mongoose.model('Booking').countDocuments({
         provider: providerId,
         disputeRaised: true,
+        disputeStatus: { $ne: 'resolved' },
         status: { $ne: 'cancelled' }
       });
 
@@ -1082,6 +1126,7 @@ class PaymentService {
       const activeDispute = await Booking.findOne({
         provider: providerId,
         disputeRaised: true,
+        disputeStatus: { $ne: 'resolved' },
         status: { $nin: ['cancelled', 'completed'] }
       });
       if (activeDispute) {
@@ -1526,7 +1571,12 @@ class PaymentService {
             },
             holdReason: {
               $cond: [
-                { $eq: ["$bookingInfo.disputeRaised", true] },
+                {
+                  $and: [
+                    { $eq: ["$bookingInfo.disputeRaised", true] },
+                    { $ne: ["$bookingInfo.disputeStatus", "resolved"] }
+                  ]
+                },
                 "Active customer dispute under admin review",
                 {
                   $cond: [
@@ -1545,13 +1595,23 @@ class PaymentService {
             isWithdrawable: {
               $and: [
                 { $in: ["$status", ["available", "paid", "withdrawn"]] },
-                { $ne: ["$bookingInfo.disputeRaised", true] },
+                {
+                  $or: [
+                    { $ne: ["$bookingInfo.disputeRaised", true] },
+                    { $eq: ["$bookingInfo.disputeStatus", "resolved"] }
+                  ]
+                },
                 { $ne: ["$isHeldByAdmin", true] }
               ]
             },
             payoutStatus: {
               $cond: [
-                { $eq: ["$bookingInfo.disputeRaised", true] },
+                {
+                  $and: [
+                    { $eq: ["$bookingInfo.disputeRaised", true] },
+                    { $ne: ["$bookingInfo.disputeStatus", "resolved"] }
+                  ]
+                },
                 "held",
                 {
                   $cond: [
@@ -3647,7 +3707,7 @@ class PaymentService {
           const booking = earning.booking;
           if (booking) {
             const bookingId = booking._id;
-            if (booking.disputeRaised || booking.disputeStatus === 'pending' || booking.disputeStatus === 'underreview') {
+            if ((booking.disputeRaised && booking.disputeStatus !== 'resolved') || booking.disputeStatus === 'pending' || booking.disputeStatus === 'underreview') {
               console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${bookingId}`);
               continue;
             }

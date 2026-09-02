@@ -40,34 +40,54 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
   const containerRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Fetch all searchable data once when user focuses the search bar
-  const fetchData = async () => {
-    if (hasFetched) return;
+  const debounceTimerRef = useRef(null);
+
+  // Dynamic debounced server-side search as user types (limit 10)
+  useEffect(() => {
+    if (!query.trim()) {
+      setServices([]);
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    try {
-      const svcRes = await getPublicServices(1, 100);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
-      if (svcRes.data?.success) {
-        setServices(svcRes.data.data || []);
-      }
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const cleanQuery = query.trim();
+        const svcPromise = getPublicServices(1, 10, cleanQuery).catch(() => ({ data: { success: false } }));
+        const bookingPromise = isAuthenticated
+          ? getCustomerBookings(new URLSearchParams({ page: 1, limit: 10, search: cleanQuery })).catch(() => ({ data: { success: false } }))
+          : Promise.resolve({ data: { success: false } });
 
+        const [svcRes, bookingsRes] = await Promise.all([svcPromise, bookingPromise]);
 
-      if (isAuthenticated) {
-        const bookingsParams = new URLSearchParams({ page: 1, limit: 50 });
-        const bookingsRes = await getCustomerBookings(bookingsParams);
+        if (svcRes.data?.success) {
+          setServices(svcRes.data.data || []);
+        } else {
+          setServices([]);
+        }
+
         if (bookingsRes.data?.success) {
           setBookings(bookingsRes.data.data || []);
+        } else {
+          setBookings([]);
         }
+      } catch (err) {
+        console.error("Debounced search error:", err);
+      } finally {
+        setLoading(false);
       }
-      setHasFetched(true);
-    } catch (err) {
-      console.error("Error prefetching search data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, 350);
 
-  // Filter logic
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [query, isAuthenticated]);
+
+  // Filter logic for categories and current search results
   const getFilteredSuggestions = () => {
     if (!query.trim()) return { categories: [], services: [], bookings: [] };
     const cleanQuery = query.toLowerCase().trim();
@@ -76,22 +96,10 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
       cat.name?.toLowerCase().includes(cleanQuery)
     ).slice(0, 5);
 
-    const filteredSvcs = services.filter(svc =>
-      svc.title?.toLowerCase().includes(cleanQuery) ||
-      svc.description?.toLowerCase().includes(cleanQuery)
-    ).slice(0, 5);
-
-    const filteredBookings = bookings.filter(b => {
-      const firstSvcTitle = b.services?.[0]?.service?.title || '';
-      const bookingId = b.bookingId || '';
-      return firstSvcTitle.toLowerCase().includes(cleanQuery) ||
-        bookingId.toLowerCase().includes(cleanQuery);
-    }).slice(0, 5);
-
     return {
       categories: filteredCats,
-      services: filteredSvcs,
-      bookings: filteredBookings
+      services: services.slice(0, 5),
+      bookings: bookings.slice(0, 5)
     };
   };
 
@@ -181,7 +189,6 @@ const SearchBar = ({ placeholder = "Search services, categories, bookings..." })
           value={query}
           onFocus={() => {
             if (!isBookingsPage) {
-              fetchData();
               setIsOpen(true);
             }
           }}

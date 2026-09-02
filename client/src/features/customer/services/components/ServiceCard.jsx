@@ -24,7 +24,11 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
         <div className="relative h-32 overflow-hidden bg-gray-50">
           <img
             src={imageUrl}
-            alt={service.title}
+            alt={service.title || "Electrical Service"}
+            loading="lazy"
+            decoding="async"
+            width={300}
+            height={128}
             className="w-full h-full object-cover"
             onError={(e) => e.target.src = defaultServiceImage}
           />

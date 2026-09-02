@@ -50,11 +50,13 @@ const FailedPaymentsPage = lazy(() => import("../features/admin/finance/FailedPa
 const AuditLogsPage = lazy(() => import("../features/admin/finance/AuditLogsPage"));
 
 import { AdminFilterProvider } from "../context/AdminFilterContext";
+import { AppErrorBoundary } from "../components/ui/Error";
 
 const AdminRoutes = () => {
     return (
         <AdminFilterProvider>
-            <Suspense fallback={<LoadingSpinner />}>
+            <AppErrorBoundary>
+                <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                     <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
                         <Route element={<AdminLayout />}>
@@ -111,6 +113,7 @@ const AdminRoutes = () => {
                     </Route>
                 </Routes>
             </Suspense>
+            </AppErrorBoundary>
         </AdminFilterProvider>
     );
 }

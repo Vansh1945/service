@@ -62,7 +62,7 @@ exports.submitContact = async (req, res, next) => {
 exports.getAllContacts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 10), 100);
     const skip = (page - 1) * limit;
 
     // Build filter
@@ -115,17 +115,26 @@ exports.getAllContacts = async (req, res, next) => {
       .populate('adminReply.repliedBy', 'name email');
 
     const total = await Contact.countDocuments(filter);
-    const totalPages = Math.ceil(total / limit);
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const calculatedTotalPages = Math.ceil(total / limitNum) || 1;
 
     res.status(200).json({
       success: true,
+      message: "Contact submissions retrieved successfully",
       data: contacts,
       pagination: {
-        currentPage: page,
-        totalPages,
+        page: pageNum,
+        currentPage: pageNum,
+        limit: limitNum,
+        total,
         totalContacts: total,
-        hasNext: page < totalPages,
-        hasPrev: page > 1
+        totalPages: calculatedTotalPages,
+        pages: calculatedTotalPages,
+        hasNextPage: pageNum < calculatedTotalPages,
+        hasPreviousPage: pageNum > 1,
+        hasNext: pageNum < calculatedTotalPages,
+        hasPrev: pageNum > 1
       }
     });
 

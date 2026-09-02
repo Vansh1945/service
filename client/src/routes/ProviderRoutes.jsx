@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import LoadingSpinner from "../components/ui/Loader";
 import ProtectedRoute from "../components/ProtectedRoute";
+import { AppErrorBoundary } from "../components/ui/Error";
 
 // 🚀 Advanced preloading factory for critical components
 const lazyWithPreload = (factory) => {
@@ -27,28 +28,34 @@ const ProviderRoutes = () => {
     useEffect(() => {
         ProviderDashboard.preload();
         ProviderProfile.preload();
+        ProviderEarning.preload();
+        ProviderSupport.preload();
+        ProviderFeedback.preload();
+        ProviderBookingDashboard.preload();
     }, []);
 
     return (
-        <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-                <Route element={<ProtectedRoute allowedRoles={["provider"]} requireTest />}>
-                    <Route element={<ProviderLayout />}>
-                        <Route index element={<ProviderDashboard />} />
-                        <Route path="profile" element={<ProviderProfile />} />
-                        <Route path="dashboard" element={<ProviderDashboard />} />
-                        <Route path="calendar" element={<ProviderCalendar />} />
-                        <Route path="test" element={<ProviderTestPage />} />
-                        <Route path="booking-requests" element={<ProviderBookingDashboard />} />
-                        <Route path="earnings" element={<ProviderEarning />} />
-                        <Route path="feedbacks" element={<ProviderFeedback />} />
-                        <Route path="support" element={<ProviderSupport />} />
-                        <Route path="refer-providers" element={<ReferProviders />} />
+        <AppErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                    <Route element={<ProtectedRoute allowedRoles={["provider"]} requireTest />}>
+                        <Route element={<ProviderLayout />}>
+                            <Route index element={<ProviderDashboard />} />
+                            <Route path="profile" element={<ProviderProfile />} />
+                            <Route path="dashboard" element={<ProviderDashboard />} />
+                            <Route path="calendar" element={<ProviderCalendar />} />
+                            <Route path="test" element={<ProviderTestPage />} />
+                            <Route path="booking-requests" element={<ProviderBookingDashboard />} />
+                            <Route path="earnings" element={<ProviderEarning />} />
+                            <Route path="feedbacks" element={<ProviderFeedback />} />
+                            <Route path="support" element={<ProviderSupport />} />
+                            <Route path="refer-providers" element={<ReferProviders />} />
+                        </Route>
+                        <Route path="track/:bookingId" element={<ProviderTrackingPage />} />
                     </Route>
-                    <Route path="track/:bookingId" element={<ProviderTrackingPage />} />
-                </Route>
-            </Routes>
-        </Suspense>
+                </Routes>
+            </Suspense>
+        </AppErrorBoundary>
     );
 }
 

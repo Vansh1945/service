@@ -5,6 +5,7 @@ import "./index.css";
 import { useAuth } from "./context/auth";
 import AppInstall from "./components/AppInstall";
 import { FALLBACK_ASSETS } from "./config/constants";
+import { trackPageView } from "../firebase";
 
 // Components
 import Navbar from "./components/Navbar";
@@ -27,29 +28,28 @@ const PrivacyPolicy = lazyWithRetry(() => import("./features/shared/static/Priva
 const NotFound = lazyWithRetry(() => import("./features/shared/static/NotFound"));
 
 import LoadingSpinner from "./components/ui/Loader";
+import { TopProgressBar } from "./components/ui/Processing";
 import RefundPolicy from "./features/shared/static/RefundPolicy";
 
 // Lazy-load wrapper: auto-reloads page once on chunk load failure (stale deployment)
-function lazyWithRetry(importFn) {
-  return lazy(() =>
-    importFn().catch((error) => {
-      // Chunk load failed — likely a new deployment invalidated old hashes
-      const hasReloaded = sessionStorage.getItem('chunk_reload');
+function lazyWithRetry(importFn, key = 'chunk_reload') {
+  return lazy(async () => {
+    try {
+      const module = await importFn();
+      // Clear reload flag ONLY after successful lazy module resolution
+      sessionStorage.removeItem(key);
+      return module;
+    } catch (error) {
+      const hasReloaded = sessionStorage.getItem(key);
       if (!hasReloaded) {
-        sessionStorage.setItem('chunk_reload', 'true');
+        sessionStorage.setItem(key, 'true');
         window.location.reload();
         return new Promise(() => { }); // Never resolves — page is reloading
       }
-      sessionStorage.removeItem('chunk_reload');
+      sessionStorage.removeItem(key);
       throw error; // If reload didn't fix it, throw original error
-    })
-  );
-}
-
-
-// Clear the reload flag on successful page load
-if (sessionStorage.getItem('chunk_reload')) {
-  sessionStorage.removeItem('chunk_reload');
+    }
+  });
 }
 
 const AdminRoutes = lazyWithRetry(() => import("./routes/AdminRoutes"));
@@ -113,11 +113,11 @@ const updateFavicon = (favicon) => {
   document.head.appendChild(newFavicon);
 };
 
-const applyDocumentSettings = (settings) => {
-  if (settings.companyName) {
+const applyDocumentSettings = (settings, isDashboard = false) => {
+  // Only overwrite document title and SEO meta on dashboard routes, letting public page Helmets control SEO titles
+  if (isDashboard && settings.companyName) {
     document.title = settings.companyName;
 
-    // Update Open Graph and Twitter SEO titles
     const ogTitle = document.querySelector("meta[property='og:title']");
     if (ogTitle) ogTitle.setAttribute("content", settings.companyName);
 
@@ -137,7 +137,7 @@ const applyDocumentSettings = (settings) => {
     }
   }
 
-  if (settings.description) {
+  if (isDashboard && settings.description) {
     const metaDesc = document.querySelector("meta[name='description']");
     if (metaDesc) metaDesc.setAttribute("content", settings.description);
 
@@ -197,12 +197,13 @@ const App = () => {
   const [updateNotes, setUpdateNotes] = useState('');
   const reloadTimerRef = useRef(null);
 
-  // Scroll to top on pathname change (Scroll Restoration)
+  // Scroll to top and track SPA page view on pathname/search change
   useEffect(() => {
     if (!loc.hash) {
       window.scrollTo(0, 0);
     }
-  }, [loc.pathname, loc.hash]);
+    trackPageView(loc.pathname + loc.search);
+  }, [loc.pathname, loc.search, loc.hash]);
 
   const triggerCacheClearAndPrompt = async (data) => {
     console.log('[PWA Update] Triggering asset clear and upgrade flow...');
@@ -353,8 +354,8 @@ const App = () => {
       splashScreen: globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen || null
     };
 
-    applyDocumentSettings(settings);
-  }, [globalSettings, activeBranding, loc.pathname, isAuthenticated, userRole]);
+    applyDocumentSettings(settings, isDashboardRoute);
+  }, [globalSettings, activeBranding, loc.pathname, isAuthenticated, userRole, isDashboardRoute]);
 
   // PWA version update check
   useEffect(() => {
@@ -512,6 +513,8 @@ const App = () => {
 
   return (
     <Suspense fallback={<LoadingSpinner />}>
+      <TopProgressBar />
+
       {/* 🌟 Dynamic In-App Splash Screen Overlay */}
       {showSplash && (
         <div

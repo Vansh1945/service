@@ -38,7 +38,7 @@ export const useClickOutside = (ref1, ref2, callback) => {
 export const UserAvatar = ({ user, size = "w-8 h-8", fallbackChar = 'U' }) => {
     const initials = getUserInitials(user, fallbackChar);
     return user?.profilePicUrl ? (
-        <img src={user.profilePicUrl} alt="Profile" className={`${size} rounded-full object-cover border border-primary/20 shadow-sm`} />
+        <img src={user.profilePicUrl} alt="User Profile" loading="lazy" decoding="async" className={`${size} rounded-full object-cover border border-primary/20 shadow-sm`} />
     ) : (
         <div className={`${size} rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs shadow-sm`}>{initials}</div>
     );
@@ -126,7 +126,7 @@ const CustomerLayout = () => {
                         <div className="flex items-center space-x-3 min-w-0 pr-2">
                             <Link to="/customer/services" className="flex items-center space-x-2.5 min-w-0 group">
                                 {logo ? (
-                                    <img src={logo} alt={companyName} className="flex-shrink-0 h-9 md:h-11 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
+                                    <img src={logo} alt={companyName} loading="eager" decoding="async" className="flex-shrink-0 h-9 md:h-11 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
                                 ) : (
                                     <FaBolt className="h-9 w-auto text-primary transition-transform duration-300 group-hover:rotate-12" />
                                 )}

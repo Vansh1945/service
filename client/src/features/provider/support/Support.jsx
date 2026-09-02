@@ -16,7 +16,7 @@ import { normalizeStatus, isComplaintResolved } from '../../../utils/status';
 import CDNImage from '../../../components/CDNImage';
 import ChatModal from '../../../components/chat/ChatModal';
 import LoadingSpinner from '../../../components/ui/Loader';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import Select from '../../../components/ui/Select';
 import Input from '../../../components/ui/Input';
 import Textarea from '../../../components/ui/Textarea';

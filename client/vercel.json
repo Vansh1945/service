@@ -31,6 +31,9 @@
   ],
   "routes": [
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/logo.png",
       "dest": "https://raj-electrical-services.onrender.com/api/system-setting/settings/branding-logo?role=customer"
     },
@@ -49,17 +52,6 @@
     {
       "src": "/api/(.*)",
       "dest": "https://raj-electrical-services.onrender.com/api/$1"
-    },
-    {
-      "src": "/robots.txt",
-      "dest": "/robots.txt"
-    },
-    {
-      "src": "/sitemap.xml",
-      "dest": "/sitemap.xml"
-    },
-    {
-      "handle": "filesystem"
     },
     {
       "src": "/(.*)",

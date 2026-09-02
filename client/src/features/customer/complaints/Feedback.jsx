@@ -16,7 +16,7 @@ import {
   editFeedback as editFeedbackService
 } from '../../../services/FeedbackService';
 import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSkeleton';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import Rating from '../../../components/Rating';
 
 const Feedback = () => {
@@ -112,7 +112,7 @@ const Feedback = () => {
       setSelectedFeedback(localFb);
       setIsViewing(true);
     }
-    
+
     try {
       const response = await getFeedbackService(feedbackId);
       const responseData = response.data;
@@ -237,8 +237,8 @@ const Feedback = () => {
         <div className="max-w-4xl mx-auto px-4 py-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => navigate(-1)} 
+              <button
+                onClick={() => navigate(-1)}
                 className="p-1 rounded-full hover:bg-neutral-100 transition-colors"
                 aria-label="Go back"
               >
@@ -331,8 +331,8 @@ const Feedback = () => {
             </div>
             <h3 className="text-xs font-bold text-neutral-900 mb-0.5">No reviews yet</h3>
             <p className="text-[10px] text-neutral-400 mb-3.5">Your reviews will appear here</p>
-            <button 
-              onClick={openAddFeedbackModal} 
+            <button
+              onClick={openAddFeedbackModal}
               className="bg-primary text-white px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-primary/90 transition-colors shadow-sm"
             >
               Write First Review
@@ -379,7 +379,7 @@ const Feedback = () => {
                       <p className="text-[9px] text-neutral-400 mt-0.5">
                         Booked on {booking?.date ? formatDate(booking.date) : formatDate(feedback.createdAt)}
                       </p>
-                      
+
                       {/* Provider Profile Info */}
                       <div className="flex items-center gap-1.5 mt-1.5">
                         <img
@@ -396,7 +396,7 @@ const Feedback = () => {
                         {(provider?.kycStatus === 'approved' || provider?.trustedProvider) && (
                           <span className="inline-flex items-center text-primary" title="Verified Professional">
                             <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                             </svg>
                           </span>
                         )}
@@ -416,17 +416,17 @@ const Feedback = () => {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <button 
-                        onClick={() => getFeedback(feedback._id)} 
-                        className="p-1 text-primary hover:bg-primary/5 rounded-lg transition-colors border border-primary/20" 
+                      <button
+                        onClick={() => getFeedback(feedback._id)}
+                        className="p-1 text-primary hover:bg-primary/5 rounded-lg transition-colors border border-primary/20"
                         title="View Detailed Rating"
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
                       {new Date() - new Date(feedback.createdAt) <= 7 * 24 * 60 * 60 * 1000 && (
-                        <button 
-                          onClick={() => startEditing(feedback)} 
-                          className="p-1 text-success hover:bg-success/5 rounded-lg transition-colors border border-success/20" 
+                        <button
+                          onClick={() => startEditing(feedback)}
+                          className="p-1 text-success hover:bg-success/5 rounded-lg transition-colors border border-success/20"
                           title="Edit Review"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -455,8 +455,8 @@ const Feedback = () => {
                   {isAddingFeedback && !selectedBookingForFeedback ? 'Select a booking to review' : 'Rate your experience'}
                 </p>
               </div>
-              <button 
-                onClick={isAddingFeedback ? closeAddFeedbackModal : closeModal} 
+              <button
+                onClick={isAddingFeedback ? closeAddFeedbackModal : closeModal}
                 className="p-1 hover:bg-neutral-100 rounded-full transition-colors"
                 aria-label="Close modal"
               >
@@ -576,8 +576,8 @@ const Feedback = () => {
                             }}
                             className="transition-transform hover:scale-110"
                           >
-                            <Star 
-                              className={`w-7 h-7 ${(isEditing ? editingForm.serviceRating : feedbackForm.serviceRating) >= star ? 'fill-accent text-accent' : 'text-neutral-200'}`} 
+                            <Star
+                              className={`w-7 h-7 ${(isEditing ? editingForm.serviceRating : feedbackForm.serviceRating) >= star ? 'fill-accent text-accent' : 'text-neutral-200'}`}
                             />
                           </button>
                         ))}
@@ -611,8 +611,8 @@ const Feedback = () => {
                             }}
                             className="transition-transform hover:scale-110"
                           >
-                            <Star 
-                              className={`w-7 h-7 ${(isEditing ? editingForm.providerRating : feedbackForm.providerRating) >= star ? 'fill-accent text-accent' : 'text-neutral-200'}`} 
+                            <Star
+                              className={`w-7 h-7 ${(isEditing ? editingForm.providerRating : feedbackForm.providerRating) >= star ? 'fill-accent text-accent' : 'text-neutral-200'}`}
                             />
                           </button>
                         ))}
@@ -629,9 +629,9 @@ const Feedback = () => {
 
                   {/* Form Actions */}
                   <div className="flex gap-2 pt-1">
-                    <button 
-                      type="button" 
-                      onClick={isEditing ? closeModal : closeAddFeedbackModal} 
+                    <button
+                      type="button"
+                      onClick={isEditing ? closeModal : closeAddFeedbackModal}
                       className="flex-1 py-1.5 border border-neutral-200 rounded-lg text-xs font-medium hover:bg-neutral-50 transition-colors"
                     >
                       Cancel

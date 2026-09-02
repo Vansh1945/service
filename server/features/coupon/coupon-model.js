@@ -99,7 +99,10 @@ const couponSchema = new Schema({
   selectedZones: [{
     type: Schema.Types.ObjectId,
     ref: 'Zone'
-  }]
+  }],
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -111,6 +114,7 @@ couponSchema.index({ expiryDate: 1 });
 couponSchema.index({ assignedTo: 1, isActive: 1 });
 couponSchema.index({ isGlobal: 1, isActive: 1 });
 couponSchema.index({ isFirstBooking: 1, isActive: 1 });
+couponSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // -------------------- Virtuals --------------------
 couponSchema.virtual('remainingUses').get(function () {

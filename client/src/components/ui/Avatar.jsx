@@ -23,7 +23,7 @@ const Avatar = ({ src, alt = 'Avatar', name, size = 'md', className = '' }) => {
       } ${className}`}
     >
       {src ? (
-        <img src={src} alt={alt} className="w-full h-full object-cover" />
+        <img src={src} alt={alt} loading="lazy" decoding="async" className="w-full h-full object-cover" />
       ) : name ? (
         <span>{getInitials(name)}</span>
       ) : (

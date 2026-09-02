@@ -76,7 +76,7 @@ const Navbar = () => {
   return (
     <nav
       role="navigation"
-      aria-label="Main navigation"
+      aria-label="Primary navigation"
       className={`fixed w-full top-0 z-50 transition-all duration-500 ease-out bg-white border-b ${scrolled
         ? 'border-gray-200 shadow-lg'
         : 'border-gray-100'
@@ -96,6 +96,7 @@ const Navbar = () => {
                   <img
                     src={systemSettings.logo}
                     alt={systemSettings.companyName || DEFAULT_COMPANY_NAME}
+                    decoding="async"
                     className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-2 md:mr-3"
                   />
                 )}

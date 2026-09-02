@@ -32,7 +32,7 @@ const ServiceListingPage = () => {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All');
   const [priceRange, setPriceRange] = useState([0, 10000]);
-  const [sortBy, setSortBy] = useState('popular');
+  const [sortBy, setSortByState] = useState(searchParams.get('sort') || 'popular');
   const [retryCount, setRetryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRatings, setSelectedRatings] = useState([]);
@@ -42,6 +42,17 @@ const ServiceListingPage = () => {
   const searchTimeoutRef = useRef(null);
   const lastPushedSearchRef = useRef(searchParams.get('search') || '');
   const isInitialMount = useRef(true);
+
+  const handleSortChange = (newSort) => {
+    setSortByState(newSort);
+    const params = new URLSearchParams(searchParams);
+    if (newSort && newSort !== 'popular') {
+      params.set('sort', newSort);
+    } else {
+      params.delete('sort');
+    }
+    setSearchParams(params);
+  };
 
   // Fetch all services
   const fetchAllServices = async () => {
@@ -69,7 +80,7 @@ const ServiceListingPage = () => {
       }
     } catch (error) {
       console.error('Fetch services error:', error);
-      setError(error.message || 'Failed to load services');
+      setError(error);
 
       if (retryCount < 2) {
         setTimeout(() => {
@@ -88,9 +99,11 @@ const ServiceListingPage = () => {
     setSearchTerm(value);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
-      const params = {};
-      if (value) params.search = value;
-      if (selectedCategory !== 'All') params.category = selectedCategory;
+      const params = new URLSearchParams(searchParams);
+      if (value) params.set('search', value);
+      else params.delete('search');
+      if (selectedCategory !== 'All') params.set('category', selectedCategory);
+      else params.delete('category');
       lastPushedSearchRef.current = value;
       setSearchParams(params);
     }, 300);
@@ -111,13 +124,17 @@ const ServiceListingPage = () => {
   useEffect(() => {
     const searchVal = searchParams.get('search') || '';
     const categoryVal = searchParams.get('category') || 'All';
+    const sortVal = searchParams.get('sort') || 'popular';
 
     if (searchVal !== lastPushedSearchRef.current) {
       setSearchTerm(searchVal);
       lastPushedSearchRef.current = searchVal;
     }
     setSelectedCategory(categoryVal);
-  }, [searchParams]);
+    if (sortVal !== sortBy) {
+      setSortByState(sortVal);
+    }
+  }, [searchParams, sortBy]);
 
   const categoriesForFilter = useMemo(() => {
     return [{ value: 'All', label: 'All Categories' }, ...categoriesData];
@@ -244,12 +261,12 @@ const ServiceListingPage = () => {
   if (error && allServices.length === 0) {
     return (
       <ErrorState
-        title="Failed to Load"
-        message={error}
-        onRetry={() => fetchAllServices()}
+        error={error}
+        onRetry={() => { setError(null); fetchAllServices(); }}
         retryText="Try Again"
         onBack={() => navigate('/')}
         backText="Go Home"
+        showHome
       />
     );
   }
@@ -291,7 +308,11 @@ const ServiceListingPage = () => {
                     {isUrlIcon ? (
                       <img
                         src={cat.icon}
-                        alt={cat.label}
+                        alt={cat.label || "Category Icon"}
+                        loading="lazy"
+                        decoding="async"
+                        width={24}
+                        height={24}
                         className={`w-5 h-5 md:w-6 md:h-6 object-contain ${isActive ? '' : 'opacity-80 group-hover:opacity-100'}`}
                         onError={(e) => {
                           e.target.style.display = 'none';

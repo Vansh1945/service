@@ -144,6 +144,7 @@ export default defineConfig(({ mode }) => {
     css: {
       postcss: './postcss.config.cjs'
     },
+    esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
     build: {
       chunkSizeWarningLimit: 1000,
       modulePreload: {

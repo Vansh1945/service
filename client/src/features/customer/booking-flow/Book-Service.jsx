@@ -9,7 +9,7 @@ import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, In
 import AddressSelector from '../../../components/AddressSelector';
 import AddressModal from '../../../components/modals/AddressModal';
 import Loader from '../../../components/ui/Loader';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import { getPublicServiceById } from '../../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../../services/CouponService';
 import { createBooking, getBookingEstimate } from '../../../services/BookingService';
@@ -1294,8 +1294,8 @@ const BookService = () => {
                                 setFormData(prev => ({ ...prev, addressId: addr._id || '' }));
                               }}
                               className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${isSelected
-                                  ? 'border-primary bg-primary/5 shadow-xs'
-                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                                ? 'border-primary bg-primary/5 shadow-xs'
+                                : 'border-gray-200 bg-white hover:border-gray-300'
                                 }`}
                             >
                               <input

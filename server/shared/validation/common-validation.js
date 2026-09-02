@@ -7,6 +7,34 @@ const objectIdSchema = z.string().refine((val) => {
   message: "Invalid ObjectId format"
 });
 
+// Parameter Validation Schemas
+const idParamSchema = z.object({ id: objectIdSchema });
+const bookingIdParamSchema = z.object({ bookingId: objectIdSchema });
+const providerIdParamSchema = z.object({ providerId: objectIdSchema });
+const userIdParamSchema = z.object({ userId: objectIdSchema });
+const feedbackIdParamSchema = z.object({ feedbackId: objectIdSchema });
+const complaintIdParamSchema = z.object({ complaintId: objectIdSchema });
+const zoneIdParamSchema = z.object({ zoneId: objectIdSchema });
+const serviceIdParamSchema = z.object({ serviceId: objectIdSchema });
+const couponIdParamSchema = z.object({ couponId: objectIdSchema });
+const addressIdParamSchema = z.object({ addressId: objectIdSchema });
+const roomIdParamSchema = z.object({ roomId: objectIdSchema });
+
+// Universal Pagination Query Schema
+const paginationSchema = z.object({
+  page: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (val === undefined || val === null || val === '') return 1;
+    const num = Number(val);
+    return isNaN(num) || num < 1 ? 1 : Math.floor(num);
+  }),
+  limit: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (val === undefined || val === null || val === '') return 10;
+    const num = Number(val);
+    if (isNaN(num) || num < 1) return 10;
+    return Math.min(Math.floor(num), 100);
+  })
+}).passthrough();
+
 // Middleware factory for validation
 const validate = (location, schema) => {
   return async (req, res, next) => {
@@ -34,7 +62,10 @@ const validate = (location, schema) => {
         return res.status(400).json({
           success: false,
           message: errorMessage,
-          error: errorMessage,
+          error: {
+            code: "VALIDATION_ERROR",
+            details: formattedErrors
+          },
           errors: formattedErrors
         });
       }
@@ -288,14 +319,52 @@ const createTemplateSchema = z.object({
 
 const updateTemplateSchema = createTemplateSchema.partial();
 
+const userProfileUpdateSchema = z.object({
+  name: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email().optional(),
+  bio: z.string().optional()
+}).passthrough();
+
+const favoriteProviderToggleSchema = z.object({
+  providerId: objectIdSchema
+}).passthrough();
+
+const savedAddressSchema = z.object({
+  title: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  pincode: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  isDefault: z.boolean().optional()
+}).passthrough();
+
 const anyBodySchema = z.any();
 
 module.exports = {
   objectIdSchema,
+  idParamSchema,
+  bookingIdParamSchema,
+  providerIdParamSchema,
+  userIdParamSchema,
+  feedbackIdParamSchema,
+  complaintIdParamSchema,
+  zoneIdParamSchema,
+  serviceIdParamSchema,
+  couponIdParamSchema,
+  addressIdParamSchema,
+  roomIdParamSchema,
+  paginationSchema,
   validateBody,
   validateQuery,
   validateParams,
   anyBodySchema,
+  userProfileUpdateSchema,
+  favoriteProviderToggleSchema,
+  savedAddressSchema,
   // Chat
   createRoomSchema,
   sendMessageSchema,
@@ -331,3 +400,4 @@ module.exports = {
   createTemplateSchema,
   updateTemplateSchema
 };
+

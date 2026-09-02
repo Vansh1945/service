@@ -9,8 +9,10 @@ import TransactionLedgerDetailModal from './components/TransactionLedgerDetailMo
 import { fmtDateTime, fmtDate, truncateId } from '../../../utils/format';
 import {
   Layers, RefreshCw, TrendingUp, TrendingDown, DollarSign,
-  AlertCircle, ArrowUpRight, ArrowDownLeft, Minus
+  AlertCircle, ArrowUpRight, ArrowDownLeft, Minus, Receipt
 } from 'lucide-react';
+import EmptyState from '../../../components/ui/EmptyState';
+import ErrorState from '../../../components/ui/Error';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Display helpers — pure display, no financial logic
@@ -305,18 +307,15 @@ const AdminTransactions = () => {
         {loading ? (
           <TableSkeleton rows={8} columns={11} standalone />
         ) : error ? (
-          <div className="p-12 text-center">
-            <AlertCircle className="w-10 h-10 text-rose-400 mx-auto mb-3" />
-            <p className="text-rose-600 font-semibold text-sm">{error}</p>
-            <button onClick={fetchLedger} className="mt-3 px-4 py-2 bg-rose-50 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-100">
-              Retry
-            </button>
-          </div>
+          <ErrorState error={error} onRetry={fetchLedger} />
         ) : transactions.length === 0 ? (
-          <div className="p-16 text-center">
-            <Layers className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm font-medium">No ledger entries found for the selected filters.</p>
-          </div>
+          <EmptyState
+            icon={Receipt}
+            title="No ledger entries found"
+            message="There are no transaction records matching the selected active filters."
+            actionLabel={activeLedger !== 'all' || searchQuery ? "Reset Filters" : undefined}
+            onAction={activeLedger !== 'all' || searchQuery ? () => { setActiveLedger('all'); setSearchQuery(''); } : undefined}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-gray-700 whitespace-nowrap min-w-[1100px]">

@@ -8,7 +8,7 @@ import {
   Timer, Zap, Star, Trophy, BarChart3, Activity, X, ChevronDown, Loader2
 } from 'lucide-react';
 import { formatDate } from '../../../utils/format';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 
 
 const useTestTimer = (initialTime, isActive, onTimeUp) => {
@@ -360,10 +360,10 @@ const ProviderTestPage = () => {
         const testId = data.testId;
         const detailsRes = await TestService.getTestDetails(testId);
         const detailsData = detailsRes.data;
-        
+
         if (detailsData.success) {
           const testData = detailsData.data;
-          
+
           setCurrentTest(testData);
           setCurrentQuestionIndex(0);
           setAnswers({});
@@ -677,12 +677,12 @@ const ProviderTestPage = () => {
                   <h2 className="text-2xl font-semibold text-secondary mb-2">
                     Question {currentQuestionIndex + 1} of {currentTest.questions.length}
                   </h2>
-                    <p className="text-secondary/80 flex items-center">
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      {currentTest.questions[currentQuestionIndex]?.categoryName || 
-                       categories.find(cat => cat._id === currentTest.questions[currentQuestionIndex]?.categoryId)?.name || 
-                       'Category'}
-                    </p>
+                  <p className="text-secondary/80 flex items-center">
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    {currentTest.questions[currentQuestionIndex]?.categoryName ||
+                      categories.find(cat => cat._id === currentTest.questions[currentQuestionIndex]?.categoryId)?.name ||
+                      'Category'}
+                  </p>
                 </div>
                 <TimerDisplay
                   timeLeft={timeLeft}

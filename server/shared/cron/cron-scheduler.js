@@ -25,6 +25,32 @@ const startCronJobs = () => {
                 await settings.save();
             }
 
+            if (process.env.DISABLE_CRON === 'true' || process.env.DISABLE_CRON === '1') {
+                return;
+            }
+
+            // Multi-instance distributed locking guard:
+            // Ensures only ONE backend instance executes background tasks per 45s window
+            const now = new Date();
+            const lockThreshold = new Date(now.getTime() - 45 * 1000);
+            const lockAcquired = await SystemConfig.findOneAndUpdate(
+                {
+                    _id: settings._id,
+                    $or: [
+                        { lastCronLockAt: { $exists: false } },
+                        { lastCronLockAt: null },
+                        { lastCronLockAt: { $lt: lockThreshold } }
+                    ]
+                },
+                { $set: { lastCronLockAt: now } },
+                { new: true }
+            );
+
+            if (!lockAcquired) {
+                // Another backend instance already claimed cron execution for this cycle
+                return;
+            }
+
             // 1. SLA Checks
             try {
                 const BookingService = require('../../features/booking/booking-service');
@@ -49,7 +75,7 @@ const startCronJobs = () => {
                 for (const booking of expiredBookings) {
                     if (booking.metadata?.assignmentInProgress) continue;
                     console.log(`[DispatchEngine] Booking ${booking._id} alert expired for provider ${booking.provider}. Delegating to Retry Manager...`);
-                    
+
                     const ProviderAssignmentService = require('../../features/booking/provider-assignment-service');
                     await ProviderAssignmentService.handleRetry(booking._id, {
                         reason: 'Provider accept timeout',
@@ -77,7 +103,6 @@ const startCronJobs = () => {
             }
 
             // 3. Pending Scheduled Notifications
-            const now = new Date();
             const pendingNotifications = await Notification.find({
                 status: 'pending',
                 scheduledFor: { $lte: now },

@@ -128,11 +128,19 @@ const TermsAndConditions = () => {
         <title>Terms & Conditions | {companyName}</title>
         <meta name="description" content={`Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with ${companyName}.`} />
         <meta name="keywords" content={`terms and conditions, user agreement, electrical services, ${companyName}`} />
-        <link rel="canonical" href={window.location.href} />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/terms-and-conditions" />
         <meta property="og:title" content={`Terms & Conditions | ${companyName}`} />
         <meta property="og:description" content={`Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with ${companyName}.`} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/terms-and-conditions" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`Terms & Conditions | ${companyName}`} />
+        <meta name="twitter:description" content={`Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with ${companyName}.`} />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/terms-and-conditions" />
       </Helmet>
 
       {/* Header Section */}

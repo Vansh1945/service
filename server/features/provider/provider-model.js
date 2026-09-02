@@ -476,7 +476,18 @@ const providerSchema = new mongoose.Schema({
     blockedTill: Date,
     isDeleted: {
         type: Boolean,
-        default: false
+        default: false,
+        index: true
+    },
+    deletedAt: {
+        type: Date,
+        default: null,
+        index: true
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Admin',
+        default: null
     },
     isActive: {
         type: Boolean,
@@ -570,16 +581,15 @@ const providerSchema = new mongoose.Schema({
     }
 });
 
-// Indexes for query optimization
-providerSchema.index({ role: 1 });
+// Indexes for query optimization (Redundant single-field prefix indexes removed)
 providerSchema.index({ services: 1 });
-providerSchema.index({ isActive: 1, approved: 1 });
 providerSchema.index({ approved: 1, isDeleted: 1 });
 providerSchema.index({ 'performanceScore.rating': -1 });
 providerSchema.index({ currentLocation: '2dsphere' });
 providerSchema.index({ currentZone: 1 });
 providerSchema.index({ createdAt: -1 });
 providerSchema.index({ isActive: 1, approved: 1, isDeleted: 1 });
+providerSchema.index({ isDeleted: 1, deletedAt: -1 });
 providerSchema.index({ role: 1, isActive: 1, approved: 1, isOnline: 1, kycStatus: 1 });
 
 

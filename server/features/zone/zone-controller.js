@@ -220,7 +220,23 @@ exports.getAllZones = async (req, res, next) => {
       Zone.countDocuments(query)
     ]);
 
-    const resultResponse = { success: true, message: "Zones retrieved successfully", data: zones, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } };
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const resultResponse = { 
+      success: true, 
+      message: "Zones retrieved successfully", 
+      data: zones, 
+      pagination: { 
+        total, 
+        page: pageNum, 
+        limit: limitNum, 
+        totalPages, 
+        pages: totalPages, 
+        hasNextPage: pageNum < totalPages, 
+        hasPreviousPage: pageNum > 1 
+      } 
+    };
     cache.set(cacheKey, resultResponse, 300);
 
     return res.status(200).json(resultResponse);
@@ -594,8 +610,13 @@ exports.deleteZone = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Zone not found", data: null });
     }
     
-    // Perform hard delete
-    await Zone.findByIdAndDelete(id);
+    // Perform soft delete
+    await Zone.findByIdAndUpdate(id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user?._id || null,
+      status: 'inactive'
+    });
 
     // Clean up references in other zones
     await Zone.updateMany(

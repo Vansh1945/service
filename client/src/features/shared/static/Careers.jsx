@@ -76,16 +76,24 @@ const CareersPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white">
       <Helmet>
         <title>Careers | {systemSettings.companyName || "Raj Electrical Services"} | Join as an Electrical Partner</title>
         <meta name="description" content={`Join ${systemSettings.companyName || "Raj Electrical Services"} in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business.`} />
         <meta name="keywords" content={`careers at ${systemSettings.companyName || "Raj Electrical Services"}, electrician jobs in North India, join electrical network, trusted electrical solutions`} />
-        <link rel="canonical" href={window.location.href} />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/careers" />
         <meta property="og:title" content={`Careers | ${systemSettings.companyName || "Raj Electrical Services"} | Join as an Electrical Partner`} />
         <meta property="og:description" content={`Join ${systemSettings.companyName || "Raj Electrical Services"} in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business.`} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/careers" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`Careers | ${systemSettings.companyName || "Raj Electrical Services"} | Join as an Electrical Partner`} />
+        <meta name="twitter:description" content={`Join ${systemSettings.companyName || "Raj Electrical Services"} in North India as a certified electrical partner.`} />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/careers" />
       </Helmet>
 
       {/* Hero Section - Matching AboutPage style */}
@@ -300,7 +308,11 @@ const CareersPage = () => {
               <div className="rounded-2xl overflow-hidden ring-4 ring-white/5 shadow-xl">
                 <img
                   src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop"
-                  alt="Professional Electrician"
+                  alt="Professional Electrician Partner"
+                  loading="lazy"
+                  decoding="async"
+                  width={800}
+                  height={300}
                   className="w-full h-[300px] object-cover"
                 />
               </div>
@@ -349,7 +361,11 @@ const CareersPage = () => {
               <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
                 <img
                   src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop"
-                  alt="On-job expert support"
+                  alt="On-job expert support for service partners"
+                  loading="lazy"
+                  decoding="async"
+                  width={800}
+                  height={320}
                   className="w-full h-[320px] object-cover"
                 />
               </div>
@@ -385,7 +401,7 @@ const CareersPage = () => {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 };
 

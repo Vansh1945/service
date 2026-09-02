@@ -9,13 +9,18 @@ import * as SystemService from '../../../../services/SystemService';
 import { formatCurrency, formatDate } from '../../../../utils/format';
 import { getWithdrawalStatusBadge } from '../../../../utils/status';
 import StatusBadge from '../../../../components/ui/StatusBadge';
+import Loader from '../../../../components/ui/Loader';
 import { IfscBankDetails } from '../../../../components/IfscBankDetails';
 
 
 import { getProviderPayoutState } from '../../../../utils/payoutState';
 
-const PayoutProfileTab = ({ showToast }) => {
-    const [loading, setLoading] = useState(true);
+const PayoutProfileTab = ({ showToast, profileData }) => {
+    const initialDetails = profileData?.bankDetails || {};
+    const initialPayoutState = getProviderPayoutState(initialDetails);
+    const hasInitialData = Boolean(initialDetails.accountNo || initialDetails.upiId || profileData?.wallet || profileData?.name);
+
+    const [loading, setLoading] = useState(!hasInitialData);
     const [saving, setSaving] = useState(false);
     const [withdrawing, setWithdrawing] = useState(false);
 
@@ -23,9 +28,9 @@ const PayoutProfileTab = ({ showToast }) => {
     const [payoutSettings, setPayoutSettings] = useState({});
 
     const [walletData, setWalletData] = useState({
-        availableBalance: 0,
-        totalWithdrawn: 0,
-        pendingWithdrawals: 0,
+        availableBalance: profileData?.wallet?.availableBalance || profileData?.wallet?.currentBalance || 0,
+        totalWithdrawn: profileData?.wallet?.totalWithdrawn || profileData?.wallet?.releasedPayouts || 0,
+        pendingWithdrawals: profileData?.wallet?.pendingWithdrawals || 0,
         lastSettlementAmount: 0,
         lastSettlementDate: null
     });
@@ -34,19 +39,19 @@ const PayoutProfileTab = ({ showToast }) => {
     const [notifications, setNotifications] = useState([]);
 
     const [bankDetails, setBankDetails] = useState({
-        accountNo: '',
-        ifsc: '',
-        bankName: '',
-        accountName: '',
-        upiId: '',
-        verified: false,
-        bankVerificationStatus: 'pending',
-        bankRejectReason: '',
-        payoutEnabled: true,
-        defaultMethod: 'bank_account',
-        passbookImage: '',
-        passbookImagePublicId: '',
-        uploadedAt: null
+        accountNo: initialPayoutState.accountNo || '',
+        ifsc: initialPayoutState.ifsc || '',
+        bankName: initialPayoutState.bankName || '',
+        accountName: initialDetails.accountName || profileData?.name || '',
+        upiId: initialPayoutState.upiId || '',
+        verified: initialPayoutState.verified || false,
+        bankVerificationStatus: initialPayoutState.bankVerificationStatus || 'pending',
+        bankRejectReason: initialPayoutState.bankRejectReason || '',
+        payoutEnabled: initialPayoutState.payoutEnabled !== false,
+        defaultMethod: initialPayoutState.preferredMethod || 'bank_account',
+        passbookImage: initialDetails.passbookImage || '',
+        passbookImagePublicId: initialDetails.passbookImagePublicId || '',
+        uploadedAt: initialDetails.uploadedAt || null
     });
 
     const [passbookFile, setPassbookFile] = useState(null);
@@ -78,7 +83,9 @@ const PayoutProfileTab = ({ showToast }) => {
 
     const fetchPayoutDetails = async () => {
         try {
-            setLoading(true);
+            if (!hasInitialData) {
+                setLoading(true);
+            }
             const [profileRes, dashboardRes, systemRes] = await Promise.all([
                 ProviderService.getProfile().catch(() => ({ data: {} })),
                 ProviderService.getDashboardData().catch(() => ({ data: {} })),
@@ -310,8 +317,9 @@ const PayoutProfileTab = ({ showToast }) => {
         }
     };
 
+    const [confirmDeleteType, setConfirmDeleteType] = useState(null);
+
     const handleDelete = async (type) => {
-        if (!window.confirm(`Are you sure you want to remove your ${type === 'bank_account' ? 'Bank Account' : 'UPI ID'}?`)) return;
         try {
             setSaving(true);
             const payload = type === 'bank_account' ? { accountNo: '', ifsc: '', bankName: '' } : { upiId: '' };
@@ -399,11 +407,7 @@ const PayoutProfileTab = ({ showToast }) => {
     };
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center p-12">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            </div>
-        );
+        return <Loader text="Loading Payout Profile..." />;
     }
 
     const hasBank = !!bankDetails.accountNo;
@@ -618,12 +622,34 @@ const PayoutProfileTab = ({ showToast }) => {
                                     >
                                         <Edit3 className="w-4 h-4" /> Edit
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete('bank_account')}
-                                        className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                                    >
-                                        <Trash2 className="w-4 h-4" /> Delete
-                                    </button>
+                                    {confirmDeleteType === 'bank_account' ? (
+                                        <div className="flex items-center gap-1.5 bg-rose-50 p-1.5 rounded-lg border border-rose-200">
+                                            <span className="text-xs font-bold text-rose-700">Remove?</span>
+                                            <button
+                                                onClick={() => setConfirmDeleteType(null)}
+                                                className="px-2 py-1 text-xs font-semibold text-slate-600 bg-white rounded border border-slate-200 hover:bg-slate-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setConfirmDeleteType(null);
+                                                    handleDelete('bank_account');
+                                                }}
+                                                disabled={saving}
+                                                className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 rounded hover:bg-rose-700 transition-colors disabled:opacity-50"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => setConfirmDeleteType('bank_account')}
+                                            className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <Trash2 className="w-4 h-4" /> Delete
+                                        </button>
+                                    )}
                                 </div>
                                 {defaultMethodClean !== 'bank_account' && (
                                     <button
@@ -701,12 +727,34 @@ const PayoutProfileTab = ({ showToast }) => {
                                     >
                                         <Edit3 className="w-4 h-4" /> Edit
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete('vpa')}
-                                        className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                                    >
-                                        <Trash2 className="w-4 h-4" /> Delete
-                                    </button>
+                                    {confirmDeleteType === 'vpa' ? (
+                                        <div className="flex items-center gap-1.5 bg-rose-50 p-1.5 rounded-lg border border-rose-200">
+                                            <span className="text-xs font-bold text-rose-700">Remove?</span>
+                                            <button
+                                                onClick={() => setConfirmDeleteType(null)}
+                                                className="px-2 py-1 text-xs font-semibold text-slate-600 bg-white rounded border border-slate-200 hover:bg-slate-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setConfirmDeleteType(null);
+                                                    handleDelete('vpa');
+                                                }}
+                                                disabled={saving}
+                                                className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 rounded hover:bg-rose-700 transition-colors disabled:opacity-50"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => setConfirmDeleteType('vpa')}
+                                            className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <Trash2 className="w-4 h-4" /> Delete
+                                        </button>
+                                    )}
                                 </div>
                                 {defaultMethodClean !== 'vpa' && defaultMethodClean !== 'upi' && (
                                     <button

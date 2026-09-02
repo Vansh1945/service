@@ -11,7 +11,7 @@ const ProtectedRoute = ({ allowedRoles, requireTest }) => {
 
   // Check if route requires specific roles
   if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/unauthorized" replace />;
   }
 
   // Provider: profile completion and qualification test check

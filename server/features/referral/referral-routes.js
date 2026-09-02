@@ -8,10 +8,13 @@ const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware')
 const referralController = require('./referral-controller');
 const {
   validateBody,
+  validateParams,
+  idParamSchema,
   updateReferralSettingsSchema,
   addMilestoneSchema,
   releaseHeldRewardSchema
 } = require('../../shared/validation/common-validation');
+const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 
 // PUBLIC VERIFY ENDPOINT (used on signup forms)
 router.get('/verify', referralController.verifyReferralCode);
@@ -27,13 +30,13 @@ router.get('/provider/eligibility', providerAuthMiddleware, referralController.g
 // ADMIN ENDPOINTS
 router.get('/admin/dashboard', adminAuthMiddleware, referralController.getAdminDashboard);
 router.get('/admin/settings', adminAuthMiddleware, referralController.getSettings);
-router.put('/admin/settings', adminAuthMiddleware, validateBody(updateReferralSettingsSchema), referralController.updateSettings);
+router.put('/admin/settings', adminAuthMiddleware, adminActionLimiter, validateBody(updateReferralSettingsSchema), referralController.updateSettings);
 router.get('/admin/milestones', adminAuthMiddleware, referralController.getMilestones);
-router.post('/admin/milestones', adminAuthMiddleware, validateBody(addMilestoneSchema), referralController.addMilestone);
-router.delete('/admin/milestones/:id', adminAuthMiddleware, referralController.deleteMilestone);
+router.post('/admin/milestones', adminAuthMiddleware, adminActionLimiter, validateBody(addMilestoneSchema), referralController.addMilestone);
+router.delete('/admin/milestones/:id', adminAuthMiddleware, adminActionLimiter, validateParams(idParamSchema), referralController.deleteMilestone);
 router.get('/admin/referrals', adminAuthMiddleware, referralController.getAdminReferralsList);
 router.get('/admin/fraud', adminAuthMiddleware, referralController.getFraudReferrals);
 router.get('/admin/logs', adminAuthMiddleware, referralController.getRewardLogs);
-router.post('/admin/release', adminAuthMiddleware, validateBody(releaseHeldRewardSchema), referralController.releaseHeldReward);
+router.post('/admin/release', adminAuthMiddleware, adminActionLimiter, validateBody(releaseHeldRewardSchema), referralController.releaseHeldReward);
 
 module.exports = router;

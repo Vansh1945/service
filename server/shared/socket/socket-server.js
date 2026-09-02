@@ -325,7 +325,7 @@ const initSocket = (httpServer) => {
                         { customerId: userId },
                         { providerId: userId }
                     ]
-                });
+                }).sort({ updatedAt: -1 }).limit(50);
                 
                 for (const room of rooms) {
                     let modified = false;

@@ -191,6 +191,8 @@ const AdminLayout = () => {
                 <img
                   src={logo}
                   alt={companyName}
+                  loading="eager"
+                  decoding="async"
                   className="h-8 w-auto object-contain mr-2 flex-shrink-0"
                 />
               )}
@@ -265,6 +267,8 @@ const AdminLayout = () => {
                 <img
                   src={logo}
                   alt={companyName}
+                  loading="eager"
+                  decoding="async"
                   className="h-9 w-auto object-contain mr-3 flex-shrink-0"
                 />
               )}
@@ -381,7 +385,9 @@ const AdminLayout = () => {
                   {user?.profilePicUrl ? (
                     <img
                       src={user.profilePicUrl}
-                      alt="Profile"
+                      alt="Admin Profile"
+                      loading="lazy"
+                      decoding="async"
                       className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0"
                     />
                   ) : (

@@ -44,6 +44,8 @@ router.get('/unread-count', flexAuth, notificationController.getUnreadCount);
 
 const {
   validateBody,
+  validateParams,
+  idParamSchema,
   saveTokenSchema,
   removeTokenSchema,
   sendBroadcastSchema,
@@ -52,15 +54,16 @@ const {
   updateTemplateSchema,
   anyBodySchema
 } = require('../../shared/validation/common-validation');
+const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 
 // PATCH /api/notifications/read-all — mark all as read
 router.patch('/read-all', flexAuth, validateBody(anyBodySchema), notificationController.markAllRead);
 
 // PATCH /api/notifications/read/:id — mark one as read
-router.patch('/read/:id', flexAuth, validateBody(anyBodySchema), notificationController.markRead);
+router.patch('/read/:id', flexAuth, validateParams(idParamSchema), validateBody(anyBodySchema), notificationController.markRead);
 
 // PATCH /api/notifications/clicked/:id — track click
-router.patch('/clicked/:id', flexAuth, validateBody(anyBodySchema), notificationController.markClicked);
+router.patch('/clicked/:id', flexAuth, validateParams(idParamSchema), validateBody(anyBodySchema), notificationController.markClicked);
 
 // POST /api/notifications/save-token
 router.post('/save-token', flexAuth, validateBody(saveTokenSchema), notificationController.saveToken);
@@ -69,7 +72,7 @@ router.post('/save-token', flexAuth, validateBody(saveTokenSchema), notification
 router.post('/remove-token', flexAuth, validateBody(removeTokenSchema), notificationController.removeToken);
 
 // POST /api/notifications/send-broadcast — Admin only
-router.post('/send-broadcast', flexAuth, adminOnly, validateBody(sendBroadcastSchema), notificationController.sendBroadcast);
+router.post('/send-broadcast', flexAuth, adminOnly, adminActionLimiter, validateBody(sendBroadcastSchema), notificationController.sendBroadcast);
 
 // GET /api/notifications/history — Admin only
 router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastHistory);
@@ -78,25 +81,25 @@ router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastH
 router.get('/admin/dashboard-stats', flexAuth, adminOnly, notificationController.getAdminDashboardStats);
 
 // PATCH /api/notifications/admin/:id — Edit (Admin only)
-router.patch('/admin/:id', flexAuth, adminOnly, validateBody(updateNotificationSchema), notificationController.updateNotification);
+router.patch('/admin/:id', flexAuth, adminOnly, adminActionLimiter, validateParams(idParamSchema), validateBody(updateNotificationSchema), notificationController.updateNotification);
 
 // DELETE /api/notifications/admin/:id — Delete/Cancel (Admin only)
-router.delete('/admin/:id', flexAuth, adminOnly, notificationController.deleteNotification);
+router.delete('/admin/:id', flexAuth, adminOnly, adminActionLimiter, validateParams(idParamSchema), notificationController.deleteNotification);
 
 // PATCH /api/notifications/admin/cancel/:id — Cancel specifically (Admin only)
-router.patch('/admin/cancel/:id', flexAuth, adminOnly, validateBody(anyBodySchema), notificationController.cancelNotification);
+router.patch('/admin/cancel/:id', flexAuth, adminOnly, adminActionLimiter, validateParams(idParamSchema), validateBody(anyBodySchema), notificationController.cancelNotification);
 
 // POST /api/notifications/admin/resend/:id — Resend (Admin only)
-router.post('/admin/resend/:id', flexAuth, adminOnly, validateBody(anyBodySchema), notificationController.resendNotification);
+router.post('/admin/resend/:id', flexAuth, adminOnly, adminActionLimiter, validateParams(idParamSchema), validateBody(anyBodySchema), notificationController.resendNotification);
 
 // GET /api/notifications/admin/analytics/:id — Analytics (Admin only)
-router.get('/admin/analytics/:id', flexAuth, adminOnly, notificationController.getAdminAnalytics);
+router.get('/admin/analytics/:id', flexAuth, adminOnly, validateParams(idParamSchema), notificationController.getAdminAnalytics);
 
 // Template CRUD routes (Admin only)
 router.get('/templates', flexAuth, adminOnly, notificationController.getTemplates);
-router.post('/templates', flexAuth, adminOnly, validateBody(createTemplateSchema), notificationController.createTemplate);
-router.put('/templates/:id', flexAuth, adminOnly, validateBody(updateTemplateSchema), notificationController.updateTemplate);
-router.delete('/templates/:id', flexAuth, adminOnly, notificationController.deleteTemplate);
+router.post('/templates', flexAuth, adminOnly, adminActionLimiter, validateBody(createTemplateSchema), notificationController.createTemplate);
+router.put('/templates/:id', flexAuth, adminOnly, adminActionLimiter, validateParams(idParamSchema), validateBody(updateTemplateSchema), notificationController.updateTemplate);
+router.delete('/templates/:id', flexAuth, adminOnly, adminActionLimiter, validateParams(idParamSchema), notificationController.deleteTemplate);
 router.get('/active-events', flexAuth, adminOnly, notificationController.getActiveEvents);
 
 module.exports = router;

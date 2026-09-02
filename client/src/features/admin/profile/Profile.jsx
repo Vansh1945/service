@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import { useConfirm } from '../../../context/ConfirmContext';
 import { toast } from '../../../components/ui/Toast';
 
 import {
   FiUser, FiMail, FiLock, FiX, FiPlus, FiShield, FiUsers,
-  FiChevronLeft, FiChevronRight, FiCalendar,
-  FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2, FiLoader, FiBell, FiAlertCircle
+  FiCalendar,
+  FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2
 } from 'react-icons/fi';
 import * as AdminService from '../../../services/AdminService';
-import * as NotificationService from '../../../services/NotificationService';
 import Pagination from '../../../components/ui/Pagination';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import { formatDate } from '../../../utils/format';
 
 // Debounce hook for search optimization
@@ -291,7 +291,7 @@ const AdminProfile = () => {
       <div className="bg-gray-50 rounded-lg p-4 sm:p-6 mt-4">
         {/* Search and Stats */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-          
+
           <div className="text-sm text-secondary whitespace-nowrap">
             Total Admins: <span className="font-semibold">{adminStats.total}</span>
           </div>
@@ -310,7 +310,11 @@ const AdminProfile = () => {
                   <div className="flex items-center space-x-3 mb-3 sm:mb-0">
                     <img
                       src={admin.profilePicUrl || '/default-avatar.png'}
-                      alt={admin.name}
+                      alt={admin.name || "Admin profile photo"}
+                      loading="lazy"
+                      decoding="async"
+                      width={40}
+                      height={40}
                       className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                     />
                     <div className="min-w-0">
@@ -395,7 +399,11 @@ const AdminProfile = () => {
                 <div className="relative mr-3 sm:mr-4">
                   <img
                     src={profile?.profilePicUrl || '/default-avatar.png'}
-                    alt={profile?.name}
+                    alt={profile?.name || "Admin profile photo"}
+                    loading="lazy"
+                    decoding="async"
+                    width={64}
+                    height={64}
                     className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-4 border-white bg-white object-cover"
                   />
                   <button
@@ -444,7 +452,11 @@ const AdminProfile = () => {
                     <div className="mt-2">
                       <img
                         src={profile?.profilePicUrl || '/default-avatar.png'}
-                        alt={profile?.name}
+                        alt={profile?.name || "Admin profile photo"}
+                        loading="lazy"
+                        decoding="async"
+                        width={96}
+                        height={96}
                         className="w-16 h-16 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-teal-200"
                       />
                     </div>
@@ -707,7 +719,11 @@ const AdminProfile = () => {
                       <div className="relative">
                         <img
                           src={editData.profilePicPreview || '/default-avatar.png'}
-                          alt="Profile preview"
+                          alt="Admin profile photo preview"
+                          loading="lazy"
+                          decoding="async"
+                          width={96}
+                          height={96}
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-teal-200"
                         />
                         <label className={`absolute bottom-0 right-0 bg-primary text-white p-1 rounded-full cursor-pointer ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>

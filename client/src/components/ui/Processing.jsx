@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 
 const Processing = ({
   loading = false,
@@ -54,4 +55,42 @@ const Processing = ({
   );
 };
 
+export const TopProgressBar = () => {
+  const location = useLocation();
+  const [isNavigating, setIsNavigating] = React.useState(false);
+  const [navProgress, setNavProgress] = React.useState(0);
+
+  React.useEffect(() => {
+    setIsNavigating(true);
+    setNavProgress(35);
+
+    const t1 = setTimeout(() => setNavProgress(75), 80);
+    const t2 = setTimeout(() => setNavProgress(100), 200);
+    const t3 = setTimeout(() => {
+      setIsNavigating(false);
+      setNavProgress(0);
+    }, 400);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [location.pathname, location.search]);
+
+  return (
+    <div
+      className={`fixed top-0 left-0 right-0 z-[100001] h-1 pointer-events-none transition-all duration-300 ease-out ${
+        isNavigating ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <div
+        className="h-full bg-gradient-to-r from-primary via-accent to-success shadow-[0_0_10px_rgba(59,130,246,0.8)] transition-all duration-300 ease-out"
+        style={{ width: `${navProgress}%` }}
+      />
+    </div>
+  );
+};
+
 export default Processing;
+

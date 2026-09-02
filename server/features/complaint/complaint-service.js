@@ -979,6 +979,8 @@ class ComplaintService {
           );
           // Also clear dispute flags on booking
           await Booking.findByIdAndUpdate(bookingId, {
+            disputeRaised: false,
+            hasComplaint: false,
             disputeStatus: 'resolved',
             adminRefundDecision: 'rejected'
           }, { session });
@@ -1037,6 +1039,8 @@ class ComplaintService {
           );
           // 2. Clear dispute status on original booking
           await Booking.findByIdAndUpdate(bookingId, {
+            disputeRaised: false,
+            hasComplaint: false,
             disputeStatus: 'resolved',
             adminRefundDecision: 'none'
           }, { session });
@@ -1090,6 +1094,8 @@ class ComplaintService {
             { session }
           );
           await Booking.findByIdAndUpdate(bookingId, {
+            disputeRaised: false,
+            hasComplaint: false,
             disputeStatus: 'resolved',
             adminRefundDecision: 'none'
           }, { session });
@@ -1127,6 +1133,8 @@ class ComplaintService {
             { session }
           );
           await Booking.findByIdAndUpdate(bookingId, {
+            disputeRaised: false,
+            hasComplaint: false,
             disputeStatus: 'resolved',
             adminRefundDecision: 'none'
           }, { session });
@@ -1186,6 +1194,8 @@ class ComplaintService {
             { session }
           );
           await Booking.findByIdAndUpdate(bookingId, {
+            disputeRaised: false,
+            hasComplaint: false,
             disputeStatus: 'resolved',
             adminRefundDecision: 'none'
           }, { session });
@@ -1366,6 +1376,8 @@ class ComplaintService {
                 booking.status = 'cancelled';
               }
               booking.paymentStatus = 'refunded';
+              booking.disputeRaised = false;
+              booking.hasComplaint = false;
               booking.disputeStatus = 'resolved';
               booking.adminRefundDecision = (refundAmount >= booking.totalAmount) ? 'approved' : 'partial';
               if (!booking.cancellationProgress) {
@@ -1422,6 +1434,16 @@ class ComplaintService {
 
       await session.commitTransaction();
       session.endSession();
+
+      const targetProvId = complaint.provider || complaint.providerId || complaint.booking?.provider;
+      if (targetProvId) {
+        try {
+          const { syncEarningsStatus } = require('../payment/payment-service');
+          if (typeof syncEarningsStatus === 'function') {
+            await syncEarningsStatus(targetProvId);
+          }
+        } catch (e) { }
+      }
 
       // Invalidate dashboard caches
       try {
@@ -1495,6 +1517,34 @@ class ComplaintService {
             }
           }
         });
+
+        // ── Auto-release provider earnings if status is resolved/rejected/closed/cancelled ──
+        if (['resolved', 'rejected', 'closed', 'cancelled', 'solved'].includes(normStatus)) {
+          await Booking.findByIdAndUpdate(complaint.booking, {
+            disputeRaised: false,
+            hasComplaint: false,
+            disputeStatus: 'resolved'
+          });
+
+          const ProviderEarning = mongoose.model('ProviderEarning');
+          const earning = await ProviderEarning.findOne({ booking: complaint.booking });
+          if (earning && earning.netAmount > 0 && earning.status !== 'cancelled') {
+            await ProviderEarning.updateOne(
+              { _id: earning._id, status: { $in: ['held', 'underreview', 'pendingrelease'] } },
+              { $set: { status: 'available', isHeldByAdmin: false, holdReason: null } }
+            );
+          }
+
+          const targetProvider = complaint.provider || complaint.providerId || earning?.provider;
+          if (targetProvider) {
+            try {
+              const { syncEarningsStatus } = require('../payment/payment-service');
+              if (typeof syncEarningsStatus === 'function') {
+                await syncEarningsStatus(targetProvider);
+              }
+            } catch (e) { }
+          }
+        }
       }
 
       // Invalidate dashboard caches

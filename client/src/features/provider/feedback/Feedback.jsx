@@ -158,7 +158,7 @@ const ProviderFeedback = () => {
                 setTotalItems(data.total || formattedFeedbacks.length);
             }
         } catch (error) {
-            setError(error.message);
+            setError(error);
             showToast('Failed to load feedbacks', 'error');
         } finally {
             setIsLoading(false);
@@ -234,12 +234,12 @@ const ProviderFeedback = () => {
     if (error) {
         return (
             <ErrorState
-                title="Failed to Load"
-                message={error}
-                onRetry={fetchProviderFeedbacks}
+                error={error}
+                onRetry={() => { setError(null); fetchProviderFeedbacks(); }}
                 retryText="Try Again"
                 onBack={() => navigate(-1)}
                 backText="Go Back"
+                showHome
             />
         );
     }

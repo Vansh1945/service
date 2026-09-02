@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from '../components/ui/Toast';
 
 import { useAuth } from '../context/auth';
@@ -10,27 +10,21 @@ const useSurchargeBooking = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeSurcharges, setActiveSurcharges] = useState([]);
 
-  // Fetch active surcharges based on user location
-  useEffect(() => {
-    const fetchSurcharges = async () => {
-      try {
-        const params = {};
-        if (user?.address?.lat && user?.address?.lng) {
-          params.lat = user.address.lat;
-          params.lng = user.address.lng;
-        }
-        const response = await resolveActiveSurcharges(params);
-        if (response.data?.success) {
-          setActiveSurcharges(response.data.data || []);
-        }
-      } catch (err) {
-        console.error("Error fetching active surcharges:", err);
+  // Fetch active surcharges based on user location via React Query
+  const { data: activeSurcharges = [] } = useQuery({
+    queryKey: ['activeSurcharges', user?.address?.lat, user?.address?.lng],
+    queryFn: async () => {
+      const params = {};
+      if (user?.address?.lat && user?.address?.lng) {
+        params.lat = user.address.lat;
+        params.lng = user.address.lng;
       }
-    };
-    fetchSurcharges();
-  }, [user]);
+      const response = await resolveActiveSurcharges(params);
+      return response.data?.data || [];
+    },
+    staleTime: 30 * 1000,
+  });
 
   // Helper to get merged price (base price + active demand surge)
   const getMergedPrice = (basePrice) => {

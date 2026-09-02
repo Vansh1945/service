@@ -17,7 +17,7 @@ const AboutPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white">
       <Helmet>
         <title>About Us | Raj Electrical Services | Premium Electricians in North India</title>
         <meta name="description" content="Learn about Raj Electrical Services, the leading provider of professional electrical repair, home electrical maintenance, and residential & commercial support across North India." />
@@ -27,6 +27,23 @@ const AboutPage = () => {
         <meta property="og:description" content="Learn about Raj Electrical Services, the leading provider of professional electrical repair, home electrical maintenance, and residential & commercial support across North India." />
         <meta property="og:url" content="https://rajelectricalservices.vercel.app/about" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="About Us | Raj Electrical Services | Premium Electricians in North India" />
+        <meta name="twitter:description" content="Learn about Raj Electrical Services, the leading provider of professional electrical repair, home electrical maintenance, and residential & commercial support across North India." />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/about" />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "AboutPage",
+            "name": "About Raj Electrical Services",
+            "url": "https://rajelectricalservices.vercel.app/about",
+            "description": "Learn about Raj Electrical Services, the leading provider of professional electrical repair and maintenance in North India."
+          })}
+        </script>
       </Helmet>
 
       {/* Hero Section */}
@@ -146,7 +163,11 @@ const AboutPage = () => {
               <div className="rounded-2xl overflow-hidden shadow-xl">
                 <img
                   src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-                  alt="Our electrician at work"
+                  alt="Our certified electrician performing electrical repair"
+                  loading="lazy"
+                  decoding="async"
+                  width={800}
+                  height={420}
                   className="w-full h-[420px] object-cover hover:scale-105 transition-transform duration-700"
                 />
               </div>
@@ -294,7 +315,11 @@ const AboutPage = () => {
               <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
                 <img
                   src="https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&q=80&w=800"
-                  alt="Safety audit checking"
+                  alt="Safety audit and inspection"
+                  loading="lazy"
+                  decoding="async"
+                  width={800}
+                  height={320}
                   className="w-full h-[320px] object-cover"
                 />
               </div>
@@ -323,7 +348,7 @@ const AboutPage = () => {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 };
 

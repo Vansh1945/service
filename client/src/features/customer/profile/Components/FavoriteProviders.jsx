@@ -53,6 +53,8 @@ const FavoriteProviders = ({ profile, fetchProfile, onBack }) => {
         }
     };
 
+    const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+
     const handleRemoveFavorite = async (providerId) => {
         try {
             setLoading(true);
@@ -87,7 +89,11 @@ const FavoriteProviders = ({ profile, fetchProfile, onBack }) => {
                             <div className="flex gap-3 items-start">
                                 <img
                                     src={fp.profilePicUrl || `https://ui-avatars.com/api/?name=${fp.providerName}&background=0D9488&color=fff`}
-                                    alt={fp.providerName}
+                                    alt={fp.providerName || "Favorite provider"}
+                                    loading="lazy"
+                                    decoding="async"
+                                    width={40}
+                                    height={40}
                                     className="w-10 h-10 rounded-xl object-cover border border-neutral-100"
                                 />
                                 <div className="min-w-0 flex-1">
@@ -104,21 +110,45 @@ const FavoriteProviders = ({ profile, fetchProfile, onBack }) => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2 border-t border-neutral-50 pt-3 mt-3">
-                                <button
-                                    onClick={() => handleBookAgainFavorite(fp)}
-                                    disabled={loading}
-                                    className="flex-1 py-1.5 text-[10px] font-bold text-white bg-primary rounded-lg transition-all active:scale-95 shadow-sm disabled:opacity-50"
-                                >
-                                    Book Again
-                                </button>
-                                <button
-                                    onClick={() => handleRemoveFavorite(fp.providerId)}
-                                    disabled={loading}
-                                    className="px-3 py-1.5 text-[10px] font-bold text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition-colors disabled:opacity-50"
-                                >
-                                    Remove
-                                </button>
+                            <div className="flex gap-2 border-t border-neutral-50 pt-3 mt-3 items-center justify-between">
+                                {confirmRemoveId === fp.providerId ? (
+                                    <div className="flex items-center gap-1.5 w-full justify-end">
+                                        <span className="text-[10px] font-bold text-rose-600 mr-1">Remove?</span>
+                                        <button
+                                            onClick={() => setConfirmRemoveId(null)}
+                                            className="px-2.5 py-1 text-[10px] font-bold text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setConfirmRemoveId(null);
+                                                handleRemoveFavorite(fp.providerId);
+                                            }}
+                                            disabled={loading}
+                                            className="px-2.5 py-1 text-[10px] font-bold text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => handleBookAgainFavorite(fp)}
+                                            disabled={loading}
+                                            className="flex-1 py-1.5 text-[10px] font-bold text-white bg-primary rounded-lg transition-all active:scale-95 shadow-sm disabled:opacity-50"
+                                        >
+                                            Book Again
+                                        </button>
+                                        <button
+                                            onClick={() => setConfirmRemoveId(fp.providerId)}
+                                            disabled={loading}
+                                            className="px-3 py-1.5 text-[10px] font-bold text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition-colors disabled:opacity-50"
+                                        >
+                                            Remove
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ))}

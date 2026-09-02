@@ -5,7 +5,7 @@ const { providerAuthMiddleware } = require('../../shared/middlewares/provider-mi
 const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware');
 const { roleMiddleware } = require('../../shared/middlewares/role-middleware');
 const { upload } = require('../../shared/middlewares/upload');
-const { validateBody } = require('../../shared/validation/common-validation');
+const { validateBody, validateParams, idParamSchema, providerIdParamSchema } = require('../../shared/validation/common-validation');
 const {
   initiateRegistrationSchema,
   completeRegistrationSchema,
@@ -19,7 +19,7 @@ const requireAdmin = roleMiddleware(['admin']);
 
 
 // Registration Routes (Public)
-const { signupLimiter, authLimiter } = require('../../shared/middlewares/rate-limit');
+const { signupLimiter, authLimiter, adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 const { throttleFailedLogins, preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
 
 router.post('/register/initiate', signupLimiter, preventDuplicateSubmissions(5), validateBody(initiateRegistrationSchema), providerController.initiateRegistration);
@@ -69,11 +69,11 @@ router.get('/agreement-pdf', providerAuthMiddleware, requireProvider, providerCo
 
 // Document Viewing Route (Protected)
 router.get('/document/:type', providerAuthMiddleware, requireProvider, providerController.viewDocument);
-router.get('/admin/document/:providerId/:type', adminAuthMiddleware, providerController.viewDocument);
+router.get('/admin/document/:providerId/:type', adminAuthMiddleware, validateParams(providerIdParamSchema), providerController.viewDocument);
 
 // Account Deletion Routes
-router.delete('/profile', providerAuthMiddleware, requireProvider, providerController.deleteAccount);
-router.delete('/:id/permanent', adminAuthMiddleware, requireAdmin, providerController.permanentDeleteAccount);
+router.delete('/profile', providerAuthMiddleware, requireProvider, authLimiter, preventDuplicateSubmissions(3), providerController.deleteAccount);
+router.delete('/:id/permanent', adminAuthMiddleware, requireAdmin, adminActionLimiter, validateParams(idParamSchema), providerController.permanentDeleteAccount);
 
 // Dashboard Routes
 router.get('/dashboard', providerAuthMiddleware, requireProvider, providerController.getDashboardData);

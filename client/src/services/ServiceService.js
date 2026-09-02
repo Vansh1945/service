@@ -57,8 +57,9 @@ export const getActiveServices = () => {
     return axiosInstance.get("/service/services")
 }
 
-export const getPublicServices = (page = 1, limit = 10) => {
-    return axiosInstance.get(`/service/services?page=${page}&limit=${limit}`);
+export const getPublicServices = (page = 1, limit = 10, search = '') => {
+    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+    return axiosInstance.get(`/service/services?page=${page}&limit=${limit}${searchParam}`);
 };
 
 export const getPublicServiceById = (id) => {

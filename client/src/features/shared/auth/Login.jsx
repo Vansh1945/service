@@ -20,7 +20,7 @@ import {
 import { login, firebaseLogin } from '../../../services/AuthService';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "../../../../firebase";
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -52,9 +52,9 @@ const BenefitsSection = ({ systemSettings = {} }) => (
         <Sparkles className="w-3.5 h-3.5 text-primary" />
         <span className="text-xs font-bold text-primary">Welcome Back to {systemSettings.companyName || "Raj Electrical Services"}</span>
       </div>
-      <h1 className="text-4xl font-bold text-secondary leading-tight">
+      <h2 className="text-4xl font-bold text-secondary leading-tight">
         Login to <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>
-      </h1>
+      </h2>
       <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
         Access your dashboard, manage bookings, and stay connected with our premium services.
       </p>
@@ -147,7 +147,7 @@ const LoginPage = () => {
           const data = response.data;
           if (data.token && data.user) {
             showToast('Welcome back.', 'success');
-            loginUser(data.token, data.user.role, data.user, data.refreshToken);
+            loginUser(data.token, data.user.role, data.user);
           }
         }
       } catch (err) {
@@ -182,7 +182,7 @@ const LoginPage = () => {
 
       if (data.token && data.user) {
         showToast('Welcome back.', 'success');
-        loginUser(data.token, data.user.role || 'customer', data.user, data.refreshToken);
+        loginUser(data.token, data.user.role || 'customer', data.user, null, rememberMe);
       } else {
         throw new Error('The email/phone or password you entered is incorrect.');
       }
@@ -208,7 +208,7 @@ const LoginPage = () => {
 
         if (data.token && data.user) {
           showToast('Welcome back.', 'success');
-          loginUser(data.token, data.user.role, data.user, data.refreshToken);
+          loginUser(data.token, data.user.role, data.user);
         }
       } catch (popupErr) {
         if (popupErr.code === 'auth/popup-blocked' || popupErr.message?.includes('popup-blocked')) {

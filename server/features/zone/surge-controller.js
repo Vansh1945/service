@@ -26,13 +26,21 @@ exports.listSurgeRules = async (req, res, next) => {
 
     const count = await Surge.countDocuments(query);
 
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const totalPages = Math.ceil(count / limitNum) || 1;
     res.status(200).json({
       success: true,
+      message: "Surge rules retrieved successfully",
       data: rules,
       pagination: {
         total: count,
-        page: parseInt(page),
-        pages: Math.ceil(count / parseInt(limit))
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        pages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
       }
     });
   } catch (error) {

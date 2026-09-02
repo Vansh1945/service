@@ -20,7 +20,11 @@ const bannerSchema = new mongoose.Schema(
     },
     startDate: Date,
     endDate: Date,
-  }
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
+  },
+  { timestamps: true }
 );
 
 const emailTemplateSchema = new mongoose.Schema(
@@ -685,6 +689,21 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      default: null
+    }
   },
   { timestamps: true }
 );

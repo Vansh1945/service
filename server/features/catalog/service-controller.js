@@ -308,7 +308,7 @@ const getAllServices = async (req, res, next) => {
     try {
         const { page, limit, search, category } = req.query;
 
-        let query = { createdBy: req.adminID };
+        let query = { createdBy: req.adminID, isDeleted: { $ne: true } };
 
         if (search) {
             query.$text = { $search: search };
@@ -390,7 +390,7 @@ const getServicesForProvider = async (req, res, next) => {
         const { page = 1, limit = 10, search, category } = req.query;
         const skip = (page - 1) * limit;
 
-        let query = { isActive: true };
+        let query = { isActive: true, isDeleted: { $ne: true } };
 
         if (search) {
             query.$text = { $search: search };
@@ -764,6 +764,10 @@ const bulkImportServices = async (req, res, next) => {
 
         cache.delByPrefix('services_');
         cache.delByPrefix('service_');
+
+        if (req.file && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch (e) {}
+        }
 
         return res.json({
             success: true,

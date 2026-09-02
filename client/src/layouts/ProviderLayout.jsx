@@ -265,7 +265,7 @@ const ProviderLayout = () => {
                         <div className="flex items-center space-x-4 min-w-0 pr-2">
                             <Link to="/provider/dashboard" className="flex items-center space-x-2.5 min-w-0 group">
                                 {logo ? (
-                                    <img src={logo} alt={companyName} className="flex-shrink-0 h-8 md:h-10 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
+                                    <img src={logo} alt={companyName} loading="eager" decoding="async" className="flex-shrink-0 h-8 md:h-10 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
                                 ) : (
                                     <FaBolt className="h-8 md:h-10 w-auto text-primary transition-transform duration-300 group-hover:rotate-12" />
                                 )}

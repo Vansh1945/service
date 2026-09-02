@@ -40,11 +40,14 @@ const formatAddress = (address) => formatAddressUtil(address);
 
 const getServiceBadges = (services) => {
   if (!services || services.length === 0) return null;
-  return services.map(service => (
-    <span key={service} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 mr-1 mb-1">
-      {service}
-    </span>
-  ));
+  return services.map((service, idx) => {
+    const name = typeof service === 'object' ? (service.name || service.title || service._id) : service;
+    return (
+      <span key={idx} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 mr-1 mb-1">
+        {name}
+      </span>
+    );
+  });
 };
 
 const getStatusBadge = (provider) => {
@@ -456,7 +459,11 @@ const AdminProviders = () => {
                                 <img
                                   className="h-10 w-10 rounded-full object-cover"
                                   src={provider.profilePicUrl || '/default-avatar.png'}
-                                  alt={provider.name}
+                                  alt={provider.name || "Provider profile photo"}
+                                  loading="lazy"
+                                  decoding="async"
+                                  width={40}
+                                  height={40}
                                   onError={(e) => {
                                     e.target.src = '/default-avatar.png';
                                   }}
@@ -635,7 +642,11 @@ const ProviderModal = ({
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <img
               src={provider.profilePicUrl || '/default-avatar.png'}
-              alt={provider.name}
+              alt={provider.name || "Provider profile photo"}
+              loading="lazy"
+              decoding="async"
+              width={64}
+              height={64}
               onError={(e) => { e.target.src = '/default-avatar.png'; }}
               className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow flex-shrink-0"
             />

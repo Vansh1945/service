@@ -116,7 +116,10 @@ const chatRoomSchema = new Schema({
     type: Date,
     default: null
   },
-  messages: [messageSchema]
+  messages: [messageSchema],
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true
 });
@@ -125,6 +128,9 @@ const chatRoomSchema = new Schema({
 chatRoomSchema.index({ bookingId: 1 });
 chatRoomSchema.index({ customerId: 1 });
 chatRoomSchema.index({ providerId: 1 });
+chatRoomSchema.index({ customerId: 1, providerId: 1 });
+chatRoomSchema.index({ status: 1, updatedAt: -1 });
+chatRoomSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 const ChatRoom = mongoose.model('ChatRoom', chatRoomSchema);
 

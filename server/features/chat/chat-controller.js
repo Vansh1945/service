@@ -489,14 +489,19 @@ const adminGetMessages = async (req, res) => {
     const endIndex = totalMessages - ((page - 1) * limit);
     const paginatedMessages = visibleMessages.slice(startIndex, endIndex);
 
+    const totalPages1 = Math.ceil(totalMessages / limit) || 1;
     res.status(200).json({
       success: true,
+      message: "Admin chat messages retrieved successfully",
       data: paginatedMessages,
       pagination: {
         total: totalMessages,
         page,
         limit,
-        pages: Math.ceil(totalMessages / limit)
+        totalPages: totalPages1,
+        pages: totalPages1,
+        hasNextPage: page < totalPages1,
+        hasPreviousPage: page > 1
       }
     });
   } catch (error) {
@@ -546,14 +551,19 @@ const getMessages = async (req, res) => {
 
     const paginatedMessages = visibleMessages.slice(startIndex, endIndex);
 
+    const totalPages2 = Math.ceil(totalMessages / limit) || 1;
     res.status(200).json({
       success: true,
+      message: "Chat messages retrieved successfully",
       data: paginatedMessages,
       pagination: {
         total: totalMessages,
         page,
         limit,
-        pages: Math.ceil(totalMessages / limit)
+        totalPages: totalPages2,
+        pages: totalPages2,
+        hasNextPage: page < totalPages2,
+        hasPreviousPage: page > 1
       }
     });
   } catch (error) {
@@ -675,18 +685,40 @@ const typingStatus = async (req, res) => {
 /**
  * 6. Admin monitor: Return all active chat rooms
  */
-const adminMonitor = async (req, res) => {
+const adminMonitor = async (req, res, next) => {
   try {
-    // Return active rooms that are not fully locked/historical unless requested
-    const rooms = await ChatRoom.find({ status: { $ne: 'locked' } })
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100);
+    const skip = (page - 1) * limit;
+
+    const filter = { status: { $ne: 'locked' } };
+    if (req.query.lastId && req.query.lastId.match(/^[0-9a-fA-F]{24}$/)) {
+      filter._id = { $lt: req.query.lastId };
+    }
+
+    const total = await ChatRoom.countDocuments(filter);
+    const rooms = await ChatRoom.find(filter)
       .populate('bookingId', 'bookingId status totalAmount date hasComplaint disputeStatus')
       .populate('customerId', 'name email phone profilePicUrl')
       .populate('providerId', 'name email phone profilePicUrl providerId')
-      .sort({ updatedAt: -1 });
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
+    const totalPages = Math.ceil(total / limit) || 1;
     res.status(200).json({
       success: true,
-      data: rooms
+      message: "Monitored chat rooms retrieved successfully",
+      data: rooms,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        pages: totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
     });
   } catch (error) {
     global.logger.error(`[ChatController.adminMonitor] Route: ${req.originalUrl || req.url} - Error in adminMonitor: ${error.message}`, error);

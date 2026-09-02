@@ -829,6 +829,21 @@ const bookingSchema = new Schema({
   bookingVersion: {
     type: Number,
     default: 0
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  deletedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
   }
   // BOOKING LOCK UPGRADE
 }, {
@@ -1371,6 +1386,9 @@ bookingSchema.methods.recalculateFinancials = async function (options = {}) {
 
 bookingSchema.index({ customer: 1, checkoutSessionId: 1 }, { sparse: true });
 bookingSchema.index({ customer: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+bookingSchema.index({ provider: 1, status: 1, createdAt: -1 });
+bookingSchema.index({ customer: 1, status: 1, createdAt: -1 });
+bookingSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

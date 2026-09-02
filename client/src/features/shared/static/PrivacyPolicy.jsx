@@ -104,11 +104,19 @@ const PrivacyPolicy = () => {
         <title>Privacy Policy | {companyName}</title>
         <meta name="description" content={`Understand how ${companyName} collects, protects, and utilizes your user data for booking electrical services.`} />
         <meta name="keywords" content={`privacy policy, data protection, security, ${companyName} privacy`} />
-        <link rel="canonical" href={window.location.href} />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/privacy-policy" />
         <meta property="og:title" content={`Privacy Policy | ${companyName}`} />
         <meta property="og:description" content={`Understand how ${companyName} collects, protects, and utilizes your user data.`} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/privacy-policy" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`Privacy Policy | ${companyName}`} />
+        <meta name="twitter:description" content={`Understand how ${companyName} collects, protects, and utilizes your user data.`} />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/privacy-policy" />
       </Helmet>
 
       {/* Header Section */}

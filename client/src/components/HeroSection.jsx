@@ -6,7 +6,7 @@ import { useAuth } from "../context/auth";
 import "swiper/css";
 import "swiper/css/pagination";
 
-import ServiceImg from "../assets/ServiceImg.png";
+import ServiceImg from "../assets/ServiceImg.webp";
 import LoadingSpinner from "./ui/Loader";
 import { getBanners } from "../services/SystemService";
 
@@ -60,6 +60,7 @@ const HeroSection = ({ noMargin = false }) => {
         setBanners(finalBanners);
       } catch (error) {
       console.error(error);
+      console.error(error);
         setBanners([defaultBanner]);
       } finally {
         setLoading(false);
@@ -99,7 +100,11 @@ const HeroSection = ({ noMargin = false }) => {
                   {/* Main image */}
                   <img
                     src={banner.image}
-                    alt={banner.title || "banner"}
+                    alt={banner.title || "Raj Electrical Service Banner"}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                    width={800}
+                    height={450}
                     className="w-full h-full object-cover"
                   />
 

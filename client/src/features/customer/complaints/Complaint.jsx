@@ -22,7 +22,7 @@ import {
 } from '../../../utils/status';
 import CDNImage from '../../../components/CDNImage';
 import LoadingSpinner from '../../../components/ui/Loader';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import ChatModal from '../../../components/chat/ChatModal';
 import Select from '../../../components/ui/Select';
 import Input from '../../../components/ui/Input';
@@ -759,7 +759,7 @@ const ComplaintsPage = () => {
                   <div className="flex flex-wrap gap-2 mt-3">
                     {formData.previewImages.map((preview, idx) => (
                       <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-neutral-200 shadow-sm group">
-                        <img src={preview} className="w-full h-full object-cover" alt="" />
+                        <img src={preview} className="w-full h-full object-cover" loading="lazy" decoding="async" width={64} height={64} alt={`Complaint attachment preview ${idx + 1}`} />
                         <button
                           type="button"
                           onClick={() => removeImage(idx)}

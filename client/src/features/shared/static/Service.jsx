@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../context/auth';
+import { trackEvent } from '../../../../firebase';
 import {
     Zap,
     Clock,
@@ -18,11 +19,15 @@ import {
     CheckCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import Wiring from '../../../assets/Service1.png';
+import Wiring from '../../../assets/Service1.webp';
 
 const ServicesPage = () => {
     const navigate = useNavigate();
     const { systemSettings = {} } = useAuth();
+
+    useEffect(() => {
+        trackEvent('view_service', { category: 'Electrical Services', page: 'Public Catalog' });
+    }, []);
 
     const phoneNumber = systemSettings.phone || '+91 9625333919';
     const consultationLink = '/contact';
@@ -89,16 +94,25 @@ const ServicesPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-white">
+        <main className="min-h-screen bg-white">
             <Helmet>
                 <title>Our Services | {systemSettings.companyName || "Raj Electrical Service"} | Professional Electrical Repair</title>
                 <meta name="description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Service"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
                 <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, residential and commercial electrical services, trusted electrical solutions" />
-                <link rel="canonical" href={window.location.href} />
+                <link rel="canonical" href="https://rajelectricalservices.vercel.app/services" />
                 <meta property="og:title" content={`Our Services | ${systemSettings.companyName || "Raj Electrical Service"} | Professional Electrical Repair`} />
                 <meta property="og:description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Service"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
-                <meta property="og:url" content={window.location.href} />
+                <meta property="og:url" content="https://rajelectricalservices.vercel.app/services" />
                 <meta property="og:type" content="website" />
+                <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+                <meta property="og:image:width" content="1200" />
+                <meta property="og:image:height" content="630" />
+                <meta name="twitter:card" content="summary_large_image" />
+                <meta name="twitter:title" content={`Our Services | ${systemSettings.companyName || "Raj Electrical Service"} | Professional Electrical Repair`} />
+                <meta name="twitter:description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Service"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
+                <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+                <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/services" />
+
             </Helmet>
 
             {/* Hero Section - Matching AboutPage style */}
@@ -181,7 +195,11 @@ const ServicesPage = () => {
                                 <div className="relative h-48 overflow-hidden">
                                     <img
                                         src={service.image}
-                                        alt={service.title}
+                                        alt={service.title || "Electrical Service"}
+                                        loading="lazy"
+                                        decoding="async"
+                                        width={400}
+                                        height={192}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                                     />
                                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1">
@@ -361,7 +379,11 @@ const ServicesPage = () => {
                             <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/10">
                                 <img
                                     src="https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&q=80&w=800"
-                                    alt="Emergency repair backup"
+                                    alt="Emergency Electrical Repair Service"
+                                    loading="lazy"
+                                    decoding="async"
+                                    width={800}
+                                    height={320}
                                     className="w-full h-[320px] object-cover"
                                 />
                             </div>
@@ -398,7 +420,7 @@ const ServicesPage = () => {
                     </div>
                 </div>
             </section>
-        </div>
+        </main>
     );
 };
 

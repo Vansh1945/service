@@ -10,9 +10,16 @@ export const AdminFilterProvider = ({ children }) => {
   const { isAuthenticated, role } = useAuth();
   const isAdmin = isAuthenticated && role === 'admin';
 
-  const [filterType, setFilterType] = useState('calendar'); // 'calendar' | 'financial'
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [filterType, setFilterType] = useState(() => {
+    return localStorage.getItem('admin_filter_type') || 'calendar';
+  });
+  const [year, setYear] = useState(() => {
+    const saved = localStorage.getItem('admin_filter_year');
+    return saved ? Number(saved) : new Date().getFullYear();
+  });
   const [financialYear, setFinancialYear] = useState(() => {
+    const saved = localStorage.getItem('admin_filter_fin_year');
+    if (saved) return saved;
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth() + 1; // 1-indexed
@@ -22,12 +29,25 @@ export const AdminFilterProvider = ({ children }) => {
       return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
     }
   });
-  const [month, setMonth] = useState(''); // '' means all
-  const [quarter, setQuarter] = useState(''); // '' means all
+  const [month, setMonth] = useState(() => localStorage.getItem('admin_filter_month') || '');
+  const [quarter, setQuarter] = useState(() => localStorage.getItem('admin_filter_quarter') || '');
   const [zoneIds, setZoneIds] = useState([]);
   const [zones, setZones] = useState([]);
   const [earliestYear, setEarliestYear] = useState(2024);
   const [showGlobalFilterBar, setShowGlobalFilterBar] = useState(false);
+
+  // Persist filter preferences to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('admin_filter_type', filterType);
+      localStorage.setItem('admin_filter_year', String(year));
+      localStorage.setItem('admin_filter_fin_year', financialYear);
+      localStorage.setItem('admin_filter_month', month || '');
+      localStorage.setItem('admin_filter_quarter', quarter || '');
+    } catch (e) {
+      console.error("Failed to save admin filter preferences", e);
+    }
+  }, [filterType, year, financialYear, month, quarter]);
 
   // Fetch earliest year from bookings & load zones list
   useEffect(() => {

@@ -30,6 +30,6 @@ router.post('/refresh-token', authLimiter, authController.refreshAccessToken);
 
 // ── Secure logout ─────────────────────────────────────────────────────────
 // Body: { refreshToken: string, allDevices?: boolean }
-router.post('/logout', authController.logout);
+router.post('/logout', authLimiter, authController.logout);
 
 module.exports = router;

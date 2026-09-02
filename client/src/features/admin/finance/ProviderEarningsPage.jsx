@@ -46,7 +46,7 @@ const ProviderEarningsPage = () => {
     } catch (err) {
       if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
         console.error("Error loading provider earnings:", err);
-        setError("Failed to fetch live provider earnings records.");
+        setError(err);
       }
     } finally {
       setLoading(false);
@@ -86,7 +86,7 @@ const ProviderEarningsPage = () => {
         {loading ? (
           <TableSkeleton rows={6} columns={9} standalone />
         ) : error ? (
-          <Error title="Earnings Data Error" message={error} onRetry={fetchEarnings} />
+          <Error error={error} onRetry={fetchEarnings} />
         ) : transactions.length === 0 ? (
           <div className="p-12 text-center text-neutral-500 text-sm font-medium">No provider earning records found.</div>
         ) : (

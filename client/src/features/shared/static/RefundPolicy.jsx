@@ -81,11 +81,19 @@ const RefundPolicy = () => {
         <title>Refund Policy | {companyName}</title>
         <meta name="description" content={`Read our transparent refund and cancellation policy details for bookings made with ${companyName}.`} />
         <meta name="keywords" content={`refund policy, cancel booking, ${companyName} refund`} />
-        <link rel="canonical" href={window.location.href} />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/refund-policy" />
         <meta property="og:title" content={`Refund Policy | ${companyName}`} />
         <meta property="og:description" content={`Read our transparent refund and cancellation policy details for bookings made with ${companyName}.`} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/refund-policy" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`Refund Policy | ${companyName}`} />
+        <meta name="twitter:description" content={`Read our transparent refund and cancellation policy details for bookings made with ${companyName}.`} />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/refund-policy" />
       </Helmet>
 
       {/* Header Section */}

@@ -55,6 +55,18 @@ const trustProxySetting = process.env.TRUST_PROXY !== undefined
   : (process.env.NODE_ENV === 'production' ? 1 : false);
 app.set('trust proxy', trustProxySetting);
 
+const Sentry = require('@sentry/node');
+
+// Initialize Sentry Backend Error Monitoring
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'production',
+    tracesSampleRate: 1.0,
+  });
+  console.log('[Sentry Node] Backend monitoring initialized.');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1️⃣ LOGGING CONFIGURATION (WINSTON & MORGAN)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,15 +91,15 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
-    new winston.transports.File({ filename: path.join(logDir, 'combined.log') })
+    new winston.transports.File({ filename: path.join(logDir, 'combined.log') }),
+    // Always include Console transport so hosting platforms (Render, Cloudflare, Vercel, Docker) capture stdout/stderr logs
+    new winston.transports.Console({
+      format: process.env.NODE_ENV === 'production'
+        ? combine(timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), errors({ stack: true }), logFormat)
+        : combine(winston.format.colorize(), logFormat)
+    })
   ]
 });
-
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: combine(winston.format.colorize(), logFormat)
-  }));
-}
 
 global.logger = logger;
 
@@ -96,7 +108,7 @@ app.use(morgan((tokens, req, res) => {
   let url = tokens.url(req, res);
   // Redact sensitive query params
   if (url) {
-    url = url.replace(/(token|secret|password)=[^&]+/ig, '$1=***');
+    url = url.replace(/(token|secret|password|refreshToken|otp|firebaseToken|key|auth|authorization)=[^&]+/ig, '$1=***');
   }
   const method = tokens.method(req, res);
   const status = tokens.status(req, res);
@@ -140,7 +152,22 @@ app.use(morgan((tokens, req, res) => {
 // 2️⃣ SECURITY & BODY PARSERS MIDDLEWARES
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src": ["'self'"],
+      "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://*.firebaseapp.com", "https://apis.google.com", "https://*.cloudinary.com"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+      "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
+      "img-src": ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://*.razorpay.com", "https://*.tile.openstreetmap.org", "https://maps.gstatic.com", "https://*.googleusercontent.com"],
+      "connect-src": ["'self'", "wss:", "https:", "http://localhost:*", "http://127.0.0.1:*"],
+      "frame-src": ["'self'", "https://api.razorpay.com", "https://*.firebaseapp.com"],
+      "object-src": ["'none'"]
+    }
+  }
+}));
 app.use(compression());
 
 app.use(express.json({
@@ -154,6 +181,30 @@ app.use(mongoSanitize({ allowDots: true, replaceWith: '_' }));
 
 // Custom Security Headers Parser
 app.use(parseFraudHeaders);
+
+// CSRF Defense-in-Depth Origin Validation Middleware for Cookie Auth Endpoints
+app.use((req, res, next) => {
+  const isAuthMutation = req.path.includes('/auth/refresh-token') || req.path.includes('/auth/logout');
+  if (isAuthMutation && req.method === 'POST') {
+    const origin = req.headers.origin || req.headers.referer;
+    if (origin) {
+      const isDev = process.env.NODE_ENV !== 'production';
+      let allowedOrigins = [];
+      if (process.env.FRONTEND_URL) {
+        allowedOrigins = process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ""));
+      }
+      const normOrigin = origin.trim().replace(/\/$/, "");
+      const isAllowed = allowedOrigins.some(allowed => normOrigin.startsWith(allowed)) ||
+        (isDev && (normOrigin.startsWith('http://localhost:') || normOrigin.startsWith('http://127.0.0.1:')));
+
+      if (!isAllowed) {
+        if (global.logger) global.logger.warn(`[CSRF Protection] Rejected request to ${req.path} from untrusted origin: ${origin}`);
+        return res.status(403).json({ success: false, message: 'Security Alert: Untrusted request origin' });
+      }
+    }
+  }
+  next();
+});
 
 // CORS Settings
 const corsOptions = {
@@ -192,9 +243,44 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Static Folders
-app.use("/uploads", express.static("uploads"));
+// Static Folders with security restriction against sensitive KYC files
+app.use("/uploads", (req, res, next) => {
+  const sensitivePatterns = [/kyc/i, /aadhaar/i, /pan/i, /passbook/i, /selfie/i, /private/i];
+  if (sensitivePatterns.some(p => p.test(req.path))) {
+    return res.status(403).json({ success: false, message: 'Security Alert: Access denied to restricted document' });
+  }
+  next();
+}, express.static("uploads"));
 app.use("/assets", express.static("assets"));
+
+// HTTP Cache-Control Header Middleware for API GET requests
+app.use((req, res, next) => {
+  if (req.method === 'GET') {
+    const url = req.originalUrl || req.url || '';
+    // Personalized/authenticated routes must never be cached by shared or browser caches
+    const isPrivate = url.includes('/admin') ||
+                      url.includes('/customer') ||
+                      url.includes('/provider') ||
+                      url.includes('/auth') ||
+                      url.includes('/booking') ||
+                      url.includes('/transaction') ||
+                      url.includes('/complaint') ||
+                      url.includes('/feedback') ||
+                      url.includes('/chat') ||
+                      url.includes('/notifications') ||
+                      url.includes('/payment') ||
+                      url.includes('/referral/customer') ||
+                      url.includes('/referral/provider') ||
+                      url.includes('/referral/admin');
+
+    if (isPrivate) {
+      res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    } else if (url.startsWith('/api/')) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+    }
+  }
+  next();
+});
 
 
 
@@ -329,7 +415,10 @@ app.use((req, res, next) => {
   res.status(404).json({
     success: false,
     message: "Resource not found",
-    error: "NOT_FOUND"
+    error: {
+      code: "NOT_FOUND",
+      details: null
+    }
   });
 });
 
@@ -337,10 +426,26 @@ const { sanitizeErrorMessage } = require('./shared/utils/error-sanitizer');
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  if (process.env.SENTRY_DSN && err && (err.status >= 500 || !err.status)) {
+    try {
+      Sentry.captureException(err);
+    } catch (sentryErr) {
+      console.error('[Sentry Error] Failed to report exception:', sentryErr);
+    }
+  }
+
   const userSafeMessage = sanitizeErrorMessage(err);
-  res.status(err.status || err.statusCode || 500).json({
+  const statusCode = err.status || err.statusCode || 500;
+  const errorCode = err.code || (typeof err.error === 'string' ? err.error : (statusCode === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR'));
+  const errorDetails = err.details || (typeof err.error === 'object' ? err.error : null);
+
+  res.status(statusCode).json({
     success: false,
-    message: userSafeMessage
+    message: userSafeMessage,
+    error: {
+      code: errorCode,
+      details: errorDetails
+    }
   });
 });
 
@@ -356,6 +461,16 @@ initSocket(server);
 
 const startServer = async () => {
   try {
+    // Startup Environment Variable Validation
+    const requiredEnvVars = ['JWT_SECRET', 'MONGO_URI'];
+    const missingEnvVars = requiredEnvVars.filter(v => !process.env[v] && !(v === 'MONGO_URI' && process.env.MONGODB_URI));
+    if (missingEnvVars.length > 0) {
+      const errorMsg = `[Startup Error] Missing required environment variable(s): ${missingEnvVars.join(', ')}`;
+      logger.error(errorMsg);
+      console.error(`❌ ${errorMsg}`);
+      process.exit(1);
+    }
+
     await connectDB();
 
     // Auto-migrate branding defaults
@@ -410,14 +525,16 @@ const startServer = async () => {
     // Start background cron scheduler
     startCronJobs();
 
-    // Run releaseHeldEarnings every hour
-    setInterval(async () => {
-      global.logger.info('Running background task: releaseHeldEarnings');
-      await releaseHeldEarnings();
-    }, 60 * 60 * 1000);
+    // Run releaseHeldEarnings every hour (if cron enabled on this instance)
+    if (process.env.DISABLE_CRON !== 'true' && process.env.DISABLE_CRON !== '1') {
+      setInterval(async () => {
+        global.logger.info('Running background task: releaseHeldEarnings');
+        await releaseHeldEarnings();
+      }, 60 * 60 * 1000);
 
-    // Initial run on startup
-    releaseHeldEarnings().catch(err => global.logger.error('Initial releaseHeldEarnings failed: ' + err.message, err));
+      // Initial run on startup
+      releaseHeldEarnings().catch(err => global.logger.error('Initial releaseHeldEarnings failed: ' + err.message, err));
+    }
 
     server.listen(PORT, () => {
       global.logger.info(`Server is running on port ${PORT}`);

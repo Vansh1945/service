@@ -15,7 +15,7 @@ const getCookieOptions = () => {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax',
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/'
   };
@@ -300,7 +300,6 @@ exports.Login = async (req, res, next) => {
       success: true,
       message: 'Login successful',
       token,
-      refreshToken: refreshTokenRaw,
       user: userData
     });
 
@@ -684,7 +683,7 @@ exports.firebaseLogin = async (req, res, next) => {
       res.cookie('refreshToken', refreshTokenRaw, getCookieOptions());
     }
 
-    return res.status(200).json({ success: true, message: 'Login successful', token: accessToken, refreshToken: refreshTokenRaw, user: userData });
+    return res.status(200).json({ success: true, message: 'Login successful', token: accessToken, user: userData });
   } catch (err) {
     global.logger.error(`[AuthController.firebaseLogin] Route: ${req.originalUrl || req.url} - Firebase login error: ${err.message}`, err);
     next(err);
@@ -800,7 +799,7 @@ exports.refreshAccessToken = async (req, res, next) => {
       res.cookie('refreshToken', newRefreshRaw, getCookieOptions());
     }
 
-    return res.status(200).json({ success: true, token: accessToken, refreshToken: newRefreshRaw });
+    return res.status(200).json({ success: true, token: accessToken });
   } catch (err) {
     global.logger.error(`[AuthController.refreshAccessToken] Route: ${req.originalUrl || req.url} - Refresh token error: ${err.message}`, err);
     next(err);

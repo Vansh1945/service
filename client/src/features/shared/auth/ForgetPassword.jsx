@@ -8,7 +8,7 @@ import { useAuth } from '../../../context/auth';
 import { toast } from '../../../components/ui/Toast';
 
 import { forgetpassword, verifyotp, resendotp, resetpassword } from '../../../services/AuthService';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -98,9 +98,9 @@ const BenefitsSection = ({ systemSettings = {} }) => (
         <Shield className="w-3.5 h-3.5 text-primary" />
         <span className="text-xs font-bold text-primary">Secure Account Recovery</span>
       </div>
-      <h1 className="text-4xl font-bold text-secondary leading-tight">
+      <h2 className="text-4xl font-bold text-secondary leading-tight">
         Recover <span className="text-primary">Your Account</span>
-      </h1>
+      </h2>
       <p className="mt-3 text-sm text-secondary/60 leading-relaxed max-w-sm mx-auto">
         Quickly reset your password and regain access to your account with our secure OTP verification.
       </p>

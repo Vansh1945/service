@@ -58,7 +58,10 @@ const contactSchema = new Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -69,6 +72,7 @@ const contactSchema = new Schema({
 contactSchema.index({ email: 1 });
 contactSchema.index({ status: 1 });
 contactSchema.index({ createdAt: -1 });
+contactSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // Middleware to update updatedAt
 contactSchema.pre('save', function(next) {

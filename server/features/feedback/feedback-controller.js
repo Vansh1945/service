@@ -386,10 +386,19 @@ const editFeedback = async (req, res, next) => {
 // @access  Private (Customer)
 const deleteFeedback = async (req, res, next) => {
   try {
-    const feedback = await Feedback.findOneAndDelete({
-      _id: req.params.feedbackId,
-      customer: req.user._id
-    });
+    const feedback = await Feedback.findOneAndUpdate(
+      {
+        _id: req.params.feedbackId,
+        customer: req.user._id,
+        isDeleted: { $ne: true }
+      },
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || null
+      },
+      { new: true }
+    );
 
     if (!feedback) {
       return res.status(404).json({
@@ -422,7 +431,7 @@ const deleteFeedback = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Feedback deleted successfully'
+      message: 'Feedback soft-deleted successfully'
     });
   } catch (error) {
     global.logger.error(`[FeedbackController.deleteFeedback] Route: ${req.originalUrl || req.url} - Error deleting feedback: ${error.message}`, error);
@@ -435,7 +444,15 @@ const deleteFeedback = async (req, res, next) => {
 // @access  Private (Admin)
 const deleteFeedbackAdmin = async (req, res, next) => {
   try {
-    const feedback = await Feedback.findByIdAndDelete(req.params.feedbackId);
+    const feedback = await Feedback.findByIdAndUpdate(
+      req.params.feedbackId,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || null
+      },
+      { new: true }
+    );
 
     if (!feedback) {
       return res.status(404).json({
@@ -705,18 +722,25 @@ const getAllFeedbacks = async (req, res, next) => {
       Feedback.countDocuments()
     ]);
 
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const totalPages = Math.ceil(total / limitNum) || 1;
     return res.status(200).json({
       success: true,
+      message: "Feedbacks retrieved successfully",
       count: feedbacks.length,
       total,
-      page: parseInt(page),
-      pages: Math.ceil(total / limit),
+      page: pageNum,
+      pages: totalPages,
       data: feedbacks,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(total / limit)
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        pages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
       }
     });
   } catch (error) {

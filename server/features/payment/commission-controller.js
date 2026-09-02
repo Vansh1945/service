@@ -67,8 +67,12 @@ exports.listCommissionRules = async (req, res, next) => {
 
     const avgCommissionRate = percentageStats[0]?.avgRate ? percentageStats[0].avgRate.toFixed(1) : '0.0';
 
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const totalPages = Math.ceil(count / limitNum) || 1;
     res.status(200).json({
       success: true,
+      message: "Commission rules retrieved successfully",
       data: rules,
       stats: {
         totalRules: count,
@@ -77,8 +81,12 @@ exports.listCommissionRules = async (req, res, next) => {
       },
       pagination: {
         total: count,
-        page: parseInt(page),
-        pages: Math.ceil(count / parseInt(limit))
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        pages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
       }
     });
   } catch (error) {

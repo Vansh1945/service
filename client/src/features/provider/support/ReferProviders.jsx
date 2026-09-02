@@ -68,7 +68,7 @@ const ReferProviders = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center bg-white rounded-2xl shadow-sm border border-neutral-100">
         <FiAlertCircle className="w-12 h-12 text-danger mx-auto mb-4 animate-pulse" />
-        <h1 className="text-lg font-bold text-neutral-800 font-poppins">Failed to load referral details</h1>
+        <h2 className="text-lg font-bold text-neutral-800 font-poppins">Failed to load referral details</h2>
         <p className="text-neutral-500 text-xs mt-2 font-medium">{error}</p>
         <button 
           onClick={fetchReferralDetails} 
@@ -84,7 +84,7 @@ const ReferProviders = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center bg-white rounded-2xl shadow-sm border border-neutral-100">
         <FiAlertCircle className="w-12 h-12 text-danger mx-auto mb-4 animate-pulse" />
-        <h1 className="text-lg font-bold text-neutral-800 font-poppins">Program Temporarily Paused</h1>
+        <h2 className="text-lg font-bold text-neutral-800 font-poppins">Program Temporarily Paused</h2>
         <p className="text-neutral-500 text-xs mt-2 font-medium">Referral program is temporarily unavailable. Check back later.</p>
       </div>
     );

@@ -2,12 +2,33 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Sentry from "@sentry/react";
 import App from "./App";
 import { AuthProvider } from "../src/context/auth";
 import { NotificationProvider } from "../src/context/NotificationContext";
 import { HelmetProvider } from "react-helmet-async";
+import { initWebVitals } from "../firebase";
 import "./index.css";
 import "leaflet/dist/leaflet.css";
+
+// Initialize Sentry for React Frontend Error Monitoring
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+    ],
+    tracesSampleRate: 1.0,
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+    environment: import.meta.env.MODE || 'production',
+  });
+  console.log('[Sentry React] Initialized successfully.');
+}
+
+// Initialize Real User Performance Web Vitals tracking
+initWebVitals();
 
 // Capture PWA beforeinstallprompt globally as early as possible
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -27,24 +48,27 @@ const queryClient = new QueryClient({
 });
 
 import { ConfirmProvider } from "./context/ConfirmContext";
+import { AppErrorBoundary } from "./components/ui/Error";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <NotificationProvider>
-            <ConfirmProvider>
-              <HelmetProvider>
-                <App />
-              </HelmetProvider>
-            </ConfirmProvider>
-          </NotificationProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <NotificationProvider>
+              <ConfirmProvider>
+                <HelmetProvider>
+                  <App />
+                </HelmetProvider>
+              </ConfirmProvider>
+            </NotificationProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   </React.StrictMode>
 );
 // PWA Service Worker Registration
@@ -57,5 +81,9 @@ const getBrandingVersion = () => {
 
 if ('serviceWorker' in navigator) {
   const version = getBrandingVersion();
-  navigator.serviceWorker.register(`/sw.js?v=${version}`).catch(err => console.error('SW registration failed:', err));
+  navigator.serviceWorker.register(`/sw.js?v=${version}`).catch(err => {
+    if (import.meta.env.DEV) {
+      console.error('SW registration failed:', err);
+    }
+  });
 }

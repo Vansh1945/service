@@ -98,15 +98,20 @@ const getAllCoupons = async (req, res, next) => {
       Coupon.countDocuments(filters)
     ]);
 
+    const totalPages = Math.ceil(total / limit) || 1;
     res.json({
       success: true,
+      message: "Coupons retrieved successfully",
       count: coupons.length,
       data: coupons,
       pagination: {
         total,
         page: pageNum,
         limit,
-        totalPages: Math.ceil(total / limit)
+        totalPages,
+        pages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
       }
     });
   } catch (error) {
@@ -249,13 +254,16 @@ const hardDeleteCoupon = async (req, res, next) => {
       });
     }
 
-    global.logger.info(`Deleting coupon: ${coupon.code}`);
-
-    await Coupon.findByIdAndDelete(id);
+    await Coupon.findByIdAndUpdate(id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user?._id || null,
+      isActive: false
+    });
 
     res.json({
       success: true,
-      message: 'Coupon permanently deleted',
+      message: 'Coupon soft-deleted successfully',
     });
   } catch (error) {
     global.logger.error(`[CouponController.hardDeleteCoupon] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);

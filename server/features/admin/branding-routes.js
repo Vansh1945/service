@@ -5,7 +5,7 @@ const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware')
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../../shared/config/cloudinary');
-const { handleUploadErrors } = require('../../shared/middlewares/upload');
+const { handleUploadErrors, fileFilterHelper } = require('../../shared/middlewares/upload');
 const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 const { preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
 
@@ -25,6 +25,10 @@ const uploadBrandingSettings = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: fileFilterHelper(
+    ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml'],
+    ['jpg', 'jpeg', 'png', 'gif', 'ico', 'svg']
+  )
 }).fields([
   { name: 'logo', maxCount: 1 },
   { name: 'icon', maxCount: 1 },

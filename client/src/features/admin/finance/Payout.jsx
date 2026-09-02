@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import StatCard from '../../../components/ui/StatCard';
 import { useAuth } from '../../../context/auth';

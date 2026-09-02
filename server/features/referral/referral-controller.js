@@ -762,14 +762,22 @@ const getCustomerReferralDetails = async (req, res, next) => {
       await customer.save();
     }
 
-    const [referrals, rewardLogs] = await Promise.all([
-      Referral.find({ referrer: customerId, referrerType: 'customer' })
+    const [referrals, rewardStats] = await Promise.all([
+      Referral.find({ referrer: customerId, referrerType: 'customer', isDeleted: { $ne: true } })
         .populate('referredUser', 'name email createdAt')
+        .sort({ createdAt: -1 })
+        .limit(100)
         .lean(),
-      ReferralRewardLog.find({ recipient: customerId, status: 'released' }).select('amount').lean()
+      ReferralRewardLog.aggregate([
+        { $match: { recipient: customerId, recipientType: 'customer', isDeleted: { $ne: true } } },
+        { $group: { _id: "$status", total: { $sum: "$amount" } } }
+      ])
     ]);
 
-    const releasedRewards = rewardLogs.reduce((sum, log) => sum + log.amount, 0);
+    let releasedRewards = 0;
+    (rewardStats || []).forEach(st => {
+      if (st._id === 'released') releasedRewards = st.total;
+    });
 
     res.status(200).json({
       success: true,
@@ -830,16 +838,23 @@ const getProviderReferralDetails = async (req, res, next) => {
       await provider.save();
     }
 
-    const [referrals, releasedLogs, heldLogs] = await Promise.all([
-      Referral.find({ referrer: providerId, referrerType: 'provider' })
+    const [referrals, rewardStats] = await Promise.all([
+      Referral.find({ referrer: providerId, referrerType: 'provider', isDeleted: { $ne: true } })
         .populate('referredUser', 'name email createdAt')
+        .sort({ createdAt: -1 })
+        .limit(100)
         .lean(),
-      ReferralRewardLog.find({ recipient: providerId, status: 'released' }).select('amount referral rewardType details status').lean(),
-      ReferralRewardLog.find({ recipient: providerId, status: 'held' }).select('amount referral rewardType details status').lean()
+      ReferralRewardLog.aggregate([
+        { $match: { recipient: providerId, recipientType: 'provider', isDeleted: { $ne: true } } },
+        { $group: { _id: "$status", total: { $sum: "$amount" } } }
+      ])
     ]);
 
-    const totalEarnings = releasedLogs.reduce((sum, log) => sum + log.amount, 0);
-    const pendingEarnings = heldLogs.reduce((sum, log) => sum + log.amount, 0);
+    let totalEarnings = 0, pendingEarnings = 0;
+    (rewardStats || []).forEach(st => {
+      if (st._id === 'released') totalEarnings = st.total;
+      else if (st._id === 'held') pendingEarnings = st.total;
+    });
 
     const milestones = refConfig.providerMilestones || [];
     const referralsWithProgress = [];

@@ -823,7 +823,11 @@ const AdminCustomersDashboard = () => {
                                         <img
                                             className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-md"
                                             src={selectedCustomer.profilePicUrl || '/default-avatar.png'}
-                                            alt={selectedCustomer.name}
+                                            alt={selectedCustomer.name || "Customer profile photo"}
+                                            loading="lazy"
+                                            decoding="async"
+                                            width={96}
+                                            height={96}
                                             onError={(e) => {
                                                 e.target.src = '/default-avatar.png';
                                             }}

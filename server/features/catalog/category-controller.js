@@ -37,7 +37,8 @@ const createCategory = async (req, res, next) => {
 // Get All Categories Admin (Admin)
 const getAllCategoriesAdmin = async (req, res, next) => {
   try {
-    const categories = await Category.find();
+    const filter = req.query.includeDeleted === 'true' ? {} : { isDeleted: { $ne: true } };
+    const categories = await Category.find(filter);
     res.status(200).json({
       success: true,
       data: categories
@@ -53,7 +54,7 @@ const getActiveCategories = async (req, res, next) => {
   try {
     let categories = cache.get('active_categories');
     if (!categories) {
-      categories = await Category.find({ isActive: true });
+      categories = await Category.find({ isActive: true, isDeleted: { $ne: true } });
       cache.set('active_categories', categories, 300);
     }
     res.status(200).json({
@@ -101,22 +102,48 @@ const updateCategory = async (req, res, next) => {
   }
 };
 
-// Delete Category (Admin) - Permanent Delete
+// Delete Category (Admin) - Soft Delete by default, Permanent if ?permanent=true or ?force=true
 const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const category = await Category.findByIdAndDelete(id);
+    const isPermanent = req.query.permanent === 'true' || req.query.force === 'true';
+
+    if (isPermanent) {
+      const category = await Category.findByIdAndDelete(id);
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        });
+      }
+      cache.del('active_categories');
+      return res.status(200).json({
+        success: true,
+        message: 'Category permanently deleted'
+      });
+    }
+
+    const category = await Category.findByIdAndUpdate(
+      id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || null,
+        isActive: false
+      },
+      { new: true }
+    );
     if (!category) {
       return res.status(404).json({
         success: false,
         message: 'Category not found'
       });
     }
+    cache.del('active_categories');
     res.status(200).json({
       success: true,
-      message: 'Category deleted successfully'
+      message: 'Category soft-deleted successfully'
     });
-    cache.del('active_categories');
   } catch (error) {
     global.logger.error(`[CategoryController.deleteCategory] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
     next(error);

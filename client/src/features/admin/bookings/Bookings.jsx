@@ -1137,7 +1137,7 @@ const AdminBookingsView = () => {
 
         try {
             await BookingService.deleteBooking(bookingId);
-            showToast('Booking deleted successfully', 'success');
+            showToast('Booking soft-deleted successfully', 'success');
             setDeleteConfirm(null);
             fetchBookings(true);
             setShowModal(false);
@@ -1163,7 +1163,7 @@ const AdminBookingsView = () => {
 
         try {
             await BookingService.deleteUserBooking(userId, bookingId);
-            showToast('User booking deleted successfully', 'success');
+            showToast('User booking soft-deleted successfully', 'success');
             setDeleteConfirm(null);
             fetchBookings(true);
             setShowModal(false);

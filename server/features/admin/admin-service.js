@@ -532,7 +532,16 @@ class AdminService {
                 });
             }
 
-            const admin = await Admin.findByIdAndDelete(adminId);
+            const admin = await Admin.findByIdAndUpdate(
+                adminId,
+                {
+                    isDeleted: true,
+                    deletedAt: new Date(),
+                    deletedBy: req.admin?._id || null,
+                    isActive: false
+                },
+                { new: true }
+            );
             if (!admin) {
                 return res.status(404).json({
                     success: false,
@@ -542,7 +551,7 @@ class AdminService {
 
             res.status(200).json({
                 success: true,
-                message: 'Admin deleted successfully'
+                message: 'Admin soft-deleted successfully'
             });
 
         } catch (error) {
@@ -794,7 +803,11 @@ class AdminService {
         try {
             const customerId = req.params.id;
 
-            const customer = await User.findOneAndDelete({ _id: customerId, role: 'customer' });
+            const customer = await User.findOneAndUpdate(
+                { _id: customerId, role: 'customer' },
+                { isDeleted: true, deletedAt: new Date(), deletedBy: req.admin?._id || req.user?._id || null },
+                { new: true }
+            );
             if (!customer) {
                 return res.status(404).json({
                     success: false,
@@ -804,7 +817,7 @@ class AdminService {
 
             res.status(200).json({
                 success: true,
-                message: 'Customer deleted successfully'
+                message: 'Customer soft-deleted successfully'
             });
 
         } catch (error) {

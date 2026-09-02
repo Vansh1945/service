@@ -35,7 +35,7 @@ const ServiceListing = () => {
   };
   const [selectedCategories, setSelectedCategories] = useState(getInitialCategories());
   const [priceRange, setPriceRange] = useState([0, 10000]);
-  const [sortBy, setSortBy] = useState('popular');
+  const [sortBy, setSortByState] = useState(searchParams.get('sort') || 'popular');
   const [selectedRatings, setSelectedRatings] = useState([]);
   const { categories: categoriesData } = useCategory();
   const [maxPrice, setMaxPrice] = useState(10000);
@@ -44,13 +44,26 @@ const ServiceListing = () => {
   const lastPushedSearchRef = useRef(searchParams.get('search') || '');
   const lastPushedCategoriesRef = useRef(getInitialCategories());
 
+  const handleSortChange = (newSort) => {
+    setSortByState(newSort);
+    const params = new URLSearchParams(searchParams);
+    if (newSort && newSort !== 'popular') {
+      params.set('sort', newSort);
+    } else {
+      params.delete('sort');
+    }
+    setSearchParams(params);
+  };
+
   const handleSearch = (value) => {
     setSearchTerm(value);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
-      const params = {};
-      if (value) params.search = value;
-      if (selectedCategories.length > 0) params.categories = selectedCategories.join(',');
+      const params = new URLSearchParams(searchParams);
+      if (value) params.set('search', value);
+      else params.delete('search');
+      if (selectedCategories.length > 0) params.set('categories', selectedCategories.join(','));
+      else params.delete('categories');
       lastPushedSearchRef.current = value;
       setSearchParams(params);
     }, 300);
@@ -67,10 +80,15 @@ const ServiceListing = () => {
     const searchVal = searchParams.get('search') || '';
     const cats = searchParams.get('categories') || searchParams.get('category');
     const categoriesVal = cats ? cats.split(',') : [];
+    const sortVal = searchParams.get('sort') || 'popular';
 
     if (searchVal !== lastPushedSearchRef.current) {
       setSearchTerm(searchVal);
       lastPushedSearchRef.current = searchVal;
+    }
+
+    if (sortVal !== sortBy) {
+      setSortByState(sortVal);
     }
 
     const isCatsMatch = categoriesVal.length === lastPushedCategoriesRef.current.length &&
@@ -81,7 +99,7 @@ const ServiceListing = () => {
       lastPushedCategoriesRef.current = categoriesVal;
       setVisibleCount(10);
     }
-  }, [searchParams]);
+  }, [searchParams, sortBy]);
 
   // Fetch services from backend
   const fetchServices = async () => {
@@ -301,6 +319,10 @@ const ServiceListing = () => {
                 <img
                   src={activeCategoryDoc.icon}
                   alt={activeCategoryName}
+                  loading="lazy"
+                  decoding="async"
+                  width={20}
+                  height={20}
                   className="w-5 h-5 object-contain"
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
@@ -414,7 +436,7 @@ const ServiceListing = () => {
               <div className="flex items-center gap-3">
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
+                  onChange={(e) => handleSortChange(e.target.value)}
                   className="hidden sm:block pl-3 pr-8 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 text-xs font-semibold text-gray-700 cursor-pointer appearance-none shadow-sm min-w-[130px]"
                 >
                   <option value="popular">Sort by: Popular</option>
@@ -491,7 +513,7 @@ const ServiceListing = () => {
           <div className="flex-1 relative">
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => handleSortChange(e.target.value)}
               className="w-full pl-2.5 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 text-xs font-bold text-gray-700 appearance-none cursor-pointer truncate"
             >
               <option value="popular">Sort: Popular</option>

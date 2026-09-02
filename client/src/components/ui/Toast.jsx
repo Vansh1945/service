@@ -42,6 +42,15 @@ toast.dismiss = (toastId) => {
   notifyListeners({ action: 'dismiss', id: toastId });
 };
 
+toast.undo = (message, onUndoAction, options = {}) => {
+  return createToast('success', message, {
+    actionLabel: options.actionLabel || 'Undo',
+    onAction: onUndoAction,
+    autoClose: options.autoClose || 10000,
+    ...options
+  });
+};
+
 toast.update = (toastId, newOptions = {}) => {
   notifyListeners({ action: 'update', id: toastId, payload: newOptions });
 };
@@ -184,6 +193,21 @@ const ToastItem = ({ toastItem, onDismiss }) => {
           {toastItem.message}
         </p>
       </div>
+
+      {((toastItem.actionLabel && toastItem.onAction) || toastItem.onUndo) && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (toastItem.onUndo) toastItem.onUndo();
+            else if (toastItem.onAction) toastItem.onAction();
+            onDismiss(toastItem.id);
+          }}
+          className="shrink-0 px-2.5 py-1 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all shadow-sm self-center ml-1 uppercase tracking-wider"
+        >
+          {toastItem.actionLabel || 'UNDO'}
+        </button>
+      )}
 
       {toastItem.type !== 'loading' && (
         <button

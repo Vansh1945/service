@@ -66,7 +66,10 @@ const zoneSchema = new mongoose.Schema({
   s2CellIds: {
     type: [String],
     default: []
-  }
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true
 });
@@ -75,6 +78,7 @@ const zoneSchema = new mongoose.Schema({
 zoneSchema.index({ polygon: '2dsphere' });
 zoneSchema.index({ s2CellIds: 1 });
 zoneSchema.index({ city: 1, name: 1 }, { unique: true });
+zoneSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // Static helper to find zone by lat/lng coordinates
 zoneSchema.statics.findZoneByCoordinates = async function(lat, lng) {

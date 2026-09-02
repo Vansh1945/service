@@ -57,6 +57,21 @@ const serviceSchema = new Schema({
     type: Boolean,
     default: true
   },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  deletedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
   createdBy: {
     type: Schema.Types.ObjectId,
     ref: 'Admin',

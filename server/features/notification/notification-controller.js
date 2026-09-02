@@ -82,7 +82,7 @@ const getNotifications = async (req, res, next) => {
     try {
         const userId = req.userID || req.query.userId;
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
+        const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100);
         const skip = (page - 1) * limit;
 
         const query = { userId };
@@ -138,11 +138,21 @@ const getNotifications = async (req, res, next) => {
             return { ...notif, title, message };
         }));
 
+        const totalPages = Math.ceil(total / limit) || 1;
         return res.status(200).json({
             success: true,
+            message: "Notifications retrieved successfully",
             data: formattedNotifications,
             unreadCount,
-            pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
+            pagination: { 
+                total, 
+                page: parseInt(page), 
+                limit: parseInt(limit), 
+                totalPages, 
+                pages: totalPages, 
+                hasNextPage: parseInt(page) < totalPages, 
+                hasPreviousPage: parseInt(page) > 1 
+            }
         });
     } catch (error) {
         global.logger.error(`[NotificationController.getNotifications] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
@@ -648,14 +658,21 @@ const getAdminNotifications = async (req, res, next) => {
             }
         });
 
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const totalPages = Math.ceil(total / limitNum) || 1;
         return res.status(200).json({
             success: true,
+            message: "Admin notifications retrieved successfully",
             data: notifications,
             pagination: {
                 total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                totalPages: Math.ceil(total / limit)
+                page: pageNum,
+                limit: limitNum,
+                totalPages,
+                pages: totalPages,
+                hasNextPage: pageNum < totalPages,
+                hasPreviousPage: pageNum > 1
             }
         });
     } catch (error) {
@@ -1100,11 +1117,20 @@ const deleteTemplate = async (req, res, next) => {
     try {
         const { id } = req.params;
         const NotificationTemplate = mongoose.model('NotificationTemplate');
-        const template = await NotificationTemplate.findByIdAndDelete(id);
+        const template = await NotificationTemplate.findByIdAndUpdate(
+            id,
+            {
+                isDeleted: true,
+                deletedAt: new Date(),
+                deletedBy: req.user?._id || null,
+                isActive: false
+            },
+            { new: true }
+        );
         if (!template) {
             return res.status(404).json({ success: false, message: 'Template not found' });
         }
-        return res.status(200).json({ success: true, message: 'Template deleted successfully' });
+        return res.status(200).json({ success: true, message: 'Template soft-deleted successfully' });
     } catch (error) {
         global.logger.error(`[NotificationController.deleteTemplate] Route: ${req.originalUrl || req.url} - deleteTemplate error: ${error.message}`, error);
         next(error);

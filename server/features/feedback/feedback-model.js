@@ -83,7 +83,10 @@ const feedbackSchema = new Schema({
   metadata: {
     ip: String,
     userAgent: String
-  }
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -95,6 +98,7 @@ const feedbackSchema = new Schema({
 feedbackSchema.index({ 'providerFeedback.provider': 1 });
 feedbackSchema.index({ 'serviceFeedback.service': 1 });
 feedbackSchema.index({ 'providerFeedback.rating': -1 });
+feedbackSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // Virtual for checking if feedback is complete
 feedbackSchema.virtual('isComplete').get(function () {

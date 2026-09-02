@@ -14,7 +14,7 @@ import {
 } from '../../../services/CustomerService';
 import AddressSelector from '../../../components/AddressSelector';
 import AddressModal from '../../../components/modals/AddressModal';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import {
     User, MapPin, Shield, ChevronRight, Gift, Wallet, Heart, LogOut,
@@ -298,11 +298,10 @@ const SavedAddressesSection = ({ profile, fetchProfile, onBack }) => {
                     {addresses.map((addr) => (
                         <div
                             key={addr._id}
-                            className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2.5 ${
-                                addr.isDefault
+                            className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between space-y-2.5 ${addr.isDefault
                                     ? 'border-primary/40 bg-primary/5 shadow-xs'
                                     : 'border-neutral-100 bg-white hover:border-neutral-200'
-                            }`}
+                                }`}
                         >
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">

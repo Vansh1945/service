@@ -6,7 +6,7 @@ const DeleteConfirmModal = ({
   onClose,
   onConfirm,
   title = "Delete Booking",
-  message = "Are you sure you want to delete this booking? This action cannot be undone.",
+  message = "Are you sure you want to delete this booking? It will be soft-deleted and archived for audit compliance.",
   actionLoading = false,
   confirmText = "Delete"
 }) => {

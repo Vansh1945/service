@@ -9,7 +9,7 @@ import {
 import AddressSelector from '../../../components/AddressSelector';
 import { IfscBankDetails } from '../../../components/IfscBankDetails';
 import { ProviderPolicy } from '../../../components/ProviderPolicy';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from '../../../components/ui/Toast';
 import DatePicker from 'react-datepicker';
@@ -40,7 +40,7 @@ const getCookie = (name) => {
       try {
         return decodeURIComponent(c.substring(nameEQ.length, c.length));
       } catch (e) {
-      console.error(e);
+        console.error(e);
         return c.substring(nameEQ.length, c.length);
       }
     }
@@ -335,11 +335,11 @@ const BenefitsSection = ({ systemSettings }) => (
         <Sparkles className="w-3.5 h-3.5 text-primary" />
         <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
       </div>
-      <h1 className="text-4xl font-bold text-secondary leading-tight">
+      <h2 className="text-4xl font-bold text-secondary leading-tight">
         Become a{' '}
         <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>{' '}
         Provider
-      </h1>
+      </h2>
       <p className="mt-3 text-sm text-secondary/60 leading-relaxed">
         Join our network of verified electrical professionals and start earning more today.
       </p>
@@ -652,7 +652,7 @@ const ProviderRegistration = () => {
           setIsReferralValid(false);
         }
       } catch (err) {
-      console.error(err);
+        console.error(err);
         setReferralFeedback('Error validating code');
         setIsReferralValid(false);
       } finally {
@@ -1190,6 +1190,42 @@ const ProviderRegistration = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+
+                  {/* Password Strength Indicator */}
+                  {formData.password && (() => {
+                    const pwd = formData.password;
+                    const checks = [
+                      { label: '8+ chars', pass: pwd.length >= 8 },
+                      { label: 'Uppercase', pass: /[A-Z]/.test(pwd) },
+                      { label: 'Lowercase', pass: /[a-z]/.test(pwd) },
+                      { label: 'Number', pass: /[0-9]/.test(pwd) },
+                      { label: 'Special symbol', pass: /[^A-Za-z0-9]/.test(pwd) }
+                    ];
+                    const score = checks.filter(c => c.pass).length;
+                    const label = score <= 2 ? 'Weak' : score <= 4 ? 'Medium' : 'Strong';
+                    const colorCls = score <= 2 ? 'bg-red-500' : score <= 4 ? 'bg-amber-500' : 'bg-emerald-500';
+                    const textCls = score <= 2 ? 'text-red-500' : score <= 4 ? 'text-amber-600' : 'text-emerald-600';
+                    const widthPct = score <= 2 ? 'w-1/3' : score <= 4 ? 'w-2/3' : 'w-full';
+
+                    return (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                          <span className="text-gray-400 uppercase tracking-wider">Password Strength</span>
+                          <span className={textCls}>{label}</span>
+                        </div>
+                        <div className="w-full bg-gray-150 rounded-full h-1.5 overflow-hidden">
+                          <div className={`h-full transition-all duration-300 ${colorCls} ${widthPct}`} />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {checks.map((c, i) => (
+                            <span key={i} className={`text-[9px] font-semibold px-2 py-0.5 rounded-md border ${c.pass ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                              {c.pass ? '✓' : '○'} {c.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </Field>
                 <Field label="Confirm Password *">
                   <div className="relative">

@@ -4,7 +4,8 @@ const serviceController = require('./service-controller');
 const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware');
 const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../../shared/middlewares/provider-middleware');
 const { uploadServiceImage, uploadServicesFile, handleUploadErrors } = require('../../shared/middlewares/upload');
-const { validateBody } = require('../../shared/validation/common-validation');
+const { validateBody, validateParams, idParamSchema } = require('../../shared/validation/common-validation');
+const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 const {
     createServiceSchema,
     updateServiceSchema,
@@ -16,6 +17,7 @@ const {
  */
 router.post('/admin/services',
     adminAuthMiddleware,
+    adminActionLimiter,
     uploadServiceImage.array('image', 3),
     handleUploadErrors,
     validateBody(createServiceSchema),
@@ -24,6 +26,8 @@ router.post('/admin/services',
 
 router.put('/admin/service/:id',
     adminAuthMiddleware,
+    adminActionLimiter,
+    validateParams(idParamSchema),
     uploadServiceImage.array('image', 3),
     handleUploadErrors,
     validateBody(updateServiceSchema),
@@ -32,11 +36,14 @@ router.put('/admin/service/:id',
 
 router.patch('/admin/services/disable-discounts',
     adminAuthMiddleware,
+    adminActionLimiter,
     serviceController.disableDiscounts
 );
 
 router.patch('/admin/services/:id/price',
     adminAuthMiddleware,
+    adminActionLimiter,
+    validateParams(idParamSchema),
     validateBody(updateBasePriceSchema),
     serviceController.updateBasePrice
 );
@@ -44,6 +51,8 @@ router.patch('/admin/services/:id/price',
 
 router.delete('/admin/services/:id',
     adminAuthMiddleware,
+    adminActionLimiter,
+    validateParams(idParamSchema),
     serviceController.deleteService
 );
 
@@ -54,11 +63,13 @@ router.get('/admin/services',
 
 router.get('/admin/services/:id',
     adminAuthMiddleware,
+    validateParams(idParamSchema),
     serviceController.getServiceById
 );
 
 router.post('/admin/bulk-import', 
     adminAuthMiddleware,
+    adminActionLimiter,
     uploadServicesFile.single('servicesFile'), 
     handleUploadErrors,
     serviceController.bulkImportServices
@@ -86,6 +97,7 @@ router.get('/provider/services',
 router.get('/provider/services/:id',
     providerAuthMiddleware,
     providerTestPassedMiddleware,
+    validateParams(idParamSchema),
     serviceController.getServiceDetailsForProvider
 );
 
@@ -93,7 +105,7 @@ router.get('/provider/services/:id',
  * PUBLIC ROUTES
  */
 router.get('/services', serviceController.getActiveServices);
-router.get('/services/:id', serviceController.getPublicServiceById);
+router.get('/services/:id', validateParams(idParamSchema), serviceController.getPublicServiceById);
 router.get('/services/category/:category', serviceController.getServicesByCategory);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const cloudinary = require('../config/cloudinary');
 const { optimizeAndUploadImage } = require('../utils/image-optimizer');
 require('dotenv').config();
@@ -11,13 +12,15 @@ if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-// Local storage config
+// Local storage config with cryptographically randomized temp filenames
 const localStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, tempDir);
   },
   filename: (req, file, cb) => {
-    cb(null, `${file.fieldname}_${Date.now()}_${file.originalname.replace(/\s/g, '-')}`);
+    const sanitizeExt = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.tmp';
+    const randomName = `${file.fieldname}_${Date.now()}_${crypto.randomBytes(12).toString('hex')}${sanitizeExt}`;
+    cb(null, randomName);
   }
 });
 
@@ -150,8 +153,8 @@ const optimizeImagesMiddleware = (defaultType, defaultFolder) => {
             throw new Error('Security Alert: File is empty or corrupt.');
           }
           
-          const allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
-          const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+          const allowedExts = ['jpg', 'jpeg', 'png', 'heic', 'heif', 'pdf'];
+          const allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif', 'application/pdf'];
 
           if (!allowedExts.includes(ext) || !allowedMimes.includes(mime)) {
             throw new Error(`Security Alert: File type not allowed. Expected formats: ${allowedExts.join(', ')}`);
@@ -422,6 +425,7 @@ const handleUploadErrors = (err, req, res, next) => {
 };
 
 module.exports = {
+  fileFilterHelper,
   upload: wrapMulter(rawGeneral, 'general', 'raj-electrical'),
   uploadProfilePic: wrapMulter(rawProfilePic, 'profile', 'profilePics'),
   uploadServiceImage: wrapMulter(rawServiceImage, 'service', 'serviceImage'),

@@ -14,12 +14,13 @@ const adminSchema = new mongoose.Schema({
     required: true,
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    match: [/\S+@\S+\.\S+/, 'Please enter a valid email']
   },
   password: {
     type: String,
     required: true,
-    minlength: 6
+    minlength: 8
   },
   profilePicUrl: {
     type: String,
@@ -79,10 +80,15 @@ const adminSchema = new mongoose.Schema({
       start: { type: String, default: '22:00' },
       end: { type: String, default: '08:00' }
     }
-  }
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true
 });
+
+adminSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // Hash password before saving
 adminSchema.pre('save', async function (next) {

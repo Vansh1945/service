@@ -136,6 +136,7 @@ const CDNImage = ({
             onLoad={handleLoad}
             onError={handleError}
             loading={lazy ? 'lazy' : 'eager'}
+            decoding="async"
             className={`transition-all duration-500 ease-out ${
               isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-sm'
             } ${className}`}

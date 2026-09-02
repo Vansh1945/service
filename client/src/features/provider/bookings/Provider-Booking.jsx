@@ -24,6 +24,7 @@ import * as ComplaintService from '../../../services/ComplaintService';
 import L from 'leaflet';
 import ChatModal from '../../../components/chat/ChatModal';
 import StatusBadge from '../../../components/ui/StatusBadge';
+import EmptyState from '../../../components/ui/EmptyState';
 
 
 
@@ -233,7 +234,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
             <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-4">
               {images.map((img, idx) => (
                 <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                  <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" alt="Proof" />
+                  <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" loading="lazy" decoding="async" alt="Proof photo attachment" />
                   <button
                     onClick={() => handleRemoveImage(idx)}
                     className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
@@ -596,7 +597,11 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
                       >
                         <img
                           src={qrData.imageUrl}
-                          alt="Dynamic Payment QR"
+                          alt="Dynamic Payment QR Code"
+                          loading="lazy"
+                          decoding="async"
+                          width={224}
+                          height={224}
                           className="w-[145%] h-[145%] max-w-none object-cover object-center transform scale-125"
                         />
                       </div>
@@ -1570,28 +1575,19 @@ const ProviderBooking = () => {
             ))}
           </div>
         ) : currentBookings.length === 0 ? (
-          <div className="bg-white rounded-xl border border-neutral-150 p-12 text-center flex flex-col items-center justify-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-50 rounded-2xl mb-4 border border-neutral-100">
-              <ClipboardList className="w-8 h-8 text-neutral-400" />
-            </div>
-            <h3 className="text-lg font-bold text-secondary mb-2">No Bookings Found</h3>
-            <p className="text-xs text-neutral-500 max-w-sm mx-auto mb-6">
-              {searchQuery ? `We couldn't find any results matching "${searchQuery}".` : "There are no bookings matching the selected filters."}
-            </p>
-            {(searchQuery || activeTab !== 'all' || filter !== 'all') && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setActiveTab('all');
-                  setFilter('all');
-                  setCurrentPage(1);
-                }}
-                className="px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
-              >
-                Clear All Filters
-              </button>
-            )}
-          </div>
+          <EmptyState
+            icon={ClipboardList}
+            title={searchQuery || activeTab !== 'all' || filter !== 'all' ? "No matching bookings found" : "No bookings yet"}
+            message={searchQuery ? `We couldn't find any results matching "${searchQuery}".` : "There are no bookings matching the selected filters."}
+            actionLabel={(searchQuery || activeTab !== 'all' || filter !== 'all') ? "Clear All Filters" : undefined}
+            onAction={(searchQuery || activeTab !== 'all' || filter !== 'all') ? () => {
+              setSearchQuery('');
+              setActiveTab('all');
+              setFilter('all');
+              setCurrentPage(1);
+            } : undefined}
+            className="mb-6"
+          />
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 mb-6">
@@ -1957,8 +1953,8 @@ const ProviderBooking = () => {
                       <div className="flex justify-between">
                         <span>Settlement Status</span>
                         <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
-                            ? 'bg-gray-100 text-gray-700'
-                            : (selectedBooking.razorpaySettlementId || selectedBooking.settlementStatus === 'settled' ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700')
+                          ? 'bg-gray-100 text-gray-700'
+                          : (selectedBooking.razorpaySettlementId || selectedBooking.settlementStatus === 'settled' ? 'bg-green-150 text-green-700' : 'bg-amber-100 text-amber-700')
                           }`}>
                           {selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentMethod === 'cod'
                             ? 'N/A'
@@ -2086,7 +2082,7 @@ const ProviderBooking = () => {
                       <div className="flex flex-wrap gap-2">
                         {selectedImages.map((file, idx) => (
                           <div key={idx} className="relative group w-14 h-14 rounded-lg overflow-hidden border border-primary/30">
-                            <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
+                            <img src={URL.createObjectURL(file)} alt="Upload preview thumbnail" loading="lazy" decoding="async" width={56} height={56} className="w-full h-full object-cover" />
                             <button
                               onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
                               className="absolute top-0 right-0 p-0.5 bg-red-500 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
@@ -2122,7 +2118,7 @@ const ProviderBooking = () => {
                           {selectedBooking.providerWorkProof?.beforeImages?.length > 0 ? (
                             selectedBooking.providerWorkProof.beforeImages.map((img, idx) => (
                               <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:border-primary transition-all">
-                                <img src={img.url} alt="Before" className="w-full h-full object-cover" />
+                                <img src={img.url} alt="Before work proof photo" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                               </div>
                             ))
                           ) : (
@@ -2152,7 +2148,7 @@ const ProviderBooking = () => {
                           {selectedBooking.providerWorkProof?.afterImages?.length > 0 ? (
                             selectedBooking.providerWorkProof.afterImages.map((img, idx) => (
                               <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:border-emerald-500 transition-all">
-                                <img src={img.url} alt="After" className="w-full h-full object-cover" />
+                                <img src={img.url} alt="After work completion photo" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                               </div>
                             ))
                           ) : (
@@ -2320,7 +2316,7 @@ const ProviderBooking = () => {
           <button className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full transition-all" onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}>
             <X className="w-6 h-6" />
           </button>
-          <img src={previewImage} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
+          <img src={previewImage} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" loading="lazy" decoding="async" alt="Full-size proof image preview" onClick={e => e.stopPropagation()} />
         </div>
       )}
 

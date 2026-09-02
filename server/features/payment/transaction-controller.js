@@ -1579,10 +1579,10 @@ const getFinanceOverview = async (req, res, next) => {
       todayTxns,
       weeklyTxns,
       monthlyTxns,
-      refunds,
-      providers,
-      failedTxns,
-      completedBookings,
+      refundStatsAgg,
+      providerStatsAgg,
+      failedTxnCount,
+      bookingEarningsAgg,
       failedSettlementRecords,
       providerEarningStats
     ] = await Promise.all([
@@ -1590,15 +1590,44 @@ const getFinanceOverview = async (req, res, next) => {
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfToday } }).lean(),
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfWeek } }).lean(),
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfMonth } }).lean(),
-      Refund.find({}).lean(),
-      Provider.find({}).select('wallet pendingPayout earnings').lean(),
-      Transaction.find({ type: 'payment', paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] } }).lean(),
-      Booking.find({
-        status: 'completed',
-        paymentStatus: { $in: ['paid', 'settled'] },
-        'cancellationProgress.status': { $ne: 'cancelled' },
-        refundProcessed: { $ne: true }
-      }).select('commissionAmount companySurgeShare platformFee totalAmount providerEarnings subtotal totalDiscount couponApplied isReferralDiscount').lean(),
+      Refund.aggregate([
+        {
+          $group: {
+            _id: { $toLower: { $ifNull: ["$refundStatus", "$status"] } },
+            totalAmount: { $sum: { $ifNull: ["$refundAmount", { $ifNull: ["$requestedAmount", 0] }] } }
+          }
+        }
+      ]),
+      Provider.aggregate([
+        { $match: { isDeleted: { $ne: true } } },
+        {
+          $group: {
+            _id: null,
+            totalPendingPayout: { $sum: { $ifNull: ["$wallet.pendingPayout", { $ifNull: ["$pendingPayout", 0] }] } },
+            totalWithdrawn: { $sum: { $ifNull: ["$wallet.totalWithdrawn", 0] } }
+          }
+        }
+      ]),
+      Transaction.countDocuments({ type: 'payment', paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] } }),
+      Booking.aggregate([
+        {
+          $match: {
+            status: 'completed',
+            paymentStatus: { $in: ['paid', 'settled'] },
+            'cancellationProgress.status': { $ne: 'cancelled' },
+            refundProcessed: { $ne: true }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            commissionTotal: { $sum: { $ifNull: ["$commissionAmount", 0] } },
+            surgeTotal: { $sum: { $ifNull: ["$companySurgeShare", 0] } },
+            providerEarningsTotal: { $sum: { $ifNull: ["$providerEarnings", 0] } },
+            totalDiscount: { $sum: { $ifNull: ["$totalDiscount", 0] } }
+          }
+        }
+      ]),
       Transaction.find({
         $or: [
           { settlementStatus: { $in: ['failed', 'rejected', 'declined', 'cancelled'] } },
@@ -1610,6 +1639,8 @@ const getFinanceOverview = async (req, res, next) => {
         { $group: { _id: null, totalNet: { $sum: '$netAmount' } } }
       ])
     ]);
+
+    const failedTxns = new Array(failedTxnCount).fill({});
 
     // Deduplicate transaction records by unique payment identity to prevent double-counting revenue
     const deduplicateByPaymentIdentity = (txns) => {
@@ -1655,19 +1686,9 @@ const getFinanceOverview = async (req, res, next) => {
     const gatewayFees = gatewayFeesPaise / 100;
     const gatewayTax = gatewayTaxPaise / 100;
 
-    let platformEarningsPaise = 0;
-    let totalProviderEarningsFromBookingsPaise = 0;
-    completedBookings.forEach(b => {
-      const isRefDisc = (b.couponApplied && b.couponApplied.isReferralCoupon) || b.isReferralDiscount;
-      const refSubsidyPaise = isRefDisc ? (toPaise(b.totalDiscount) || 0) : 0;
-      const netPlatformContributionPaise = (toPaise(b.commissionAmount) || 0) + (toPaise(b.companySurgeShare) || 0) - refSubsidyPaise;
-
-      platformEarningsPaise += netPlatformContributionPaise;
-      totalProviderEarningsFromBookingsPaise += (toPaise(b.providerEarnings) || 0);
-    });
-
-    const platformEarnings = platformEarningsPaise / 100;
-    const totalProviderEarningsFromBookings = totalProviderEarningsFromBookingsPaise / 100;
+    const bAgg = bookingEarningsAgg[0] || {};
+    const platformEarnings = (bAgg.commissionTotal || 0) + (bAgg.surgeTotal || 0);
+    const totalProviderEarningsFromBookings = bAgg.providerEarningsTotal || 0;
 
     const totalProviderEarnings = (providerEarningStats && providerEarningStats[0]?.totalNet != null)
       ? providerEarningStats[0].totalNet
@@ -1678,23 +1699,19 @@ const getFinanceOverview = async (req, res, next) => {
     const monthlyRevenue = (uniqueMonthlyTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
 
     let pendingRefundsPaise = 0, completedRefundsPaise = 0;
-    refunds.forEach(r => {
-      const amtPaise = toPaise(r.refundAmount ?? r.requestedAmount ?? 0) || 0;
-      const status = r.refundStatus || r.status;
+    (refundStatsAgg || []).forEach(r => {
+      const amtPaise = toPaise(r.totalAmount || 0);
+      const status = r._id;
       if (status === 'completed') completedRefundsPaise += amtPaise;
-      else if (status === 'pending' || status === 'processing' || status === 'approved') pendingRefundsPaise += amtPaise;
+      else if (['pending', 'processing', 'approved'].includes(status)) pendingRefundsPaise += amtPaise;
     });
 
     const pendingRefunds = pendingRefundsPaise / 100;
     const completedRefunds = completedRefundsPaise / 100;
 
-    let providerPendingPayoutPaise = 0, completedPayoutPaise = 0;
-    providers.forEach(p => {
-      providerPendingPayoutPaise += (toPaise(p.wallet?.pendingPayout || p.pendingPayout) || 0);
-      completedPayoutPaise += (toPaise(p.wallet?.totalWithdrawn) || 0);
-    });
-    const providerPendingPayout = providerPendingPayoutPaise / 100;
-    const completedPayout = completedPayoutPaise / 100;
+    const pStat = providerStatsAgg[0] || {};
+    const providerPendingPayout = pStat.totalPendingPayout || 0;
+    const completedPayout = pStat.totalWithdrawn || 0;
 
     const rawRecentActivities = await Transaction.find({})
       .populate('user', 'name email phone')
@@ -2835,23 +2852,27 @@ const getUnifiedEntityDetails = async (req, res, next) => {
         // Fetch connected entities for 7 tabs
         const Complaint = require('../complaint/complaint-model');
         const [userBookings, userTransactions, userRefunds, userComplaints] = await Promise.all([
-          Booking.find({ customer: user._id })
+          Booking.find({ customer: user._id, isDeleted: { $ne: true } })
             .populate('services.service', 'title price category')
             .populate('provider', 'name email phone')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
           Transaction.find({ user: user._id })
             .populate('booking', 'bookingId status totalAmount')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
           Refund.find({ customerId: user._id })
             .populate('bookingId', 'bookingId totalAmount')
             .populate('approvedBy', 'name email')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
-          Complaint.find({ raisedBy: user._id })
+          Complaint.find({ raisedBy: user._id, isDeleted: { $ne: true } })
             .populate('booking', 'bookingId')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean()
         ]);
 
@@ -3090,24 +3111,29 @@ const getUnifiedEntityDetails = async (req, res, next) => {
 
         const ProviderEarning = require('../provider/provider-earning-model');
         const [providerBookings, providerEarnings, providerSettlements, providerWithdrawals, providerPenalties] = await Promise.all([
-          Booking.find({ provider: provider._id })
+          Booking.find({ provider: provider._id, isDeleted: { $ne: true } })
             .populate('customer', 'name email phone')
             .populate('services.service', 'title price category')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
           ProviderEarning.find({ provider: provider._id })
             .populate('booking', 'bookingId totalAmount paidAmount')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
           Transaction.find({ provider: provider._id, type: { $in: ['settlement', 'payment', 'commissiondeduction'] } })
             .populate('booking', 'bookingId totalAmount')
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
           PaymentRecord.find({ provider: provider._id })
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean(),
           Transaction.find({ provider: provider._id, type: 'penalty' })
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean()
         ]);
 

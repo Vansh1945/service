@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, X } from 'lucide-react';
 import AddressSelector from '../AddressSelector';
-import Processing from '../ui-skeletons/Processing';
+import Processing from '../ui/Processing';
 import * as CustomerService from '../../services/CustomerService';
 import { toast } from '../ui/Toast';
 

@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as SystemService from '../../../services/SystemService';
 import * as ContactService from '../../../services/ContactService';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 
 const Contact = () => {
   const { API, showToast, systemSettings: systemData = {} } = useAuth();
@@ -84,16 +84,25 @@ const Contact = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white">
       <Helmet>
         <title>Contact Us | {systemData.companyName || "Raj Electrical Services"} | 24/7 North India Support</title>
         <meta name="description" content={`Reach our professional electrical support desk at ${systemData.companyName || "Raj Electrical Services"}. Book emergency electrical support, home maintenance, and residential & commercial wiring services.`} />
         <meta name="keywords" content={`contact ${systemData.companyName || "Raj Electrical Services"}, electrical services, home electrical maintenance, emergency electrical repair`} />
-        <link rel="canonical" href={window.location.href} />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/contact" />
         <meta property="og:title" content={`Contact Us | ${systemData.companyName || "Raj Electrical Services"} | 24/7 North India Support`} />
         <meta property="og:description" content={`Reach our professional electrical support desk at ${systemData.companyName || "Raj Electrical Services"}.`} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/contact" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`Contact Us | ${systemData.companyName || "Raj Electrical Services"} | 24/7 North India Support`} />
+        <meta name="twitter:description" content={`Reach our professional electrical support desk at ${systemData.companyName || "Raj Electrical Services"}.`} />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/contact" />
+
       </Helmet>
 
       {/* Hero Section - Matching other pages */}
@@ -430,7 +439,7 @@ const Contact = () => {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 };
 

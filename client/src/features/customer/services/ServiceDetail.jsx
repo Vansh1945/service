@@ -188,8 +188,8 @@ const ServiceDetailPage = () => {
         }
       }
     } catch (err) {
-      setError(err.message);
-      showToast(err.message, 'error');
+      setError(err);
+      showToast(err.message || 'Failed to load service', 'error');
     } finally {
       setLoading(false);
     }
@@ -261,11 +261,13 @@ const ServiceDetailPage = () => {
   if (error || !service) {
     return (
       <ErrorState
-        title="Service Not Found"
-        message={error || "We couldn't find the service you are looking for."}
-        onRetry={fetchServiceData}
+        error={error}
+        title={!service && !error ? "Service Not Found" : undefined}
+        message={!service && !error ? "We couldn't find the service you are looking for." : undefined}
+        onRetry={() => { setError(null); fetchServiceData(); }}
         onBack={() => navigate('/customer/services')}
         backText="Browse Services"
+        showHome
       />
     );
   }
@@ -313,7 +315,7 @@ const ServiceDetailPage = () => {
                       className={`w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden border-2 bg-gray-50 flex-shrink-0 transition-all ${currentImageIndex === idx ? 'border-primary shadow-md scale-95' : 'border-gray-200 hover:border-gray-300'
                         }`}
                     >
-                      <img src={img} alt={`thumbnail-${idx}`} className="w-full h-full object-cover" />
+                      <img src={img} alt={`${service?.title || 'Service'} thumbnail ${idx + 1}`} loading="lazy" decoding="async" width={64} height={64} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -328,7 +330,11 @@ const ServiceDetailPage = () => {
                 )}
                 <img
                   src={allImages[currentImageIndex]}
-                  alt={service.title}
+                  alt={service?.title || "Service Details Image"}
+                  loading="eager"
+                  decoding="async"
+                  width={400}
+                  height={400}
                   className={`w-full h-full object-contain transition-all duration-500 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                   onLoad={handleImageLoad}
                 />

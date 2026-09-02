@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from '../../../../components/ui/Toast';
 
 import { Camera, Edit2, User, Mail, Phone, ShieldCheck, MapPin, ChevronRight, Sparkles } from 'lucide-react';
-import Processing from '../../../../components/ui-skeletons/Processing';
+import Processing from '../../../../components/ui/Processing';
 import { updateProfile, updateprofilepic } from '../../../../services/CustomerService';
 import { compressImage } from '../../../../utils/format';
 
@@ -68,7 +68,7 @@ const PersonalDetails = ({ profile, setProfile, isEditing, setIsEditing, isWalle
             {/* Header Card */}
             <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden relative">
                 <div className="h-12 bg-gradient-to-r from-primary/20 via-primary/10 to-teal-50" />
-                
+
                 {/* Edit Profile Text Link (Top Right) */}
                 <button
                     onClick={() => setIsEditing(!isEditing)}
@@ -84,7 +84,11 @@ const PersonalDetails = ({ profile, setProfile, isEditing, setIsEditing, isWalle
                         <div className="relative group shrink-0">
                             <img
                                 src={profile.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=0D9488&color=fff`}
-                                alt="Profile"
+                                alt="Customer profile photo"
+                                loading="lazy"
+                                decoding="async"
+                                width={64}
+                                height={64}
                                 className="w-16 h-16 rounded-2xl border-4 border-white object-cover shadow-md bg-neutral-50"
                             />
                             <label className="absolute -bottom-1 -right-1 bg-primary text-white rounded-full p-1.5 cursor-pointer shadow-md hover:bg-primary/95 transition-all">

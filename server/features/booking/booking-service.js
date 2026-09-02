@@ -5596,7 +5596,12 @@ class BookingService {
       // Get customer details for email notification
       const customer = await User.findById(booking.customer);
 
-      await Booking.findByIdAndDelete(id);
+      await Booking.findByIdAndUpdate(id, {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || req.admin?._id || null,
+        status: 'cancelled'
+      });
       emitBookingDeleted(id);
 
       // Invalidate dashboard caches
@@ -5607,7 +5612,7 @@ class BookingService {
 
       res.json({
         success: true,
-        message: 'Booking deleted successfully'
+        message: 'Booking soft-deleted successfully'
       });
     } catch (error) {
       res.status(500).json({
@@ -5646,7 +5651,12 @@ class BookingService {
 
       const service = await Service.findById(booking.services);
 
-      await Booking.findByIdAndDelete(bookingId);
+      await Booking.findByIdAndUpdate(bookingId, {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || null,
+        status: 'cancelled'
+      });
       emitBookingDeleted(bookingId);
 
       res.json({

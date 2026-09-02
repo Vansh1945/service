@@ -397,8 +397,8 @@ const searchUniversal = async (req, res, next) => {
     // Normalize parameters if sent as query params
     const moduleName = payload.module || req.query.module || 'providers';
     const search = payload.search || req.query.search || '';
-    const page = payload.page || req.query.page || 1;
-    const limit = payload.limit || req.query.limit || 20;
+    const page = parseInt(payload.page || req.query.page) || 1;
+    const limit = Math.min(Math.max(1, parseInt(payload.limit || req.query.limit) || 20), 100);
     const sortBy = payload.sortBy || req.query.sortBy || 'createdAt';
     const sortOrder = payload.sortOrder || req.query.sortOrder || 'desc';
 

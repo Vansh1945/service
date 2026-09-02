@@ -17,7 +17,7 @@ const { userAuthMiddleware } = require('../../shared/middlewares/user-middleware
 const { providerAuthMiddleware } = require('../../shared/middlewares/provider-middleware');
 const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware');
 const { roleMiddleware } = require('../../shared/middlewares/role-middleware');
-const { validateBody } = require('../../shared/validation/common-validation');
+const { validateBody, validateParams, idParamSchema } = require('../../shared/validation/common-validation');
 const {
   submitComplaintSchema,
   resolveComplaintSchema,
@@ -47,8 +47,8 @@ router.post(
 
 // Shared routes ( Customer and Provider )
 router.get("/my-complaints", sharedAuthMiddleware, getMyComplaints);
-router.get("/:id", sharedAuthMiddleware, getComplaint);
-router.put("/:id/reopen", sharedAuthMiddleware, feedbackLimiter, preventDuplicateSubmissions(5), validateBody(reopenComplaintSchema), reopenComplaint);
+router.get("/:id", sharedAuthMiddleware, validateParams(idParamSchema), getComplaint);
+router.put("/:id/reopen", sharedAuthMiddleware, feedbackLimiter, preventDuplicateSubmissions(5), validateParams(idParamSchema), validateBody(reopenComplaintSchema), reopenComplaint);
 
 // Reply route (Admin and Provider)
 router.post(
@@ -56,6 +56,7 @@ router.post(
   sharedAuthMiddleware,
   feedbackLimiter,
   preventDuplicateSubmissions(5),
+  validateParams(idParamSchema),
   uploadComplaintImage.array("images", 5),
   validateBody(replyToComplaintSchema),
   replyToComplaint
@@ -63,8 +64,8 @@ router.post(
 
 // Admin routes
 router.get("/", adminAuthMiddleware, requireAdmin, getAllComplaints);
-router.get("/:id/details", adminAuthMiddleware, requireAdmin, getComplaintDetails);
-router.put("/:id/resolve", adminAuthMiddleware, requireAdmin, validateBody(resolveComplaintSchema), resolveComplaint);
-router.put("/:id/status", adminAuthMiddleware, requireAdmin, validateBody(updateComplaintStatusSchema), updateComplaintStatus);
+router.get("/:id/details", adminAuthMiddleware, requireAdmin, validateParams(idParamSchema), getComplaintDetails);
+router.put("/:id/resolve", adminAuthMiddleware, requireAdmin, validateParams(idParamSchema), validateBody(resolveComplaintSchema), resolveComplaint);
+router.put("/:id/status", adminAuthMiddleware, requireAdmin, validateParams(idParamSchema), validateBody(updateComplaintStatusSchema), updateComplaintStatus);
 
 module.exports = router;

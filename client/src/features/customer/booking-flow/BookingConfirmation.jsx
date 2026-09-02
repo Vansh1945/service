@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import { toast } from '../../../components/ui/Toast';
+import { trackEvent } from '../../../../firebase';
 
 import {
   ArrowLeft, CreditCard, Wallet, Calendar, MapPin,
@@ -14,7 +15,7 @@ import axiosInstance from '../../../api/axiosInstance';
 import * as TransactionService from '../../../services/TransactionService';
 import * as CustomerService from '../../../services/CustomerService';
 import Loader from '../../../components/ui/Loader';
-import Processing from '../../../components/ui-skeletons/Processing';
+import Processing from '../../../components/ui/Processing';
 import ErrorState from '../../../components/ui/Error';
 import { formatDate, formatTime } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
@@ -123,7 +124,7 @@ const BookingConfirmation = () => {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      setError(errorMessage);
+      setError(error);
       showToast(errorMessage, 'error');
     }
   };
@@ -416,12 +417,24 @@ const BookingConfirmation = () => {
 
             if (!verifyResponse.data?.success) throw new Error('Payment verification failed');
 
+            trackEvent('payment_success', {
+              booking_id: bookingDetails._id,
+              payment_id: response.razorpay_payment_id,
+              amount: bookingDetails.totalAmount,
+              method: selectedMethod
+            });
+
             clearCheckoutSession();
             showToast('Payment successful. Your booking is confirmed.', 'success');
             axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
             setTimeout(() => navigate('/customer/bookings'), 2000);
           } catch (verificationError) {
             console.error(verificationError);
+            trackEvent('payment_failed', {
+              booking_id: bookingDetails._id,
+              error: verificationError.message,
+              method: selectedMethod
+            });
             setIsProcessingPayment(false);
             setPaymentProgressMessage('');
             showToast("We couldn't complete your payment. Please try again.", 'error');
@@ -451,10 +464,22 @@ const BookingConfirmation = () => {
       window.currentRazorpay = rzp;
 
       rzp.on('payment.failed', function (response) {
+        trackEvent('payment_failed', {
+          booking_id: bookingDetails._id,
+          reason: response.error?.description || 'Razorpay payment failed',
+          method: selectedMethod
+        });
         setIsProcessingPayment(false);
         setPaymentProgressMessage('');
         showToast("We couldn't complete your payment. Please try again.", 'error');
       });
+
+      trackEvent('payment_attempt', {
+        booking_id: bookingDetails._id,
+        amount: remainingAmount,
+        method: selectedMethod
+      });
+
       rzp.open();
     } catch (error) {
       console.error('Online payment creation error:', error);
@@ -469,7 +494,7 @@ const BookingConfirmation = () => {
     if (targetServiceId) {
       try {
         sessionStorage.removeItem(`checkout_booking_${targetServiceId}`);
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
@@ -520,12 +545,14 @@ const BookingConfirmation = () => {
   if (error || !bookingDetails) {
     return (
       <ErrorState
-        title="Failed to Load"
-        message={error || 'Booking not found'}
-        onRetry={() => fetchBookingDetails()}
+        error={error}
+        title={!bookingDetails && !error ? "Booking Not Found" : undefined}
+        message={!bookingDetails && !error ? "The requested booking could not be found." : undefined}
+        onRetry={() => { setError(null); fetchBookingDetails(); }}
         retryText="Try Again"
         onBack={() => navigate('/customer/services')}
         backText="Browse Services"
+        showHome
       />
     );
   }

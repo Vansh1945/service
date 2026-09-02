@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const chatController = require('./chat-controller');
 const {
   validateBody,
+  validateParams,
+  roomIdParamSchema,
   createRoomSchema,
   sendMessageSchema,
   markSeenSchema,
@@ -26,18 +28,18 @@ const requireCustomerOrProviderOrAdmin = roleMiddleware(['customer', 'provider',
 // Chat endpoints
 router.post('/create-room', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(createRoomSchema), chatController.createRoom);
 router.post('/send', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(sendMessageSchema), chatController.sendMessage);
-router.get('/messages/:roomId', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, chatController.getMessages);
+router.get('/messages/:roomId', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateParams(roomIdParamSchema), chatController.getMessages);
 router.patch('/mark-seen', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(markSeenSchema), chatController.markSeen);
 router.post('/typing', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(typingStatusSchema), chatController.typingStatus);
 router.post('/delete-for-me', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateBody(deleteMessageForMeSchema), chatController.deleteMessageForMe);
-router.get('/search/:roomId', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, chatController.searchMessages);
+router.get('/search/:roomId', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, validateParams(roomIdParamSchema), chatController.searchMessages);
 
 const { uploadComplaintImage, handleUploadErrors } = require('../../shared/middlewares/upload');
 
 // Admin-specific endpoints
 router.get('/admin-monitor', adminAuthMiddleware, requireAdmin, chatController.adminMonitor);
-router.post('/admin-join/:roomId', adminAuthMiddleware, requireAdmin, validateBody(anyBodySchema), chatController.joinAdmin);
-router.get('/admin/chat/:roomId', adminAuthMiddleware, requireAdmin, chatController.adminGetMessages);
+router.post('/admin-join/:roomId', adminAuthMiddleware, requireAdmin, validateParams(roomIdParamSchema), validateBody(anyBodySchema), chatController.joinAdmin);
+router.get('/admin/chat/:roomId', adminAuthMiddleware, requireAdmin, validateParams(roomIdParamSchema), chatController.adminGetMessages);
 
 // Upload endpoint
 router.post('/upload', sharedAuthMiddleware, requireCustomerOrProviderOrAdmin, uploadComplaintImage.single('file'), handleUploadErrors, validateBody(anyBodySchema), chatController.uploadChatFile);

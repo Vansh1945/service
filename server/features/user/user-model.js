@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: function () { return !this.authProvider || this.authProvider === 'email'; },
-    minlength: [6, 'Password must be at least 6 characters'],
+    minlength: [8, 'Password must be at least 8 characters'],
     select: false
   },
   // Firebase / OAuth fields
@@ -255,6 +255,21 @@ const userSchema = new mongoose.Schema({
   lastSeen: {
     type: Date,
     default: null
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
   }
 }, {
   timestamps: true
@@ -264,6 +279,7 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ role: 1 });
 userSchema.index({ phone: 1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ isDeleted: 1, deletedAt: -1 });
 userSchema.index({ currentLocation: '2dsphere' });
 
 

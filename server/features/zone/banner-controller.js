@@ -107,7 +107,15 @@ const updateBanner = async (req, res, next) => {
 const deleteBanner = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const banner = await Banner.findByIdAndDelete(id);
+    const banner = await Banner.findByIdAndUpdate(
+      id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || null
+      },
+      { new: true }
+    );
     if (!banner) {
       return res.status(404).json({
         success: false,

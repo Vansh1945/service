@@ -48,7 +48,7 @@ const ReferEarn = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center bg-white rounded-2xl shadow-sm border border-neutral-100">
         <FiAlertCircle className="w-12 h-12 text-danger mx-auto mb-4 animate-pulse" />
-        <h1 className="text-lg font-bold text-neutral-800 font-poppins">Program Temporarily Paused</h1>
+        <h2 className="text-lg font-bold text-neutral-800 font-poppins">Program Temporarily Paused</h2>
         <p className="text-neutral-500 text-xs mt-2 font-medium">Referral program is temporarily unavailable. Check back later.</p>
       </div>
     );
@@ -58,7 +58,7 @@ const ReferEarn = () => {
     return (
       <div className="max-w-md mx-auto px-6 py-8 text-center bg-white rounded-2xl shadow-sm border border-neutral-100 mt-10">
         <FiGift className="w-12 h-12 text-warning mx-auto mb-4 animate-bounce" />
-        <h1 className="text-lg font-bold text-neutral-800 font-poppins">Program is Locked</h1>
+        <h2 className="text-lg font-bold text-neutral-800 font-poppins">Program is Locked</h2>
         <p className="text-neutral-500 text-xs mt-2 font-medium">Unlocks after completing {details.eligibility.requiredBookings} bookings.</p>
         <div className="mt-6 bg-neutral-100/30 p-4 rounded-xl border border-neutral-100">
           <div className="flex justify-between text-xs font-bold mb-2 text-neutral-600">

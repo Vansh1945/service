@@ -157,13 +157,18 @@ const complaintSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",
       default: null
-    }
+    },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
   },
   {
     // Complaint creation date and time
     timestamps: true, // Adds createdAt and updatedAt
   }
 );
+
+complaintSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // Pre-validate hook to normalize category and status before Mongoose enum validation
 complaintSchema.pre("validate", function (next) {

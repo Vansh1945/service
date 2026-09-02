@@ -1,7 +1,13 @@
 import axiosInstance from "../api/axiosInstance";
+import { trackEvent } from "../../firebase";
 
 // Customer routes
 export const submitFeedback = (data) => {
+    trackEvent('review_submitted', {
+        rating: data?.rating,
+        booking_id: data?.bookingId,
+        service_id: data?.serviceId
+    });
     return axiosInstance.post("/feedback", data);
 };
 

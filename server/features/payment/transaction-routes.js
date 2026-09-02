@@ -4,8 +4,9 @@ const paymentController = require('./transaction-controller');
 const { userAuthMiddleware } = require('../../shared/middlewares/user-middleware');
 const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware');
 const { roleMiddleware } = require('../../shared/middlewares/role-middleware');
-const { validateBody } = require('../../shared/validation/common-validation');
+const { validateBody, validateParams, idParamSchema, bookingIdParamSchema } = require('../../shared/validation/common-validation');
 const { createOrderSchema, verifyPaymentSchema } = require('./transaction-validation');
+const { paymentLimiter, adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 
 const adminRoleCheck = roleMiddleware(['admin']);
 
@@ -13,7 +14,6 @@ const adminRoleCheck = roleMiddleware(['admin']);
 // @desc    Create Razorpay order for booking payment
 // @route   POST /api/transaction/create-order
 // @access  Private (user)
-const { paymentLimiter } = require('../../shared/middlewares/rate-limit');
 const { preventDuplicateSubmissions } = require('../../shared/middlewares/fraud-middleware');
 
 router.post('/create-order', userAuthMiddleware, paymentLimiter, preventDuplicateSubmissions(5), validateBody(createOrderSchema), paymentController.createOrder);
@@ -39,17 +39,17 @@ const { providerAuthMiddleware } = require('../../shared/middlewares/provider-mi
 // Cash Booking Payment Verification Routes
 router.post('/cash-verification/generate-qr', providerAuthMiddleware, paymentLimiter, preventDuplicateSubmissions(5), paymentController.generateBookingQR);
 router.post('/cash-verification/confirm-cash', providerAuthMiddleware, paymentLimiter, preventDuplicateSubmissions(5), paymentController.verifyCashReceived);
-router.get('/cash-verification/status/:bookingId', providerAuthMiddleware, paymentController.getQRVerificationStatus);
-router.post('/admin/cash-verification/override/:bookingId', adminAuthMiddleware, adminRoleCheck, paymentController.adminOverrideCashVerification);
+router.get('/cash-verification/status/:bookingId', providerAuthMiddleware, validateParams(bookingIdParamSchema), paymentController.getQRVerificationStatus);
+router.post('/admin/cash-verification/override/:bookingId', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, validateParams(bookingIdParamSchema), paymentController.adminOverrideCashVerification);
 
 // Admin Routes
 
 router.get('/admin/all', adminAuthMiddleware, adminRoleCheck, paymentController.getAllTransactions);
-router.get('/admin/details/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getTransactionById);
-router.get('/admin/payment-details/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getAdminPaymentDetails);
-router.get('/admin/unified-details/:entityType/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getUnifiedEntityDetails);
-router.post('/admin/retry-verify/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminRetryVerify);
-router.post('/admin/mark-paid/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminMarkPaid);
+router.get('/admin/details/:id', adminAuthMiddleware, adminRoleCheck, validateParams(idParamSchema), paymentController.getTransactionById);
+router.get('/admin/payment-details/:id', adminAuthMiddleware, adminRoleCheck, validateParams(idParamSchema), paymentController.getAdminPaymentDetails);
+router.get('/admin/unified-details/:entityType/:id', adminAuthMiddleware, adminRoleCheck, validateParams(idParamSchema), paymentController.getUnifiedEntityDetails);
+router.post('/admin/retry-verify/:id', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, validateParams(idParamSchema), paymentController.adminRetryVerify);
+router.post('/admin/mark-paid/:id', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, validateParams(idParamSchema), paymentController.adminMarkPaid);
 
 // Additional Finance Admin Endpoints
 router.get('/admin/finance-overview', adminAuthMiddleware, adminRoleCheck, paymentController.getFinanceOverview);
@@ -63,14 +63,14 @@ router.get('/admin/failed-payments', adminAuthMiddleware, adminRoleCheck, paymen
 router.get('/admin/audit-logs', adminAuthMiddleware, adminRoleCheck, paymentController.getAuditLogs);
 
 // ── Razorpay Synchronization & Reconciliation Admin Routes ────────────────
-router.post('/admin/razorpay/sync-all', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayAll);
-router.post('/admin/razorpay/sync-payments', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayPayments);
-router.post('/admin/razorpay/sync-settlements', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpaySettlements);
-router.post('/admin/razorpay/sync-refunds', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayRefunds);
-router.post('/admin/razorpay/sync-recon', adminAuthMiddleware, adminRoleCheck, paymentController.syncRazorpayRecon);
+router.post('/admin/razorpay/sync-all', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, paymentController.syncRazorpayAll);
+router.post('/admin/razorpay/sync-payments', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, paymentController.syncRazorpayPayments);
+router.post('/admin/razorpay/sync-settlements', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, paymentController.syncRazorpaySettlements);
+router.post('/admin/razorpay/sync-refunds', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, paymentController.syncRazorpayRefunds);
+router.post('/admin/razorpay/sync-recon', adminAuthMiddleware, adminRoleCheck, adminActionLimiter, paymentController.syncRazorpayRecon);
 
 // ── Master Financial Ledger Routes ────────────────────
 router.get('/admin/ledger', adminAuthMiddleware, adminRoleCheck, paymentController.getMasterLedger);
-router.get('/admin/ledger-detail/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getLedgerDetail);
+router.get('/admin/ledger-detail/:id', adminAuthMiddleware, adminRoleCheck, validateParams(idParamSchema), paymentController.getLedgerDetail);
 
 module.exports = router;

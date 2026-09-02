@@ -92,7 +92,10 @@ const referralSchema = new mongoose.Schema({
   },
   completedAt: {
     type: Date
-  }
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true
 });
@@ -115,13 +118,13 @@ const referralRewardLogSchema = new mongoose.Schema({
   },
   recipientModel: {
     type: String,
-    required: true,
-    enum: ['User', 'Provider']
+    enum: ['User', 'Provider'],
+    required: true
   },
   recipientType: {
     type: String,
-    required: true,
-    enum: ['customer', 'provider']
+    enum: ['customer', 'provider'],
+    required: true
   },
   amount: {
     type: Number,
@@ -139,18 +142,23 @@ const referralRewardLogSchema = new mongoose.Schema({
     type: String,
     enum: ['released', 'held'],
     default: 'released'
-  }
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
 }, {
   timestamps: true
 });
 
 // Indexes for fast querying
 referralSchema.index({ referrer: 1, referrerType: 1 });
+referralSchema.index({ referrer: 1, referrerType: 1, status: 1, createdAt: -1 });
 referralSchema.index({ referredUser: 1, referredUserType: 1 }, { unique: true });
 referralSchema.index({ referralCodeUsed: 1 });
 referralSchema.index({ status: 1 });
 
 referralRewardLogSchema.index({ recipient: 1, recipientType: 1 });
+referralRewardLogSchema.index({ recipient: 1, recipientType: 1, status: 1, createdAt: -1 });
 referralRewardLogSchema.index({ status: 1 });
 referralRewardLogSchema.index({ createdAt: -1 });
 

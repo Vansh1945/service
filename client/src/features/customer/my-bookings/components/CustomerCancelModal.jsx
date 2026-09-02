@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, AlertTriangle, Wallet, CreditCard, RefreshCw, CheckCircle2, Info } from 'lucide-react';
 import { isPaymentSuccessful } from '../../../../utils/status';
 import { getSystemSetting } from '../../../../services/SystemService';
+import Processing from '../../../../components/ui/Processing';
+import { trackEvent } from '../../../../../firebase';
 
 const CANCELLATION_REASONS = [
   'Change of plans / Schedule conflict',
@@ -52,6 +54,14 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
     e.preventDefault();
     const finalReason = reason === 'Other reason' ? (customReason || 'Customer requested cancellation') : reason;
     const finalDestination = canChooseOriginalPayment ? refundDestination : 'wallet';
+
+    trackEvent('booking_cancelled', {
+      booking_id: booking.bookingId || booking._id,
+      reason: finalReason,
+      refund_destination: finalDestination,
+      total_amount: totalAmount,
+      refund_amount: calculatedRefund
+    });
 
     onConfirm({
       reason: finalReason,
@@ -246,19 +256,14 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
             >
               Keep Booking
             </button>
-            <button
+            <Processing
               type="submit"
-              disabled={loading}
-              className="px-5 py-2.5 rounded-xl bg-danger hover:bg-red-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+              loading={loading}
+              loadingText="Processing..."
+              className="bg-danger hover:bg-red-700 text-white text-xs shadow-md"
             >
-              {loading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Processing...
-                </>
-              ) : (
-                'Confirm Cancellation'
-              )}
-            </button>
+              Confirm Cancellation
+            </Processing>
           </div>
         </form>
       </div>

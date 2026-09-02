@@ -1,9 +1,17 @@
 const Razorpay = require('razorpay');
 const axios = require('axios');
 
+const isProd = process.env.NODE_ENV === 'production';
+const rzpKeyId = process.env.RAZORPAY_KEY_ID;
+const rzpKeySecret = process.env.RAZORPAY_KEY_SECRET;
+
+if (isProd && (!rzpKeyId || !rzpKeySecret)) {
+  console.warn('⚠️ WARNING: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET environment variables are missing in production!');
+}
+
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret'
+  key_id: rzpKeyId || 'dummy_key',
+  key_secret: rzpKeySecret || 'dummy_secret'
 });
 
 /**

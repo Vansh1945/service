@@ -244,10 +244,34 @@ const toggleQuestionStatus = async (req, res) => {
   }
 };
 
-// Delete question (ADMIN) - hard delete
+// Delete question (ADMIN) - soft delete by default, permanent if ?permanent=true
 const deleteQuestion = async (req, res) => {
   try {
-    const question = await Question.findByIdAndDelete(req.params.id);
+    const isPermanent = req.query.permanent === 'true' || req.query.force === 'true';
+    if (isPermanent) {
+      const question = await Question.findByIdAndDelete(req.params.id);
+      if (!question) {
+        return res.status(404).json({
+          success: false,
+          message: 'Question not found'
+        });
+      }
+      return res.json({
+        success: true,
+        message: 'Question permanently deleted'
+      });
+    }
+
+    const question = await Question.findByIdAndUpdate(
+      req.params.id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?._id || null,
+        isActive: false
+      },
+      { new: true }
+    );
 
     if (!question) {
       return res.status(404).json({
@@ -258,7 +282,7 @@ const deleteQuestion = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Question deleted successfully'
+      message: 'Question soft-deleted successfully'
     });
   } catch (error) {
     res.status(400).json({
@@ -292,15 +316,21 @@ const getAllQuestions = async (req, res) => {
       Question.countDocuments(filter)
     ]);
 
+    const totalPages = limit === 0 ? 1 : Math.ceil(total / limit) || 1;
     res.json({
       success: true,
-      count: questions.length,
+      message: "Questions retrieved successfully",
+      data: questions,
       questions,
+      count: questions.length,
       pagination: {
         total,
         page: pageNum,
         limit: limit === 0 ? total : limit,
-        totalPages: limit === 0 ? 1 : Math.ceil(total / limit)
+        totalPages,
+        pages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1
       }
     });
   } catch (error) {

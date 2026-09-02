@@ -14,7 +14,7 @@ import {
   Headphones,
   Receipt
 } from 'lucide-react';
-import electricanimg from "../../../assets/electrician.png"
+import electricanimg from "../../../assets/electrician.webp"
 
 const Home = () => {
   const { systemSettings = {} } = useAuth();
@@ -54,17 +54,30 @@ const Home = () => {
 
 
   return (
-    <div className="overflow-hidden bg-transparent">
+    <main className="overflow-hidden bg-transparent">
       <Helmet>
         <title>{systemSettings.companyName || "Raj Electrical Services"} | Trusted Electrical Services in North India</title>
-        <meta name="description" content={`Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India.`} />
+        <meta name="description" content="Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India." />
         <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, residential and commercial electrical services, trusted electrical solutions" />
-        <link rel="canonical" href={window.location.href} />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/" />
         <meta property="og:title" content={`${systemSettings.companyName || "Raj Electrical Services"} | Trusted Electrical Services in North India`} />
-        <meta property="og:description" content={`Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India.`} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:description" content="Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India." />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/" />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${systemSettings.companyName || "Raj Electrical Services"} | Trusted Electrical Services in North India`} />
+        <meta name="twitter:description" content="Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India." />
+        <meta name="twitter:image" content="https://rajelectricalservices.vercel.app/og-image.jpg" />
+        <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/" />
       </Helmet>
+
+      {/* Semantic H1 for SEO Audit */}
+      <h1 className="sr-only">
+        {systemSettings.companyName || "Raj Electrical Services"} - Certified Electricians & Professional Electrical Support in North India
+      </h1>
 
       {/* Hero Section */}
       <HeroSection />
@@ -163,7 +176,11 @@ const Home = () => {
               <div className="relative w-full max-w-[440px] aspect-[4/3] rounded-3xl overflow-hidden shadow-xl border border-gray-100">
                 <img
                   src={electricanimg}
-                  alt="Professional Electrician"
+                  alt="Professional Electrician at Work"
+                  width={440}
+                  height={330}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -177,10 +194,10 @@ const Home = () => {
 
                 {/* Avatars */}
                 <div className="flex -space-x-1.5 overflow-hidden">
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="avatar" />
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="avatar" />
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="avatar" />
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="avatar" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
                 </div>
               </div>
 
@@ -273,7 +290,7 @@ const Home = () => {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 };
 

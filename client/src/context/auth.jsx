@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback } 
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import { toast } from "../components/ui/Toast";
-
+import { normalizeApiError } from "../utils/messages";
 
 import * as AdminService from "../services/AdminService";
 import * as ProviderService from "../services/ProviderService";
@@ -197,12 +197,24 @@ export const AuthProvider = ({ children }) => {
         }
     }, [token]);
 
-    // Toast notification
-    const showToast = (message, type = 'success') => {
-        if (message === 'silent_cancel' || message === 'canceled' || message === 'Duplicate request blocked') {
+    // Toast notification with automatic human-readable error sanitization
+    const showToast = (rawMessage, type = 'success') => {
+        if (!rawMessage || rawMessage === 'silent_cancel' || rawMessage === 'canceled' || rawMessage === 'Duplicate request blocked') {
             return;
         }
-        toast[type](message, {
+
+        let message = rawMessage;
+        let toastType = type;
+
+        if (typeof rawMessage === 'object' || (typeof rawMessage === 'string' && (type === 'error' || rawMessage.startsWith('Error:') || rawMessage.includes('Mongo') || rawMessage.includes('Axios') || rawMessage.includes('500') || rawMessage.includes('Cast') || rawMessage.includes('ObjectId')))) {
+            const normalized = normalizeApiError(rawMessage);
+            message = normalized.message;
+            if (type === 'error' || normalized.isServerError || normalized.isNetworkError || normalized.isAuthError || normalized.isForbidden) {
+                toastType = 'error';
+            }
+        }
+
+        toast[toastType](message, {
             position: "top-right",
             autoClose: 2000,
             hideProgressBar: false,
@@ -213,7 +225,7 @@ export const AuthProvider = ({ children }) => {
         });
     };
 
-    const loginUser = async (newToken, newRole, userData, newRefreshToken = null) => {
+    const loginUser = async (newToken, newRole, userData, newRefreshToken = null, rememberMe = false) => {
         try {
             if (isTokenExpired(newToken)) {
                 throw new Error("Token is invalid or expired");
@@ -228,11 +240,12 @@ export const AuthProvider = ({ children }) => {
                 isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
             };
 
-            // Save to cookies securely (refreshToken is managed via HttpOnly cookie by backend)
-            setCookie("token", newToken, 7);
+            // Save to cookies securely (rememberMe true = 30 days, false = session cookie)
+            const cookieDays = rememberMe ? 30 : null;
+            setCookie("token", newToken, cookieDays);
             eraseCookie("refreshToken");
-            setCookie("role", finalRole, 7);
-            setCookie("user", JSON.stringify(userObj), 7);
+            setCookie("role", finalRole, cookieDays);
+            setCookie("user", JSON.stringify(userObj), cookieDays);
 
             // Update state
             setToken(newToken);
@@ -318,15 +331,13 @@ export const AuthProvider = ({ children }) => {
         showToast('Logged out successfully');
         navigate('/login');
 
-        // Execute backend logout API in the background without blocking the UI
-        if (currentRefreshToken || currentFcmToken) {
-            AuthService.logoutApi({
-                refreshToken: currentRefreshToken,
-                fcmToken: currentFcmToken
-            }).catch(e => {
-                console.warn("Backend background logout failed:", e);
-            });
-        }
+        // Execute backend logout API in the background to clear HttpOnly refresh cookie
+        const currentFcmToken = localStorage.getItem("fcmToken");
+        AuthService.logoutApi({
+            fcmToken: currentFcmToken
+        }).catch(e => {
+            console.warn("Backend background logout failed:", e);
+        });
     };
 
     // Callback to refresh user data from DB

@@ -196,7 +196,7 @@ const GeneralTab = ({
 
       <div className="border border-gray-200 rounded-2xl p-5 text-center bg-gray-50">
         <label className="block text-xs font-bold text-gray-500 uppercase mb-3">Company Logo</label>
-        {previewLogo && <img src={previewLogo} className="mx-auto w-24 h-24 object-contain bg-white rounded-xl p-1 mb-3" />}
+        {previewLogo && <img src={previewLogo} alt="Company logo preview" loading="lazy" decoding="async" className="mx-auto w-24 h-24 object-contain bg-white rounded-xl p-1 mb-3" />}
         <label className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
           <Upload className="w-3.5 h-3.5" /> Select Logo
           <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && setLogoFile(e.target.files[0])} className="hidden" />
@@ -205,7 +205,7 @@ const GeneralTab = ({
 
       <div className="border border-gray-200 rounded-2xl p-5 text-center bg-gray-50">
         <label className="block text-xs font-bold text-gray-500 uppercase mb-3">Browser Favicon</label>
-        {previewFavicon && <img src={previewFavicon} className="mx-auto w-12 h-12 object-contain bg-white rounded-lg p-1 mb-3" />}
+        {previewFavicon && <img src={previewFavicon} alt="Favicon preview" loading="lazy" decoding="async" className="mx-auto w-12 h-12 object-contain bg-white rounded-lg p-1 mb-3" />}
         <label className="inline-flex items-center gap-1.5 bg-secondary text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
           <Upload className="w-3.5 h-3.5" /> Select Favicon
           <input type="file" accept="image/*,.ico" onChange={(e) => e.target.files?.[0] && setFaviconFile(e.target.files[0])} className="hidden" />
@@ -214,7 +214,7 @@ const GeneralTab = ({
 
       <div className="border border-gray-200 rounded-2xl p-5 text-center bg-gray-50">
         <label className="block text-xs font-bold text-gray-500 uppercase mb-3">Digital Signature</label>
-        {previewSignature && <img src={previewSignature} className="mx-auto w-24 h-12 object-contain bg-white rounded-xl p-1 mb-3" />}
+        {previewSignature && <img src={previewSignature} alt="Digital signature preview" loading="lazy" decoding="async" className="mx-auto w-24 h-12 object-contain bg-white rounded-xl p-1 mb-3" />}
         <label className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
           <Upload className="w-3.5 h-3.5" /> Select Signature
           <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && setSignatureFile(e.target.files[0])} className="hidden" />
@@ -223,7 +223,7 @@ const GeneralTab = ({
 
       <div className="border border-gray-200 rounded-2xl p-5 text-center bg-gray-50">
         <label className="block text-xs font-bold text-gray-500 uppercase mb-3">Company Seal</label>
-        {previewSeal && <img src={previewSeal} className="mx-auto w-16 h-16 object-contain bg-white rounded-xl p-1 mb-3" />}
+        {previewSeal && <img src={previewSeal} alt="Company seal preview" loading="lazy" decoding="async" className="mx-auto w-16 h-16 object-contain bg-white rounded-xl p-1 mb-3" />}
         <label className="inline-flex items-center gap-1.5 bg-secondary text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
           <Upload className="w-3.5 h-3.5" /> Select Seal
           <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && setSealFile(e.target.files[0])} className="hidden" />

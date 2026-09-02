@@ -52,10 +52,10 @@ const Calendar = () => {
       } else {
         setError(res.data.message || 'Failed to fetch bookings');
       }
-    } catch (err) {
-      console.error(err);
-      setError('Error loading bookings for calendar');
-    } finally {
+      } catch (err) {
+        console.error(err);
+        setError(err);
+      } finally {
       setLoading(false);
     }
   };
@@ -341,7 +341,7 @@ const Calendar = () => {
   const upcomingBookings = getUpcomingBookings();
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState title="Error fetching bookings" message={error} onRetry={fetchBookings} />;
+  if (error) return <ErrorState error={error} onRetry={() => { setError(null); fetchBookings(); }} showHome />;
   const todayBookings = getBookingsForDay(selectedDate);
   const todayJobsCount = todayBookings.length;
   const todayEarnings = todayBookings.reduce((sum, b) => sum + (b.providerEarnings || b.netAmount || 0), 0);

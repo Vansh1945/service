@@ -5,7 +5,7 @@ const adminAuthMiddleware = require('../../shared/middlewares/admin-middleware')
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../../shared/config/cloudinary');
-const { handleUploadErrors } = require('../../shared/middlewares/upload');
+const { handleUploadErrors, fileFilterHelper } = require('../../shared/middlewares/upload');
 
 // Sub-routers
 const categoryRoutes = require('../catalog/category-routes');
@@ -40,6 +40,10 @@ const uploadSystemSettings = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: fileFilterHelper(
+    ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/m4a', 'video/mp4'],
+    ['jpg', 'jpeg', 'png', 'gif', 'ico', 'mp3', 'wav', 'ogg', 'aac', 'm4a', 'mp4']
+  )
 }).fields([
   { name: 'logo', maxCount: 1 },
   { name: 'favicon', maxCount: 1 },
@@ -54,12 +58,14 @@ router.use('/', bannerRoutes);
 router.use('/', brandingRoutes);
 router.use('/', emailTemplateRoutes);
 
+const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
+
 // CORE PUBLIC ROUTES
 router.get('/system-data', systemSettingController.getSystemSetting);
 router.get('/validate-ifsc/:code', systemSettingController.validateIfsc);
 
 // CORE ADMIN ROUTES
 router.get('/admin/system-setting', adminAuthMiddleware, systemSettingController.getSystemSetting);
-router.put('/admin/system-setting', adminAuthMiddleware, uploadSystemSettings, handleUploadErrors, systemSettingController.updateSystemSetting);
+router.put('/admin/system-setting', adminAuthMiddleware, adminActionLimiter, uploadSystemSettings, handleUploadErrors, systemSettingController.updateSystemSetting);
 
 module.exports = router;

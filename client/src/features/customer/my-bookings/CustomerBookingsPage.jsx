@@ -21,6 +21,9 @@ import useDebounce from '../../../hooks/useDebounce';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
 import CustomerCancelModal from './components/CustomerCancelModal';
 import { normalizeStatus } from '../../../utils/status';
+import EmptyState from '../../../components/ui/EmptyState';
+import ErrorState from '../../../components/ui/Error';
+import { CalendarX } from 'lucide-react';
 
 
 
@@ -116,7 +119,7 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-10 h-10 bg-white rounded-full overflow-hidden flex items-center justify-center border border-slate-200 shrink-0 shadow-sm">
           {provider.profilePicUrl ? (
-            <img src={provider.profilePicUrl} alt={provider.name} className="w-full h-full object-cover" />
+            <img src={provider.profilePicUrl} alt={provider.name || "Provider profile"} loading="lazy" decoding="async" width={40} height={40} className="w-full h-full object-cover" />
           ) : (
             <User className="w-5 h-5 text-slate-400" />
           )}
@@ -146,11 +149,10 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
         {onToggleFavorite && (
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(provider); }}
-            className={`p-2 rounded-xl transition-all border shadow-sm ${
-              isFavorited
+            className={`p-2 rounded-xl transition-all border shadow-sm ${isFavorited
                 ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
                 : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-rose-500'
-            }`}
+              }`}
             title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           >
             <Heart className={`w-3.5 h-3.5 ${isFavorited ? 'text-rose-500 fill-rose-500' : ''}`} />
@@ -356,7 +358,15 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
 
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100] animate-fade-in" onClick={onClose}>
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100] animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Booking Details Modal"
+      tabIndex={0}
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl z-30">
           <div className="flex justify-between items-start gap-4 mb-2">
@@ -369,7 +379,12 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 capitalize border border-slate-200">{booking.status}</span>
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-xl hover:bg-gray-100">
+            <button
+              type="button"
+              aria-label="Close modal"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -413,7 +428,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 bg-white rounded-full overflow-hidden flex items-center justify-center border-2 border-slate-200 shrink-0 shadow-md">
                     {provider.profilePicUrl ? (
-                      <img src={provider.profilePicUrl} alt={provider.name} className="w-full h-full object-cover" />
+                      <img src={provider.profilePicUrl} alt={provider.name || "Provider profile"} loading="lazy" decoding="async" width={64} height={64} className="w-full h-full object-cover" />
                     ) : (
                       <User className="w-8 h-8 text-slate-400" />
                     )}
@@ -427,11 +442,10 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                       {onToggleFavorite && (
                         <button
                           onClick={() => onToggleFavorite(provider)}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border shadow-xs ml-auto ${
-                            isModalFavorited
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border shadow-xs ml-auto ${isModalFavorited
                               ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
                               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-rose-500'
-                          }`}
+                            }`}
                           title={isModalFavorited ? 'Remove from favorites' : 'Add to favorites'}
                         >
                           <Heart className={`w-3.5 h-3.5 ${isModalFavorited ? 'text-rose-500 fill-rose-500' : 'text-gray-400'}`} />
@@ -650,7 +664,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                       {booking.providerWorkProof?.beforeImages?.length > 0 ? (
                         booking.providerWorkProof.beforeImages.map((img, idx) => (
                           <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-primary transition-all cursor-pointer group">
-                            <img src={img.url} alt="Before" className="w-full h-full object-cover" />
+                            <img src={img.url} alt="Before work proof photo" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <Eye className="w-4 h-4 text-white" />
                             </div>
@@ -682,7 +696,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                       {booking.providerWorkProof?.afterImages?.length > 0 ? (
                         booking.providerWorkProof.afterImages.map((img, idx) => (
                           <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-emerald-500 transition-all cursor-pointer group">
-                            <img src={img.url} alt="After" className="w-full h-full object-cover" />
+                            <img src={img.url} alt="After work proof photo" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <CheckSquare className="w-4 h-4 text-white" />
                             </div>
@@ -802,7 +816,7 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
       <div className="p-4 md:p-5">
         <div className="flex items-start gap-3 mb-4">
           <div className="flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden border-2 border-gray-100 bg-gradient-to-br from-primary/10 to-primary/20 flex items-center justify-center">
-            {svcImage ? <img src={svcImage} alt="service" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} /> : null}
+            {svcImage ? <img src={svcImage} alt={booking.services?.[0]?.service?.title || "Service thumbnail"} loading="lazy" decoding="async" width={48} height={48} className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex'; }} /> : null}
             <Wrench className="w-6 h-6 text-primary" style={svcImage ? { display: 'none' } : {}} />
           </div>
           <div className="flex-1 min-w-0">
@@ -1291,23 +1305,13 @@ const CustomerBookingsPage = () => {
             ))}
           </div>
         ) : bookings.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
-            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-secondary mb-1">No bookings found</h3>
-            <p className="text-sm text-gray-500 mb-6">
-              {hasFilters ? 'Try adjusting your filters.' : "You haven't made any bookings yet."}
-            </p>
-            {!hasFilters && (
-              <button onClick={() => navigate('/services')} className="bg-primary text-white px-6 py-2.5 rounded-xl font-bold hover:bg-primary/90 transition-all">
-                Browse Services
-              </button>
-            )}
-            {hasFilters && (
-              <button onClick={clearFilters} className="bg-gray-100 text-gray-700 px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
-                Clear Filters
-              </button>
-            )}
-          </div>
+          <EmptyState
+            icon={CalendarX}
+            title={hasFilters ? "No matching bookings found" : "No bookings yet"}
+            message={hasFilters ? "Try changing your search keywords or active status filters." : "Your completed and upcoming service bookings will appear here."}
+            actionLabel={hasFilters ? "Clear Filters" : "Browse Services"}
+            onAction={hasFilters ? clearFilters : () => navigate('/services')}
+          />
         ) : (
           <div className="space-y-6">
             <div className="space-y-4">
