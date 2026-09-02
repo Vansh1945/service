@@ -60,6 +60,7 @@
   <!-- ── Google Tag Manager ── -->
   <script>
     (function (w, d, s, l, i) {
+      if (!i || i.startsWith('%') || i.startsWith('VITE_')) return;
       w[l] = w[l] || [];
       w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
       var f = d.getElementsByTagName(s)[0],
@@ -73,12 +74,18 @@
   <!-- ── End Google Tag Manager ── -->
 
   <!-- ── Google Analytics (gtag.js) ── -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_GA_ID%"></script>
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', '%VITE_GA_ID%');
+    (function (id) {
+      if (!id || id.startsWith('%') || id.startsWith('VITE_')) return;
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', id);
+    })('%VITE_GA_ID%');
   </script>
   <!-- ── End Google Analytics ── -->
 </head>

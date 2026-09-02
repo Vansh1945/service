@@ -1126,8 +1126,12 @@ const ProviderBooking = () => {
   }, []);
 
   const getServiceIcon = useCallback((category) => {
-    if (category?.toLowerCase() === 'electrical') return <Zap className="w-4 h-4 text-yellow-500" />;
-    if (['appliance repair', 'repair', 'maintenance'].includes(category?.toLowerCase())) return <Wrench className="w-4 h-4 text-orange-500" />;
+    const catStr = (typeof category === 'string'
+      ? category
+      : (category?.name || category?.title || ''))?.toLowerCase() || '';
+
+    if (catStr.includes('electrical') || catStr.includes('electric')) return <Zap className="w-4 h-4 text-yellow-500" />;
+    if (['appliance repair', 'repair', 'maintenance'].some(k => catStr.includes(k))) return <Wrench className="w-4 h-4 text-orange-500" />;
     return <Package className="w-4 h-4 text-gray-400" />;
   }, []);
 
@@ -1293,14 +1297,9 @@ const ProviderBooking = () => {
             <Clock className="w-3.5 h-3.5 text-neutral-400" />
             <span className="truncate">{formatDate(booking.date)} · {formatTime(booking.time)}</span>
           </div>
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 text-neutral-600 truncate">
-              <CreditCard className="w-3.5 h-3.5 text-neutral-400" />
-              <span className="truncate">{booking.paymentMethod === 'cash' ? 'COD' : 'Online'}</span>
-            </div>
-            <span className="text-amber-500 font-bold flex items-center shrink-0">
-              ⭐ {Number(customerRating).toFixed(1)}
-            </span>
+          <div className="flex items-center gap-1.5 text-neutral-600 truncate">
+            <CreditCard className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="truncate">{booking.paymentMethod === 'cash' ? 'COD' : 'Online'}</span>
           </div>
         </div>
 
@@ -1856,10 +1855,6 @@ const ProviderBooking = () => {
                       <div className="flex justify-between">
                         <span>Email Address</span>
                         <span className="text-secondary font-bold break-all">{selectedBooking.customer?.email || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>User Rating</span>
-                        <span className="text-amber-500 font-bold">⭐ {Number(selectedBooking.customer?.rating || selectedBooking.customer?.averageRating || selectedBooking.customer?.performanceScore?.rating || 4.8).toFixed(1)}</span>
                       </div>
                       <div className="border-t border-gray-100 pt-2 flex items-center gap-1.5 text-[10px] text-gray-400">
                         <Shield className="w-3.5 h-3.5" />
