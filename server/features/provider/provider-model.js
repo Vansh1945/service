@@ -535,6 +535,18 @@ const providerSchema = new mongoose.Schema({
         default: false
     },
     suspensionReason: String,
+    deletionRequested: {
+        type: Boolean,
+        default: false
+    },
+    deletionRequestedAt: {
+        type: Date,
+        default: null
+    },
+    deletionReason: {
+        type: String,
+        default: null
+    },
     notificationPreferences: {
         bookingAlertTone: { type: Boolean, default: true },
         bookingVibration: { type: Boolean, default: true },

@@ -41,15 +41,24 @@ const getRequestKey = (config) => {
     return `${method}:${url}:${serializedData}:${JSON.stringify(params)}`;
 };
 
-const setCookie = (name, value, days = 7) => {
+const setCookie = (name, value, days = 30) => {
     let expires = "";
-    if (days) {
+    const effectiveDays = (days === null || days === false) ? null : (days || 30);
+    if (effectiveDays) {
         const date = new Date();
-        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        date.setTime(date.getTime() + (effectiveDays * 24 * 60 * 60 * 1000));
         expires = "; expires=" + date.toUTCString();
     }
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${name}=${encodeURIComponent(value || "")}${expires}; path=/; SameSite=Lax${secure}`;
+    const strVal = typeof value === 'object' ? JSON.stringify(value) : (value || "");
+    document.cookie = `${name}=${encodeURIComponent(strVal)}${expires}; path=/; SameSite=Lax${secure}`;
+    try {
+        if (value) {
+            localStorage.setItem(name, strVal);
+        } else {
+            localStorage.removeItem(name);
+        }
+    } catch (e) {}
 };
 
 const getCookie = (name) => {
@@ -67,11 +76,18 @@ const getCookie = (name) => {
             }
         }
     }
+    try {
+        const localVal = localStorage.getItem(name);
+        if (localVal) return localVal;
+    } catch (e) {}
     return null;
 };
 
 const eraseCookie = (name) => {
     document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
+    try {
+        localStorage.removeItem(name);
+    } catch (e) {}
 };
 
 const api = axios.create({

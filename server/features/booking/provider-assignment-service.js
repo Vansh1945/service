@@ -161,7 +161,7 @@ class ProviderAssignmentService {
     };
 
     if (bookingServicesCategories.length > 0) {
-      baseProviderQuery.services = { $all: bookingServicesCategories };
+      baseProviderQuery.services = { $in: bookingServicesCategories };
     }
 
     const bookingS2CellId = latLngToS2CellId(lat, lng, 13);
@@ -353,10 +353,30 @@ class ProviderAssignmentService {
       return null;
     }
 
-    const bookingServicesCategories = booking.services.map(item => {
+    const bookingServicesCategories = (booking.services || []).map(item => {
       const cat = item.service?.category;
-      return cat?._id ? cat._id.toString() : cat?.toString();
+      return cat?._id ? cat._id.toString() : (cat ? cat.toString() : null);
     }).filter(Boolean);
+
+    if (bookingServicesCategories.length === 0 && booking.services?.length > 0) {
+      try {
+        const ServiceModel = mongoose.model('Service');
+        const sIds = booking.services.map(s => s.service?._id || s.service).filter(Boolean);
+        if (sIds.length > 0) {
+          const foundServices = await ServiceModel.find({ _id: { $in: sIds } }).select('category').lean();
+          foundServices.forEach(fs => {
+            if (fs.category) {
+              const catStr = fs.category._id ? fs.category._id.toString() : fs.category.toString();
+              if (!bookingServicesCategories.includes(catStr)) {
+                bookingServicesCategories.push(catStr);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[AutoAssign] Error fetching service categories fallback:', err.message);
+      }
+    }
 
     const baseProviderQuery = {
       _id: { $nin: booking.metadata?.ignoredProviders || [] },
@@ -371,9 +391,12 @@ class ProviderAssignmentService {
         { blockedTill: null },
         { blockedTill: { $lte: new Date() } }
       ],
-      'performanceScore.restrictionsActive': { $ne: true },
-      services: { $all: bookingServicesCategories }
+      'performanceScore.restrictionsActive': { $ne: true }
     };
+
+    if (bookingServicesCategories.length > 0) {
+      baseProviderQuery.services = { $in: bookingServicesCategories };
+    }
 
     const bookingS2CellId = latLngToS2CellId(lat, lng, 13);
     if (bookingS2CellId) {

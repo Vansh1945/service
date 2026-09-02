@@ -5,6 +5,7 @@ import AddressSelector from '../../../../components/AddressSelector';
 import DatePicker from 'react-datepicker';
 import useCategory from '../../../../hooks/useCategory';
 import 'react-datepicker/dist/react-datepicker.css';
+import { formatDate } from '../../../../utils/format';
 
 const PersonalDetailsTab = ({
   profileData,
@@ -95,7 +96,7 @@ const PersonalDetailsTab = ({
             </div>
             <div>
               <span className="text-neutral-400 block text-[10px]">Date of Birth</span>
-              <span>{profileData.dateOfBirth || '—'}</span>
+              <span>{profileData.dateOfBirth ? formatDate(profileData.dateOfBirth) : '—'}</span>
             </div>
           </div>
         )}

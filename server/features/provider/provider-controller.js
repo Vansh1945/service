@@ -109,6 +109,15 @@ const getCommissionStatus = async (req, res, next) => {
   }
 };
 
+const rejectDeletionRequest = async (req, res, next) => {
+  try {
+    await ProviderService.rejectDeletionRequest(req, res, next);
+  } catch (error) {
+    global.logger.error(`[ProviderController.rejectDeletionRequest] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
 module.exports = {
   initiateRegistration,
   completeRegistration,
@@ -119,6 +128,7 @@ module.exports = {
   viewDocument,
   deleteAccount,
   permanentDeleteAccount,
+  rejectDeletionRequest,
   getDashboardData,
   getAgreementPdf,
   getCommissionStatus

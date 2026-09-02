@@ -74,6 +74,7 @@ router.get('/admin/document/:providerId/:type', adminAuthMiddleware, validatePar
 // Account Deletion Routes
 router.delete('/profile', providerAuthMiddleware, requireProvider, authLimiter, preventDuplicateSubmissions(3), providerController.deleteAccount);
 router.delete('/:id/permanent', adminAuthMiddleware, requireAdmin, adminActionLimiter, validateParams(idParamSchema), providerController.permanentDeleteAccount);
+router.post('/:id/reject-deletion', adminAuthMiddleware, requireAdmin, adminActionLimiter, validateParams(idParamSchema), providerController.rejectDeletionRequest);
 
 // Dashboard Routes
 router.get('/dashboard', providerAuthMiddleware, requireProvider, providerController.getDashboardData);

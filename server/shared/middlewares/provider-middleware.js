@@ -52,10 +52,12 @@ const providerAuthMiddleware = async (req, res, next) => {
 
 
         // Detached heavy populate logic from auth middleware to optimize API response times
-        if (provider.isDeleted) {
+        if (provider.isDeleted || provider.deletionRequested) {
             return res.status(403).json({
                 success: false,
-                message: "Account deactivated"
+                message: provider.isDeleted
+                    ? "Account permanently deleted"
+                    : "Your account is disabled. Access is restricted."
             });
         }
 

@@ -93,7 +93,7 @@ exports.Login = async (req, res, next) => {
     if (!user) {
       user = await Provider.findOne({
         email: { $regex: new RegExp(`^${trimmedEmail}$`, 'i') }
-      }).select('+password +approved +blockedTill');
+      }).select('+password +approved +blockedTill +deletionRequested +isDeleted');
       userType = 'provider';
     }
 
@@ -197,12 +197,26 @@ exports.Login = async (req, res, next) => {
       });
     }
 
-    // Check if provider is blocked
-    if (userType === 'provider' && user.blockedTill && new Date(user.blockedTill) > new Date()) {
-      return res.status(403).json({
-        success: false,
-        message: `Your provider account has been blocked by the administrator until ${new Date(user.blockedTill).toLocaleDateString()}.`
-      });
+    // Check if provider is blocked, deleted, or requested deletion
+    if (userType === 'provider') {
+      if (user.isDeleted) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deleted.'
+        });
+      }
+      if (user.deletionRequested) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is disabled. You cannot log in at this time.'
+        });
+      }
+      if (user.blockedTill && new Date(user.blockedTill) > new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: `Your provider account has been blocked by the administrator until ${new Date(user.blockedTill).toLocaleDateString()}.`
+        });
+      }
     }
 
     // Check Global Maintenance Mode Restrictions

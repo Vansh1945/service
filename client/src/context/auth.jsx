@@ -16,15 +16,24 @@ import {
     writeSystemSettingsCache
 } from "../utils/systemSettingsCache";
 
-const setCookie = (name, value, days = 7) => {
+const setCookie = (name, value, days = 30) => {
     let expires = "";
-    if (days) {
+    const effectiveDays = (days === null || days === false) ? null : (days || 30);
+    if (effectiveDays) {
         const date = new Date();
-        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        date.setTime(date.getTime() + (effectiveDays * 24 * 60 * 60 * 1000));
         expires = "; expires=" + date.toUTCString();
     }
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${name}=${encodeURIComponent(value || "")}${expires}; path=/; SameSite=Lax${secure}`;
+    const strVal = typeof value === 'object' ? JSON.stringify(value) : (value || "");
+    document.cookie = `${name}=${encodeURIComponent(strVal)}${expires}; path=/; SameSite=Lax${secure}`;
+    try {
+        if (value) {
+            localStorage.setItem(name, strVal);
+        } else {
+            localStorage.removeItem(name);
+        }
+    } catch (e) {}
 };
 
 const getCookie = (name) => {
@@ -42,19 +51,19 @@ const getCookie = (name) => {
             }
         }
     }
+    try {
+        const localVal = localStorage.getItem(name);
+        if (localVal) return localVal;
+    } catch (e) {}
     return null;
 };
 
 const eraseCookie = (name) => {
     document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
+    try {
+        localStorage.removeItem(name);
+    } catch (e) {}
 };
-
-// Clean up any sensitive auth data left in localStorage (auth now uses cookies)
-if (typeof window !== "undefined" && window.localStorage) {
-    ["token", "refreshToken", "user"].forEach(key => {
-        if (localStorage.getItem(key)) localStorage.removeItem(key);
-    });
-}
 
 const AuthContext = createContext(null);
 
@@ -225,7 +234,7 @@ export const AuthProvider = ({ children }) => {
         });
     };
 
-    const loginUser = async (newToken, newRole, userData, newRefreshToken = null, rememberMe = false) => {
+    const loginUser = async (newToken, newRole, userData, newRefreshToken = null, rememberMe = true) => {
         try {
             if (isTokenExpired(newToken)) {
                 throw new Error("Token is invalid or expired");
@@ -240,8 +249,8 @@ export const AuthProvider = ({ children }) => {
                 isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
             };
 
-            // Save to cookies securely (rememberMe true = 30 days, false = session cookie)
-            const cookieDays = rememberMe ? 30 : null;
+            // Save to cookies & localStorage securely (30 days persistent)
+            const cookieDays = rememberMe === false ? null : 30;
             setCookie("token", newToken, cookieDays);
             eraseCookie("refreshToken");
             setCookie("role", finalRole, cookieDays);

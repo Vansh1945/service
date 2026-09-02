@@ -856,9 +856,9 @@ const BookService = () => {
           {/* Left Column - Booking Form */}
           <div className="lg:col-span-8 space-y-5">
             {/* Service Card */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <div className="flex gap-5">
-                <div className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-gray-100 relative">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3.5 sm:p-5">
+              <div className="flex items-start gap-3.5 sm:gap-5">
+                <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-lg sm:rounded-xl overflow-hidden bg-gray-100 relative">
                   <img
                     src={service.images?.[0] || 'https://placehold.co/400x400?text=No+Image'}
                     alt={service.title}
@@ -872,29 +872,31 @@ const BookService = () => {
                     </span>
                   )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="inline-block text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-lg mb-1">
-                        {typeof service.category === 'object' ? service.category.name : service.category}
-                      </span>
-                      {service.isFeatured && (
-                        <span className="ml-1.5 inline-block text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
-                          ★ Featured
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center flex-wrap gap-1.5 mb-1">
+                        <span className="inline-block text-[10px] sm:text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                          {typeof service.category === 'object' ? service.category.name : service.category}
                         </span>
-                      )}
-                      <h2 className="text-base font-extrabold text-secondary">{service.title}</h2>
+                        {service.isFeatured && (
+                          <span className="inline-block text-[9px] sm:text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                            ★ Featured
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-sm sm:text-base font-extrabold text-secondary truncate">{service.title}</h2>
                     </div>
-                    <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
-                      <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                      <span className="font-semibold text-secondary text-sm">{service.averageRating?.toFixed(1) || '0.0'}</span>
+                    <div className="flex items-center gap-1 bg-yellow-50 px-2 py-0.5 sm:py-1 rounded-lg shrink-0">
+                      <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-500 fill-yellow-500" />
+                      <span className="font-semibold text-secondary text-xs sm:text-sm">{service.averageRating?.toFixed(1) || '0.0'}</span>
                     </div>
                   </div>
 
                   {service.shortDescription ? (
-                    <p className="text-gray-500 text-xs mt-1 italic">"{service.shortDescription}"</p>
+                    <p className="text-gray-500 text-[11px] sm:text-xs mt-0.5 italic line-clamp-2">"{service.shortDescription}"</p>
                   ) : (
-                    <p className="text-gray-500 text-xs mt-1 line-clamp-2">{service.description}</p>
+                    <p className="text-gray-500 text-[11px] sm:text-xs mt-0.5 line-clamp-2">{service.description}</p>
                   )}
 
                   {service.warranty?.duration && (
@@ -903,8 +905,7 @@ const BookService = () => {
                     </div>
                   )}
 
-
-                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 font-medium">
+                  <div className="flex items-center flex-wrap gap-3 mt-1.5 text-[11px] sm:text-xs text-gray-500 font-medium">
                     <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-primary" />{service.duration} hrs</div>
                     {getCustomerPricingBreakdown().visiting > 0 ? (
                       <div className="flex items-center gap-1">
@@ -919,11 +920,11 @@ const BookService = () => {
                     )}
                   </div>
 
-                  <div className="mt-2">
+                  <div className="mt-1.5">
                     <div className="flex items-baseline gap-1.5">
                       {service.discountPrice ? (
                         <>
-                          <span className="text-lg font-black text-green-600">
+                          <span className="text-base sm:text-lg font-black text-green-600">
                             {formatCurrency(getMergedPrice(service.discountPrice, activeSurcharges))}
                           </span>
                           <span className="text-xs line-through text-gray-400 font-normal">
@@ -931,7 +932,7 @@ const BookService = () => {
                           </span>
                         </>
                       ) : (
-                        <span className="text-lg font-black text-primary">
+                        <span className="text-base sm:text-lg font-black text-primary">
                           {formatCurrency(getMergedPrice(service.basePrice, activeSurcharges))}
                         </span>
                       )}
@@ -974,7 +975,7 @@ const BookService = () => {
 
               <div className="space-y-4">
                 {/* Booking Type Selector */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-4">
                   {/* Scheduled Card */}
                   <div
                     onClick={() => {
@@ -984,29 +985,31 @@ const BookService = () => {
                         isInstant: false
                       }));
                     }}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${(!formData.isEmergency && !formData.isInstant)
-                      ? 'border-primary bg-primary/5 shadow-sm'
+                    className={`relative p-2.5 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${(!formData.isEmergency && !formData.isInstant)
+                      ? 'border-primary bg-primary/5 shadow-xs'
                       : 'border-gray-100 bg-white hover:border-gray-200'
                       }`}
                   >
-                    {(!formData.isEmergency && !formData.isInstant) && (
-                      <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
-                        ✓
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-base sm:text-lg shrink-0">📅</span>
+                          <h4 className="text-xs sm:text-sm font-bold text-secondary truncate">Scheduled Booking</h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="inline-block bg-primary/10 text-primary text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                            Recommended
+                          </span>
+                          {(!formData.isEmergency && !formData.isInstant) && (
+                            <div className="bg-primary text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[9px] font-bold">
+                              ✓
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">📅</span>
-                        <h4 className="text-sm font-bold text-secondary">Scheduled Booking</h4>
-                      </div>
-                      <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">
+                      <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium leading-tight">
                         Choose your preferred date and time.
                       </p>
-                    </div>
-                    <div className="mt-3">
-                      <span className="inline-block bg-primary/10 text-primary text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
-                        Recommended
-                      </span>
                     </div>
                   </div>
 
@@ -1024,29 +1027,31 @@ const BookService = () => {
                         time: nextTime
                       }));
                     }}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${formData.isInstant
-                      ? 'border-primary bg-primary/5 shadow-sm'
+                    className={`relative p-2.5 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${formData.isInstant
+                      ? 'border-primary bg-primary/5 shadow-xs'
                       : 'border-gray-100 bg-white hover:border-gray-200'
                       }`}
                   >
-                    {formData.isInstant && (
-                      <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
-                        ✓
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-base sm:text-lg shrink-0">⚡</span>
+                          <h4 className="text-xs sm:text-sm font-bold text-secondary truncate">Instant Booking</h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                            60–90 mins
+                          </span>
+                          {formData.isInstant && (
+                            <div className="bg-primary text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[9px] font-bold">
+                              ✓
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">⚡</span>
-                        <h4 className="text-sm font-bold text-secondary">Instant Booking</h4>
-                      </div>
-                      <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">
-                        Get connected with the nearest available electrician.
+                      <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium leading-tight">
+                        Get connected with nearest electrician.
                       </p>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                        60–90 mins
-                      </span>
                     </div>
                   </div>
 
@@ -1064,32 +1069,34 @@ const BookService = () => {
                         time: nextTime
                       }));
                     }}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${formData.isEmergency
-                      ? 'border-primary bg-primary/5 shadow-sm'
+                    className={`relative p-2.5 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${formData.isEmergency
+                      ? 'border-primary bg-primary/5 shadow-xs'
                       : 'border-gray-100 bg-white hover:border-gray-200'
                       }`}
                   >
-                    {formData.isEmergency && (
-                      <div className="absolute top-2 right-2 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
-                        ✓
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-base sm:text-lg shrink-0">🚨</span>
+                          <h4 className="text-xs sm:text-sm font-bold text-secondary truncate">Emergency Booking</h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[9px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                            30–60 mins
+                          </span>
+                          <span className="inline-block bg-red-100 text-red-700 text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                            Priority
+                          </span>
+                          {formData.isEmergency && (
+                            <div className="bg-primary text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[9px] font-bold">
+                              ✓
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">🚨</span>
-                        <h4 className="text-sm font-bold text-secondary">Emergency Booking</h4>
-                      </div>
-                      <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">
-                        Priority assistance for urgent electrical issues.
+                      <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium leading-tight">
+                        Priority assistance for urgent issues.
                       </p>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded">
-                        30–60 mins
-                      </span>
-                      <span className="inline-block bg-red-100 text-red-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
-                        Priority
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -1126,34 +1133,34 @@ const BookService = () => {
                 )}
 
                 {formData.isInstant && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl shadow-sm animate-fade-in space-y-3 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-250/10 rounded-full blur-xl pointer-events-none"></div>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-2.5">
-                        <span className="text-xl">⚡</span>
-                        <div>
-                          <h4 className="text-sm font-bold text-blue-900">Instant Booking</h4>
-                          <p className="text-xs text-blue-850/90 leading-relaxed mt-1">
-                            We'll connect you with the nearest available electrician as quickly as possible.
+                  <div className="p-2.5 sm:p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl shadow-2xs animate-fade-in space-y-2 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-200/20 rounded-full blur-lg pointer-events-none"></div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-base shrink-0">⚡</span>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-blue-950 leading-tight">Instant Booking</h4>
+                          <p className="text-[11px] text-blue-850/90 leading-tight mt-0.5 truncate sm:whitespace-normal">
+                            We'll connect you with the nearest available professional as quickly as possible.
                           </p>
                         </div>
                       </div>
-                      <div className="bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-right shrink-0">
-                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Estimated Arrival</p>
-                        <p className="text-xs font-black">60–90 mins</p>
+                      <div className="bg-amber-100/90 text-amber-900 border border-amber-200 px-2 py-1 rounded-md text-right shrink-0">
+                        <p className="text-[8px] font-extrabold uppercase tracking-wider text-amber-700 leading-none">Estimated Arrival</p>
+                        <p className="text-[11px] font-black leading-tight mt-0.5">60–90 mins</p>
                       </div>
                     </div>
 
-                    <div className="border-t border-blue-200/60 pt-2">
-                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-blue-800/90 font-medium">
-                        <li className="flex items-center gap-2">
-                          <span className="text-blue-500">•</span> Fast service
+                    <div className="border-t border-blue-200/60 pt-1.5">
+                      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-blue-900/80 font-medium">
+                        <li className="flex items-center gap-1">
+                          <span className="text-blue-500 font-bold">•</span> Fast service
                         </li>
-                        <li className="flex items-center gap-2">
-                          <span className="text-blue-500">•</span> Nearest available verified electrician
+                        <li className="flex items-center gap-1">
+                          <span className="text-blue-500 font-bold">•</span> Nearest available verified professional
                         </li>
-                        <li className="flex items-center gap-2">
-                          <span className="text-blue-500">•</span> Standard service charges apply
+                        <li className="flex items-center gap-1">
+                          <span className="text-blue-500 font-bold">•</span> Standard charges apply
                         </li>
                       </ul>
                     </div>
@@ -1225,73 +1232,95 @@ const BookService = () => {
                       </div>
                     </div>
 
-                    {bookingPreference === 'favorite' && (
-                      <div className="space-y-2.5 animate-fade-in bg-gray-50/50 p-2.5 rounded-xl border border-gray-100">
-                        <select
-                          value={selectedFavoriteProviderId}
-                          onChange={(e) => setSelectedFavoriteProviderId(e.target.value)}
-                          className="w-full px-3 py-2 text-xs border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold text-secondary"
-                        >
-                          <option value="">Choose a Favorite Provider</option>
-                          {user.favoriteProviders.map((fp) => {
-                            const ratingStr = fp.rating ? `⭐ ${Number(fp.rating).toFixed(1)}` : '⭐ New';
-                            const jobsStr = `${fp.completedBookings || 0} Jobs`;
-                            return (
-                              <option key={fp.providerId} value={fp.providerId}>
-                                {fp.providerName} ({fp.category}) — {ratingStr} | {jobsStr}
-                              </option>
-                            );
-                          })}
-                        </select>
+                    {bookingPreference === 'favorite' && (() => {
+                      const currentCatName = (service?.category && typeof service.category === 'object')
+                        ? service.category.name
+                        : (typeof service?.category === 'string' ? service.category : '');
 
-                        {selectedFavoriteProviderId && (() => {
-                          const selectedFp = user.favoriteProviders.find(f => String(f.providerId) === String(selectedFavoriteProviderId));
-                          if (!selectedFp) return null;
-                          return (
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm">
-                              <div className="flex items-center gap-1.5 overflow-hidden">
-                                <span className="font-bold text-secondary truncate">{selectedFp.providerName}</span>
-                                <span className="text-[10px] text-gray-400 truncate">({selectedFp.category})</span>
-                              </div>
-                              <div className="flex items-center gap-2 font-semibold">
-                                <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 text-[11px]">
-                                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                  {selectedFp.rating ? Number(selectedFp.rating).toFixed(1) : 'New'}
-                                </span>
-                                <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 text-[11px]">
-                                  <Briefcase className="w-3 h-3 text-blue-500" />
-                                  {selectedFp.completedBookings || 0} Completed Jobs
-                                </span>
-                              </div>
+                      const filteredFavorites = (user?.favoriteProviders || []).filter(fp => {
+                        if (!currentCatName) return true;
+                        if (!fp.category || fp.category === 'N/A') return true;
+                        const categoriesList = fp.category.toLowerCase().split(',').map(c => c.trim());
+                        const targetName = currentCatName.toLowerCase().trim();
+                        return categoriesList.some(cat => cat === targetName || cat.includes(targetName) || targetName.includes(cat));
+                      });
+
+                      return (
+                        <div className="space-y-2 animate-fade-in bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 max-w-full overflow-hidden">
+                          {filteredFavorites.length > 0 ? (
+                            <select
+                              value={selectedFavoriteProviderId}
+                              onChange={(e) => setSelectedFavoriteProviderId(e.target.value)}
+                              className="w-full px-3 py-2 text-xs border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold text-secondary truncate max-w-full overflow-hidden"
+                            >
+                              <option value="">Choose a Favorite Provider</option>
+                              {filteredFavorites.map((fp) => {
+                                const ratingStr = fp.rating ? `⭐ ${Number(fp.rating).toFixed(1)}` : '⭐ New';
+                                const jobsStr = `${fp.completedBookings || 0} Jobs`;
+                                return (
+                                  <option key={fp.providerId} value={fp.providerId}>
+                                    {fp.providerName} — {ratingStr} | {jobsStr}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          ) : (
+                            <div className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200/60 leading-relaxed font-medium">
+                              None of your favorite providers offer <strong>{currentCatName || 'this service category'}</strong>. We will auto-match the best professional for you.
                             </div>
-                          );
-                        })()}
+                          )}
 
-                        {selectedFavoriteProviderId && favoriteProviderAvailability.checked && (
-                          <div className="mt-1">
-                            {favoriteProviderAvailability.available ? (
-                              <div className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
-                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                                <span>{favoriteProviderAvailability.message}</span>
+                          {selectedFavoriteProviderId && (() => {
+                            const selectedFp = user.favoriteProviders.find(f => String(f.providerId) === String(selectedFavoriteProviderId));
+                            if (!selectedFp) return null;
+                            return (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm max-w-full overflow-hidden">
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-secondary truncate">{selectedFp.providerName}</div>
+                                  <div className="text-[10px] text-gray-400 truncate leading-tight mt-0.5" title={selectedFp.category}>
+                                    {selectedFp.category}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 font-semibold shrink-0">
+                                  <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 text-[11px]">
+                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    {selectedFp.rating ? Number(selectedFp.rating).toFixed(1) : 'New'}
+                                  </span>
+                                  <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 text-[11px]">
+                                    <Briefcase className="w-3 h-3 text-blue-500" />
+                                    {selectedFp.completedBookings || 0} Jobs
+                                  </span>
+                                </div>
                               </div>
-                            ) : (
-                              <div className="p-2.5 bg-red-50 border border-red-100 rounded-lg">
-                                <p className="text-[11px] font-bold text-red-700">Provider Unavailable</p>
-                                <p className="text-[10px] text-red-600 leading-relaxed mt-0.5">
-                                  {favoriteProviderAvailability.message || 'Provider is currently offline or busy.'} We will auto-assign a professional instead.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                            );
+                          })()}
+
+                          {selectedFavoriteProviderId && favoriteProviderAvailability.checked && (
+                            <div className="mt-1">
+                              {favoriteProviderAvailability.available ? (
+                                <div className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                  <span>{favoriteProviderAvailability.message}</span>
+                                </div>
+                              ) : (
+                                <div className="p-2.5 bg-red-50 border border-red-100 rounded-lg">
+                                  <p className="text-[11px] font-bold text-red-700">Provider Unavailable</p>
+                                  <p className="text-[10px] text-red-600 leading-relaxed mt-0.5">
+                                    {favoriteProviderAvailability.message || 'Provider is currently offline or busy.'} We will auto-assign a professional instead.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
                 {/* Service Address Selection */}
                 <div className="border-t border-gray-100 pt-4 mt-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
+                  <div className="flex items-center justify-between gap-2 mb-3.5">
                     <div>
                       <label className="block text-sm font-semibold text-secondary">Service Address</label>
                       <span className="text-[10px] text-gray-400">Where should we deliver the service?</span>
@@ -1303,9 +1332,9 @@ const BookService = () => {
                         setEditingAddressModalData(null);
                         setIsAddAddressModalOpen(true);
                       }}
-                      className="px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                      className="px-2.5 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors flex items-center gap-1 shrink-0"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-3.5 h-3.5" />
                       Add Address
                     </button>
                   </div>

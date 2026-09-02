@@ -23,12 +23,16 @@ import {
   Banknote,
   TrendingUp,
   AlertCircle,
+  AlertTriangle,
+  Info,
+  X,
   FileText
 } from 'lucide-react';
 import { toast } from '../../../components/ui/Toast';
 
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
+import * as ProviderService from '../../../services/ProviderService';
 import { formatDate, formatAddress as formatAddressUtil } from '../../../utils/format';
 import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
@@ -51,6 +55,13 @@ const getServiceBadges = (services) => {
 };
 
 const getStatusBadge = (provider) => {
+  if (provider.deletionRequested) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-600 text-white border border-amber-700 animate-pulse">
+        🚨 Deletion Requested
+      </span>
+    );
+  }
   if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white border border-red-700">
@@ -609,6 +620,39 @@ const ProviderModal = ({
   const isSuspended = provider.isSuspended;
   const isRestricted = ps.restrictionsActive;
   const isAnyNegativeState = isBlocked || isSuspended || isRestricted;
+
+  const handlePermanentDelete = async (providerId) => {
+    if (!window.confirm('Are you sure you want to permanently delete this provider account? This action cannot be undone.')) return;
+    try {
+      setProcessingAction('permanent_delete');
+      const res = await ProviderService.permanentDeleteAccount(providerId);
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Provider account permanently deleted');
+        onClose();
+        if (typeof onRefresh === 'function') onRefresh();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete provider account');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const handleRejectDeletion = async (providerId) => {
+    try {
+      setProcessingAction('reject_deletion');
+      const res = await ProviderService.rejectDeletionRequest(providerId);
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Deletion request rejected successfully');
+        onClose();
+        if (typeof onRefresh === 'function') onRefresh();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to reject deletion request');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       {/* Backdrop */}
@@ -620,60 +664,56 @@ const ProviderModal = ({
       {/* Modal Panel */}
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
 
-        {/* ── Gradient Header ── */}
-        <div className="relative bg-gradient-to-r from-primary to-teal-700 px-6 pt-6 pb-16 flex-shrink-0">
+        {/* ── Integrated Header ── */}
+        <div className="bg-slate-900 text-white p-5 sm:p-6 flex-shrink-0 relative border-b border-slate-800">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-all"
+            aria-label="Close modal"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           </button>
-          <p className="text-xs font-bold text-teal-100 uppercase tracking-widest mb-1">Provider Details</p>
-          <h2 className="text-2xl font-extrabold text-white">{provider.name}</h2>
-          {provider.providerId && (
-            <p className="text-xs text-teal-100 font-mono mt-0.5">{provider.providerId}</p>
-          )}
-        </div>
 
-        {/* ── Floating Profile Card ── */}
-        <div className="relative px-6 -mt-10 flex-shrink-0">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <img
-              src={provider.profilePicUrl || '/default-avatar.png'}
-              alt={provider.name || "Provider profile photo"}
-              loading="lazy"
-              decoding="async"
-              width={64}
-              height={64}
-              onError={(e) => { e.target.src = '/default-avatar.png'; }}
-              className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow flex-shrink-0"
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                {getStatusBadge(provider)}
-                {ps.restrictionsActive && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-danger/10 text-danger">
-                    <Shield size={10} /> Restricted
-                  </span>
-                )}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pr-8">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <img
+                  src={provider.profilePicUrl || '/default-avatar.png'}
+                  alt={provider.name || "Provider profile photo"}
+                  onError={(e) => { e.target.src = '/default-avatar.png'; }}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-teal-500/40 bg-slate-800 shadow-md shrink-0"
+                />
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
-                <span className="flex items-center gap-1"><Mail size={11} />{provider.email}</span>
-                {provider.phone && <span className="flex items-center gap-1"><Phone size={11} />{provider.phone}</span>}
-                <span className="flex items-center gap-1"><Calendar size={11} />Joined {formatDate(provider.registrationDate || provider.createdAt)}</span>
-              </div>
-            </div>
-            <div className="text-right flex-shrink-0">
-              {provider.averageRating > 0 && (
-                <div className="flex items-center gap-1 justify-end">
-                  <Star size={14} className="text-yellow-400 fill-yellow-400" />
-                  <span className="text-lg font-extrabold text-gray-800">{provider.averageRating.toFixed(1)}</span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl font-bold text-white tracking-tight">{provider.name}</h2>
+                  {getStatusBadge(provider)}
+                  {ps.restrictionsActive && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <Shield size={10} /> Restricted
+                    </span>
+                  )}
                 </div>
-              )}
-              <p className="text-[10px] text-gray-400 mt-0.5">Avg Rating</p>
+                <div className="flex items-center gap-3 text-xs text-slate-300 mt-1.5 flex-wrap font-medium">
+                  <span className="font-mono text-teal-300 bg-teal-950/80 px-2.5 py-0.5 rounded-md border border-teal-700/50 text-[11px] font-bold">
+                    #{provider.providerId || provider._id?.slice(-8)}
+                  </span>
+                  <span className="flex items-center gap-1"><Mail size={12} className="text-slate-400" />{provider.email}</span>
+                  {provider.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-slate-400" />{provider.phone}</span>}
+                  <span className="flex items-center gap-1"><Calendar size={12} className="text-slate-400" />Joined {formatDate(provider.registrationDate || provider.createdAt)}</span>
+                </div>
+              </div>
             </div>
+
+            {provider.averageRating > 0 && (
+              <div className="bg-slate-800/90 border border-slate-700 px-3.5 py-2 rounded-xl flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                <Star size={18} className="text-amber-400 fill-amber-400" />
+                <div className="text-right">
+                  <span className="text-base font-black text-white leading-none block">{provider.averageRating.toFixed(1)}</span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">Avg Rating</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -974,34 +1014,75 @@ const ProviderModal = ({
 
           {/* Account Controls */}
           <SectionCard title="Account Controls" icon={Shield} iconColor="text-slate-600" bgColor="bg-slate-50">
-            <div className="mb-4 bg-white p-3 rounded-xl border border-slate-100 space-y-1">
-              <h5 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Actions Guide</h5>
-              <p className="text-[10px] text-slate-500">
-                ⚠️ <strong>Restrict:</strong> Disables new bookings. |
-                🚫 <strong>Suspend:</strong> Restricts login operations. |
-                ❌ <strong>Block:</strong> Complete block & logout.
+            {provider.deletionRequested && (
+              <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-extrabold text-red-800 text-xs">
+                    <AlertCircle size={15} className="text-red-600" />
+                    <span>Provider Requested Account Deletion</span>
+                  </div>
+                  <span className="text-[10px] text-red-600 font-bold">
+                    Requested: {provider.deletionRequestedAt ? formatDate(provider.deletionRequestedAt) : 'Recently'}
+                  </span>
+                </div>
+                <p className="text-xs text-red-700 font-medium">
+                  Reason: <span className="italic">{provider.deletionReason || 'Provider requested account deletion'}</span>
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handlePermanentDelete(provider._id)}
+                    disabled={processingAction}
+                    className="py-2 px-3 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                  >
+                    <X size={13} />
+                    {processingAction === 'permanent_delete' ? 'Deleting…' : 'Approve & Permanently Delete Account'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRejectDeletion(provider._id)}
+                    disabled={processingAction}
+                    className="py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                  >
+                    <CheckCircle size={13} />
+                    {processingAction === 'reject_deletion' ? 'Rejecting…' : 'Reject Deletion Request'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-3 p-3 bg-slate-100/70 rounded-xl border border-slate-200/60 text-xs text-slate-600 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px] uppercase tracking-wider">
+                <Info size={13} className="text-slate-500" />
+                <span>Actions Guide</span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                <span className="font-semibold text-amber-700">Restrict:</span> Disables new booking assignments. &bull; <span className="font-semibold text-rose-700">Suspend:</span> Restricts provider login operations. &bull; <span className="font-semibold text-red-700">Block:</span> Full account termination & logout.
               </p>
             </div>
+
             <div className="mb-3">
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                Remarks / Reason <span className="text-red-400">(Required for Restrict, Suspend, Reject)</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Remarks / Justification <span className="text-red-500 font-normal">(Required for Restrict, Suspend)</span>
               </label>
               <textarea
                 value={approvalRemarks}
                 onChange={(e) => setApprovalRemarks(e.target.value)}
-                className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white resize-none"
+                className="w-full p-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white resize-none shadow-2xs font-medium"
                 placeholder="Enter justification..."
                 rows="2"
               />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               {isBlocked ? (
                 <button
                   onClick={() => handleStatusUpdate('active')}
                   disabled={processingAction}
-                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                  className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  {processingAction === 'active' ? 'Unblocking…' : '✓ Unblock'}
+                  <CheckCircle size={14} />
+                  {processingAction === 'active' ? 'Unblocking…' : 'Unblock Account'}
                 </button>
               ) : (
                 <>
@@ -1010,9 +1091,10 @@ const ProviderModal = ({
                     <button
                       onClick={() => handleStatusUpdate('active')}
                       disabled={processingAction}
-                      className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      {processingAction === 'active' ? 'Activating…' : '✓ Remove Restriction'}
+                      <CheckCircle size={14} />
+                      {processingAction === 'active' ? 'Activating…' : 'Remove Restriction'}
                     </button>
                   ) : (
                     <button
@@ -1022,9 +1104,10 @@ const ProviderModal = ({
                         setShowDurationInput(true);
                       }}
                       disabled={processingAction}
-                      className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                      className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      ⚠ Restrict
+                      <AlertTriangle size={14} />
+                      Restrict Account
                     </button>
                   )}
 
@@ -1033,17 +1116,19 @@ const ProviderModal = ({
                     <button
                       onClick={() => handleStatusUpdate('active')}
                       disabled={processingAction}
-                      className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      {processingAction === 'active' ? 'Activating…' : '✓ Unsuspend'}
+                      <CheckCircle size={14} />
+                      {processingAction === 'active' ? 'Activating…' : 'Unsuspend Account'}
                     </button>
                   ) : (
                     <button
                       onClick={() => handleStatusUpdate('suspended')}
                       disabled={processingAction}
-                      className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                      className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      {processingAction === 'suspended' ? 'Suspending…' : '🚫 Suspend'}
+                      <AlertCircle size={14} />
+                      {processingAction === 'suspended' ? 'Suspending…' : 'Suspend Account'}
                     </button>
                   )}
 
@@ -1055,9 +1140,10 @@ const ProviderModal = ({
                       setShowDurationInput(true);
                     }}
                     disabled={processingAction}
-                    className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                    className="py-2.5 px-4 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
-                    ❌ Block
+                    <X size={14} />
+                    Block Account
                   </button>
                 </>
               )}

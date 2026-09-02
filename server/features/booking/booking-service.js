@@ -1840,12 +1840,12 @@ class BookingService {
         }).lean(),
         providerIds.length > 0
           ? Feedback.aggregate([
-              { $match: { 'providerFeedback.provider': { $in: providerIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-              { $group: { _id: '$providerFeedback.provider', avgRating: { $avg: '$providerFeedback.rating' } } }
-            ]).catch(err => {
-              global.logger?.warn?.(`Error calculating provider dynamic ratings: ${err.message}`);
-              return [];
-            })
+            { $match: { 'providerFeedback.provider': { $in: providerIds.map(id => new mongoose.Types.ObjectId(id)) } } },
+            { $group: { _id: '$providerFeedback.provider', avgRating: { $avg: '$providerFeedback.rating' } } }
+          ]).catch(err => {
+            global.logger?.warn?.(`Error calculating provider dynamic ratings: ${err.message}`);
+            return [];
+          })
           : Promise.resolve([])
       ]);
 
@@ -3089,7 +3089,11 @@ class BookingService {
         ]
       })
         .populate('customer', 'name email phone profilePicUrl' + ' createdAt')
-        .populate('services.service', 'title description duration price basePrice images serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed')
+        .populate({
+          path: 'services.service',
+          select: 'title description duration price basePrice images serviceType warranty tags faqs shortDescription isFeatured prerequisites discountPrice specialNotes serviceIncludes serviceExcludes serviceGuarantees materialsUsed category',
+          populate: { path: 'category', select: 'name title' }
+        })
         .lean();
 
       if (!booking) {
@@ -3325,7 +3329,11 @@ class BookingService {
 
       const bookings = await Booking.find(query)
         .populate('customer', 'name email phone profilePicUrl')
-        .populate('services.service', 'title price duration category')
+        .populate({
+          path: 'services.service',
+          select: 'title price duration category',
+          populate: { path: 'category', select: 'name title' }
+        })
         .sort({ date: 1, time: 1 })
         .skip((page - 1) * limit)
         .limit(parseInt(limit))

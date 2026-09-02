@@ -847,7 +847,7 @@ const getWalletHistory = async (req, res, next) => {
       const rawTxn = rawTxns.find(rt => rt._id && txn._id && rt._id.toString() === txn._id.toString()) || rawTxns[idx];
       const rawBookingId = rawTxn?.booking;
       const storedBookingId = rawTxn?.bookingId || txn.bookingId;
-      
+
       let bookingData = txn.booking;
       let reasonText = txn.reason;
 

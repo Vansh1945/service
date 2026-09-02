@@ -37,6 +37,10 @@ export const permanentDeleteAccount = (id) => {
     return axiosInstance.delete(`/provider/${id}/permanent`);
 };
 
+export const rejectDeletionRequest = (id) => {
+    return axiosInstance.post(`/provider/${id}/reject-deletion`);
+};
+
 export const getDashboardData = (params) => {
     return axiosInstance.get("/provider/dashboard", { params });
 };

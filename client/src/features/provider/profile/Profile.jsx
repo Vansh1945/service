@@ -438,8 +438,8 @@ const ProviderProfile = () => {
       const response = await ProviderService.deleteAccount();
       const data = response.data;
       if (data.success) {
-        showToast('Account deleted successfully');
-        logoutUser();
+        showToast(data.message || 'Account deletion request submitted to Admin for review', 'success');
+        setTimeout(() => logoutUser(), 1500);
       } else {
         showToast(data.message, 'error');
       }
@@ -732,25 +732,42 @@ const ProviderProfile = () => {
                 <AlertCircle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-secondary">Delete Account</h3>
-                <p className="text-xs text-gray-500">Permanent action</p>
+                <h3 className="font-semibold text-secondary">Request Account Deletion</h3>
+                <p className="text-xs text-gray-500">Requires Admin Verification & Approval</p>
               </div>
             </div>
 
             <div className="bg-red-50 rounded-xl p-4 mb-4 space-y-2 border border-red-100">
-              <p className="text-xs font-semibold text-red-800">⚠️ This cannot be undone:</p>
-              <ul className="text-xs text-red-700 space-y-1 ml-4">
-                <li>• All data permanently deleted</li>
-                <li>• Profile removed from platform</li>
-                <li>• Pending bookings cancelled</li>
+              <p className="text-xs font-semibold text-red-800">⚠️ Request submitted to Admin for review:</p>
+              <ul className="text-xs text-red-700 space-y-1.5 ml-2">
+                <li className="flex items-start gap-1.5">
+                  <span className="font-bold shrink-0">•</span>
+                  <span>Your request will be sent to Admin for manual account review</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="font-bold shrink-0">•</span>
+                  <span>All profile data and documents will be permanently deleted upon approval</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="font-bold shrink-0">•</span>
+                  <span>All pending & scheduled bookings will be cancelled</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="font-bold shrink-0">•</span>
+                  <span>All payment history & transaction records will be deleted</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="font-bold shrink-0">•</span>
+                  <span>Unclaimed wallet balance & pending payouts will be forfeited to company</span>
+                </li>
               </ul>
             </div>
 
-            <label className="flex items-center gap-2 mb-4">
+            <label className="flex items-center gap-2 mb-4 cursor-pointer">
               <input type="checkbox" checked={deleteModal.confirmed}
                 onChange={(e) => setDeleteModal({ ...deleteModal, confirmed: e.target.checked })}
                 className="w-4 h-4 text-red-600 rounded" />
-              <span className="text-xs text-gray-700 font-medium">I understand this is irreversible</span>
+              <span className="text-xs text-gray-700 font-medium">I understand this request will be sent to Admin for review</span>
             </label>
 
             <div className="flex justify-end gap-2">
@@ -758,7 +775,7 @@ const ProviderProfile = () => {
                 className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={deleteAccount} disabled={!deleteModal.confirmed}
                 className={`px-4 py-2 text-sm font-medium text-white rounded-lg ${deleteModal.confirmed ? 'bg-red-600 hover:bg-red-700' : 'bg-red-300 cursor-not-allowed'}`}>
-                Delete Account
+                Submit Deletion Request
               </button>
             </div>
           </div>

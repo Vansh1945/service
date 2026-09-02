@@ -1812,33 +1812,71 @@ class ProviderService {
                 });
             }
 
-            // Mark as deleted
-            provider.isDeleted = true;
-            provider.isActive = false;
+            const { reason } = req.body || {};
+
+            // Mark deletion as requested for Admin review
+            provider.deletionRequested = true;
+            provider.deletionRequestedAt = new Date();
+            provider.deletionReason = (reason || 'Provider requested account deletion').trim();
+            provider.isOnline = false;
             await provider.save();
 
             try {
                 const { getIO } = require('../../shared/socket/socket-server');
                 const io = getIO();
                 if (io) {
-                    const payload = { providerId: provider._id.toString(), status: 'deleted', isDeleted: true };
+                    const payload = { providerId: provider._id.toString(), status: 'deletion_requested', deletionRequested: true };
                     io.to(provider._id.toString()).emit('provider-status-changed', payload);
                     io.to('admin_live_room').emit('provider-status-changed', payload);
                 }
             } catch (e) {
-                console.error("Failed to emit provider deleted event:", e);
+                console.error("Failed to emit provider deletion requested event:", e);
             }
 
             res.status(200).json({
                 success: true,
-                message: 'Account deleted successfully'
+                message: 'Account deletion request submitted to Admin for review. Admin will process your account within 24-48 hours.'
             });
         } catch (error) {
-            console.error('Delete account error:', error);
+            console.error('Delete account request error:', error);
             res.status(500).json({
                 success: false,
-                message: 'Failed to delete account',
+                message: 'Failed to request account deletion',
                 error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+    }
+
+    static async rejectDeletionRequest(req, res) {
+        try {
+            if (req.role !== 'admin') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Unauthorized: Admin access required'
+                });
+            }
+
+            const provider = await Provider.findById(req.params.id);
+            if (!provider) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Provider not found'
+                });
+            }
+
+            provider.deletionRequested = false;
+            provider.deletionReason = null;
+            await provider.save();
+
+            res.status(200).json({
+                success: true,
+                message: 'Account deletion request rejected successfully'
+            });
+        } catch (error) {
+            console.error('Reject deletion request error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to reject deletion request'
             });
         }
     }

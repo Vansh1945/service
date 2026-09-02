@@ -1238,6 +1238,14 @@ const ProviderBooking = () => {
             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${isEmergency ? 'bg-danger-light text-danger border-danger/20' : (isInstant ? 'bg-accent/10 text-accent border-accent/20' : 'bg-info-light text-info border-info/20')}`}>
               {isEmergency ? '⚠️ Critical' : (isInstant ? '⚡ Instant' : '📅 Scheduled')}
             </span>
+            {(() => {
+              const catName = booking.services?.[0]?.service?.category?.name || booking.services?.[0]?.service?.category?.title || booking.services?.[0]?.categoryName || null;
+              return catName ? (
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-purple-50 text-purple-700 border border-purple-200">
+                  🏷️ {catName}
+                </span>
+              ) : null;
+            })()}
             {booking.providerResponseDeadline && isPending && (
               <span className="text-[9px] bg-danger-light text-danger border border-danger/15 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                 <Clock className="w-3 h-3 animate-spin" />
@@ -1743,6 +1751,17 @@ const ProviderBooking = () => {
                         <span>Booking Type</span>
                         {getBookingTypeBadge(selectedBooking.bookingType)}
                       </div>
+                      {(() => {
+                        const selCatName = selectedBooking.services?.[0]?.service?.category?.name || selectedBooking.services?.[0]?.service?.category?.title || selectedBooking.services?.[0]?.categoryName || null;
+                        return selCatName ? (
+                          <div className="flex justify-between items-center">
+                            <span>Service Category</span>
+                            <span className="font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full text-[10px]">
+                              🏷️ {selCatName}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="flex justify-between items-center">
                         <span>Priority Status</span>
                         <span className={`font-black uppercase text-[10px] px-2 py-0.5 rounded-full ${selectedBooking.isEmergency ? 'bg-red-100 text-red-700' : (selectedBooking.isInstant ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700')}`}>
