@@ -2398,7 +2398,7 @@ class BookingService {
       const booking = await Booking.findById(id)
         .populate('services.service', 'title description basePrice category images duration')
         .populate('customer', 'name email phone profilePicUrl')
-        .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings activeBooking experience')
+        .populate('provider', 'name email phone businessName contactPerson rating averageRating ratings performanceScore address currentLocation isOnline profilePicUrl completedBookings activeBooking experience')
         .populate('feedback')
         .lean();
 
@@ -2409,8 +2409,32 @@ class BookingService {
         });
       }
 
-      // Check if user is authorized to view this booking
-      if (booking.customer._id.toString() !== req.user._id.toString()) {
+      if (booking.provider) {
+        try {
+          const pId = booking.provider._id || booking.provider;
+          const Feedback = mongoose.model('Feedback');
+          const agg = await Feedback.aggregate([
+            { $match: { 'providerFeedback.provider': new mongoose.Types.ObjectId(pId) } },
+            { $group: { _id: null, avgRating: { $avg: '$providerFeedback.rating' } } }
+          ]);
+          if (agg.length > 0 && agg[0].avgRating) {
+            const calculatedRating = parseFloat(agg[0].avgRating.toFixed(1));
+            booking.provider.rating = calculatedRating;
+            booking.provider.averageRating = calculatedRating;
+          }
+        } catch (ratingErr) {
+          global.logger?.warn?.(`Error calculating provider dynamic rating: ${ratingErr.message}`);
+        }
+      }
+
+      // Check if user is authorized to view this booking (Admin/Superadmin, assigned Provider, or Customer owner)
+      const userRole = req.user?.role || '';
+      const userId = req.user?._id?.toString();
+      const isCustomerOwner = booking.customer?._id?.toString() === userId;
+      const isAssignedProvider = booking.provider?._id?.toString() === userId;
+      const isAdmin = ['admin', 'superadmin'].includes(userRole);
+
+      if (!isAdmin && !isCustomerOwner && !isAssignedProvider) {
         return res.status(403).json({
           success: false,
           message: 'Unauthorized to view this booking'
@@ -4989,6 +5013,31 @@ class BookingService {
           $unwind: {
             path: '$provider',
             preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $lookup: {
+            from: 'feedbacks',
+            localField: 'provider._id',
+            foreignField: 'providerFeedback.provider',
+            as: 'providerFeedbacks'
+          }
+        },
+        {
+          $addFields: {
+            'provider.rating': {
+              $cond: {
+                if: { $gt: [{ $ifNull: ['$provider.rating', 0] }, 0] },
+                then: '$provider.rating',
+                else: {
+                  $cond: {
+                    if: { $gt: [{ $size: { $ifNull: ['$providerFeedbacks', []] } }, 0] },
+                    then: { $round: [{ $avg: '$providerFeedbacks.providerFeedback.rating' }, 1] },
+                    else: '$provider.rating'
+                  }
+                }
+              }
+            }
           }
         },
         {

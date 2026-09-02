@@ -563,7 +563,7 @@ const Dashboard = () => {
                 </div>
               ) : (
                 isReady && Recharts && (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <ResponsiveContainer width="100%" height={180} minWidth={0}>
                     <AreaChart data={earnings.chartData}>
                       <defs>
                         <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
@@ -613,7 +613,7 @@ const Dashboard = () => {
                 <>
                   <div className="w-1/2 flex justify-center h-[140px] min-w-0">
                     {isReady && Recharts && (
-                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                      <ResponsiveContainer width="100%" height={140} minWidth={0}>
                         <PieChart>
                           <Pie
                             data={bookings?.pieChartData || []}

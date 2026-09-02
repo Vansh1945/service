@@ -2,22 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import { useAuth } from '../../../context/auth';
 import useDebounce from '../../../hooks/useDebounce';
+import usePagination from '../../../hooks/usePagination';
 import { useConfirm } from '../../../context/ConfirmContext';
 import AdminSearchBar from '../../../components/AdminSearchBar';
-import {
-  Users,
-  Settings,
-  Plus,
-  Edit,
-  Trash2,
-  CheckCircle,
-  XCircle,
-  X,
-  Percent,
-  Info,
-  Globe,
-  Calendar
-} from 'lucide-react';
+import { Users, Settings, Plus, Edit, Trash2, CheckCircle, XCircle, X, Percent, Info, Globe, Calendar } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '../../../utils/format';
 import * as CommissionService from '../../../services/CommissionService';
 import * as AdminService from '../../../services/AdminService';
@@ -201,7 +189,25 @@ const AdminCommissionPage = () => {
 
   // Available options matching backend enum
   const performanceScores = ['bronze', 'silver', 'gold', 'platinum'];
-  const applyToOptions = ['all', 'performanceScore', 'specificProvider'];
+  const {
+    currentPage: specPage,
+    onPageChange: onSpecPageChange,
+    setTotalItems: setSpecTotalItems
+  } = usePagination(1, 5);
+
+  const matchedProvidersList = useMemo(() => {
+    if (!viewingRule) return [];
+    return getTargetedProviders(viewingRule);
+  }, [viewingRule, providers, zones]);
+
+  useEffect(() => {
+    setSpecTotalItems(matchedProvidersList.length);
+  }, [matchedProvidersList, setSpecTotalItems]);
+
+  const paginatedMatchedProviders = useMemo(() => {
+    const start = (specPage - 1) * 5;
+    return matchedProvidersList.slice(start, start + 5);
+  }, [matchedProvidersList, specPage]);
 
   const fetchAbortControllerRef = useRef(null);
 
@@ -512,8 +518,8 @@ const AdminCommissionPage = () => {
     setShowRuleModal(true);
   };
 
-  // View rule details
   const viewRuleDetails = (rule) => {
+    if (!providers || providers.length === 0) fetchProviders();
     fetchCommissionRuleById(rule._id);
   };
 
@@ -568,9 +574,8 @@ const AdminCommissionPage = () => {
     }
   }, []);
 
-
   // Helper functions for targeted providers and zone paths
-  const getZoneHierarchyPath = (zoneId) => {
+  function getZoneHierarchyPath(zoneId) {
     if (!zoneId) return 'Unknown Zone';
     let currentZone = zones.find(z => z._id.toString() === zoneId.toString());
     const path = [];
@@ -584,9 +589,9 @@ const AdminCommissionPage = () => {
       }
     }
     return path.join(' > ') || 'Unknown Zone';
-  };
+  }
 
-  const getDescendantZoneIds = (zoneId, allZones) => {
+  function getDescendantZoneIds(zoneId, allZones) {
     if (!zoneId) return [];
     const descendants = [zoneId.toString()];
     let added = true;
@@ -601,21 +606,30 @@ const AdminCommissionPage = () => {
       }
     }
     return descendants;
-  };
+  }
 
-  const getTargetedProviders = (rule) => {
+  function getTargetedProviders(rule) {
     if (!rule) return [];
     let list = [...providers];
 
     // 1. Filter by specific provider first (since it overrides everything)
     if (rule.applyTo === 'specificProvider') {
-      const targetId = (rule.specificProvider?._id || rule.specificProvider || '').toString();
-      return list.filter(p => p._id.toString() === targetId || p.providerId === targetId);
+      const targetObj = rule.specificProvider;
+      const targetId = (targetObj?._id || targetObj?.providerId || targetObj || '').toString().toLowerCase();
+      const targetName = (targetObj?.name || '').toString().toLowerCase();
+
+      return list.filter(p => {
+        const pId = (p._id || '').toString().toLowerCase();
+        const pProvId = (p.providerId || '').toString().toLowerCase();
+        const pName = (p.name || '').toString().toLowerCase();
+        return (targetId && (pId === targetId || pProvId === targetId)) || (targetName && pName === targetName);
+      });
     }
 
     // 2. Filter by Zone (if defined, otherwise global and applies to all zones)
     if (rule.zoneId) {
-      const allowedZoneIds = getDescendantZoneIds(rule.zoneId, zones);
+      const targetZoneId = (rule.zoneId?._id || rule.zoneId || '').toString();
+      const allowedZoneIds = getDescendantZoneIds(targetZoneId, zones);
       list = list.filter(p => {
         const pZoneId = (p.currentZone?._id || p.currentZone || p.zoneId || '').toString();
         return pZoneId && allowedZoneIds.includes(pZoneId);
@@ -624,9 +638,10 @@ const AdminCommissionPage = () => {
 
     // 3. Filter by Performance Score
     if (rule.applyTo === 'performanceScore') {
+      const targetBadge = (rule.performanceScore || '').toString().toLowerCase();
       list = list.filter(p => {
-        const badge = (p.performanceBadge || p.performanceScore?.badge || 'bronze').toLowerCase();
-        return badge === rule.performanceScore;
+        const badge = (p.performanceBadge || p.performanceScore?.badge || 'bronze').toString().toLowerCase();
+        return badge === targetBadge;
       });
     }
 
@@ -1270,23 +1285,23 @@ const AdminCommissionPage = () => {
                 </button>
               </div>
 
-              <div className="p-6 space-y-6">
-                {/* Visual Card (The "Commission Ticket") */}
-                <div className="relative bg-slate-50/50 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm overflow-hidden">
-                  <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-r border-dashed border-primary/30" />
-                  <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-l border-dashed border-primary/30" />
+              <div className="p-4 sm:p-5 space-y-3.5">
+                {/* Visual Card (The "Commission Ticket") - Compact */}
+                <div className="relative bg-slate-50/50 border border-primary/20 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-3 shadow-xs overflow-hidden">
+                  <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-white rounded-full border-r border-dashed border-primary/30" />
+                  <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-white rounded-full border-l border-dashed border-primary/30" />
 
                   <div className="flex flex-col items-center sm:items-start text-center sm:text-left pl-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2.5">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 mb-1">
                       {viewingRule.isActive ? 'Active Commission Rule' : 'Inactive Commission Rule'}
                     </span>
-                    <h3 className="text-2xl font-black text-secondary tracking-wide">
+                    <h3 className="text-xl sm:text-2xl font-black text-secondary tracking-wide">
                       {viewingRule.name}
                     </h3>
                   </div>
                   <div className="flex flex-col items-center sm:items-end text-center sm:text-right pr-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Commission Value</span>
-                    <div className="text-3xl font-black text-primary">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Commission Value</span>
+                    <div className="text-2xl sm:text-3xl font-black text-primary">
                       {viewingRule.type === 'percentage'
                         ? `${viewingRule.value}%`
                         : `₹${viewingRule.value.toFixed(2)}`
@@ -1295,13 +1310,13 @@ const AdminCommissionPage = () => {
                   </div>
                 </div>
 
-                {/* Key Indicators Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-xs">
-                  <div className="text-center p-2 border-r border-slate-200/60">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                {/* Key Indicators Grid - Compact */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50/50 p-2.5 sm:p-3 rounded-xl border border-slate-100 shadow-xs">
+                  <div className="text-center p-1 border-r border-slate-200/60">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
                       Status
                     </p>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black ${viewingRule.isActive
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black ${viewingRule.isActive
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                       }`}>
@@ -1309,27 +1324,27 @@ const AdminCommissionPage = () => {
                     </span>
                   </div>
 
-                  <div className="text-center p-2 sm:border-r border-slate-200/60">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                  <div className="text-center p-1 sm:border-r border-slate-200/60">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
                       Created By
                     </p>
-                    <p className="text-sm font-extrabold text-slate-755 truncate">
+                    <p className="text-xs font-extrabold text-slate-755 truncate">
                       {viewingRule.createdBy?.name || 'Admin'}
                     </p>
                   </div>
 
-                  <div className="text-center p-2 border-r border-slate-200/60">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" /> Start
+                  <div className="text-center p-1 border-r border-slate-200/60">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
+                      <Calendar className="w-3 h-3" /> Start
                     </p>
                     <p className="text-xs font-extrabold text-slate-750">
                       {viewingRule.effectiveFrom ? formatDate(viewingRule.effectiveFrom) : 'Immediate'}
                     </p>
                   </div>
 
-                  <div className="text-center p-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" /> Expiration
+                  <div className="text-center p-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
+                      <Calendar className="w-3 h-3" /> Expiration
                     </p>
                     <p className="text-xs font-extrabold text-slate-750 truncate">
                       {viewingRule.effectiveUntil ? formatDate(viewingRule.effectiveUntil) : 'No expiration'}
@@ -1338,22 +1353,22 @@ const AdminCommissionPage = () => {
                 </div>
 
                 {viewingRule.description && (
-                  <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rule Description</p>
-                    <p className="text-sm text-slate-600 font-semibold">{viewingRule.description}</p>
+                  <div className="bg-slate-50/50 p-2.5 sm:p-3 rounded-lg border border-slate-100 space-y-0.5">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rule Description</p>
+                    <p className="text-xs text-slate-600 font-semibold">{viewingRule.description}</p>
                   </div>
                 )}
 
-                {/* Targeting & Geographic Scope */}
-                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
-                    <Globe className="w-4 h-4 text-primary" /> Scope & Application Impact
+                {/* Scope & Application Impact - Compact */}
+                <div className="bg-slate-50/50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-2.5">
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-1.5 border-b border-slate-100/50">
+                    <Globe className="w-3.5 h-3.5 text-primary" /> Scope & Application Impact
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Geographic Zone Info */}
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex flex-col justify-center shadow-xs">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Geographic Zone Constraints</p>
-                      <p className="text-xs font-extrabold text-slate-750 flex items-center gap-1 uppercase tracking-wider">
+                    <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200/50 flex flex-col justify-center shadow-xs">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Geographic Zone Constraints</p>
+                      <div className="text-[10px] font-extrabold text-slate-750 flex items-center gap-1 uppercase tracking-wider">
                         {viewingRule.zoneId ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200/60 shadow-xs">
                             📍 {getZoneHierarchyPath(viewingRule.zoneId)}
@@ -1363,12 +1378,12 @@ const AdminCommissionPage = () => {
                             🌍 Globally Applicable
                           </span>
                         )}
-                      </p>
+                      </div>
                     </div>
 
                     {/* Target Provider Group */}
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex flex-col justify-center shadow-xs">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Targeting Criteria</p>
+                    <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200/50 flex flex-col justify-center shadow-xs">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Targeting Criteria</p>
                       <div className="flex flex-wrap gap-1">
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200/60 shadow-xs">
                           {viewingRule.applyTo === 'all' && 'All Providers'}
@@ -1376,72 +1391,111 @@ const AdminCommissionPage = () => {
                           {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
                         </span>
                         {viewingRule.performanceScore && (
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border shadow-xs ${viewingRule.performanceScore === 'Platinum' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
-                              viewingRule.performanceScore === 'Gold' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
-                                viewingRule.performanceScore === 'Silver' ? 'bg-slate-100 text-slate-700 border-slate-250/50' :
-                                  'bg-orange-50 text-orange-700 border-orange-200/60'
-                            }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border shadow-xs ${
+                            (viewingRule.performanceScore || '').toLowerCase() === 'platinum' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
+                            (viewingRule.performanceScore || '').toLowerCase() === 'gold' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
+                            (viewingRule.performanceScore || '').toLowerCase() === 'silver' ? 'bg-slate-100 text-slate-700 border-slate-250/50' :
+                            'bg-orange-50 text-orange-700 border-orange-200/60'
+                          }`}>
                             🏆 {viewingRule.performanceScore} Tier
                           </span>
                         )}
                         {viewingRule.specificProvider && (
                           <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-50 text-purple-800 border border-purple-200/60 shadow-xs">
-                            👤 {viewingRule.specificProvider.name || viewingRule.specificProvider}
+                            👤 {viewingRule.specificProvider?.name || viewingRule.specificProvider?.providerId || viewingRule.specificProvider}
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Impact Analysis: Matching Providers Count */}
+                  {/* Impact Analysis: Matching Providers Count & Table */}
                   <div className="pt-2">
-                    {(() => {
-                      const matchedProvs = getTargetedProviders(viewingRule);
-                      return (
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest">Active Scope Impact</span>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-teal-100 text-teal-900 border border-teal-200/70 shadow-xs">
-                              ⚡ Applies to {matchedProvs.length} {matchedProvs.length === 1 ? 'Provider' : 'Providers'}
-                            </span>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center bg-teal-50/70 p-2.5 rounded-xl border border-teal-200/60">
+                        <span className="text-[10px] font-black text-teal-900 uppercase tracking-widest flex items-center gap-1">
+                          ⚡ Active Scope Impact
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-teal-600 text-white shadow-xs">
+                          Applies to {matchedProvidersList.length} {matchedProvidersList.length === 1 ? 'Provider' : 'Providers'}
+                        </span>
+                      </div>
+
+                      {matchedProvidersList.length > 0 ? (
+                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+                          <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-150 flex items-center justify-between">
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5 text-primary" /> Matched Specialist Table ({matchedProvidersList.length})
+                            </p>
                           </div>
+                          <table className="min-w-full divide-y divide-slate-150">
+                            <thead className="bg-slate-50/80">
+                              <tr>
+                                <th className="px-3.5 py-2 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Provider Details</th>
+                                <th className="px-3.5 py-2 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Provider ID</th>
+                                <th className="px-3.5 py-2 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Performance Tier</th>
+                                <th className="px-3.5 py-2 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-xs">
+                              {paginatedMatchedProviders.map((prov) => {
+                                const tier = (prov.performanceBadge || prov.performanceScore?.badge || 'bronze').toLowerCase();
+                                const badgeColor = {
+                                  'platinum': 'bg-indigo-50 text-indigo-700 border-indigo-200/65',
+                                  'gold': 'bg-amber-50 text-amber-700 border-amber-200/65',
+                                  'silver': 'bg-slate-100 text-slate-700 border-slate-200/70',
+                                  'bronze': 'bg-orange-50 text-orange-700 border-orange-200/65'
+                                }[tier] || 'bg-slate-50 text-slate-650 border-slate-150';
 
-                          {matchedProvs.length > 0 ? (
-                            <div className="bg-white/80 p-3.5 rounded-xl border border-slate-200/60 shadow-xs">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                <Users className="w-3.5 h-3.5 text-slate-500" /> Matched Specialist List
-                              </p>
-                              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
-                                {matchedProvs.map(prov => {
-                                  const badgeColor = {
-                                    'platinum': 'bg-indigo-50 text-indigo-700 border-indigo-200/65',
-                                    'gold': 'bg-amber-50 text-amber-700 border-amber-200/65',
-                                    'silver': 'bg-slate-100 text-slate-700 border-slate-200/70',
-                                    'bronze': 'bg-orange-50 text-orange-700 border-orange-200/65'
-                                  }[(prov.performanceBadge || '').toLowerCase()] || 'bg-slate-50 text-slate-650 border-slate-150';
-
-                                  return (
-                                    <span key={prov._id} className="inline-flex items-center px-2 py-0.8 rounded-full text-[10px] font-bold bg-white text-slate-700 border border-slate-200 hover:border-slate-350 hover:bg-slate-50/50 shadow-xs transition-colors duration-150">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 animate-pulse" />
-                                      {prov.name} ({prov.providerId || 'N/A'})
-                                      <span className={`ml-2 px-1.5 py-0.2 rounded-full text-[8px] font-black uppercase border ${badgeColor}`}>
-                                        {prov.performanceBadge || 'bronze'}
+                                return (
+                                  <tr key={prov._id} className="hover:bg-slate-50/40 transition-colors">
+                                    <td className="px-3.5 py-2.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                        <p className="font-extrabold text-slate-800 leading-none">{prov.name}</p>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {prov.email && <span className="text-[10px] text-slate-400 font-semibold">{prov.email}</span>}
+                                        {prov.phone && <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200/60">{prov.phone}</span>}
+                                      </div>
+                                    </td>
+                                    <td className="px-3.5 py-2.5 font-mono font-bold text-slate-700">
+                                      {prov.providerId || prov._id}
+                                    </td>
+                                    <td className="px-3.5 py-2.5">
+                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${badgeColor}`}>
+                                        🏆 {tier}
                                       </span>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bg-amber-50/65 p-3.5 rounded-xl border border-amber-150 text-center">
-                              <p className="text-xs font-semibold text-amber-800">
-                                ⚠️ No active providers currently match this commission rule's targeting parameters.
-                              </p>
-                            </div>
+                                    </td>
+                                    <td className="px-3.5 py-2.5">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-green-50 text-green-700 border border-green-200/60">
+                                        Active
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+
+                          {matchedProvidersList.length > 5 && (
+                            <Pagination
+                              currentPage={specPage}
+                              totalPages={Math.ceil(matchedProvidersList.length / 5)}
+                              totalItems={matchedProvidersList.length}
+                              limit={5}
+                              onPageChange={onSpecPageChange}
+                            />
                           )}
                         </div>
-                      );
-                    })()}
+                      ) : (
+                        <div className="bg-amber-50/65 p-3.5 rounded-xl border border-amber-150 text-center">
+                          <p className="text-xs font-semibold text-amber-800">
+                            ⚠️ No active providers currently match this commission rule's targeting parameters.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

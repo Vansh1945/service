@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
 import StatCard from '../../../components/ui/StatCard';
+import usePagination from '../../../hooks/usePagination';
+import Pagination from '../../../components/ui/Pagination';
 import * as BookingService from '../../../services/BookingService';
 import * as ZoneService from '../../../services/ZoneService';
 import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents, LayersControl, FeatureGroup } from 'react-leaflet';
@@ -323,6 +325,40 @@ const ZoneManagement = () => {
   const [expandedNodes] = useState({});
   const [filterLevel, setFilterLevel] = useState('');
   const [analyticsModal, setAnalyticsModal] = useState({ open: false, zone: null, loading: false });
+
+  // Pagination for Zone Analytics Modal
+  const {
+    currentPage: providerPage,
+    onPageChange: onProviderPageChange,
+    setPaginationData: setProviderPagination
+  } = usePagination(1, 5);
+
+  const {
+    currentPage: userPage,
+    onPageChange: onUserPageChange,
+    setPaginationData: setUserPagination
+  } = usePagination(1, 5);
+
+  useEffect(() => {
+    if (analyticsModal.zone) {
+      const pCount = analyticsModal.zone.linkedProviders?.length || 0;
+      const uCount = analyticsModal.zone.linkedUsers?.length || 0;
+      setProviderPagination({ page: 1, limit: 5, total: pCount, pages: Math.ceil(pCount / 5) || 1 });
+      setUserPagination({ page: 1, limit: 5, total: uCount, pages: Math.ceil(uCount / 5) || 1 });
+    }
+  }, [analyticsModal.zone, setProviderPagination, setUserPagination]);
+
+  const paginatedProviders = useMemo(() => {
+    const list = analyticsModal.zone?.linkedProviders || [];
+    const start = (providerPage - 1) * 5;
+    return list.slice(start, start + 5);
+  }, [analyticsModal.zone?.linkedProviders, providerPage]);
+
+  const paginatedUsers = useMemo(() => {
+    const list = analyticsModal.zone?.linkedUsers || [];
+    const start = (userPage - 1) * 5;
+    return list.slice(start, start + 5);
+  }, [analyticsModal.zone?.linkedUsers, userPage]);
   const [actionHubModal, setActionHubModal] = useState({ open: false, zone: null });
 
   // Modal and Map States
@@ -643,6 +679,7 @@ const ZoneManagement = () => {
     setIsDrawing(true);
     setDrawPoints([]);
     setShowForm(true);
+    setSidebarOpen(true);
     setEditingZoneId(null);
     setFormData({
       name: '',
@@ -1295,93 +1332,100 @@ const ZoneManagement = () => {
 
       {/* Main Panel Content Area */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4 relative min-h-0 overflow-hidden">
-        {/* Left Side Sidebar Panel - Controls & Zone lists */}
+        {/* Left Side Sidebar Panel - Controls & Zone lists / Form */}
         <div className={`${sidebarOpen ? 'w-full lg:w-96 lg:shrink-0' : 'w-0 lg:w-0'} ${activeTab === 'list' ? 'flex' : 'hidden lg:flex'
           } bg-white border border-gray-200 rounded-2xl flex flex-col min-h-0 overflow-hidden overflow-x-hidden transition-all duration-300 relative z-[2] shadow-sm`}>
-          <div className="p-4 border-b border-gray-100 space-y-3 shrink-0 overflow-hidden">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                  <Layers className="w-4 h-4 text-primary" />
-                </div>
+          {showForm ? (
+            <div className="flex flex-col h-full overflow-hidden p-4">
+              {/* Form Header */}
+              <div className="flex justify-between items-center border-b border-gray-100 pb-3 mb-3 text-left shrink-0">
                 <div>
-                  <h1 className="text-xs font-black uppercase tracking-wider text-gray-800">Zone Dispatch Control</h1>
-                  <p className="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Geo-boundary configuration</p>
-                </div>
-              </div>
-              <button
-                onClick={handleStartDrawing}
-                disabled={isDrawing && !editingZoneId}
-                className="py-1.5 px-3 bg-primary hover:bg-teal-700 active:scale-95 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all disabled:opacity-50 disabled:pointer-events-none"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add Zone
-              </button>
-            </div>
-
-            {/* Form Input Display Area */}
-            {showForm && (
-              <form onSubmit={handleSaveZone} className="bg-gray-50 border border-gray-200 p-3 pb-5 rounded-xl space-y-3 animate-slide-up shadow-inner">
-                <div className="flex justify-between items-center border-b border-gray-200 pb-1.5">
-                  <span className="text-[10px] text-primary font-black uppercase tracking-wider">
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                     {editingZoneId ? '✏️ Edit Zone Configuration' : '📐 New Zone Boundary'}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-600 text-[8px] font-black uppercase" title="Number of boundary points drawn on the map">
+                  </h3>
+                  <p className="text-[10px] text-gray-500 font-medium">
+                    Define boundary, parameters & capacity.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-bold uppercase tracking-wider">
                     {drawPoints.length} Vertices
                   </span>
+                  <button
+                    type="button"
+                    onClick={handleCancelForm}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-all"
+                    title="Close Form"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
+              </div>
 
+              {/* Form Body - Scrollable */}
+              <form onSubmit={handleSaveZone} className="flex-1 overflow-y-auto space-y-3.5 pr-1 text-left">
                 {/* AUTO-GENERATE FROM PINCODE / AREA FEATURE */}
-                <div className="bg-primary/5 p-2 rounded-lg border border-primary/25 space-y-1.5">
-                  <label className="text-[8px] font-black uppercase text-primary tracking-wider block">⚡ Auto-Generate Boundary</label>
-                  <p className="text-[7.5px] text-gray-500 font-medium leading-relaxed">Enter a pincode (e.g. 144001) or area name (e.g. Model Town Jalandhar) to auto-draw the zone boundary on the map.</p>
-                  <div className="flex gap-1">
+                <div className="bg-primary/5 p-3 rounded-xl border border-primary/20 space-y-2 text-left">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase text-primary tracking-wider flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5" /> Auto-Generate Boundary
+                    </label>
+                    <span className="text-[8.5px] text-gray-400 font-medium">OpenStreetMap</span>
+                  </div>
+                  <div className="flex gap-1.5">
                     <input
                       type="text"
                       placeholder="e.g. 144001 or Model Town Jalandhar"
                       value={geoQuery}
                       onChange={(e) => setGeoQuery(e.target.value)}
-                      className="flex-1 px-2 py-1.5 bg-white border border-gray-250 rounded text-[11px] outline-none font-semibold text-gray-900 placeholder-gray-400"
+                      className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary text-slate-900 font-medium placeholder-gray-400"
                     />
                     <button
                       type="button"
                       onClick={handleAutoGenerateBoundary}
                       disabled={autoGenerating}
-                      className="px-2.5 py-1.5 bg-primary hover:bg-teal-700 active:scale-95 text-white rounded text-[9px] font-black uppercase tracking-wider disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center min-w-[70px]"
+                      className="px-2.5 py-1.5 bg-primary hover:bg-teal-700 active:scale-95 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 transition-all cursor-pointer shadow-xs shrink-0"
                     >
-                      {autoGenerating ? 'Searching...' : 'Generate'}
+                      {autoGenerating ? '...' : 'Generate'}
                     </button>
                   </div>
-                  <p className="text-[7px] text-gray-400 font-semibold">Uses OpenStreetMap data. If exact boundary not found, creates a circular approximation using the radius below.</p>
+                  <p className="text-[8.5px] text-gray-400 font-medium">
+                    Enter pincode or locality to auto-draw boundary on map.
+                  </p>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Zone Name <span className="text-red-400">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Jalandhar City Center"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    onBlur={handleZoneNameBlur}
-                    className="w-full px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400 font-semibold"
-                    required
-                  />                  <p className="text-[7.5px] text-gray-400 font-medium">Unique name for this zone. Must be unique per city.</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
+                {/* Zone Name & City */}
+                <div className="grid grid-cols-1 gap-2.5 text-left">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1">
-                      <span>Zone Level</span>
-                      <span className="relative group cursor-pointer text-primary text-[10px]">
-                        ℹ️
-                        <span className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block w-56 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
-                          <strong className="text-primary block mb-1 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
-                          • <strong>City:</strong> Pure City/State boundary (Bada level).<br />
-                          • <strong>Service:</strong> Category-wise dispatch level.<br />
-                          • <strong>Local:</strong> Sectors aur localities ke liye.<br />
-                          • <strong>Micro:</strong> Hyper-local building/galiyon ke liye.
-                        </span>
-                      </span>
-                    </label>
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Zone Name <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Jalandhar City Center"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      onBlur={handleZoneNameBlur}
+                      className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary text-slate-900 font-semibold"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">City <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Jalandhar"
+                      value={formData.city}
+                      onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                      className="w-full px-3 py-1.5 bg-white border border-gray-200 text-slate-900 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary font-semibold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Zone Level & Parent Zone */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Zone Level</label>
                     <select
                       value={formData.zoneLevel}
                       onChange={(e) => {
@@ -1402,45 +1446,34 @@ const ZoneManagement = () => {
                           serviceRadius: defaults.serviceRadius
                         }));
                       }}
-                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 text-slate-900 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary font-semibold cursor-pointer"
                     >
-                      <option value="city">🏙️ City</option>
-                      <option value="service">⚡ Service</option>
-                      <option value="local">📍 Local</option>
-                      <option value="micro">🎯 Micro</option>
+                      <option value="city">🌆 City (Root Level)</option>
+                      <option value="service">🏢 Service Zone</option>
+                      <option value="local">📍 Local Sector</option>
+                      <option value="micro">🎯 Micro Area</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">City</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Jalandhar"
-                      value={formData.city}
-                      onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold"
-                      required
-                    />
-                  </div>
+
+                  {formData.zoneLevel !== 'city' && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Parent Zone</label>
+                      <select
+                        value={formData.parentZone}
+                        onChange={(e) => setFormData(prev => ({ ...prev, parentZone: e.target.value }))}
+                        className="w-full px-2.5 py-1.5 bg-white border border-gray-200 text-slate-900 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary font-semibold cursor-pointer"
+                      >
+                        <option value="">Select Parent Zone</option>
+                        {parentOptions.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.city})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                {/* Parent Zone Dropdown */}
-                {formData.zoneLevel !== 'city' && (
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Parent Zone (Optional)</label>
-                    <select
-                      value={formData.parentZone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, parentZone: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
-                    >
-                      <option value="">Select Parent Zone</option>
-                      {parentOptions.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.city})</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
                 {/* Adjacent Zones Multi-Select */}
-                <div className="space-y-1">
+                <div className="space-y-1 text-left">
                   <HierarchicalZoneSelector
                     zones={zones.filter(z => z.id !== editingZoneId)}
                     selectedZoneIds={formData.adjacentZones}
@@ -1449,336 +1482,334 @@ const ZoneManagement = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                {/* Priority & Capacity Grid */}
+                <div className="grid grid-cols-2 gap-2.5 text-left">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Priority Level</label>
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Priority</label>
                     <select
                       value={formData.priority}
                       onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
-                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 text-slate-900 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary font-semibold cursor-pointer"
                     >
                       <option value="low">🟢 Low</option>
                       <option value="medium">🟡 Medium</option>
                       <option value="high">🔴 High</option>
                     </select>
                   </div>
+
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1">
-                      <span>Max Providers</span>
-                      <span className="relative group cursor-pointer text-primary text-[10px]">
-                        ℹ️
-                        <span className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
-                          <strong className="text-primary block mb-0.5 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
-                          • City: <strong>0</strong> (unlimited) ya 200+<br />
-                          • Service: <strong>50 - 150</strong> providers<br />
-                          • Local: <strong>20 - 50</strong> providers<br />
-                          • Micro: <strong>5 - 15</strong> providers
-                        </span>
-                      </span>
-                    </label>
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Max Providers</label>
                     <input
                       type="number"
                       placeholder={formData.zoneLevel === 'city' ? "Unlimited" : "e.g. 20"}
                       value={formData.zoneLevel === 'city' ? 0 : formData.maxProviders}
                       disabled={formData.zoneLevel === 'city'}
                       onChange={(e) => setFormData(prev => ({ ...prev, maxProviders: e.target.value }))}
-                      className={`w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold ${formData.zoneLevel === 'city' ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
+                      className={`w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-slate-900 placeholder-gray-400 font-semibold ${formData.zoneLevel === 'city' ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
                       min="0"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                {/* Status & Service Radius Grid */}
+                <div className="grid grid-cols-2 gap-2.5 text-left">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Status</label>
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Status</label>
                     <select
                       value={formData.status}
                       onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 text-slate-900 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary font-semibold cursor-pointer"
                     >
                       <option value="active">✅ Active</option>
                       <option value="inactive">⏸️ Inactive</option>
                     </select>
                   </div>
+
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider flex items-center gap-1">
-                      <span>Service Radius (KM)</span>
-                      <span className="relative group cursor-pointer text-primary text-[10px]">
-                        ℹ️
-                        <span className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 bg-slate-900 text-white text-[8.5px] p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none normal-case leading-relaxed font-sans font-medium border border-slate-800">
-                          <strong className="text-primary block mb-0.5 font-bold uppercase text-[7.5px] tracking-wider">Level Guide:</strong>
-                          • City: <strong>15 - 30 KM</strong><br />
-                          • Service: <strong>5 - 10 KM</strong><br />
-                          • Local: <strong>2 - 5 KM</strong><br />
-                          • Micro: <strong>0.5 - 2 KM</strong>
-                        </span>
-                      </span>
-                    </label>
+                    <label className="text-[10px] font-bold uppercase text-slate-700 tracking-wider block">Radius (KM)</label>
                     <input
                       type="number"
                       placeholder="e.g. 5"
                       value={formData.serviceRadius}
                       onChange={(e) => setFormData(prev => ({ ...prev, serviceRadius: e.target.value }))}
-                      className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-slate-900 placeholder-gray-400 font-semibold"
                       min="1"
                     />
                   </div>
                 </div>
 
-                <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-500/20 text-[8.5px] text-amber-800 font-medium leading-relaxed space-y-1 text-left">
-                  <p className="font-black text-amber-950 text-[9px]">🗺️ How to create a zone boundary:</p>
-                  <p><strong>Option A:</strong> Enter a Pincode/Area name → click Generate. The boundary will be auto-drawn.</p>
-                  <p><strong>Option B:</strong> Switch to Map tab → click to place vertices. Min 3 points needed.</p>
-                  <p className="text-amber-600 font-bold">When done → fill details → click "Save Boundary".</p>
-                </div>
-
-                <div className="flex gap-2 pt-1.5 pb-4">
+                {/* Form Action Buttons Footer */}
+                <div className="flex gap-2 pt-3 border-t border-gray-100 shrink-0">
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleCancelForm}
                     disabled={loading}
-                    className="flex-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg transition-all font-black text-center shadow-md cursor-pointer text-xs disabled:opacity-50 disabled:pointer-events-none"
+                    className="flex-1 py-2 px-3 bg-gray-100 border border-gray-200 hover:bg-gray-200 text-slate-700 rounded-xl transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer"
                   >
-                    {loading ? 'Saving...' : 'Save Boundary'}
+                    Cancel
                   </button>
                   <button
                     type="button"
                     onClick={handleClearDrawing}
                     disabled={loading}
-                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:pointer-events-none"
+                    className="py-2 px-3 bg-gray-100 border border-gray-200 hover:bg-gray-200 text-slate-700 rounded-xl transition-all font-bold text-[10px] uppercase tracking-wider cursor-pointer"
                   >
                     Clear Map
                   </button>
                   <button
-                    type="button"
-                    onClick={handleCancelForm}
+                    type="submit"
                     disabled={loading}
-                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:pointer-events-none"
+                    className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all font-bold text-[10px] uppercase tracking-wider shadow-sm cursor-pointer disabled:opacity-50"
                   >
-                    Cancel
+                    {loading ? 'Saving...' : 'Save Zone'}
                   </button>
                 </div>
               </form>
-            )}
-
-            {/* Search and Filters Layout */}
-            {!showForm && (
-              <div className="space-y-2.5 animate-fade-in">
-                {/* Sidebar View Toggle */}
-                <div className="flex bg-gray-100 p-1 rounded-xl text-[9px] font-black uppercase tracking-wider border border-gray-200 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setSidebarTab('list')}
-                    className={`flex-1 py-1.5 text-center rounded-lg transition-all ${sidebarTab === 'list' ? 'bg-white text-gray-900 shadow-sm font-black' : 'text-gray-500 hover:text-gray-950 font-bold'}`}
-                  >
-                    List View ({filteredZones.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarTab('tree')}
-                    className={`flex-1 py-1.5 text-center rounded-lg transition-all ${sidebarTab === 'tree' ? 'bg-white text-gray-900 shadow-sm font-black' : 'text-gray-500 hover:text-gray-950 font-bold'}`}
-                  >
-                    Hierarchy Tree
-                  </button>
-                </div>
-
-
-                <div className="grid grid-cols-2 gap-1.5 text-[8.5px] font-bold">
-                  <select
-                    value={filterCity}
-                    onChange={(e) => setFilterCity(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
-                  >
-                    <option value="">All Cities</option>
-                    {Array.from(new Set(zones.map(z => z.city).filter(Boolean))).sort().map(city => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                  <select
-                    value={filterPriority}
-                    onChange={(e) => setFilterPriority(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
-                  >
-                    <option value="">All Priorities</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                  <select
-                    value={filterLevel}
-                    onChange={(e) => setFilterLevel(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
-                  >
-                    <option value="">All Levels</option>
-                    <option value="city">City</option>
-                    <option value="service">Service</option>
-                    <option value="local">Local</option>
-                    <option value="micro">Micro</option>
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Scrollable list card representation */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white">
-            {sidebarTab === 'tree' ? (
-              /* Tree View Mode */
-              zoneTree.length === 0 ? (
-                <div className="py-12 text-center text-gray-400 text-xs italic font-semibold font-sans">
-                  No zones configured to build a tree.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {(() => {
-                    const levelBadge = {
-                      'city': { bg: 'bg-primary/10', text: 'text-primary', label: 'City', dot: 'w-2 h-2' },
-                      'service': { bg: 'bg-teal-500/10', text: 'text-teal-600', label: 'Service', dot: 'w-1.5 h-1.5' },
-                      'local': { bg: 'bg-blue-500/10', text: 'text-blue-600', label: 'Local', dot: 'w-1.5 h-1.5' },
-                      'micro': { bg: 'bg-purple-500/10', text: 'text-purple-600', label: 'Micro', dot: 'w-1 h-1' }
-                    };
-
-                    const renderTreeNode = (node, depth = 0) => {
-                      const badge = levelBadge[node.zoneLevel] || levelBadge['city'];
-                      return (
-                        <div key={node.id} className={depth > 0 ? "pl-4 ml-2 border-l border-gray-200" : "border border-gray-150 rounded-xl p-2 bg-gray-50/50 mb-2 text-left animate-slide-up"}>
-                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className={`${badge.dot} rounded-full ${node.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                              <span className="truncate">{node.name}</span>
-                              <span className={`text-[7.5px] ${badge.bg} ${badge.text} px-1.5 py-0.2 rounded font-black tracking-wider uppercase`}>{badge.label}</span>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button onClick={() => handleFocusZone(node.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => handleEditZone(node)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => handleOpenAnalytics(node.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
-                            </div>
-                          </div>
-                          {node.children && node.children.length > 0 && (
-                            <div className="mt-1 space-y-1">
-                              {node.children.map(child => renderTreeNode(child, depth + 1))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    };
-
-                    return zoneTree.map(node => renderTreeNode(node, 0));
-                  })()}
-                </div>
-              )
-            ) : filteredZones.length > 0 ? (
-              filteredZones.map(zone => {
-                const zoneStats = zoneStatsMap[zone.id] || { providersCount: 0, activeBookingsCount: 0, customerCount: 0 };
-                return (
-                  <div
-                    key={zone.id}
-                    className="p-4 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 transition-all flex flex-col space-y-3 shadow-sm select-none"
-                  >
-                    {/* Header: Status, Title, Level badge, Actions */}
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2 min-w-0">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${zone.status === 'active' ? 'bg-success' : 'bg-neutral-300'}`} />
-                        <h4 className="text-xs font-bold text-neutral-800 truncate capitalize" title={zone.name}>{zone.name}</h4>
-                        <span className="text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider scale-95 shrink-0">
-                          {zone.zoneLevel || 'city'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center space-x-1 shrink-0">
-                        <button
-                          onClick={() => handleToggleStatus(zone.id, zone.status)}
-                          title={zone.status === 'active' ? 'Deactivate' : 'Activate'}
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${zone.status === 'active'
-                            ? 'bg-success-light border-success/30 text-success'
-                            : 'bg-neutral-55 border-neutral-200 text-neutral-500'
-                            }`}
-                        >
-                          {zone.status === 'active' ? 'Active' : 'Disabled'}
-                        </button>
-                        <button
-                          onClick={() => handleEditZone(zone)}
-                          className="p-1 bg-neutral-50 border border-neutral-200 rounded text-neutral-500 hover:text-neutral-800 transition-all"
-                          title="Edit Zone"
-                        >
-                          <Edit className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(zone.id)}
-                          className="p-1 bg-neutral-50 border border-neutral-200 rounded text-neutral-400 hover:text-danger transition-all"
-                          title="Delete Zone"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
+            </div>
+          ) : (
+            <>
+              <div className="p-4 border-b border-gray-100 space-y-3 shrink-0 overflow-hidden">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
+                      <Layers className="w-4 h-4 text-primary" />
                     </div>
-
-                    {/* Metadata Line */}
-                    <div className="text-[10px] text-neutral-500 font-medium flex items-center flex-wrap gap-x-2 gap-y-1">
-                      <span className="capitalize">{zone.city}</span>
-                      <span className="text-neutral-300">•</span>
-                      <span>{zone.serviceRadius} km Radius</span>
-                      <span className="text-neutral-300">•</span>
-                      <span className={`font-semibold ${zone.priority === 'high' ? 'text-danger' : zone.priority === 'medium' ? 'text-warning' : 'text-success'
-                        }`}>{zone.priority} Priority</span>
-                      {zone.parentZone && (
-                        <>
-                          <span className="text-neutral-300">•</span>
-                          <span className="truncate max-w-[100px]">Parent: {zone.parentZone?.name || zone.parentZone}</span>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Compact Metrics Row */}
-                    <div className="flex items-center justify-between bg-neutral-50 border border-neutral-100 rounded-lg p-2 text-[10px] text-neutral-600">
-                      <div className="flex items-center space-x-1">
-                        <span className="font-bold text-neutral-800">{zoneStats.providersCount}</span>
-                        <span className="text-neutral-500">Providers</span>
-                      </div>
-                      <span className="text-neutral-300">|</span>
-                      <div className="flex items-center space-x-1">
-                        <span className="font-bold text-neutral-800">{zoneStats.customerCount}</span>
-                        <span className="text-neutral-500">Customers</span>
-                      </div>
-                      <span className="text-neutral-300">|</span>
-                      <div className="flex items-center space-x-1">
-                        <span className="font-bold text-neutral-800">{zoneStats.activeBookingsCount}</span>
-                        <span className="text-neutral-500">Active Jobs</span>
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleFocusZone(zone.coordinates)}
-                        className="flex-1 py-1.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-neutral-500" /> Map View
-                      </button>
-                      <button
-                        onClick={() => handleOpenAnalytics(zone.id)}
-                        className="flex-1 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1 border border-primary/15"
-                      >
-                        <Activity className="w-3.5 h-3.5 text-primary" /> Analytics
-                      </button>
+                    <div>
+                      <h1 className="text-xs font-black uppercase tracking-wider text-gray-800">Zone Dispatch Control</h1>
+                      <p className="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Geo-boundary configuration</p>
                     </div>
                   </div>
-                );
-              })
-            ) : (
-              <div className="py-12 text-center text-gray-400 text-xs italic font-semibold font-sans">
-                No matching zones found.
+                  <button
+                    onClick={handleStartDrawing}
+                    disabled={isDrawing && !editingZoneId}
+                    className="py-1.5 px-3 bg-primary hover:bg-teal-700 active:scale-95 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add Zone
+                  </button>
+                </div>
+                {/* Search and Filters Layout */}
+                <div className="space-y-2 animate-fade-in">
+                  {/* Sidebar View Toggle */}
+                  <div className="flex bg-gray-100 p-1 rounded-xl text-[9px] font-bold uppercase tracking-wider border border-gray-200 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab('list')}
+                      className={`flex-1 py-1.5 text-center rounded-lg transition-all ${sidebarTab === 'list' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-gray-500 hover:text-gray-900 font-semibold'}`}
+                    >
+                      List View ({filteredZones.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab('tree')}
+                      className={`flex-1 py-1.5 text-center rounded-lg transition-all ${sidebarTab === 'tree' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-gray-500 hover:text-gray-900 font-semibold'}`}
+                    >
+                      Hierarchy Tree
+                    </button>
+                  </div>
+
+                  {/* Filters 2x2 Grid */}
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px] font-medium">
+                    <select
+                      value={filterCity}
+                      onChange={(e) => setFilterCity(e.target.value)}
+                      className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-1.5 text-slate-700 outline-none cursor-pointer font-medium"
+                    >
+                      <option value="">All Cities</option>
+                      {Array.from(new Set(zones.map(z => z.city).filter(Boolean))).sort().map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-1.5 text-slate-700 outline-none cursor-pointer font-medium"
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                    <select
+                      value={filterPriority}
+                      onChange={(e) => setFilterPriority(e.target.value)}
+                      className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-1.5 text-slate-700 outline-none cursor-pointer font-medium"
+                    >
+                      <option value="">All Priorities</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                    <select
+                      value={filterLevel}
+                      onChange={(e) => setFilterLevel(e.target.value)}
+                      className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-1.5 text-slate-700 outline-none cursor-pointer font-medium"
+                    >
+                      <option value="">All Levels</option>
+                      <option value="city">City</option>
+                      <option value="service">Service</option>
+                      <option value="local">Local</option>
+                      <option value="micro">Micro</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Scrollable list card representation */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-white">
+                {sidebarTab === 'tree' ? (
+                  /* Tree View Mode */
+                  zoneTree.length === 0 ? (
+                    <div className="py-12 text-center text-gray-400 text-xs italic font-semibold">
+                      No zones configured to build a tree.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(() => {
+                        const levelBadge = {
+                          'city': { bg: 'bg-primary/10', text: 'text-primary', label: 'City', dot: 'w-2 h-2' },
+                          'service': { bg: 'bg-teal-500/10', text: 'text-teal-600', label: 'Service', dot: 'w-1.5 h-1.5' },
+                          'local': { bg: 'bg-blue-500/10', text: 'text-blue-600', label: 'Local', dot: 'w-1.5 h-1.5' },
+                          'micro': { bg: 'bg-purple-500/10', text: 'text-purple-600', label: 'Micro', dot: 'w-1 h-1' }
+                        };
+
+                        const renderTreeNode = (node, depth = 0) => {
+                          const badge = levelBadge[node.zoneLevel] || levelBadge['city'];
+                          return (
+                            <div key={node.id} className={depth > 0 ? "pl-3 ml-2 border-l border-gray-200" : "border border-gray-150 rounded-xl p-2 bg-gray-50/50 mb-2 text-left"}>
+                              <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-2xs text-[11px] font-bold text-slate-800">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className={`${badge.dot} rounded-full ${node.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                                  <span className="truncate">{node.name}</span>
+                                  <span className={`text-[7.5px] ${badge.bg} ${badge.text} px-1.5 py-0.2 rounded-full font-bold uppercase`}>{badge.label}</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => handleFocusZone(node.coordinates)} className="p-1 hover:bg-gray-100 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleEditZone(node)} className="p-1 hover:bg-gray-100 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleOpenAnalytics(node.id)} className="p-1 hover:bg-gray-100 text-indigo-600 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                              {node.children && node.children.length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  {node.children.map(child => renderTreeNode(child, depth + 1))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        };
+
+                        return zoneTree.map(node => renderTreeNode(node, 0));
+                      })()}
+                    </div>
+                  )
+                ) : filteredZones.length > 0 ? (
+                  filteredZones.map(zone => {
+                    const zoneStats = zoneStatsMap[zone.id] || { providersCount: 0, activeBookingsCount: 0, customerCount: 0 };
+                    const priorityBadgeClass = zone.priority === 'high'
+                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                      : zone.priority === 'medium'
+                        ? 'bg-amber-50 border-amber-200 text-amber-700'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-700';
+
+                    return (
+                      <div
+                        key={zone.id}
+                        className="p-3 bg-white border border-gray-150 rounded-xl hover:border-primary/40 transition-all flex flex-col space-y-2 shadow-2xs select-none text-left"
+                      >
+                        {/* Header: Status, Title, Level badge, Priority */}
+                        <div className="flex justify-between items-center gap-1">
+                          <div className="flex items-center space-x-1.5 min-w-0">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${zone.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                            <h4 className="text-xs font-bold text-slate-900 truncate capitalize" title={zone.name}>{zone.name}</h4>
+                            <span className="text-[8.5px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.2 rounded-full font-bold uppercase shrink-0">
+                              {zone.zoneLevel || 'city'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-1 shrink-0">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border ${priorityBadgeClass}`}>
+                              {zone.priority || 'low'}
+                            </span>
+                            <button
+                              onClick={() => handleToggleStatus(zone.id, zone.status)}
+                              title={zone.status === 'active' ? 'Deactivate' : 'Activate'}
+                              className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border ${zone.status === 'active'
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                : 'bg-gray-100 border-gray-200 text-gray-500'
+                                }`}
+                            >
+                              {zone.status === 'active' ? 'Active' : 'Disabled'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Compact Badges Info Line */}
+                        <div className="flex items-center flex-wrap gap-1 text-[9px] text-gray-500 font-medium">
+                          <span className="bg-gray-50 px-1.5 py-0.5 rounded border border-gray-150 text-slate-700 font-semibold">{zone.city}</span>
+                          <span className="bg-gray-50 px-1.5 py-0.5 rounded border border-gray-150 text-slate-700 font-semibold">{zone.serviceRadius || 0} KM Radius</span>
+                          {zone.parentZone && (
+                            <span className="bg-teal-50 text-teal-800 px-1.5 py-0.5 rounded border border-teal-200 font-semibold truncate max-w-[100px]">
+                              Parent: {zone.parentZone?.name || zone.parentZone}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Metrics Counter Bar */}
+                        <div className="grid grid-cols-3 gap-1 bg-slate-50/70 border border-gray-150 rounded-lg p-1.5 text-[9.5px] text-slate-600 text-center">
+                          <div>
+                            <span className="font-black text-slate-900 block">{zoneStats.providersCount}</span>
+                            <span className="text-[8px] text-gray-400 font-medium uppercase">Providers</span>
+                          </div>
+                          <div className="border-x border-gray-150">
+                            <span className="font-black text-slate-900 block">{zoneStats.customerCount}</span>
+                            <span className="text-[8px] text-gray-400 font-medium uppercase">Users</span>
+                          </div>
+                          <div>
+                            <span className="font-black text-slate-900 block">{zoneStats.activeBookingsCount}</span>
+                            <span className="text-[8px] text-gray-400 font-medium uppercase">Active Jobs</span>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="grid grid-cols-4 gap-1 pt-0.5">
+                          <button
+                            onClick={() => handleFocusZone(zone.coordinates)}
+                            className="py-1 bg-gray-100 hover:bg-gray-200 text-slate-700 text-[9px] font-bold rounded-md transition-all uppercase tracking-wider flex items-center justify-center gap-0.5 border border-gray-200"
+                            title="View on Map"
+                          >
+                            <Eye className="w-3 h-3 text-gray-500" /> Map
+                          </button>
+                          <button
+                            onClick={() => handleOpenAnalytics(zone.id)}
+                            className="py-1 bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-bold rounded-md transition-all uppercase tracking-wider flex items-center justify-center gap-0.5 border border-primary/20"
+                            title="View Analytics"
+                          >
+                            <Activity className="w-3 h-3 text-primary" /> Stats
+                          </button>
+                          <button
+                            onClick={() => handleEditZone(zone)}
+                            className="py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[9px] font-bold rounded-md transition-all uppercase tracking-wider flex items-center justify-center gap-0.5 border border-blue-200"
+                            title="Edit Zone"
+                          >
+                            <Edit className="w-3 h-3 text-blue-600" /> Edit
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirmId(zone.id)}
+                            className="py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[9px] font-bold rounded-md transition-all uppercase tracking-wider flex items-center justify-center gap-0.5 border border-rose-200"
+                            title="Delete Zone"
+                          >
+                            <Trash2 className="w-3 h-3 text-rose-600" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center text-gray-400 text-xs italic font-semibold">
+                    No matching zones found.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Collapsible toggle sidebar helper for mobile view */}
@@ -2048,10 +2079,12 @@ const ZoneManagement = () => {
         </div>
       )}
 
+
+
       {/* Analytics Modal Overlay */}
       {analyticsModal.open && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto p-4 select-text">
-          <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-2xl max-w-4xl w-full mx-auto my-8 relative flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 p-4 select-text">
+          <div className="bg-white border border-gray-150 p-4 sm:p-5 rounded-2xl shadow-2xl max-w-3xl w-full mx-auto relative flex flex-col max-h-[85vh]">
             <button
               onClick={() => setAnalyticsModal({ open: false, zone: null, loading: false })}
               className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-all"
@@ -2060,172 +2093,210 @@ const ZoneManagement = () => {
             </button>
 
             {analyticsModal.loading ? (
-              <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                <RefreshCw className="w-8 h-8 text-primary " />
-                <p className="text-xs text-gray-500 uppercase tracking-widest font-black">Fetching zone intelligence...</p>
+              <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                <RefreshCw className="w-7 h-7 text-primary animate-spin" />
+                <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Fetching zone intelligence...</p>
               </div>
             ) : analyticsModal.zone ? (
               <div className="flex flex-col min-h-0 overflow-hidden text-left">
                 {/* Modal Header */}
-                <div className="border-b border-gray-150 pb-4 mb-4">
+                <div className="border-b border-gray-100 pb-3.5 mb-3.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-wider capitalize">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-wider capitalize">
                       {analyticsModal.zone.name}
                     </h3>
-                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded uppercase font-black tracking-wider text-[9px]">
+                    <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full uppercase font-bold tracking-wider text-[9px]">
                       {analyticsModal.zone.zoneLevel}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${analyticsModal.zone.status === 'active' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' : 'bg-gray-100 border border-gray-200 text-gray-500'
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${analyticsModal.zone.status === 'active' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-gray-100 border border-gray-200 text-gray-500'
                       }`}>
                       {analyticsModal.zone.status === 'active' ? 'Active' : 'Disabled'}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mt-1 text-left">
-                    Operational analytics and member list for {analyticsModal.zone.city} hub
+                  <p className="text-xs text-gray-500 mt-0.5 font-medium text-left">
+                    Operational analytics and member list for <strong className="text-slate-800 font-semibold">{analyticsModal.zone.city}</strong> hub
                   </p>
                 </div>
 
                 {/* Scrollable Container */}
-                <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
-                      <div className="flex justify-between items-center text-gray-400">
-                        <span className="text-[9px] font-black uppercase tracking-wider">Total Bookings</span>
-                        <Layers className="w-4 h-4 text-primary" />
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+                    <div className="bg-white border border-gray-150 p-2.5 sm:p-3 rounded-xl hover:shadow-xs hover:border-primary/30 transition-all text-left">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Total Bookings</span>
+                        <div className="w-5.5 h-5.5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                          <Layers className="w-3 h-3 text-primary" />
+                        </div>
                       </div>
-                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                      <h4 className="text-base sm:text-lg font-black mt-0.5 text-slate-900 text-left leading-tight">
                         {analyticsModal.zone.analytics?.totalBookings ?? 0}
                       </h4>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">All-time jobs in zone</p>
+                      <p className="text-[8px] text-gray-400 font-medium text-left">All-time jobs in zone</p>
                     </div>
 
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
-                      <div className="flex justify-between items-center text-gray-400">
-                        <span className="text-[9px] font-black uppercase tracking-wider">Active Providers</span>
-                        <Users className="w-4 h-4 text-blue-500" />
+                    <div className="bg-white border border-gray-150 p-2.5 sm:p-3 rounded-xl hover:shadow-xs hover:border-blue-200 transition-all text-left">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Active Providers</span>
+                        <div className="w-5.5 h-5.5 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
+                          <Users className="w-3 h-3 text-blue-600" />
+                        </div>
                       </div>
-                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                      <h4 className="text-base sm:text-lg font-black mt-0.5 text-slate-900 text-left leading-tight">
                         {analyticsModal.zone.analytics?.activeProviders ?? 0}
                       </h4>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Matched to zone</p>
+                      <p className="text-[8px] text-gray-400 font-medium text-left">Matched to zone</p>
                     </div>
 
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
-                      <div className="flex justify-between items-center text-gray-400">
-                        <span className="text-[9px] font-black uppercase tracking-wider">Active Users</span>
-                        <Users className="w-4 h-4 text-purple-500" />
+                    <div className="bg-white border border-gray-150 p-2.5 sm:p-3 rounded-xl hover:shadow-xs hover:border-purple-200 transition-all text-left">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Active Users</span>
+                        <div className="w-5.5 h-5.5 rounded-md bg-purple-50 flex items-center justify-center shrink-0">
+                          <Users className="w-3 h-3 text-purple-600" />
+                        </div>
                       </div>
-                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                      <h4 className="text-base sm:text-lg font-black mt-0.5 text-slate-900 text-left leading-tight">
                         {analyticsModal.zone.analytics?.activeUsers ?? 0}
                       </h4>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Linked accounts</p>
+                      <p className="text-[8px] text-gray-400 font-medium text-left">Linked accounts</p>
                     </div>
 
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
-                      <div className="flex justify-between items-center text-gray-400">
-                        <span className="text-[9px] font-black uppercase tracking-wider">Commission Generated</span>
-                        <Award className="w-4 h-4 text-emerald-500" />
+                    <div className="bg-white border border-gray-150 p-2.5 sm:p-3 rounded-xl hover:shadow-xs hover:border-emerald-200 transition-all text-left">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Commission Generated</span>
+                        <div className="w-5.5 h-5.5 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
+                          <Award className="w-3 h-3 text-emerald-600" />
+                        </div>
                       </div>
-                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                      <h4 className="text-base sm:text-lg font-black mt-0.5 text-slate-900 text-left leading-tight">
                         ₹{(analyticsModal.zone.analytics?.commissionGenerated ?? 0).toLocaleString()}
                       </h4>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Total commission earned</p>
+                      <p className="text-[8px] text-gray-400 font-medium text-left">Total commission earned</p>
                     </div>
 
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
-                      <div className="flex justify-between items-center text-gray-400">
-                        <span className="text-[9px] font-black uppercase tracking-wider">Coupon Usage</span>
-                        <Zap className="w-4 h-4 text-amber-500" />
+                    <div className="bg-white border border-gray-150 p-2.5 sm:p-3 rounded-xl hover:shadow-xs hover:border-amber-200 transition-all text-left">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Coupon Usage</span>
+                        <div className="w-5.5 h-5.5 rounded-md bg-amber-50 flex items-center justify-center shrink-0">
+                          <Zap className="w-3 h-3 text-amber-600" />
+                        </div>
                       </div>
-                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                      <h4 className="text-base sm:text-lg font-black mt-0.5 text-slate-900 text-left leading-tight">
                         {analyticsModal.zone.analytics?.couponUsage ?? 0}
                       </h4>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Successful redemptions</p>
+                      <p className="text-[8px] text-gray-400 font-medium text-left">Successful redemptions</p>
                     </div>
 
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
-                      <div className="flex justify-between items-center text-gray-400">
-                        <span className="text-[9px] font-black uppercase tracking-wider">Assignment Success</span>
-                        <ShieldCheck className="w-4 h-4 text-teal-500" />
+                    <div className="bg-white border border-gray-150 p-2.5 sm:p-3 rounded-xl hover:shadow-xs hover:border-teal-200 transition-all text-left">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Assignment Success</span>
+                        <div className="w-5.5 h-5.5 rounded-md bg-teal-50 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="w-3 h-3 text-teal-600" />
+                        </div>
                       </div>
-                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                      <h4 className="text-base sm:text-lg font-black mt-0.5 text-slate-900 text-left leading-tight">
                         {analyticsModal.zone.analytics?.assignmentSuccessRate ?? 0}%
                       </h4>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Workforce dispatch rate</p>
+                      <p className="text-[8px] text-gray-400 font-medium text-left">Workforce dispatch rate</p>
                     </div>
                   </div>
 
                   {/* Split Linked Members Lists */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                     {/* Providers Column */}
-                    <div className="space-y-3 text-left">
-                      <div className="flex justify-between items-center border-b border-gray-150 pb-2">
-                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5 text-left">
-                          <Users className="w-4 h-4 text-blue-500" /> Linked Providers ({analyticsModal.zone.linkedProviders?.length ?? 0})
-                        </h4>
-                      </div>
-                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {analyticsModal.zone.linkedProviders && analyticsModal.zone.linkedProviders.length > 0 ? (
-                          analyticsModal.zone.linkedProviders.map(provider => (
-                            <div key={provider._id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center gap-2 hover:border-gray-300 transition-all text-left">
-                              <div className="min-w-0 flex-1 text-left">
-                                <h5 className="text-[11px] font-black text-gray-900 truncate capitalize text-left">{provider.name}</h5>
-                                <p className="text-[9px] text-gray-550 truncate text-left">{provider.email}</p>
-                                <p className="text-[9px] text-gray-400 font-semibold text-left">{provider.phone || 'No phone'}</p>
+                    <div className="space-y-2 text-left flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-1.5 mb-1.5">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 text-left">
+                            <Users className="w-3.5 h-3.5 text-blue-600" /> Linked Providers ({analyticsModal.zone.linkedProviders?.length ?? 0})
+                          </h4>
+                        </div>
+                        <div className="space-y-1.5 min-h-[160px]">
+                          {analyticsModal.zone.linkedProviders && analyticsModal.zone.linkedProviders.length > 0 ? (
+                            paginatedProviders.map(provider => (
+                              <div key={provider._id} className="p-2 bg-gray-50/70 border border-gray-150 rounded-xl flex justify-between items-center gap-2 hover:bg-white hover:border-gray-250 transition-all text-left shadow-2xs">
+                                <div className="min-w-0 flex-1 text-left">
+                                  <h5 className="text-[11px] font-bold text-slate-900 truncate capitalize text-left">{provider.name}</h5>
+                                  <p className="text-[9px] text-gray-500 truncate text-left">{provider.email}</p>
+                                  <p className="text-[9px] text-gray-400 font-medium text-left">{provider.phone || 'No phone'}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider shrink-0 ${provider.status === 'available' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' :
+                                  provider.status === 'busy' ? 'bg-amber-50 border border-amber-200 text-amber-700' :
+                                    'bg-gray-100 border border-gray-200 text-gray-500'
+                                  }`}>
+                                  {provider.status}
+                                </span>
                               </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0 ${provider.status === 'available' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' :
-                                provider.status === 'busy' ? 'bg-amber-50 border border-amber-200 text-amber-700' :
-                                  'bg-gray-100 border border-gray-200 text-gray-500'
-                                }`}>
-                                {provider.status}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-center py-6 text-xs text-gray-400 italic">No providers linked to this zone</p>
-                        )}
+                            ))
+                          ) : (
+                            <p className="text-center py-6 text-xs text-gray-400 italic">No providers linked to this zone</p>
+                          )}
+                        </div>
                       </div>
+                      {analyticsModal.zone.linkedProviders && analyticsModal.zone.linkedProviders.length > 5 && (
+                        <div className="pt-2">
+                          <Pagination
+                            currentPage={providerPage}
+                            totalPages={Math.ceil(analyticsModal.zone.linkedProviders.length / 5)}
+                            totalItems={analyticsModal.zone.linkedProviders.length}
+                            limit={5}
+                            onPageChange={onProviderPageChange}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Users Column */}
-                    <div className="space-y-3 text-left">
-                      <div className="flex justify-between items-center border-b border-gray-150 pb-2">
-                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5 text-left">
-                          <Users className="w-4 h-4 text-purple-500" /> Linked Users ({analyticsModal.zone.linkedUsers?.length ?? 0})
-                        </h4>
+                    <div className="space-y-2 text-left flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-1.5 mb-1.5">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 text-left">
+                            <Users className="w-3.5 h-3.5 text-purple-600" /> Linked Users ({analyticsModal.zone.linkedUsers?.length ?? 0})
+                          </h4>
+                        </div>
+                        <div className="space-y-1.5 min-h-[160px]">
+                          {analyticsModal.zone.linkedUsers && analyticsModal.zone.linkedUsers.length > 0 ? (
+                            paginatedUsers.map(user => (
+                              <div key={user._id} className="p-2 bg-gray-50/70 border border-gray-150 rounded-xl flex flex-col hover:bg-white hover:border-gray-250 transition-all text-left shadow-2xs">
+                                <h5 className="text-[11px] font-bold text-slate-900 truncate capitalize text-left">{user.name}</h5>
+                                <p className="text-[9px] text-gray-500 truncate text-left">{user.email}</p>
+                                <p className="text-[9px] text-gray-400 font-medium text-left">{user.phone || 'No phone'}</p>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-center py-6 text-xs text-gray-400 italic">No users linked to this zone</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {analyticsModal.zone.linkedUsers && analyticsModal.zone.linkedUsers.length > 0 ? (
-                          analyticsModal.zone.linkedUsers.map(user => (
-                            <div key={user._id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col hover:border-gray-300 transition-all text-left">
-                              <h5 className="text-[11px] font-black text-gray-900 truncate capitalize text-left">{user.name}</h5>
-                              <p className="text-[9px] text-gray-550 truncate text-left">{user.email}</p>
-                              <p className="text-[9px] text-gray-400 font-semibold text-left">{user.phone || 'No phone'}</p>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-center py-6 text-xs text-gray-400 italic">No users linked to this zone</p>
-                        )}
-                      </div>
+                      {analyticsModal.zone.linkedUsers && analyticsModal.zone.linkedUsers.length > 5 && (
+                        <div className="pt-2">
+                          <Pagination
+                            currentPage={userPage}
+                            totalPages={Math.ceil(analyticsModal.zone.linkedUsers.length / 5)}
+                            totalItems={analyticsModal.zone.linkedUsers.length}
+                            limit={5}
+                            onPageChange={onUserPageChange}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Modal Footer */}
-                <div className="border-t border-gray-150 pt-4 mt-4 flex justify-end">
+                <div className="border-t border-gray-100 pt-3 mt-3 flex justify-end">
                   <button
                     onClick={() => setAnalyticsModal({ open: false, zone: null, loading: false })}
-                    className="py-2 px-5 bg-gray-100 border border-gray-205 hover:bg-gray-200 active:scale-95 text-gray-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm"
+                    className="py-1.5 px-4 bg-gray-100 border border-gray-200 hover:bg-gray-200 active:scale-95 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-2xs"
                   >
                     Close Analytics
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-red-500">
-                <AlertTriangle className="w-10 h-10 animate-bounce" />
-                <p className="text-xs font-black uppercase tracking-wider mt-2">Failed to load zone intelligence</p>
+              <div className="flex flex-col items-center justify-center py-16 text-rose-500">
+                <AlertTriangle className="w-9 h-9 animate-bounce" />
+                <p className="text-xs font-bold uppercase tracking-wider mt-2">Failed to load zone intelligence</p>
               </div>
             )}
           </div>

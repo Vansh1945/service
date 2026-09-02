@@ -2701,12 +2701,34 @@ class AdminService {
                     },
                     { $unwind: "$providerInfo" },
                     {
+                        $lookup: {
+                            from: 'feedbacks',
+                            localField: '_id',
+                            foreignField: 'providerFeedback.provider',
+                            as: 'providerFeedbacks'
+                        }
+                    },
+                    {
                         $project: {
                             name: "$providerInfo.name",
                             jobs: 1,
                             earnings: 1,
-                            id: "$providerInfo.providerId",
-                            profilePic: "$providerInfo.profilePicUrl"
+                            id: { $ifNull: ["$providerInfo.providerId", "$providerInfo._id"] },
+                            profilePic: "$providerInfo.profilePicUrl",
+                            performanceBadge: { $toLower: { $ifNull: ["$providerInfo.performanceBadge", { $ifNull: ["$providerInfo.performanceScore.badge", "bronze"] }] } },
+                            rating: {
+                                $cond: {
+                                    if: { $gt: [{ $ifNull: ["$providerInfo.rating", 0] }, 0] },
+                                    then: "$providerInfo.rating",
+                                    else: {
+                                        $cond: {
+                                            if: { $gt: [{ $size: { $ifNull: ["$providerFeedbacks", []] } }, 0] },
+                                            then: { $round: [{ $avg: "$providerFeedbacks.providerFeedback.rating" }, 1] },
+                                            else: { $ifNull: ["$providerInfo.averageRating", 0] }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 ]),

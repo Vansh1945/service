@@ -964,13 +964,13 @@ const getAllTransactions = async (req, res, next) => {
       }
       const bKey = t.booking?._id?.toString() || t.bookingId || t._id.toString();
       const existing = uniqueMap.get(bKey);
-      
+
       if (!existing) {
         uniqueMap.set(bKey, t);
       } else {
         const isCurrentSuccess = ['completed', 'paid', 'success', 'captured'].includes(t.paymentStatus);
         const isExistingSuccess = ['completed', 'paid', 'success', 'captured'].includes(existing.paymentStatus);
-        
+
         if (isCurrentSuccess && !isExistingSuccess) {
           uniqueMap.set(bKey, t);
         } else if (isCurrentSuccess && isExistingSuccess) {
@@ -2305,7 +2305,7 @@ const getCustomerWallets = async (req, res, next) => {
                   {
                     $and: [
                       { $eq: ['$paymentMethod', 'wallet'] },
-                      { $nor: [{ $in: ['$type', ['withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'referral_coupon_subsidy']] }] }
+                      { $not: [{ $in: ['$type', ['withdrawal', 'penalty', 'commissiondeduction', 'refundrecovery', 'referral_coupon_subsidy']] }] }
                     ]
                   },
                   '$amount',
@@ -2832,7 +2832,7 @@ const getUnifiedEntityDetails = async (req, res, next) => {
       if (refundId && razorpay) {
         try {
           return await razorpay.refunds.fetch(refundId);
-        } catch (e) {}
+        } catch (e) { }
       }
       return null;
     };

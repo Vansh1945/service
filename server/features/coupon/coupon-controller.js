@@ -89,8 +89,9 @@ const getAllCoupons = async (req, res, next) => {
 
     const [coupons, total] = await Promise.all([
       Coupon.find(filters)
-        .populate('usedBy.user', 'name email')
-        .populate('assignedTo', 'name email')
+        .populate('usedBy.user', 'name email phone')
+        .populate('usedBy.booking', 'bookingId totalAmount subtotal totalDiscount')
+        .populate('assignedTo', 'name email phone')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -170,8 +171,9 @@ const updateCoupon = async (req, res, next) => {
     await existingCoupon.save();
 
     const updatedCoupon = await Coupon.findById(id)
-      .populate('assignedTo', 'name email totalBookings')
-      .populate('usedBy.user', 'name email');
+      .populate('assignedTo', 'name email phone totalBookings')
+      .populate('usedBy.user', 'name email phone')
+      .populate('usedBy.booking', 'bookingId totalAmount subtotal totalDiscount');
 
     res.status(200).json({
       success: true,

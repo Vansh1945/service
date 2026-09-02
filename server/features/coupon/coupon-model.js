@@ -76,6 +76,10 @@ const couponSchema = new Schema({
       type: Schema.Types.ObjectId,
       ref: 'User'
     },
+    booking: {
+      type: Schema.Types.ObjectId,
+      ref: 'Booking'
+    },
     usedAt: {
       type: Date,
       default: Date.now

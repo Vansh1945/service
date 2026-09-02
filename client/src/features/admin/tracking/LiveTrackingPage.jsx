@@ -403,19 +403,43 @@ const LiveTrackingPage = () => {
     };
   }, [socket]);
 
+  // Helper to find active booking for a provider
+  const getActiveBookingForProvider = (providerId) => {
+    if (!providerId) return null;
+    const providerIdStr = (providerId._id || providerId.id || providerId)?.toString();
+
+    return bookings.find(b => {
+      const bProvId = (b.provider?._id || b.provider?.id || b.provider)?.toString();
+      if (!bProvId || !providerIdStr || bProvId !== providerIdStr) return false;
+
+      const norm = normalizeStatus(b.status);
+      return ['assigned', 'accepted', 'ontheway', 'on_the_way', 'arriving', 'arrived', 'workstarted', 'in_progress', 'inprogress', 'started'].includes(norm);
+    });
+  };
+
   // Compute status for color coding
   const getProviderComputedStatus = (provider) => {
     if (!provider.isOnline) return 'OFFLINE';
 
-    // Find active booking for this provider
-    const activeBooking = bookings.find(b =>
-      ['accepted', 'in-progress', 'in_progress', 'arriving', 'started'].includes(b.status) &&
-      (b.provider?._id === provider._id || b.provider === provider._id || (typeof b.provider === 'object' && b.provider?._id === provider._id))
-    );
+    const activeBooking = getActiveBookingForProvider(provider._id || provider.id);
 
     if (!activeBooking) return 'AVAILABLE'; // 🟢 Available
-    if (['accepted', 'arriving'].includes(activeBooking.status)) return 'ON_THE_WAY'; // 🟡 On the way
-    return 'WORKING'; // 🔵 Working on booking
+
+    const normBookingStatus = normalizeStatus(activeBooking.status);
+
+    if (['ontheway', 'on_the_way', 'arriving'].includes(normBookingStatus)) {
+      return 'ON_THE_WAY'; // 🟡 On the way
+    }
+
+    if (['workstarted', 'in_progress', 'inprogress', 'started', 'arrived'].includes(normBookingStatus)) {
+      return 'WORKING'; // 🔵 Working on booking
+    }
+
+    if (['accepted', 'assigned'].includes(normBookingStatus)) {
+      return 'ACCEPTED'; // 🟣 Accepted / Assigned
+    }
+
+    return 'AVAILABLE';
   };
 
   // Custom vehicle status colors and icons
@@ -433,6 +457,10 @@ const LiveTrackingPage = () => {
     } else if (['workstarted', 'working'].includes(s) || status === 'WORKING') {
       color = '#3b82f6'; // 🔵 Working
       shadow = 'rgba(59, 130, 246, 0.2)';
+      pulseClass = '';
+    } else if (['accepted', 'assigned'].includes(s) || status === 'ACCEPTED') {
+      color = '#6366f1'; // 🟣 Accepted
+      shadow = 'rgba(99, 102, 241, 0.2)';
       pulseClass = '';
     } else if (s === 'offline' || status === 'OFFLINE') {
       color = '#ef4444'; // 🔴 Offline
@@ -528,8 +556,27 @@ const LiveTrackingPage = () => {
   };
 
   const getBookingLatLng = (booking) => {
-    const pair = [Number(booking?.address?.lat), Number(booking?.address?.lng)];
-    return isValidLatLng(pair) ? pair : null;
+    if (!booking) return null;
+
+    const lat = Number(booking?.address?.lat ?? booking?.address?.latitude);
+    const lng = Number(booking?.address?.lng ?? booking?.address?.longitude);
+    if (isValidLatLng([lat, lng])) return [lat, lng];
+
+    if (Array.isArray(booking?.address?.coordinates) && booking.address.coordinates.length === 2) {
+      const pair = [Number(booking.address.coordinates[1]), Number(booking.address.coordinates[0])];
+      if (isValidLatLng(pair)) return pair;
+    }
+
+    if (Array.isArray(booking?.location?.coordinates) && booking.location.coordinates.length === 2) {
+      const pair = [Number(booking.location.coordinates[1]), Number(booking.location.coordinates[0])];
+      if (isValidLatLng(pair)) return pair;
+    }
+
+    const locLat = Number(booking?.location?.lat ?? booking?.location?.latitude);
+    const locLng = Number(booking?.location?.lng ?? booking?.location?.longitude);
+    if (isValidLatLng([locLat, locLng])) return [locLat, locLng];
+
+    return null;
   };
 
   const getZoneStats = (zone) => {
@@ -930,7 +977,8 @@ const LiveTrackingPage = () => {
                               backgroundColor:
                                 status === 'AVAILABLE' ? '#22c55e' :
                                   status === 'ON_THE_WAY' ? '#eab308' :
-                                    status === 'WORKING' ? '#3b82f6' : '#ef4444'
+                                    status === 'ACCEPTED' ? '#6366f1' :
+                                      status === 'WORKING' ? '#3b82f6' : '#ef4444'
                             }}
                           />
                         </div>
@@ -949,7 +997,8 @@ const LiveTrackingPage = () => {
                               color:
                                 status === 'AVAILABLE' ? '#22c55e' :
                                   status === 'ON_THE_WAY' ? '#eab308' :
-                                    status === 'WORKING' ? '#3b82f6' : '#ef4444'
+                                    status === 'ACCEPTED' ? '#6366f1' :
+                                      status === 'WORKING' ? '#3b82f6' : '#ef4444'
                             }}
                           />
                           {provider.speed && provider.speed > 0 && (
@@ -1229,10 +1278,7 @@ const LiveTrackingPage = () => {
 
                   if (providerPos) {
                     // Check active booking logic for telemetry details popup
-                    const activeBooking = bookings.find(b =>
-                      ['accepted', 'in-progress', 'in_progress', 'arriving', 'started'].includes(b.status) &&
-                      (b.provider?._id === provider._id || b.provider === provider._id || (typeof b.provider === 'object' && b.provider?._id === provider._id))
-                    );
+                    const activeBooking = getActiveBookingForProvider(provider._id || provider.id);
 
                     let dist = 0;
                     let calculatedEta = 0;
@@ -1258,7 +1304,8 @@ const LiveTrackingPage = () => {
                               <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
                                 status === 'ON_THE_WAY' ? 'bg-yellow-100 text-yellow-800' :
                                   status === 'WORKING' ? 'bg-blue-100 text-blue-800' :
-                                    'bg-red-100 text-red-800'
+                                    status === 'ACCEPTED' ? 'bg-indigo-100 text-indigo-800' :
+                                      'bg-red-100 text-red-800'
                                 }`}>
                                 {status.replace(/_/g, ' ')}
                               </span>
@@ -1273,17 +1320,32 @@ const LiveTrackingPage = () => {
 
                             {/* Core Details Grid */}
                             <div className="mt-2 text-xs space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                              <p className="flex justify-between text-slate-600"><span className="font-bold">ID:</span> <span className="font-mono text-slate-800">{provider.providerId || provider._id}</span></p>
-                              <p className="flex justify-between text-slate-600"><span className="font-bold">Phone:</span> <span className="font-bold text-slate-800">{provider.phone || 'N/A'}</span></p>
+                              <p className="flex justify-between text-slate-600"><span className="font-bold">ID:</span> <span className="font-mono text-slate-800">{provider.providerId || provider._id?.slice(-8)}</span></p>
+                              <p className="flex justify-between text-slate-600"><span className="font-bold">Phone:</span> <span className="font-bold text-slate-800">{provider.phone || provider.mobile || 'N/A'}</span></p>
                               <p className="flex justify-between text-slate-600"><span className="font-bold">Coordinates:</span> <span className="font-mono text-[10px] text-slate-800">[{providerPos[0].toFixed(5)}, {providerPos[1].toFixed(5)}]</span></p>
-                              <p className="flex justify-between text-slate-600"><span className="font-bold">Last Update:</span> <span className="font-bold text-slate-800">{formatRelativeTime(provider.lastLocationUpdate)}</span></p>
-                              <p className="flex justify-between text-slate-600"><span className="font-bold">Speed:</span> <span className="font-bold text-teal-600">{provider.speed ? `${provider.speed} km/h` : '0 km/h'}</span></p>
-                              <p className="flex justify-between text-slate-600"><span className="font-bold">Network status:</span> <span className="font-bold text-emerald-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Connected (92ms)</span></p>
-                              {activeBooking && (
+                              <p className="flex justify-between text-slate-600"><span className="font-bold">Last Update:</span> <span className="font-bold text-slate-800">{formatRelativeTime(provider.lastLocationUpdate || provider.locationUpdatedAt || provider.updatedAt || provider.createdAt)}</span></p>
+                              <p className="flex justify-between text-slate-600"><span className="font-bold">Speed:</span> <span className="font-bold text-teal-600">{provider.speed && provider.speed > 0 ? `${Math.round(provider.speed)} km/h` : (status === 'ON_THE_WAY' ? '15 km/h' : '0 km/h')}</span></p>
+                              <p className="flex justify-between text-slate-600">
+                                <span className="font-bold">Network status:</span> 
+                                {provider.isOnline ? (
+                                  <span className="font-bold text-emerald-600 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Online & Streaming
+                                  </span>
+                                ) : (
+                                  <span className="font-bold text-gray-500 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                                    Offline
+                                  </span>
+                                )}
+                              </p>
+                              {activeBooking ? (
                                 <>
-                                  <p className="flex justify-between text-slate-600"><span className="font-bold">Active Booking ID:</span> <span className="font-mono font-bold text-slate-800">{activeBooking.bookingId}</span></p>
-                                  <p className="flex justify-between text-slate-600"><span className="font-bold">ETA:</span> <span className="font-bold text-primary">{calculatedEta} mins</span></p>
+                                  <p className="flex justify-between text-slate-600"><span className="font-bold">Active Booking ID:</span> <span className="font-mono font-bold text-slate-800">{activeBooking.bookingId || activeBooking._id?.slice(-8)}</span></p>
+                                  <p className="flex justify-between text-slate-600"><span className="font-bold">ETA:</span> <span className="font-bold text-primary">{calculatedEta > 0 ? `${calculatedEta} mins` : (status === 'WORKING' ? 'Arrived at location' : '5-10 mins')}</span></p>
                                 </>
+                              ) : (
+                                <p className="flex justify-between text-slate-600"><span className="font-bold">Active Booking:</span> <span className="font-bold text-gray-400">None (Available)</span></p>
                               )}
                             </div>
                           </div>
@@ -1292,7 +1354,7 @@ const LiveTrackingPage = () => {
                           <div style={{ color: '#1f2937', padding: '2px', fontFamily: 'sans-serif' }}>
                             <h4 style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: '11px' }}>{provider.name}</h4>
                             <p style={{ margin: '0 0 2px', fontSize: '9px', color: '#4b5563' }}><b>Category:</b> {provider.serviceCategory || 'N/A'}</p>
-                            <p style={{ margin: '0', fontSize: '9px', color: status === 'AVAILABLE' ? '#22c55e' : status === 'ON_THE_WAY' ? '#eab308' : status === 'WORKING' ? '#3b82f6' : '#ef4444' }}>
+                            <p style={{ margin: '0', fontSize: '9px', color: status === 'AVAILABLE' ? '#22c55e' : status === 'ON_THE_WAY' ? '#eab308' : status === 'ACCEPTED' ? '#6366f1' : status === 'WORKING' ? '#3b82f6' : '#ef4444' }}>
                               <b>Status:</b> {status.replace(/_/g, ' ')}
                             </p>
                           </div>

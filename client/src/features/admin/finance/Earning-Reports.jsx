@@ -11,7 +11,7 @@ import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { normalizeStatus, formatStatus } from '../../../utils/status';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import { formatCurrency, formatAmount, formatFinancialReportAmount, isMonetaryField, isPercentageField, formatDate } from '../../../utils/format';
-
+import useDebounce from '../../../hooks/useDebounce';
 
 const REPORT_CATEGORIES = [
   { id: 'REVENUE', label: 'Revenue & Sales', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -38,8 +38,11 @@ const REPORT_DEFINITIONS = [
     columns: [
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
       { key: 'date', header: 'Booking Date', type: 'date' },
-      { key: 'customer', header: 'Customer', type: 'string' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
       { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
       { key: 'providerEarnings', header: 'Provider Earnings', type: 'currency' },
@@ -61,8 +64,11 @@ const REPORT_DEFINITIONS = [
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
       { key: 'bookingDate', header: 'Booking Date', type: 'date' },
       { key: 'completionDate', header: 'Completion Date', type: 'date' },
-      { key: 'customer', header: 'Customer', type: 'string' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'service', header: 'Service', type: 'string' },
       { key: 'subtotal', header: 'Subtotal', type: 'currency' },
       { key: 'normalDiscount', header: 'Discount', type: 'currency' },
@@ -87,7 +93,9 @@ const REPORT_DEFINITIONS = [
     columns: [
       { key: 'transactionId', header: 'Transaction ID', type: 'id' },
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
-      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
       { key: 'attemptedAmount', header: 'Attempted Amount', type: 'currency' },
       { key: 'actualCollectedAmount', header: 'Collected Amount', type: 'currency' },
       { key: 'collectionStatus', header: 'Collection Status', type: 'status' },
@@ -110,7 +118,8 @@ const REPORT_DEFINITIONS = [
     supportedFormats: ['csv', 'excel', 'pdf'],
     columns: [
       { key: 'earningId', header: 'Earning ID', type: 'id' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
       { key: 'bookingDate', header: 'Booking Date', type: 'date' },
       { key: 'grossAmount', header: 'Gross Amount', type: 'currency' },
@@ -136,7 +145,8 @@ const REPORT_DEFINITIONS = [
     columns: [
       { key: 'earningId', header: 'Earning ID', type: 'id' },
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'bookingDate', header: 'Booking Date', type: 'date' },
       { key: 'commissionRate', header: 'Commission Rate', type: 'percentage' },
       { key: 'grossAmount', header: 'Gross Amount', type: 'currency' },
@@ -160,7 +170,9 @@ const REPORT_DEFINITIONS = [
     columns: [
       { key: 'refundId', header: 'Refund ID', type: 'id' },
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
-      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
       { key: 'requestedAmount', header: 'Requested Amount', type: 'currency' },
       { key: 'refundAmount', header: 'Refund Amount', type: 'currency' },
       { key: 'walletRefundAmount', header: 'Wallet Refund Amount', type: 'currency' },
@@ -186,7 +198,8 @@ const REPORT_DEFINITIONS = [
     columns: [
       { key: 'paymentRecordId', header: 'Payment Record ID', type: 'id' },
       { key: 'transactionReference', header: 'Transaction Reference', type: 'id' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'amount', header: 'Amount', type: 'currency' },
       { key: 'netAmount', header: 'Net Amount', type: 'currency' },
       { key: 'withdrawalType', header: 'Withdrawal Type', type: 'string' },
@@ -236,8 +249,11 @@ const REPORT_DEFINITIONS = [
     supportedFormats: ['csv', 'excel', 'pdf'],
     columns: [
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
-      { key: 'customer', header: 'Customer', type: 'string' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'totalAmount', header: 'Total Amount', type: 'currency' },
       { key: 'cashCollected', header: 'Cash Collected', type: 'currency' },
       { key: 'platformCommission', header: 'Platform Commission', type: 'currency' },
@@ -258,7 +274,9 @@ const REPORT_DEFINITIONS = [
     supportedFormats: ['csv', 'excel', 'pdf'],
     columns: [
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
-      { key: 'customer', header: 'Customer', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
       { key: 'couponCode', header: 'Coupon Code', type: 'id' },
       { key: 'discountType', header: 'Discount Type', type: 'string' },
       { key: 'discountValue', header: 'Discount Value', type: 'currency' },
@@ -280,7 +298,9 @@ const REPORT_DEFINITIONS = [
     supportedFormats: ['csv', 'excel', 'pdf'],
     columns: [
       { key: 'rewardLogId', header: 'Reward Log ID', type: 'id' },
-      { key: 'recipient', header: 'Recipient', type: 'string' },
+      { key: 'recipientName', header: 'Recipient Name', type: 'string' },
+      { key: 'recipientEmail', header: 'Recipient Email', type: 'string' },
+      { key: 'recipientPhone', header: 'Recipient Phone', type: 'phone' },
       { key: 'recipientType', header: 'Recipient Type', type: 'string' },
       { key: 'rewardType', header: 'Reward Type', type: 'string' },
       { key: 'amount', header: 'Amount', type: 'currency' },
@@ -300,8 +320,11 @@ const REPORT_DEFINITIONS = [
     columns: [
       { key: 'complaintId', header: 'Complaint ID', type: 'id' },
       { key: 'bookingId', header: 'Booking ID', type: 'id' },
-      { key: 'customer', header: 'Customer', type: 'string' },
-      { key: 'provider', header: 'Provider', type: 'string' },
+      { key: 'customerName', header: 'Customer Name', type: 'string' },
+      { key: 'customerEmail', header: 'Customer Email', type: 'string' },
+      { key: 'customerPhone', header: 'Customer Phone', type: 'phone' },
+      { key: 'providerName', header: 'Provider Name', type: 'string' },
+      { key: 'providerPhone', header: 'Provider Phone', type: 'phone' },
       { key: 'title', header: 'Title', type: 'string' },
       { key: 'category', header: 'Category', type: 'category' },
       { key: 'status', header: 'Status', type: 'status' },
@@ -383,6 +406,7 @@ const AdminFinancialReportCenter = () => {
     endDate: globalDates.endDate || new Date().toISOString().split('T')[0],
     providerId: '',
     customerId: '',
+    customerSearch: '',
     bookingId: '',
     paymentMethod: '',
     paymentStatus: '',
@@ -421,6 +445,8 @@ const AdminFinancialReportCenter = () => {
         zoneIds: mergedQuery.zoneIds || undefined,
         providerId: filters.providerId || undefined,
         customerId: filters.customerId || undefined,
+        customerSearch: filters.customerSearch || undefined,
+        search: filters.customerSearch || mergedQuery.search || undefined,
         bookingId: filters.bookingId || undefined,
         paymentMethod: filters.paymentMethod || undefined,
         paymentStatus: filters.paymentStatus || undefined,
@@ -452,6 +478,7 @@ const AdminFinancialReportCenter = () => {
     let count = 0;
     if (filters.providerId) count++;
     if (filters.customerId) count++;
+    if (filters.customerSearch) count++;
     if (filters.bookingId) count++;
     if (filters.paymentMethod) count++;
     if (filters.paymentStatus) count++;
@@ -474,6 +501,7 @@ const AdminFinancialReportCenter = () => {
       endDate: fresh.endDate || new Date().toISOString().split('T')[0],
       providerId: '',
       customerId: '',
+      customerSearch: '',
       bookingId: '',
       paymentMethod: '',
       paymentStatus: '',
@@ -514,6 +542,8 @@ const AdminFinancialReportCenter = () => {
         zoneIds: mergedQuery.zoneIds || undefined,
         providerId: filters.providerId || undefined,
         customerId: filters.customerId || undefined,
+        customerSearch: filters.customerSearch || undefined,
+        search: filters.customerSearch || mergedQuery.search || undefined,
         bookingId: filters.bookingId || undefined,
         paymentMethod: filters.paymentMethod || undefined,
         paymentStatus: filters.paymentStatus || undefined,
@@ -620,65 +650,62 @@ const AdminFinancialReportCenter = () => {
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Referral Rewards</p>
             <p className="text-base md:text-lg font-black text-cyan-600 mt-0.5">{formatCurrency(summaryData.referralRewards || 0)}</p>
-            <p className="text-[9px] font-medium text-cyan-400 mt-1">User Referral Subsidies</p>
+            <p className="text-[9px] font-medium text-cyan-400 mt-1">Released Referral Rewards</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Coupon Subsidy</p>
-            <p className="text-base md:text-lg font-black text-amber-600 mt-0.5">{formatCurrency(summaryData.couponSubsidy || 0)}</p>
-            <p className="text-[9px] font-medium text-amber-400 mt-1">Platform Discount Subsidies</p>
+            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">{formatCurrency(summaryData.couponSubsidy || 0)}</p>
+            <p className="text-[9px] font-medium text-teal-400 mt-1">Platform Funded Discounts</p>
           </div>
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Cash Collection</p>
-            <p className="text-base md:text-lg font-black text-slate-700 mt-0.5">{formatCurrency(summaryData.providerCollectedCash || 0)}</p>
-            <p className="text-[9px] font-medium text-slate-400 mt-1">Cash Collected by Providers</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cash Recovery (Est.)</p>
+            <p className="text-base md:text-lg font-black text-amber-600 mt-0.5">{formatCurrency(summaryData.cashRecovery || 0)}</p>
+            <p className="text-[9px] font-medium text-amber-500 mt-1">Commission in Provider Cash</p>
           </div>
-          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cash Recovery</p>
-            <p className="text-base md:text-lg font-black text-teal-600 mt-0.5">{formatCurrency(summaryData.cashRecovery || 0)}</p>
-            <p className="text-[9px] font-medium text-teal-400 mt-1">Cash Booking Commission</p>
-          </div>
-          <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Net Platform Revenue</p>
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm bg-gradient-to-br from-emerald-500 to-teal-700 text-white">
+            <p className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider">Net Platform Revenue</p>
             <p className="text-base md:text-lg font-black mt-0.5">{formatCurrency(summaryData.netPlatformRevenue || 0)}</p>
             <p className="text-[9px] font-medium text-emerald-200 mt-1">Net Retained Earnings</p>
           </div>
         </div>
       )}
 
-      {/* CATEGORY SELECTOR TABS */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {REPORT_CATEGORIES.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => {
-              setActiveCategory(cat.id);
-              const firstRep = REPORT_TYPES.find(r => r.category === cat.id);
-              if (firstRep) setSelectedReport(firstRep.id);
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all border ${activeCategory === cat.id ? 'bg-secondary text-white border-secondary shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-              }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+      {/* REPORT TABS BY CATEGORY */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {REPORT_CATEGORIES.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => {
+                setActiveCategory(cat.id);
+                const firstRep = REPORT_DEFINITIONS.find(r => r.category === cat.id);
+                if (firstRep) setSelectedReport(firstRep.id);
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${activeCategory === cat.id ? `${cat.color} shadow-sm scale-[1.02]` : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
 
-      {/* REPORT TYPE CARDS (FOR SELECTED CATEGORY) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {REPORT_TYPES.filter(r => r.category === activeCategory).map(rep => (
-          <div
-            key={rep.id}
-            onClick={() => setSelectedReport(rep.id)}
-            className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedReport === rep.id ? 'bg-primary/5 border-primary shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'
-              }`}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-900">{rep.title}</h3>
-              {selectedReport === rep.id && <FiCheckCircle className="w-4 h-4 text-primary" />}
+        {/* SUB REPORT TYPES IN CATEGORY */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {REPORT_DEFINITIONS.filter(r => r.category === activeCategory).map(rep => (
+            <div
+              key={rep.id}
+              onClick={() => setSelectedReport(rep.id)}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedReport === rep.id ? 'bg-primary/5 border-primary shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'
+                }`}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-gray-900">{rep.title}</h3>
+                {selectedReport === rep.id && <FiCheckCircle className="w-4 h-4 text-primary" />}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">{rep.desc}</p>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">{rep.desc}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* FILTER BAR */}
@@ -701,7 +728,7 @@ const AdminFinancialReportCenter = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 text-xs">
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Start Date</label>
             <input type="date" value={filters.startDate} onChange={e => handleFilterChange('startDate', e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg" />
@@ -744,8 +771,28 @@ const AdminFinancialReportCenter = () => {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Provider ID</label>
-            <input type="text" placeholder="Filter Provider ID" value={filters.providerId} onChange={e => handleFilterChange('providerId', e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg" />
+            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Customer Search</label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Email, Phone, Name..."
+                value={filters.customerSearch}
+                onChange={e => handleFilterChange('customerSearch', e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fetchReportData()}
+                className="w-full p-2 border border-gray-200 rounded-lg text-xs"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Provider ID / Name</label>
+            <input
+              type="text"
+              placeholder="Filter Provider ID..."
+              value={filters.providerId}
+              onChange={e => handleFilterChange('providerId', e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && fetchReportData()}
+              className="w-full p-2 border border-gray-200 rounded-lg text-xs"
+            />
           </div>
         </div>
       </div>
@@ -803,15 +850,15 @@ const AdminFinancialReportCenter = () => {
                             const k = col.key.toLowerCase();
                             const explicitType = col.type || (
                               k.includes('phone') || k.includes('mobile') ? 'phone' :
-                              k.includes('id') || k.includes('reference') || k.includes('utr') || k.includes('code') ? 'id' :
-                              k.includes('status') ? 'status' :
-                              k.includes('method') ? 'payment_method' :
-                              k.includes('category') ? 'category' :
-                              isMonetaryField(col.key) ? 'currency' :
-                              isPercentageField(col.key) ? 'percentage' :
-                              k.includes('date') || k.includes('time') || k === 'createdat' ? 'date' :
-                              typeof val === 'boolean' ? 'boolean' :
-                              'text'
+                                k.includes('id') || k.includes('reference') || k.includes('utr') || k.includes('code') ? 'id' :
+                                  k.includes('status') ? 'status' :
+                                    k.includes('method') ? 'payment_method' :
+                                      k.includes('category') ? 'category' :
+                                        isMonetaryField(col.key) ? 'currency' :
+                                          isPercentageField(col.key) ? 'percentage' :
+                                            k.includes('date') || k.includes('time') || k === 'createdat' ? 'date' :
+                                              typeof val === 'boolean' ? 'boolean' :
+                                                'text'
                             );
 
                             return (

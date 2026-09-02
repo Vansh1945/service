@@ -63,12 +63,14 @@ const ProviderWalletsPage = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('openDetail') === 'true' && data.providers?.length > 0 && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
-      const searchVal = params.get('search');
+      const searchVal = params.get('search') || '';
+      const searchLower = searchVal.toLowerCase();
       const target = data.providers.find(p =>
         p._id === searchVal ||
         p.providerId === searchVal ||
-        p.name === searchVal ||
-        p.phone === searchVal
+        p.name?.toLowerCase().includes(searchLower) ||
+        p.email?.toLowerCase().includes(searchLower) ||
+        p.phone?.includes(searchVal)
       ) || data.providers[0];
       if (target) {
         setSelectedWallet(target);

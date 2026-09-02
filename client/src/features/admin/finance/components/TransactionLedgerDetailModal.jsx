@@ -10,48 +10,45 @@ import {
 import PriceDisplay from '../../../../components/PriceDisplay';
 import * as TransactionService from '../../../../services/TransactionService';
 import { normalizeStatus } from '../../../../utils/status';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Utility helpers
 import { fmtDate, fmtDateTime } from '../../../../utils/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared UI atoms
 // ─────────────────────────────────────────────────────────────────────────────
 const InfoRow = ({ label, value, mono = false, badge, highlight }) => (
-  <div className={`flex items-start justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3 ${highlight ? 'bg-indigo-50/40 -mx-4 px-4 rounded' : ''}`}>
-    <span className="text-[11px] text-slate-500 font-medium shrink-0 pt-0.5 min-w-[110px]">{label}</span>
-    <span className={`text-xs font-semibold text-slate-800 text-right ${mono ? 'font-mono break-all' : ''}`}>
+  <div className={`flex items-center justify-between py-2 border-b border-neutral-100 last:border-0 gap-3 text-xs ${highlight ? 'bg-indigo-50/40 -mx-4 px-4 rounded' : ''}`}>
+    <span className="text-neutral-500 font-medium shrink-0">{label}</span>
+    <span className={`font-semibold text-neutral-800 text-right ${mono ? 'font-mono break-all' : ''}`}>
       {badge || value || '—'}
     </span>
   </div>
 );
 
-const SectionCard = ({ title, icon: Icon, iconColor = 'text-indigo-600', children, noPad = false }) => (
-  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+const SectionCard = ({ title, icon: Icon, iconColor = 'text-teal-600', children, noPad = false }) => (
+  <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xs overflow-hidden">
     {title && (
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50/60">
+      <div className="px-4 py-3 border-b border-neutral-100 flex items-center gap-2 bg-neutral-50/60">
         {Icon && <Icon className={`w-4 h-4 ${iconColor}`} />}
-        <h3 className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">{title}</h3>
+        <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider">{title}</h3>
       </div>
     )}
-    <div className={noPad ? '' : 'px-4 py-3'}>{children}</div>
+    <div className={noPad ? '' : 'p-4'}>{children}</div>
   </div>
 );
 
 const StatusChip = ({ label, type = 'default', size = 'sm' }) => {
   const types = {
-    success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    warning: 'bg-amber-50 text-amber-700 border-amber-200',
-    danger:  'bg-rose-50 text-rose-700 border-rose-200',
-    info:    'bg-blue-50 text-blue-700 border-blue-200',
-    purple:  'bg-purple-50 text-purple-700 border-purple-200',
-    indigo:  'bg-indigo-50 text-indigo-700 border-indigo-200',
-    default: 'bg-slate-100 text-slate-600 border-slate-200',
+    success: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    warning: 'bg-amber-50 text-amber-700 border-amber-200/80',
+    danger: 'bg-rose-50 text-rose-700 border-rose-200/80',
+    info: 'bg-blue-50 text-blue-700 border-blue-200/80',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200/80',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+    default: 'bg-neutral-100 text-neutral-600 border-neutral-200/80',
   };
-  const sz = size === 'lg' ? 'text-xs px-3 py-1' : 'text-[10px] px-2.5 py-0.5';
+  const sz = size === 'lg' ? 'text-xs px-2.5 py-1' : 'text-[10px] px-2 py-0.5';
   return (
-    <span className={`inline-flex items-center ${sz} font-extrabold uppercase tracking-wider border rounded-full ${types[type]}`}>
+    <span className={`inline-flex items-center ${sz} font-bold uppercase tracking-wider border rounded-full ${types[type]}`}>
       {label}
     </span>
   );
@@ -69,7 +66,7 @@ const AmtRow = ({ label, amount, colorClass = 'text-slate-700', bold = false, in
 const CopyBtn = ({ text, fieldKey, copiedField, setCopiedField }) => {
   const copy = () => {
     if (!text || text === '—') return;
-    navigator.clipboard.writeText(text).catch(() => {});
+    navigator.clipboard.writeText(text).catch(() => { });
     setCopiedField(fieldKey);
     setTimeout(() => setCopiedField(null), 2000);
   };
@@ -120,11 +117,11 @@ const ConnectedRecordRow = ({ icon: Icon, iconColor, label, value, onClick, empt
 // Tab definitions
 // ─────────────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'overview',   label: 'Overview',             icon: DollarSign },
-  { id: 'breakdown',  label: 'Financial Breakdown',   icon: Layers },
-  { id: 'connected',  label: 'Connected Records',     icon: FileText },
-  { id: 'timeline',   label: 'Timeline',              icon: Clock },
-  { id: 'audit',      label: 'Audit',                 icon: Shield },
+  { id: 'overview', label: 'Overview', icon: DollarSign },
+  { id: 'breakdown', label: 'Financial Breakdown', icon: Layers },
+  { id: 'connected', label: 'Connected Records', icon: FileText },
+  { id: 'timeline', label: 'Timeline', icon: Clock },
+  { id: 'audit', label: 'Audit', icon: Shield },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,46 +171,46 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
   // Payment status colour
   const payStatus = (d.paymentStatus || 'pending').toLowerCase();
   const isSuccess = ['success', 'completed', 'paid'].includes(payStatus);
-  const isFailed  = payStatus === 'failed';
-  const headerBg  = isSuccess
+  const isFailed = payStatus === 'failed';
+  const headerBg = isSuccess
     ? 'bg-emerald-600'
     : isFailed
-    ? 'bg-rose-600'
-    : 'bg-amber-500';
+      ? 'bg-rose-600'
+      : 'bg-amber-500';
 
   const txnLabel = d.transactionId || d.razorpayPaymentId || `#${String(d._id || '').slice(-8).toUpperCase()}`;
 
   // ── Navigation callbacks ─────────────────────────────────────────────────
   const nav = {
-    booking:       (id) => navigate(`/admin/bookings?search=${encodeURIComponent(id || d.booking?.bookingId || '')}&openDetail=true`),
-    payment:       (id) => navigate(`/admin/payments?search=${encodeURIComponent(id || d.razorpayPaymentId || d.transactionId || '')}&openDetail=true`),
-    refund:        (id) => navigate(`/admin/refunds?search=${encodeURIComponent(id || d.refundId || '')}&openDetail=true`),
-    settlement:    (id) => navigate(`/admin/settlements?search=${encodeURIComponent(id || d.settlementId || d.razorpaySettlementId || '')}&openDetail=true`),
-    customer:      (id) => navigate(`/admin/customers?search=${encodeURIComponent(id || d.customer?.customerId || d.customer?._id || '')}&openDetail=true`),
-    provider:      (id) => navigate(`/admin/approve-providers?search=${encodeURIComponent(id || d.provider?.providerId || d.provider?._id || '')}&openDetail=true`),
-    custWallet:    (id) => navigate(`/admin/customer-wallets?search=${encodeURIComponent(id || d.walletTransactionId || '')}&openDetail=true`),
-    provWallet:    (id) => navigate(`/admin/provider-wallets?search=${encodeURIComponent(id || d.walletTransactionId || '')}&openDetail=true`),
-    provEarnings:  () => navigate('/admin/provider-earnings'),
-    payout:        (id) => navigate(`/admin/payout?search=${encodeURIComponent(id || d.paymentRecord?.transactionReference || d.bookingId || '')}&openDetail=true`),
+    booking: (id) => navigate(`/admin/bookings?search=${encodeURIComponent(id || d.booking?.bookingId || '')}&openDetail=true`),
+    payment: (id) => navigate(`/admin/payments?search=${encodeURIComponent(id || d.razorpayPaymentId || d.transactionId || '')}&openDetail=true`),
+    refund: (id) => navigate(`/admin/refunds?search=${encodeURIComponent(id || d.refundId || '')}&openDetail=true`),
+    settlement: (id) => navigate(`/admin/settlements?search=${encodeURIComponent(id || d.settlementId || d.razorpaySettlementId || '')}&openDetail=true`),
+    customer: (id) => navigate(`/admin/customers?search=${encodeURIComponent(id || d.customer?.customerId || d.customer?._id || '')}&openDetail=true`),
+    provider: (id) => navigate(`/admin/approve-providers?search=${encodeURIComponent(id || d.provider?.providerId || d.provider?._id || '')}&openDetail=true`),
+    custWallet: (id) => navigate(`/admin/customer-wallets?search=${encodeURIComponent(id || d.walletTransactionId || '')}&openDetail=true`),
+    provWallet: (id) => navigate(`/admin/provider-wallets?search=${encodeURIComponent(id || d.walletTransactionId || '')}&openDetail=true`),
+    provEarnings: () => navigate('/admin/provider-earnings'),
+    payout: (id) => navigate(`/admin/payout?search=${encodeURIComponent(id || d.paymentRecord?.transactionReference || d.bookingId || '')}&openDetail=true`),
   };
 
   // ── Type badge styling ───────────────────────────────────────────────────
   const getTxnTypeChip = (type) => {
     const map = {
-      payment:             { label: 'Customer Payment',   type: 'success' },
-      wallet_topup:        { label: 'Wallet Payment',     type: 'warning' },
-      refund:              { label: 'Refund',             type: 'danger' },
-      refundrecovery:      { label: 'Wallet Refund',      type: 'danger' },
-      commissiondeduction: { label: 'Commission',         type: 'default' },
-      settlement:          { label: 'Settlement',         type: 'info' },
-      withdrawal:          { label: 'Withdrawal',         type: 'indigo' },
-      withdrawalrejection: { label: 'Withdrawal Rejected',type: 'danger' },
-      penalty:             { label: 'Penalty',            type: 'danger' },
-      referralreward:      { label: 'Referral Reward',    type: 'purple' },
-      cashback:            { label: 'Cashback / Coupon',  type: 'success' },
-      escrow_hold:         { label: 'Escrow Hold',        type: 'info' },
-      escrow_release:      { label: 'Escrow Release',     type: 'success' },
-      adjustment:          { label: 'Adjustment',         type: 'default' },
+      payment: { label: 'Customer Payment', type: 'success' },
+      wallet_topup: { label: 'Wallet Payment', type: 'warning' },
+      refund: { label: 'Refund', type: 'danger' },
+      refundrecovery: { label: 'Wallet Refund', type: 'danger' },
+      commissiondeduction: { label: 'Commission', type: 'default' },
+      settlement: { label: 'Settlement', type: 'info' },
+      withdrawal: { label: 'Withdrawal', type: 'indigo' },
+      withdrawalrejection: { label: 'Withdrawal Rejected', type: 'danger' },
+      penalty: { label: 'Penalty', type: 'danger' },
+      referralreward: { label: 'Referral Reward', type: 'purple' },
+      cashback: { label: 'Cashback / Coupon', type: 'success' },
+      escrow_hold: { label: 'Escrow Hold', type: 'info' },
+      escrow_release: { label: 'Escrow Release', type: 'success' },
+      adjustment: { label: 'Adjustment', type: 'default' },
     };
     const cfg = map[type] || { label: type?.replace(/_/g, ' ') || 'Unknown', type: 'default' };
     return <StatusChip label={cfg.label} type={cfg.type} size="lg" />;
@@ -395,7 +392,7 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
               <InfoRow label="Earning Status" badge={
                 <StatusChip label={d.providerEarningRecord.status || 'held'} type={
                   d.providerEarningRecord.status === 'available' || d.providerEarningRecord.status === 'paid' ? 'success'
-                  : d.providerEarningRecord.status === 'held' ? 'warning' : 'default'
+                    : d.providerEarningRecord.status === 'held' ? 'warning' : 'default'
                 } />
               } />
               {d.providerEarningRecord.availableAfter && (
@@ -637,11 +634,10 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
                 <div key={i} className="flex gap-3">
                   {/* Line */}
                   <div className="flex flex-col items-center">
-                    <div className={`w-3.5 h-3.5 rounded-full border-2 mt-0.5 flex-shrink-0 ${
-                      isDone ? 'bg-emerald-500 border-emerald-500'
-                      : isFail ? 'bg-rose-500 border-rose-500'
-                      : 'bg-amber-400 border-amber-400'
-                    }`} />
+                    <div className={`w-3.5 h-3.5 rounded-full border-2 mt-0.5 flex-shrink-0 ${isDone ? 'bg-emerald-500 border-emerald-500'
+                        : isFail ? 'bg-rose-500 border-rose-500'
+                          : 'bg-amber-400 border-amber-400'
+                      }`} />
                     {!isLast && <div className="w-0.5 bg-slate-100 flex-1 mt-1 mb-0.5 min-h-[20px]" />}
                   </div>
                   {/* Content */}
@@ -671,13 +667,13 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
     return (
       <div className="space-y-4">
         <SectionCard title="Transaction Audit Trail" icon={Shield} iconColor="text-indigo-600">
-          <InfoRow label="Created By"  value={audit.createdBy || '—'} />
-          <InfoRow label="Role"        value={audit.createdByRole || '—'} />
-          <InfoRow label="Updated By"  value={audit.updatedBy || '—'} />
+          <InfoRow label="Created By" value={audit.createdBy || '—'} />
+          <InfoRow label="Role" value={audit.createdByRole || '—'} />
+          <InfoRow label="Updated By" value={audit.updatedBy || '—'} />
           <InfoRow label="Reason / Description" value={audit.reason || '—'} />
           <InfoRow label="Idempotency Key" value={audit.idempotencyKey || (d.type === 'payment' ? 'Standard Checkout (Signature Verified)' : '—')} mono />
-          <InfoRow label="Created At"  value={fmtDateTime(audit.createdAt)} />
-          <InfoRow label="Updated At"  value={fmtDateTime(audit.updatedAt)} />
+          <InfoRow label="Created At" value={fmtDateTime(audit.createdAt)} />
+          <InfoRow label="Updated At" value={fmtDateTime(audit.updatedAt)} />
         </SectionCard>
 
         {refundLogs.length > 0 && (
@@ -715,135 +711,110 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
   };
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[900] transition-opacity"
-        onClick={onClose}
-      />
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5" onClick={onClose}>
+      <div className="bg-white w-full max-w-4xl rounded-2xl shadow-xl border border-neutral-200 overflow-hidden flex flex-col max-h-[88vh]" onClick={e => e.stopPropagation()}>
 
-      {/* Modal */}
-      <div className="fixed inset-0 z-[901] flex items-center justify-center p-4">
-        <div
-          className="bg-slate-50 w-full max-w-5xl max-h-[92vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* ── Header ────────────────────────────────────────────────────── */}
-          <div className="bg-gradient-to-r from-secondary via-neutral-800 to-secondary text-white px-6 py-4 flex items-start justify-between border-b border-neutral-700/50">
+        {/* Light Header */}
+        <div className="bg-neutral-50 px-5 py-3.5 flex items-center justify-between border-b border-neutral-200 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-200 flex items-center justify-center font-bold text-sm">
+              <DollarSign className="w-5 h-5" />
+            </div>
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <span className="text-xs font-bold uppercase tracking-widest text-neutral-300">Master Ledger · Transaction Detail</span>
-              </div>
-              <h2 className="text-lg font-black tracking-tight font-mono text-white">{txnLabel}</h2>
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-neutral-900 font-mono">{txnLabel}</h2>
                 {getTxnTypeChip(d.type)}
-                <span className="text-xs text-neutral-300">{fmtDateTime(d.createdAt)}</span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Debit/Credit summary */}
-              {(d.debitAmount || 0) > 0 && (
-                <div className="bg-white/10 rounded-lg px-3 py-2 text-right border border-white/10">
-                  <div className="text-[10px] uppercase opacity-70 font-bold text-rose-300">Debit</div>
-                  <div className="font-black text-sm text-white"><PriceDisplay amount={d.debitAmount} /></div>
-                </div>
-              )}
-              {(d.creditAmount || 0) > 0 && (
-                <div className="bg-white/10 rounded-lg px-3 py-2 text-right border border-white/10">
-                  <div className="text-[10px] uppercase opacity-70 font-bold text-emerald-300">Credit</div>
-                  <div className="font-black text-sm text-white"><PriceDisplay amount={d.creditAmount} /></div>
-                </div>
-              )}
-              {!(d.debitAmount > 0) && !(d.creditAmount > 0) && d.amount > 0 && (
-                <div className="bg-white/10 rounded-lg px-3 py-2 text-right border border-white/10">
-                  <div className="text-[10px] uppercase opacity-70 font-bold text-neutral-300">Amount</div>
-                  <div className="font-black text-sm text-white"><PriceDisplay amount={d.amount} /></div>
-                </div>
-              )}
-              <button
-                onClick={onClose}
-                className="ml-2 p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all cursor-pointer"
-                title="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <p className="text-[11px] text-neutral-500 font-medium mt-0.5">
+                Master Ledger Record • {fmtDateTime(d.createdAt)}
+              </p>
             </div>
           </div>
-
-          {/* ── Tab bar ───────────────────────────────────────────────────── */}
-          <div className="flex bg-neutral-50/90 border-b border-neutral-200 overflow-x-auto scrollbar-hide px-4 pt-1">
-            {TABS.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${
-                    activeTab === tab.id
-                      ? 'border-primary text-primary bg-white shadow-xs'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ── Body ──────────────────────────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide p-5">
-            {loading ? (
-              <div className="flex items-center justify-center py-16 gap-2 text-slate-500">
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                <span className="text-sm font-medium">Loading ledger detail…</span>
+          <div className="flex items-center gap-2">
+            {(d.creditAmount || 0) > 0 && (
+              <div className="px-3 py-1 bg-emerald-50 border border-emerald-200/80 rounded-xl text-right">
+                <div className="text-[9px] uppercase font-bold text-emerald-600">Credit</div>
+                <div className="font-black text-xs text-emerald-700"><PriceDisplay amount={d.creditAmount} /></div>
               </div>
-            ) : error ? (
-              <div className="text-center py-12">
-                <AlertCircle className="w-10 h-10 text-rose-400 mx-auto mb-3" />
-                <p className="text-rose-600 text-sm font-semibold">{error}</p>
-                <button
-                  onClick={() => loadDetail(initialData._id)}
-                  className="mt-3 px-4 py-2 bg-rose-50 text-rose-700 rounded-lg text-xs font-bold hover:bg-rose-100"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <>
-                {activeTab === 'overview'  && renderOverview()}
-                {activeTab === 'breakdown' && renderBreakdown()}
-                {activeTab === 'connected' && renderConnected()}
-                {activeTab === 'timeline'  && renderTimeline()}
-                {activeTab === 'audit'     && renderAudit()}
-              </>
             )}
-          </div>
-
-          {/* ── Footer ────────────────────────────────────────────────────── */}
-          <div className="bg-white border-t border-slate-200 px-5 py-3 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400 font-mono">TXN · {String(d._id || '').slice(-12).toUpperCase()}</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => loadDetail(d._id || initialData._id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Refresh
-              </button>
-              <button
-                onClick={onClose}
-                className="px-6 py-2.5 bg-primary hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+            {(d.debitAmount || 0) > 0 && (
+              <div className="px-3 py-1 bg-rose-50 border border-rose-200/80 rounded-xl text-right">
+                <div className="text-[9px] uppercase font-bold text-rose-600">Debit</div>
+                <div className="font-black text-xs text-rose-700"><PriceDisplay amount={d.debitAmount} /></div>
+              </div>
+            )}
+            <button onClick={onClose} className="p-1.5 bg-white hover:bg-neutral-100 rounded-lg text-neutral-600 border border-neutral-200 cursor-pointer ml-1" title="Close">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
+
+        {/* Tabs Bar */}
+        <div className="bg-white border-b border-neutral-200 px-5 py-2 flex items-center gap-1.5 overflow-x-auto shrink-0">
+          {TABS.map(tab => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-1 px-3 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${active ? 'bg-indigo-600 text-white font-bold' : 'text-neutral-600 hover:bg-neutral-100'
+                  }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-neutral-400'}`} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Body */}
+        <div className="p-5 overflow-y-auto flex-1 space-y-5 bg-neutral-50/20">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 gap-2 text-neutral-400">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span className="text-xs font-medium">Loading ledger detail…</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <AlertCircle className="w-8 h-8 text-rose-400 mx-auto mb-2" />
+              <p className="text-rose-600 text-xs font-semibold">{error}</p>
+              <button
+                onClick={() => loadDetail(initialData._id)}
+                className="mt-3 px-3 py-1.5 bg-rose-50 text-rose-700 rounded-lg text-xs font-bold"
+              >
+                Retry Loading
+              </button>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'overview' && renderOverview()}
+              {activeTab === 'breakdown' && renderBreakdown()}
+              {activeTab === 'connected' && renderConnected()}
+              {activeTab === 'timeline' && renderTimeline()}
+              {activeTab === 'audit' && renderAudit()}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-white border-t border-neutral-200 px-5 py-3 flex items-center justify-between text-xs text-neutral-500 shrink-0">
+          <span className="font-mono text-neutral-600 font-medium">TXN • {String(d._id || '').slice(-12).toUpperCase()}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => loadDetail(d._id || initialData._id)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+            <button onClick={onClose} className="px-4 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl font-bold cursor-pointer">
+              Close
+            </button>
+          </div>
+        </div>
+
       </div>
-    </>
+    </div>
   );
 };
 

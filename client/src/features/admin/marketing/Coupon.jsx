@@ -1,24 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Eye,
-  Filter,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Percent,
-  DollarSign,
-  Users,
-  Globe,
-  Gift,
-  Calendar,
-  Save,
-  X
-} from 'lucide-react';
+import usePagination from '../../../hooks/usePagination';
+import { Plus, Edit, Trash2, Eye, Filter, CheckCircle, XCircle, Clock, Percent, DollarSign, Users, Globe, Gift, Calendar, Save, X } from 'lucide-react';
 import { toast } from '../../../components/ui/Toast';
 
 import { useAuth } from '../../../context/auth';
@@ -67,6 +51,18 @@ const AdminCoupons = () => {
   const [users, setUsers] = useState([]);
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
+  const {
+    currentPage: couponLogPage,
+    onPageChange: onCouponLogPageChange,
+    setTotalItems: setCouponLogTotalItems
+  } = usePagination(1, 5);
+
+  useEffect(() => {
+    if (selectedCoupon?.usedBy) {
+      setCouponLogTotalItems(selectedCoupon.usedBy.length);
+    }
+  }, [selectedCoupon, setCouponLogTotalItems]);
+
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -74,6 +70,12 @@ const AdminCoupons = () => {
     global: 0,
     firstBooking: 0
   });
+
+  const paginatedRedemptionLogs = useMemo(() => {
+    if (!selectedCoupon?.usedBy) return [];
+    const start = (couponLogPage - 1) * 5;
+    return selectedCoupon.usedBy.slice(start, start + 5);
+  }, [selectedCoupon, couponLogPage]);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -1167,23 +1169,23 @@ const AdminCoupons = () => {
             title="Coupon Details"
             size="large"
           >
-            <div className="space-y-6">
-              {/* Premium Ticket Card with punch-holes */}
-              <div className="relative bg-teal-50/40 border border-dashed border-primary/30 p-6 rounded-2xl overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-r border-dashed border-primary/30" />
-                <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-l border-dashed border-primary/30" />
+            <div className="space-y-3.5">
+              {/* Compact Ticket Header Card */}
+              <div className="relative bg-teal-50/40 border border-dashed border-primary/30 p-3.5 sm:p-4 rounded-xl overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-white rounded-full border-r border-dashed border-primary/30" />
+                <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-white rounded-full border-l border-dashed border-primary/30" />
 
                 <div className="flex flex-col items-center sm:items-start text-center sm:text-left pl-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2.5">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 mb-1">
                     {selectedCoupon.isActive && !isExpired(selectedCoupon.expiryDate) ? 'Active Promo Code' : 'Inactive / Expired Code'}
                   </span>
-                  <h3 className="text-3xl font-black text-secondary tracking-wider font-mono uppercase">
+                  <h3 className="text-xl sm:text-2xl font-black text-secondary tracking-wider font-mono uppercase">
                     {selectedCoupon.code}
                   </h3>
                 </div>
                 <div className="flex flex-col items-center sm:items-end text-center sm:text-right pr-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Savings Value</span>
-                  <div className="text-3xl font-black text-primary">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Savings Value</span>
+                  <div className="text-2xl sm:text-3xl font-black text-primary">
                     {selectedCoupon.discountType === 'flat'
                       ? formatCurrency(selectedCoupon.discountValue)
                       : `${selectedCoupon.discountValue}% OFF`
@@ -1192,13 +1194,13 @@ const AdminCoupons = () => {
                 </div>
               </div>
 
-              {/* Key Indicators Grid */}
-              <div className="grid grid-cols-3 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-xs">
-                <div className="text-center p-2 border-r border-slate-200/60">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" /> Expiry
+              {/* Key Indicators Grid - Compact */}
+              <div className="grid grid-cols-3 gap-3 bg-slate-50/50 p-2.5 sm:p-3 rounded-xl border border-slate-100 shadow-xs">
+                <div className="text-center p-1 border-r border-slate-200/60">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
+                    <Calendar className="w-3 h-3" /> Expiry
                   </p>
-                  <p className={`text-sm font-extrabold ${isExpired(selectedCoupon.expiryDate) ? 'text-red-500' : 'text-slate-750'}`}>
+                  <p className={`text-xs font-extrabold ${isExpired(selectedCoupon.expiryDate) ? 'text-red-500' : 'text-slate-750'}`}>
                     {formatDate(selectedCoupon.expiryDate)}
                   </p>
                   {isExpired(selectedCoupon.expiryDate) && (
@@ -1206,49 +1208,49 @@ const AdminCoupons = () => {
                   )}
                 </div>
 
-                <div className="text-center p-2 border-r border-slate-200/60">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
-                    <Users className="w-3.5 h-3.5" /> Redemptions
+                <div className="text-center p-1 border-r border-slate-200/60">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
+                    <Users className="w-3 h-3" /> Redemptions
                   </p>
-                  <p className="text-sm font-extrabold text-slate-750">
+                  <p className="text-xs font-extrabold text-slate-750">
                     {selectedCoupon.usedBy?.length || 0} <span className="text-slate-400 font-medium">/</span> {selectedCoupon.usageLimit === null ? '∞' : selectedCoupon.usageLimit}
                   </p>
                   <p className="text-[8px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Used Count</p>
                 </div>
 
-                <div className="text-center p-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
-                    <DollarSign className="w-3.5 h-3.5" /> Min Booking
+                <div className="text-center p-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5 flex items-center justify-center gap-1">
+                    <DollarSign className="w-3 h-3" /> Min Booking
                   </p>
-                  <p className="text-sm font-extrabold text-slate-750">
+                  <p className="text-xs font-extrabold text-slate-750">
                     {selectedCoupon.minBookingValue ? formatCurrency(selectedCoupon.minBookingValue) : 'No Minimum'}
                   </p>
                   <p className="text-[8px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Minimum Spend</p>
                 </div>
               </div>
 
-              {/* Targeting & Scope Card (Combined fields) */}
-              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
-                  <Globe className="w-4 h-4 text-primary" /> Targeting & Scope
+              {/* Targeting & Scope Card - Compact */}
+              <div className="bg-slate-50/50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-2.5">
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-1.5 border-b border-slate-100/50">
+                  <Globe className="w-3.5 h-3.5 text-primary" /> Targeting & Scope
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Coupon Type Info */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex items-center gap-3 shadow-xs">
-                    <div className="p-2 bg-primary/10 text-primary rounded-xl border border-primary/20 shrink-0">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200/50 flex items-center gap-2.5 shadow-xs">
+                    <div className="p-1.5 bg-primary/10 text-primary rounded-lg border border-primary/20 shrink-0">
                       {selectedCoupon.isGlobal ? (
-                        <Globe className="w-5 h-5 text-primary" />
+                        <Globe className="w-4 h-4 text-primary" />
                       ) : selectedCoupon.isFirstBooking ? (
-                        <Users className="w-5 h-5 text-purple-650" />
+                        <Users className="w-4 h-4 text-purple-650" />
                       ) : selectedCoupon.assignedTo ? (
-                        <Users className="w-5 h-5 text-orange-600" />
+                        <Users className="w-4 h-4 text-orange-600" />
                       ) : (
-                        <Gift className="w-5 h-5 text-slate-650" />
+                        <Gift className="w-4 h-4 text-slate-650" />
                       )}
                     </div>
                     <div>
-                      <p className="text-xs font-black text-slate-750 uppercase tracking-wide leading-none">Campaign Type</p>
-                      <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                      <p className="text-[11px] font-black text-slate-750 uppercase tracking-wide leading-none">Campaign Type</p>
+                      <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
                         {selectedCoupon.isGlobal ? (
                           'Global Promotion'
                         ) : selectedCoupon.isFirstBooking ? (
@@ -1263,10 +1265,10 @@ const AdminCoupons = () => {
                   </div>
 
                   {/* Applicable Zones Info */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex flex-col justify-center shadow-xs">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Geographic Zones</p>
+                  <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200/50 flex flex-col justify-center shadow-xs">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Geographic Zones</p>
                     {selectedCoupon.applicableZones && selectedCoupon.applicableZones.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
+                      <div className="flex flex-wrap gap-1 max-h-14 overflow-y-auto pr-1">
                         {selectedCoupon.applicableZones.map(z => {
                           const zoneId = typeof z === 'object' ? z._id : z;
                           return (
@@ -1277,47 +1279,80 @@ const AdminCoupons = () => {
                         })}
                       </div>
                     ) : (
-                      <span className="text-xs font-extrabold text-slate-750 flex items-center gap-1 uppercase tracking-wider text-[10px]">🌍 Globally Applicable</span>
+                      <span className="text-[10px] font-extrabold text-slate-750 flex items-center gap-1 uppercase tracking-wider">🌍 Globally Applicable</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Redemption History Table */}
-              {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
-                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
-                    <Clock className="w-4 h-4 text-primary" /> Redemption Logs ({selectedCoupon.usedBy.length})
+              {/* Redemption History Table - ALWAYS PRESENT */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100/50">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-primary" /> Redemption Logs ({selectedCoupon.usedBy?.length || 0})
                   </h4>
-                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {selectedCoupon.usageLimit ? `Limit: ${selectedCoupon.usageLimit}` : 'Unlimited Redemptions'}
+                  </span>
+                </div>
+
+                {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 ? (
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
                     <table className="min-w-full divide-y divide-slate-150">
                       <thead className="bg-slate-50">
                         <tr>
-                          <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">User</th>
+                          <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">User Details</th>
+                          <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Booking ID</th>
                           <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Booking Value</th>
                           <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Redeemed At</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
-                        {selectedCoupon.usedBy.map((usage, index) => (
+                        {paginatedRedemptionLogs.map((usage, index) => (
                           <tr key={index} className="hover:bg-slate-50/40 transition-colors">
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-2.5">
                               <p className="font-extrabold text-slate-800 leading-none">{getUserDisplayName(usage.user)}</p>
-                              <p className="text-[10px] text-slate-400 mt-1 font-semibold">{usage.user?.email || ''}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {usage.user?.email && <span className="text-[10px] text-slate-400 font-semibold">{usage.user.email}</span>}
+                                {usage.user?.phone && <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200/60">{usage.user.phone}</span>}
+                              </div>
                             </td>
-                            <td className="px-4 py-3 font-extrabold text-slate-800">
-                              {formatCurrency(usage.bookingValue)}
+                            <td className="px-4 py-2.5 font-mono font-bold text-slate-700">
+                              {usage.booking?.bookingId || usage.booking || usage.bookingId || 'N/A'}
                             </td>
-                            <td className="px-4 py-3 font-semibold text-slate-500">
+                            <td className="px-4 py-2.5 font-extrabold text-slate-800">
+                              {formatCurrency(usage.bookingValue || usage.booking?.totalAmount || 0)}
+                            </td>
+                            <td className="px-4 py-2.5 font-semibold text-slate-500">
                               {formatDate(usage.usedAt)}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+
+                    {selectedCoupon.usedBy.length > 5 && (
+                      <Pagination
+                        currentPage={couponLogPage}
+                        totalPages={Math.ceil(selectedCoupon.usedBy.length / 5)}
+                        totalItems={selectedCoupon.usedBy.length}
+                        limit={5}
+                        onPageChange={onCouponLogPageChange}
+                      />
+                    )}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="bg-white p-6 rounded-xl border border-dashed border-slate-200 text-center flex flex-col items-center justify-center space-y-1">
+                    <div className="p-2.5 bg-slate-100/70 text-slate-400 rounded-full mb-1">
+                      <Clock className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700">No Redemptions Logged Yet</p>
+                    <p className="text-[11px] text-slate-400 max-w-sm">
+                      Once customers redeem this promo code during checkout, their user details, booking ID, booking value, and timestamps will be logged here.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">

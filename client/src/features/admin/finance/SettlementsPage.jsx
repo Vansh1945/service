@@ -177,8 +177,8 @@ const SettlementsPage = () => {
                 {data.settlements.map((s) => {
                   const gross = s.grossAmount || s.amount || s.booking?.totalAmount || 0;
                   const fee = (s.gatewayFee !== undefined && s.gatewayFee !== null) ? s.gatewayFee : null;
-                  const net = (s.netAmount !== undefined && s.netAmount !== null) 
-                    ? s.netAmount 
+                  const net = (s.netAmount !== undefined && s.netAmount !== null)
+                    ? s.netAmount
                     : ((s.settlementAmount !== undefined && s.settlementAmount !== null) ? s.settlementAmount : null);
                   const comm = (s.platformCommission !== undefined && s.platformCommission !== null)
                     ? s.platformCommission

@@ -8,7 +8,7 @@ import {
   FiCalendar, FiDollarSign, FiUsers, FiUser,
   FiTrendingUp, FiPieChart, FiArrowUp, FiClock,
   FiCheckCircle, FiXCircle, FiAlertTriangle, FiActivity,
-  FiFilter, FiRefreshCw
+  FiFilter, FiRefreshCw, FiStar
 } from 'react-icons/fi';
 import * as AdminService from '../../../services/AdminService';
 import { formatDate, formatCurrency } from '../../../utils/format';
@@ -612,41 +612,61 @@ const AdminDashboard = () => {
             <thead>
               <tr className="text-left border-b border-gray-100">
                 <th className="pb-4 font-semibold text-gray-500 text-sm">Provider Details</th>
+                <th className="pb-4 font-semibold text-gray-500 text-sm text-center">Rating</th>
                 <th className="pb-4 font-semibold text-gray-500 text-sm text-center">Completed Jobs</th>
                 <th className="pb-4 font-semibold text-gray-500 text-sm text-right">Total Earnings</th>
-                <th className="pb-4 font-semibold text-gray-500 text-sm text-right">Performance</th>
+                <th className="pb-4 font-semibold text-gray-500 text-sm text-right">Performance Tier</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {(analytics?.topProviders || []).map((provider, index) => (
-                <tr key={index} className="group hover:bg-gray-50/50 transition-colors">
-                  <td className="py-4">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 rounded-full bg-gray-100 mr-3 flex items-center justify-center text-primary font-bold overflow-hidden border border-gray-100">
-                        {provider.profilePic ? (
-                          <img src={provider.profilePic} alt={provider.name} className="w-full h-full object-cover" />
-                        ) : (
-                          provider.name?.charAt(0)
-                        )}
+              {(analytics?.topProviders || []).map((provider, index) => {
+                const tier = (provider.performanceBadge || provider.performanceScore?.badge || provider.tier || 'bronze').toLowerCase();
+                const badgeStyle = {
+                  'platinum': 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
+                  'gold': 'bg-amber-50 text-amber-700 border-amber-200/60',
+                  'silver': 'bg-slate-100 text-slate-700 border-slate-250/60',
+                  'bronze': 'bg-orange-50 text-orange-700 border-orange-200/60'
+                }[tier] || 'bg-orange-50 text-orange-700 border-orange-200/60';
+
+                const ratingVal = provider.rating || provider.averageRating || provider.performanceScore?.rating;
+
+                return (
+                  <tr key={index} className="group hover:bg-gray-50/50 transition-colors">
+                    <td className="py-4">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 mr-3 flex items-center justify-center text-primary font-bold overflow-hidden border border-gray-100">
+                          {provider.profilePic ? (
+                            <img src={provider.profilePic} alt={provider.name} className="w-full h-full object-cover" />
+                          ) : (
+                            provider.name?.charAt(0)
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">{provider.name}</p>
+                          <p className="text-xs text-gray-400 uppercase tracking-tighter font-mono">{provider.id}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">{provider.name}</p>
-                        <p className="text-xs text-gray-400 uppercase tracking-tighter font-mono">{provider.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 font-medium text-gray-700 text-center">{provider.jobs} Jobs</td>
-                  <td className="py-4 font-bold text-gray-900 text-right">{formatCurrency(provider.earnings)}</td>
-                  <td className="py-4 text-right">
-                    <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded-md tracking-wider ${index === 0 ? 'bg-yellow-50 text-yellow-600' :
-                      index === 1 ? 'bg-gray-100 text-gray-600' :
-                        index === 2 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
-                      }`}>
-                      {index === 0 ? '🏆 Star' : index === 1 ? '🥈 Pro' : index === 2 ? '🥉 Elite' : 'Top Tier'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-4 text-center">
+                      {ratingVal && Number(ratingVal) > 0 ? (
+                        <span className="inline-flex items-center gap-1 font-black text-xs text-slate-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                          <FiStar className="text-amber-500 fill-amber-400 w-3 h-3" />
+                          {Number(ratingVal).toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-400 italic">No ratings yet</span>
+                      )}
+                    </td>
+                    <td className="py-4 font-medium text-gray-700 text-center">{provider.jobs} Jobs</td>
+                    <td className="py-4 font-bold text-gray-900 text-right">{formatCurrency(provider.earnings)}</td>
+                    <td className="py-4 text-right">
+                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase rounded-full border shadow-2xs tracking-wider ${badgeStyle}`}>
+                        🏆 {tier}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -5059,6 +5059,11 @@ class PaymentService {
         toDate,
         providerId,
         customerId,
+        customerSearch,
+        customerEmail,
+        customerPhone,
+        search,
+        customerQuery,
         bookingId,
         transactionId,
         paymentMethod,
@@ -5087,7 +5092,90 @@ class PaymentService {
       const User = mongoose.model('User');
       const Provider = mongoose.model('Provider');
 
+      // ── Customer & Provider Search Resolvers ──
+      const rawCustomerQuery = (
+        customerSearch ||
+        customerEmail ||
+        customerPhone ||
+        customerQuery ||
+        customerId ||
+        search ||
+        req.query.q ||
+        ''
+      ).toString().trim();
+
+      let customerUserIds = null;
+      if (rawCustomerQuery) {
+        const escapedQuery = rawCustomerQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = new RegExp(escapedQuery, 'i');
+        const userOr = [
+          { name: searchRegex },
+          { email: searchRegex },
+          { phone: searchRegex }
+        ];
+        if (mongoose.Types.ObjectId.isValid(rawCustomerQuery)) {
+          userOr.push({ _id: rawCustomerQuery });
+        }
+        const matchedUsers = await User.find({ $or: userOr }, '_id').lean();
+        customerUserIds = matchedUsers.map(u => u._id);
+      }
+
+      const rawProviderQuery = (
+        providerId ||
+        req.query.providerSearch ||
+        ''
+      ).toString().trim();
+
+      let providerUserIds = null;
+      if (rawProviderQuery) {
+        const escapedQuery = rawProviderQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = new RegExp(escapedQuery, 'i');
+        const provOr = [
+          { name: searchRegex },
+          { email: searchRegex },
+          { phone: searchRegex },
+          { providerId: searchRegex }
+        ];
+        if (mongoose.Types.ObjectId.isValid(rawProviderQuery)) {
+          provOr.push({ _id: rawProviderQuery });
+        }
+        const matchedProviders = await Provider.find({ $or: provOr }, '_id').lean();
+        providerUserIds = matchedProviders.map(p => p._id);
+      }
+
+      // Helper to format customer identity text for table preview & exports
+      const formatCustomerLabel = (custObj) => {
+        if (!custObj) return 'N/A';
+        const name = custObj.name || 'Customer';
+        const details = [custObj.email, custObj.phone].filter(Boolean).join(' - ');
+        return details ? `${name} (${details})` : name;
+      };
+
       // ── 1. GLOBAL FINANCIAL SUMMARY METRICS (Authoritative Backend Read) ──
+      const summaryBookingMatch = { createdAt: { $gte: sDate, $lte: eDate } };
+      if (customerUserIds !== null) summaryBookingMatch.customer = { $in: customerUserIds };
+      if (providerUserIds !== null) summaryBookingMatch.provider = { $in: providerUserIds };
+
+      const summaryTxnMatch = { createdAt: { $gte: sDate, $lte: eDate }, type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } };
+      if (customerUserIds !== null) summaryTxnMatch.user = { $in: customerUserIds };
+      if (providerUserIds !== null) summaryTxnMatch.provider = { $in: providerUserIds };
+
+      const summaryEarningMatch = { createdAt: { $gte: sDate, $lte: eDate } };
+      if (providerUserIds !== null) summaryEarningMatch.provider = { $in: providerUserIds };
+      if (customerUserIds !== null) {
+        const custBks = await Booking.find({ customer: { $in: customerUserIds } }, '_id').lean();
+        summaryEarningMatch.booking = { $in: custBks.map(b => b._id) };
+      }
+
+      const summaryPayoutMatch = { createdAt: { $gte: sDate, $lte: eDate }, status: { $in: ['completed', 'transferred'] } };
+      if (providerUserIds !== null) summaryPayoutMatch.provider = { $in: providerUserIds };
+
+      const summaryRefundMatch = { createdAt: { $gte: sDate, $lte: eDate }, refundStatus: 'completed' };
+      if (customerUserIds !== null) summaryRefundMatch.customerId = { $in: customerUserIds };
+
+      const summaryReferralMatch = { createdAt: { $gte: sDate, $lte: eDate }, status: 'released' };
+      if (customerUserIds !== null) summaryReferralMatch.recipient = { $in: customerUserIds };
+
       const [
         bookingStats,
         txnStats,
@@ -5097,7 +5185,7 @@ class PaymentService {
         referralStats
       ] = await Promise.all([
         Booking.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate } } },
+          { $match: summaryBookingMatch },
           {
             $group: {
               _id: null,
@@ -5121,7 +5209,7 @@ class PaymentService {
           }
         ]),
         Transaction.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate }, type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } } },
+          { $match: summaryTxnMatch },
           {
             $group: {
               _id: '$type',
@@ -5131,7 +5219,7 @@ class PaymentService {
           }
         ]),
         ProviderEarning.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate } } },
+          { $match: summaryEarningMatch },
           {
             $group: {
               _id: null,
@@ -5142,15 +5230,15 @@ class PaymentService {
           }
         ]),
         PaymentRecord.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate }, status: { $in: ['completed', 'transferred'] } } },
+          { $match: summaryPayoutMatch },
           { $group: { _id: null, totalPayouts: { $sum: '$amount' } } }
         ]),
         Refund.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate }, refundStatus: 'completed' } },
+          { $match: summaryRefundMatch },
           { $group: { _id: null, totalRefunds: { $sum: '$refundAmount' } } }
         ]),
         ReferralRewardLog.aggregate([
-          { $match: { createdAt: { $gte: sDate, $lte: eDate }, status: 'released' } },
+          { $match: summaryReferralMatch },
           { $group: { _id: null, totalReferralRewards: { $sum: '$amount' } } }
         ])
       ]);
@@ -5203,19 +5291,31 @@ class PaymentService {
       switch (reportType) {
         case 'summary': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (bookingStatus) filter.status = bookingStatus;
+          if (paymentStatus) filter.paymentStatus = paymentStatus;
+          if (paymentMethod) filter.paymentMethod = paymentMethod;
+          if (customerUserIds !== null) filter.customer = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+          if (bookingId) filter.$or = [{ bookingId: bookingId }, ...(mongoose.Types.ObjectId.isValid(bookingId) ? [{ _id: bookingId }] : [])];
+
           totalRecords = await Booking.countDocuments(filter);
           const bookings = await Booking.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('customer', 'name')
-            .populate('provider', 'name')
+            .populate('customer', 'name email phone')
+            .populate('provider', 'name phone providerId')
             .lean();
 
           reportData = bookings.map(b => ({
             bookingId: b.bookingId || b._id,
             date: b.createdAt,
+            customerName: b.customer?.name || 'N/A',
+            customerEmail: b.customer?.email || 'N/A',
+            customerPhone: b.customer?.phone || 'N/A',
             customer: b.customer?.name || 'N/A',
+            providerName: b.provider?.name || 'N/A',
+            providerPhone: b.provider?.phone || 'N/A',
             provider: b.provider?.name || 'N/A',
             totalAmount: b.totalAmount || 0,
             platformCommission: b.commissionAmount || 0,
@@ -5232,6 +5332,8 @@ class PaymentService {
           if (bookingStatus) filter.status = bookingStatus;
           if (paymentStatus) filter.paymentStatus = paymentStatus;
           if (paymentMethod) filter.paymentMethod = paymentMethod;
+          if (customerUserIds !== null) filter.customer = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
 
           totalRecords = await Booking.countDocuments(filter);
           const bookings = await Booking.find(filter)
@@ -5247,7 +5349,12 @@ class PaymentService {
             bookingId: b.bookingId || b._id,
             bookingDate: b.createdAt,
             completionDate: b.completedAt || b.serviceCompletedAt || null,
+            customerName: b.customer?.name || 'N/A',
+            customerEmail: b.customer?.email || 'N/A',
+            customerPhone: b.customer?.phone || 'N/A',
             customer: b.customer?.name || 'N/A',
+            providerName: b.provider?.name || 'Unassigned',
+            providerPhone: b.provider?.phone || 'N/A',
             provider: b.provider?.name || 'Unassigned',
             service: b.services?.[0]?.service?.title || 'Service',
             subtotal: b.subtotal || 0,
@@ -5265,20 +5372,26 @@ class PaymentService {
 
         case 'commission': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
-          if (providerId && mongoose.Types.ObjectId.isValid(providerId)) filter.provider = providerId;
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+          if (customerUserIds !== null) {
+            const custBookings = await Booking.find({ customer: { $in: customerUserIds } }, '_id').lean();
+            filter.booking = { $in: custBookings.map(b => b._id) };
+          }
 
           totalRecords = await ProviderEarning.countDocuments(filter);
           const earnings = await ProviderEarning.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('provider', 'name providerId')
+            .populate('provider', 'name providerId phone')
             .populate('booking')
             .lean();
 
           reportData = earnings.map(e => ({
             earningId: e._id,
             bookingId: e.booking?.bookingId || e.booking?._id || 'N/A',
+            providerName: e.provider?.name || 'N/A',
+            providerPhone: e.provider?.phone || 'N/A',
             provider: e.provider?.name || 'N/A',
             bookingDate: e.createdAt,
             commissionRate: e.commissionRate || 0,
@@ -5292,7 +5405,11 @@ class PaymentService {
 
         case 'provider_earnings': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
-          if (providerId && mongoose.Types.ObjectId.isValid(providerId)) filter.provider = providerId;
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+          if (customerUserIds !== null) {
+            const custBookings = await Booking.find({ customer: { $in: customerUserIds } }, '_id').lean();
+            filter.booking = { $in: custBookings.map(b => b._id) };
+          }
 
           totalRecords = await ProviderEarning.countDocuments(filter);
           const earnings = await ProviderEarning.find(filter)
@@ -5305,6 +5422,8 @@ class PaymentService {
 
           reportData = earnings.map(e => ({
             earningId: e._id,
+            providerName: e.provider?.name || 'N/A',
+            providerPhone: e.provider?.phone || 'N/A',
             provider: e.provider?.name || 'N/A',
             bookingId: e.booking?.bookingId || e.booking?._id || 'N/A',
             bookingDate: e.createdAt,
@@ -5322,13 +5441,15 @@ class PaymentService {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
           if (paymentMethod) filter.paymentMethod = paymentMethod;
           if (paymentStatus) filter.paymentStatus = paymentStatus;
+          if (customerUserIds !== null) filter.user = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
 
           totalRecords = await Transaction.countDocuments(filter);
           const txns = await Transaction.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('user', 'name email')
+            .populate('user', 'name email phone')
             .populate('booking')
             .lean();
 
@@ -5345,6 +5466,9 @@ class PaymentService {
             return {
               transactionId: t.transactionId || t._id,
               bookingId: t.bookingId || t.booking?.bookingId || 'N/A',
+              customerName: t.user?.name || 'N/A',
+              customerEmail: t.user?.email || 'N/A',
+              customerPhone: t.user?.phone || 'N/A',
               customer: t.user?.name || 'N/A',
               attemptedAmount: t.amount || 0,
               actualCollectedAmount,
@@ -5362,6 +5486,9 @@ class PaymentService {
 
         case 'razorpay_reconcile': {
           const filter = { razorpayPaymentId: { $ne: null }, createdAt: { $gte: sDate, $lte: eDate } };
+          if (customerUserIds !== null) filter.user = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+
           totalRecords = await Transaction.countDocuments(filter);
           const txns = await Transaction.find(filter)
             .sort({ createdAt: -1 })
@@ -5399,18 +5526,27 @@ class PaymentService {
 
         case 'refund': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (customerUserIds !== null) filter.customerId = { $in: customerUserIds };
+          if (providerUserIds !== null) {
+            const provBookings = await Booking.find({ provider: { $in: providerUserIds } }, '_id').lean();
+            filter.bookingId = { $in: provBookings.map(b => b._id) };
+          }
+
           totalRecords = await Refund.countDocuments(filter);
           const refunds = await Refund.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('customerId', 'name email')
+            .populate('customerId', 'name email phone')
             .populate('bookingId')
             .lean();
 
           reportData = refunds.map(r => ({
             refundId: r.refundId || r._id,
             bookingId: r.bookingId?.bookingId || r.bookingId?._id || 'N/A',
+            customerName: r.customerId?.name || 'N/A',
+            customerEmail: r.customerId?.email || 'N/A',
+            customerPhone: r.customerId?.phone || 'N/A',
             customer: r.customerId?.name || 'N/A',
             requestedAmount: r.requestedAmount || 0,
             refundAmount: r.refundAmount || 0,
@@ -5426,6 +5562,8 @@ class PaymentService {
 
         case 'payout': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+
           totalRecords = await PaymentRecord.countDocuments(filter);
           const records = await PaymentRecord.find(filter)
             .sort({ createdAt: -1 })
@@ -5437,6 +5575,8 @@ class PaymentService {
           reportData = records.map(p => ({
             paymentRecordId: p._id,
             transactionReference: p.transactionReference || 'N/A',
+            providerName: p.provider?.name || 'N/A',
+            providerPhone: p.provider?.phone || 'N/A',
             provider: p.provider?.name || 'N/A',
             amount: p.amount || 0,
             netAmount: p.netAmount || 0,
@@ -5460,14 +5600,16 @@ class PaymentService {
             createdAt: { $gte: sDate, $lte: eDate }
           };
           if (paymentStatus) filter.paymentStatus = paymentStatus;
+          if (customerUserIds !== null) filter.user = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
 
           totalRecords = await Transaction.countDocuments(filter);
           const txns = await Transaction.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('user', 'name role')
-            .populate('provider', 'name')
+            .populate('user', 'name email phone role')
+            .populate('provider', 'name phone')
             .lean();
 
           reportData = txns.map(t => {
@@ -5501,18 +5643,26 @@ class PaymentService {
 
         case 'cash_recovery': {
           const filter = { paymentMethod: 'cash', createdAt: { $gte: sDate, $lte: eDate } };
+          if (customerUserIds !== null) filter.customer = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+
           totalRecords = await Booking.countDocuments(filter);
           const cashBookings = await Booking.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('customer', 'name')
-            .populate('provider', 'name providerId')
+            .populate('customer', 'name email phone')
+            .populate('provider', 'name providerId phone')
             .lean();
 
           reportData = cashBookings.map(b => ({
             bookingId: b.bookingId || b._id,
+            customerName: b.customer?.name || 'N/A',
+            customerEmail: b.customer?.email || 'N/A',
+            customerPhone: b.customer?.phone || 'N/A',
             customer: b.customer?.name || 'N/A',
+            providerName: b.provider?.name || 'N/A',
+            providerPhone: b.provider?.phone || 'N/A',
             provider: b.provider?.name || 'N/A',
             totalAmount: b.totalAmount || 0,
             cashCollected: b.cashToPay || b.totalAmount || 0,
@@ -5527,16 +5677,22 @@ class PaymentService {
 
         case 'coupon': {
           const filter = { 'couponApplied.code': { $exists: true, $ne: null }, createdAt: { $gte: sDate, $lte: eDate } };
+          if (customerUserIds !== null) filter.customer = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+
           totalRecords = await Booking.countDocuments(filter);
           const couponBookings = await Booking.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('customer', 'name')
+            .populate('customer', 'name email phone')
             .lean();
 
           reportData = couponBookings.map(b => ({
             bookingId: b.bookingId || b._id,
+            customerName: b.customer?.name || 'N/A',
+            customerEmail: b.customer?.email || 'N/A',
+            customerPhone: b.customer?.phone || 'N/A',
             customer: b.customer?.name || 'N/A',
             couponCode: b.couponApplied?.code || 'N/A',
             discountType: b.couponApplied?.discountType || 'flat',
@@ -5552,16 +5708,21 @@ class PaymentService {
 
         case 'referral': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (customerUserIds !== null) filter.recipient = { $in: customerUserIds };
+
           totalRecords = await ReferralRewardLog.countDocuments(filter);
           const logs = await ReferralRewardLog.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('recipient', 'name')
+            .populate('recipient', 'name email phone')
             .lean();
 
           reportData = logs.map(l => ({
             rewardLogId: l._id,
+            recipientName: l.recipient?.name || 'N/A',
+            recipientEmail: l.recipient?.email || 'N/A',
+            recipientPhone: l.recipient?.phone || 'N/A',
             recipient: l.recipient?.name || 'N/A',
             recipientType: l.recipientType,
             rewardType: l.rewardType,
@@ -5574,20 +5735,28 @@ class PaymentService {
 
         case 'complaint': {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (customerUserIds !== null) filter.customer = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
+
           totalRecords = await Complaint.countDocuments(filter);
           const complaints = await Complaint.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pLimit)
-            .populate('customer', 'name')
-            .populate('provider', 'name')
+            .populate('customer', 'name email phone')
+            .populate('provider', 'name phone providerId')
             .populate('booking')
             .lean();
 
           reportData = complaints.map(c => ({
             complaintId: c.complaintId || c._id,
             bookingId: c.booking?.bookingId || c.booking?._id || 'N/A',
+            customerName: c.customer?.name || 'N/A',
+            customerEmail: c.customer?.email || 'N/A',
+            customerPhone: c.customer?.phone || 'N/A',
             customer: c.customer?.name || 'N/A',
+            providerName: c.provider?.name || 'N/A',
+            providerPhone: c.provider?.phone || 'N/A',
             provider: c.provider?.name || 'N/A',
             title: c.title,
             category: c.category,
@@ -5600,6 +5769,11 @@ class PaymentService {
         case 'master_reconcile':
         default: {
           const filter = { createdAt: { $gte: sDate, $lte: eDate } };
+          if (bookingStatus) filter.status = bookingStatus;
+          if (paymentStatus) filter.paymentStatus = paymentStatus;
+          if (paymentMethod) filter.paymentMethod = paymentMethod;
+          if (customerUserIds !== null) filter.customer = { $in: customerUserIds };
+          if (providerUserIds !== null) filter.provider = { $in: providerUserIds };
           totalRecords = await Booking.countDocuments(filter);
           const bookings = await Booking.find(filter)
             .sort({ createdAt: -1 })

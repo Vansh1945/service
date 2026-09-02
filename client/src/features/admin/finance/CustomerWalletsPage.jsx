@@ -63,12 +63,14 @@ const CustomerWalletsPage = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('openDetail') === 'true' && data.users?.length > 0 && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
-      const searchVal = params.get('search');
+      const searchVal = params.get('search') || '';
+      const searchLower = searchVal.toLowerCase();
       const target = data.users.find(u =>
         u._id === searchVal ||
         u.customerId === searchVal ||
-        u.name === searchVal ||
-        u.phone === searchVal
+        u.name?.toLowerCase().includes(searchLower) ||
+        u.email?.toLowerCase().includes(searchLower) ||
+        u.phone?.includes(searchVal)
       ) || data.users[0];
       if (target) {
         setSelectedWallet(target);
