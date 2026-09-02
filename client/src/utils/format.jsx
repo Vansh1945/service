@@ -954,8 +954,8 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   };
 };
 
-export const LIGHT_MAP_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-export const LIGHT_MAP_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+export const LIGHT_MAP_TILES = "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}";
+export const LIGHT_MAP_ATTRIBUTION = '&copy; Google Maps';
 
 const GEOCODE_CACHE = new Map();
 const GEOCODE_CACHE_TTL_MS = 5 * 60 * 1000;

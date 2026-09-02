@@ -92,7 +92,8 @@ const BookService = () => {
     const checkAvailability = async () => {
       if (bookingPreference === 'favorite' && selectedFavoriteProviderId) {
         try {
-          const categoryId = service?.category?._id || service?.category;
+          const catObj = service?.category;
+          const categoryId = (catObj && typeof catObj === 'object' && catObj._id) ? catObj._id : (typeof catObj === 'string' ? catObj : null);
           const res = await CustomerService.checkFavoriteProviderAvailability(selectedFavoriteProviderId, categoryId);
           if (res.data?.success) {
             setFavoriteProviderAvailability({
@@ -1232,12 +1233,39 @@ const BookService = () => {
                           className="w-full px-3 py-2 text-xs border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold text-secondary"
                         >
                           <option value="">Choose a Favorite Provider</option>
-                          {user.favoriteProviders.map((fp) => (
-                            <option key={fp.providerId} value={fp.providerId}>
-                              {fp.providerName} ({fp.category})
-                            </option>
-                          ))}
+                          {user.favoriteProviders.map((fp) => {
+                            const ratingStr = fp.rating ? `⭐ ${Number(fp.rating).toFixed(1)}` : '⭐ New';
+                            const jobsStr = `${fp.completedBookings || 0} Jobs`;
+                            return (
+                              <option key={fp.providerId} value={fp.providerId}>
+                                {fp.providerName} ({fp.category}) — {ratingStr} | {jobsStr}
+                              </option>
+                            );
+                          })}
                         </select>
+
+                        {selectedFavoriteProviderId && (() => {
+                          const selectedFp = user.favoriteProviders.find(f => String(f.providerId) === String(selectedFavoriteProviderId));
+                          if (!selectedFp) return null;
+                          return (
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm">
+                              <div className="flex items-center gap-1.5 overflow-hidden">
+                                <span className="font-bold text-secondary truncate">{selectedFp.providerName}</span>
+                                <span className="text-[10px] text-gray-400 truncate">({selectedFp.category})</span>
+                              </div>
+                              <div className="flex items-center gap-2 font-semibold">
+                                <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 text-[11px]">
+                                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                  {selectedFp.rating ? Number(selectedFp.rating).toFixed(1) : 'New'}
+                                </span>
+                                <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 text-[11px]">
+                                  <Briefcase className="w-3 h-3 text-blue-500" />
+                                  {selectedFp.completedBookings || 0} Completed Jobs
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {selectedFavoriteProviderId && favoriteProviderAvailability.checked && (
                           <div className="mt-1">

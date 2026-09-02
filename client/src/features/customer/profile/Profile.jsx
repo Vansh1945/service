@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../context/auth';
 import ProfileSkeleton from '../../../components/ui-skeletons/ProfileSkeleton';
 import { toast } from '../../../components/ui/Toast';
 

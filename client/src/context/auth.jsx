@@ -381,6 +381,16 @@ export const AuthProvider = ({ children }) => {
         refreshUser();
     }, [token, role, refreshUser]);
 
+    // Callback to update user state locally/optimistically
+    const updateUserData = useCallback((updatedFields) => {
+        setUser(prevUser => {
+            if (!prevUser) return prevUser;
+            const newUser = { ...prevUser, ...updatedFields };
+            setCookie("user", JSON.stringify(newUser), 7);
+            return newUser;
+        });
+    }, []);
+
     // Context value
     const contextValue = useMemo(() => ({
         token,
@@ -397,6 +407,7 @@ export const AuthProvider = ({ children }) => {
         loginUser,
         logoutUser,
         refreshUser,
+        updateUserData,
         API,
         API_URL_IMAGE,
         showToast,
@@ -404,7 +415,7 @@ export const AuthProvider = ({ children }) => {
         systemSettings,
         activeBranding,
         fetchSystemAndBranding
-    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API, refreshUser, systemSettings, activeBranding, fetchSystemAndBranding]);
+    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API, refreshUser, updateUserData, systemSettings, activeBranding, fetchSystemAndBranding]);
 
     return (
         <AuthContext.Provider value={contextValue}>

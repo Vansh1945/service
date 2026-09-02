@@ -976,19 +976,45 @@ const checkFavoriteProviderAvailability = async (req, res, next) => {
     // Smart rules: approved, online, active, service category matches
     const isApproved = providerDoc.approved === true;
     const isOnline = providerDoc.isOnline === true;
-    const isActive = providerDoc.isActive === true;
+    const isActive = providerDoc.isActive !== false;
     const isSuspended = providerDoc.isSuspended === true;
     const blockedTill = providerDoc.blockedTill;
     const isBlocked = blockedTill && new Date(blockedTill) > new Date();
 
-    const serviceCategoryMatch = categoryId ? providerDoc.services?.some(catId => catId.toString() === categoryId.toString()) : true;
+    let serviceCategoryMatch = true;
+    if (categoryId && categoryId !== 'undefined' && categoryId !== 'null') {
+      const targetCatId = (typeof categoryId === 'object' && categoryId._id) ? categoryId._id.toString() : categoryId.toString();
+      if (providerDoc.services && providerDoc.services.length > 0) {
+        serviceCategoryMatch = providerDoc.services.some(s => {
+          if (!s) return false;
+          const sId = (s._id || s).toString();
+          return sId === targetCatId;
+        });
+      }
+    }
+
+    const reasons = [];
+    if (!isApproved) reasons.push('Provider profile is pending admin approval');
+    if (!isOnline) reasons.push('Provider is currently offline');
+    if (!isActive) reasons.push('Provider account is inactive');
+    if (isSuspended) reasons.push('Provider account is currently suspended');
+    if (isBlocked) reasons.push('Provider is temporarily blocked');
+    if (!serviceCategoryMatch) reasons.push('Provider does not offer this service category');
 
     const isAvailable = isApproved && isOnline && isActive && !isSuspended && !isBlocked && serviceCategoryMatch;
 
     return res.status(200).json({
       success: true,
       isAvailable: !!isAvailable,
-      message: isAvailable ? 'Provider is available' : 'Provider is unavailable'
+      message: isAvailable ? 'Provider is online & available' : (reasons.join('. ') || 'Provider is currently unavailable'),
+      details: {
+        isApproved,
+        isOnline,
+        isActive,
+        isSuspended,
+        isBlocked,
+        serviceCategoryMatch
+      }
     });
   } catch (error) {
     global.logger.error(`[UserController.checkFavoriteProviderAvailability] Route: ${req.originalUrl || req.url} - Error checking favorite provider availability: ${error.message}`, error);

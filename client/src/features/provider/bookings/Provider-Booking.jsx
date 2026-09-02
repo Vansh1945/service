@@ -114,68 +114,72 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type =
 const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, minCompletedImages }) => {
   const [images, setImages] = useState([]);
   const [location, setLocation] = useState(null);
-  const [pin, setPin] = useState('');
-  const [notes, setNotes] = useState('');
+  const [pin, setPin] = useState(() => sessionStorage.getItem('p_pin') || '');
+  const [notes, setNotes] = useState(() => sessionStorage.getItem('p_notes') || '');
   const [gettingLocation, setGettingLocation] = useState(false);
   const [compressing, setCompressing] = useState(false);
+
+  const previewUrls = useMemo(() => images.map(img => (typeof img === 'string' ? img : URL.createObjectURL(img))), [images]);
+
+  useEffect(() => {
+    if (isOpen) {
+      sessionStorage.setItem('p_pin', pin);
+      sessionStorage.setItem('p_notes', notes);
+    }
+  }, [isOpen, pin, notes]);
 
   const captureLocation = () => {
     setGettingLocation(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-          setGettingLocation(false);
-        },
-        (err) => {
-          console.warn('Geolocation capture failed, using fallback:', err.message);
-
-          setGettingLocation(false);
-        },
+        (pos) => { setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }); setGettingLocation(false); },
+        () => setGettingLocation(false),
         { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       );
-    } else {
-      setGettingLocation(false);
-    }
+    } else setGettingLocation(false);
   };
 
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
-    if (isOpen) {
-      setImages([]);
-      setPin('');
-      setLocation(null);
-      setNotes('');
-    }
+    if (isOpen) setLocation(null);
+    else { sessionStorage.removeItem('p_pin'); sessionStorage.removeItem('p_notes'); }
   }
 
-  useEffect(() => {
-    if (isOpen) {
-      captureLocation();
-    }
-  }, [isOpen]);
-
+  useEffect(() => { if (isOpen) captureLocation(); }, [isOpen]);
   if (!isOpen) return null;
 
   const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    setImages(prev => [...prev, ...files]);
+    e.stopPropagation();
+    const files = Array.from(e.target.files || []);
+    if (files.length) setImages(prev => [...prev, ...files]);
+    e.target.value = '';
   };
 
-  const handleRemoveImage = (idx) => {
-    setImages(prev => prev.filter((_, i) => i !== idx));
+  const handleRemoveImage = (idx) => setImages(prev => prev.filter((_, i) => i !== idx));
+
+  const handleCloseModal = () => {
+    sessionStorage.removeItem('p_pin');
+    sessionStorage.removeItem('p_notes');
+    sessionStorage.removeItem('active_proof_modal');
+    onClose();
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
     setCompressing(true);
     try {
       const compressedImages = await Promise.all(
         images.map(img => compressImage(img, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }))
       );
+      sessionStorage.removeItem('p_pin');
+      sessionStorage.removeItem('p_notes');
+      sessionStorage.removeItem('active_proof_modal');
       onConfirm(compressedImages, location, pin, notes);
     } catch (err) {
-      console.error("Compression error, using originals:", err);
+      sessionStorage.removeItem('p_pin');
+      sessionStorage.removeItem('p_notes');
+      sessionStorage.removeItem('active_proof_modal');
       onConfirm(images, location, pin, notes);
     } finally {
       setCompressing(false);
@@ -232,10 +236,11 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
             </label>
 
             <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-4">
-              {images.map((img, idx) => (
+              {previewUrls.map((url, idx) => (
                 <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                  <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" loading="lazy" decoding="async" alt="Proof photo attachment" />
+                  <img src={url} className="w-full h-full object-cover" loading="lazy" decoding="async" alt="Proof photo attachment" />
                   <button
+                    type="button"
                     onClick={() => handleRemoveImage(idx)}
                     className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                   >
@@ -321,13 +326,15 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
         {/* Sticky Footer */}
         <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3">
           <button
-            onClick={onClose}
+            type="button"
+            onClick={handleCloseModal}
             disabled={loading || compressing}
             className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold text-secondary hover:bg-gray-100 transition-colors disabled:opacity-50 bg-white"
           >
             Cancel
           </button>
           <button
+            type="button"
             disabled={loading || compressing || images.length < (isStart ? 1 : (minCompletedImages || 1)) || pin.length !== 4 || !location || (!isStart && !notes.trim())}
             onClick={handleSubmit}
             className={`flex-1 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none ${isStart ? 'bg-primary' : 'bg-emerald-600'}`}
@@ -686,7 +693,13 @@ const ProviderBooking = () => {
   const [filter, setFilter] = useState('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', data: null });
-  const [proofModal, setProofModal] = useState({ isOpen: false, action: null, bookingId: null });
+  const [proofModal, setProofModal] = useState(() => JSON.parse(sessionStorage.getItem('active_proof_modal') || '{"isOpen":false,"action":null,"bookingId":null}'));
+
+  useEffect(() => {
+    if (proofModal?.isOpen) sessionStorage.setItem('active_proof_modal', JSON.stringify(proofModal));
+    else sessionStorage.removeItem('active_proof_modal');
+  }, [proofModal]);
+
   const [paymentVerificationModal, setPaymentVerificationModal] = useState({ isOpen: false, booking: null });
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalBookings: 0, completedBookings: 0, pendingBookings: 0, totalCashCollected: 0, commissionPayable: 0, netEarnings: 0 });
@@ -701,6 +714,7 @@ const ProviderBooking = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState({ id: null, type: null });
   const [selectedImages, setSelectedImages] = useState([]);
+  const selectedImagePreviews = useMemo(() => selectedImages.map(img => typeof img === 'string' ? img : URL.createObjectURL(img)), [selectedImages]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [navModal] = useState({ isOpen: false, booking: null });
 
@@ -2082,8 +2096,9 @@ const ProviderBooking = () => {
                       <div className="flex flex-wrap gap-2">
                         {selectedImages.map((file, idx) => (
                           <div key={idx} className="relative group w-14 h-14 rounded-lg overflow-hidden border border-primary/30">
-                            <img src={URL.createObjectURL(file)} alt="Upload preview thumbnail" loading="lazy" decoding="async" width={56} height={56} className="w-full h-full object-cover" />
+                            <img src={selectedImagePreviews[idx] || ''} alt="Upload preview thumbnail" loading="lazy" decoding="async" width={56} height={56} className="w-full h-full object-cover" />
                             <button
+                              type="button"
                               onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
                               className="absolute top-0 right-0 p-0.5 bg-red-500 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
                               disabled={uploadProgress > 0}

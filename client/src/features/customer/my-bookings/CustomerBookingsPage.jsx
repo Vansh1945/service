@@ -100,8 +100,14 @@ const getCompletionPin = (booking) => {
 
 
 const renderStars = (rating = 0) => {
-  const count = Math.min(5, Math.max(0, Math.floor(rating)));
+  const count = Math.min(5, Math.max(0, Math.round(rating)));
   return '★'.repeat(count) + '☆'.repeat(5 - count);
+};
+
+const getProviderRating = (provider) => {
+  if (!provider) return 0;
+  const raw = provider.rating ?? provider.averageRating ?? provider.performanceScore?.rating ?? provider.performanceScore?.averageRating ?? 0;
+  return Number(raw) || 0;
 };
 
 // ─── Provider Card ────────────────────────────────────────────────────────────
@@ -109,7 +115,7 @@ const renderStars = (rating = 0) => {
 const ProviderCard = ({ provider, status, compact = false, onCall, onChat, bookingId, onToggleFavorite, user }) => {
   if (!provider) return null;
 
-  const rating = provider.rating || provider.averageRating || 4.5;
+  const rating = getProviderRating(provider);
   const completedCount = (provider.completedBookings !== undefined ? provider.completedBookings : provider.completedJobs) || 0;
   const providerIdStr = (provider._id || provider.id)?.toString();
   const isFavorited = user?.favoriteProviders?.some(fp => (fp.providerId?._id || fp.providerId)?.toString() === providerIdStr);
@@ -148,7 +154,8 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
 
         {onToggleFavorite && (
           <button
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(provider); }}
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(provider, e); }}
             className={`p-2 rounded-xl transition-all border shadow-sm ${isFavorited
                 ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
                 : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-rose-500'
@@ -441,7 +448,8 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                       )}
                       {onToggleFavorite && (
                         <button
-                          onClick={() => onToggleFavorite(provider)}
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(provider, e); }}
                           className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border shadow-xs ml-auto ${isModalFavorited
                               ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
                               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-rose-500'
@@ -455,8 +463,8 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                     </div>
                     <p className="text-xs font-bold text-slate-500 mt-0.5 uppercase tracking-wide">Professional Partner</p>
                     <div className="flex items-center gap-2 mt-1.5 text-xs">
-                      <span className="text-amber-500 font-extrabold tracking-wider">{renderStars(provider.rating || provider.averageRating || 4.5)}</span>
-                      <span className="font-extrabold text-slate-700">{Number(provider.rating || provider.averageRating || 4.5).toFixed(1)}</span>
+                      <span className="text-amber-500 font-extrabold tracking-wider">{renderStars(getProviderRating(provider))}</span>
+                      <span className="font-extrabold text-slate-700">{getProviderRating(provider).toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
@@ -949,15 +957,37 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
 // ─── Main Page ───────────────
 
 const CustomerBookingsPage = () => {
-  const { token, API, showToast, user, refreshUser } = useAuth();
+  const { token, API, showToast, user, refreshUser, updateUserData } = useAuth();
   const { socket } = useSocket();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
   const [actionLoading, setActionLoading] = useState({});
 
-  const handleToggleFavorite = async (provider) => {
+  const handleToggleFavorite = async (provider, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!provider) return;
+    const providerIdStr = (provider._id || provider.id)?.toString();
+    if (!providerIdStr) return;
+
+    const currentFavs = user?.favoriteProviders || [];
+    const isCurrentlyFavorited = currentFavs.some(fp => (fp.providerId?._id || fp.providerId)?.toString() === providerIdStr);
+
+    // Optimistic local update
+    let newFavs;
+    if (isCurrentlyFavorited) {
+      newFavs = currentFavs.filter(fp => (fp.providerId?._id || fp.providerId)?.toString() !== providerIdStr);
+    } else {
+      newFavs = [...currentFavs, { providerId: provider._id || provider.id, providerName: provider.name, category: provider.category || 'N/A' }];
+    }
+
+    if (updateUserData) {
+      updateUserData({ favoriteProviders: newFavs });
+    }
+
     try {
       const res = await toggleFavoriteProvider({
         providerId: provider._id || provider.id,
@@ -966,9 +996,15 @@ const CustomerBookingsPage = () => {
       });
       if (res.data?.success) {
         showToast(res.data.message || 'Updated favorites', 'success');
-        refreshUser(); // Updates user context favorites
+        if (res.data.favoriteProviders && updateUserData) {
+          updateUserData({ favoriteProviders: res.data.favoriteProviders });
+        }
       }
     } catch (err) {
+      // Rollback on failure
+      if (updateUserData) {
+        updateUserData({ favoriteProviders: currentFavs });
+      }
       showToast(err.response?.data?.message || err.message || 'Failed to update favorites', 'error');
     }
   };

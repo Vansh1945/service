@@ -1825,17 +1825,36 @@ class BookingService {
 
       const bookingIds = filteredBookings.map(b => b._id);
 
-      // Batch fetch transactions and provider earnings to prevent N+1 database queries
+      // Batch fetch transactions, provider earnings, and provider dynamic ratings to prevent N+1 database queries
       const Transaction = require('../payment/transaction-model');
-      const [transactions, earnings] = await Promise.all([
+      const providerIds = Array.from(new Set(filteredBookings.map(b => b.provider?._id || b.provider).filter(Boolean).map(id => id.toString())));
+      const Feedback = mongoose.model('Feedback');
+
+      const [transactions, earnings, providerFeedbacks] = await Promise.all([
         Transaction.find({
           booking: { $in: bookingIds },
           paymentStatus: { $in: ['completed', 'paid'] }
         }).sort({ createdAt: -1 }).lean(),
         ProviderEarning.find({
           booking: { $in: bookingIds }
-        }).lean()
+        }).lean(),
+        providerIds.length > 0
+          ? Feedback.aggregate([
+              { $match: { 'providerFeedback.provider': { $in: providerIds.map(id => new mongoose.Types.ObjectId(id)) } } },
+              { $group: { _id: '$providerFeedback.provider', avgRating: { $avg: '$providerFeedback.rating' } } }
+            ]).catch(err => {
+              global.logger?.warn?.(`Error calculating provider dynamic ratings: ${err.message}`);
+              return [];
+            })
+          : Promise.resolve([])
       ]);
+
+      const providerRatingMap = {};
+      (providerFeedbacks || []).forEach(f => {
+        if (f._id && f.avgRating) {
+          providerRatingMap[f._id.toString()] = parseFloat(f.avgRating.toFixed(1));
+        }
+      });
 
       const transactionMap = {};
       transactions.forEach(t => {
@@ -1855,6 +1874,13 @@ class BookingService {
       const bookingsWithTransactions = await Promise.all(
         filteredBookings.map(async (booking) => {
           const bookingObj = booking;
+
+          if (bookingObj.provider && typeof bookingObj.provider === 'object') {
+            const pIdStr = (bookingObj.provider._id || bookingObj.provider).toString();
+            const calculatedRating = providerRatingMap[pIdStr] ?? bookingObj.provider.performanceScore?.rating ?? bookingObj.provider.performanceScore?.averageRating ?? bookingObj.provider.rating ?? bookingObj.provider.averageRating ?? 0;
+            bookingObj.provider.rating = calculatedRating;
+            bookingObj.provider.averageRating = calculatedRating;
+          }
 
           const transaction = transactionMap[booking._id.toString()];
           if (transaction) {
