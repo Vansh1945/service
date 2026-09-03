@@ -18,6 +18,11 @@ const bannerSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    link: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     startDate: Date,
     endDate: Date,
     isDeleted: { type: Boolean, default: false, index: true },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
 import { useAuth } from "../context/auth";
@@ -12,6 +13,7 @@ import { getBanners } from "../services/SystemService";
 
 const HeroSection = ({ noMargin = false }) => {
   const { API } = useAuth();
+  const navigate = useNavigate();
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +22,17 @@ const HeroSection = ({ noMargin = false }) => {
     title: "Power Your Home & Business with Reliable Electrical Services",
     subtitle:
       "Expert wiring, repair, and maintenance for homes & industries across North India.",
+    link: "/customer/services-list?category=All",
     isDefault: true,
+  };
+
+  const handleBannerClick = (banner) => {
+    const targetLink = banner.link?.trim() || "/customer/services-list?category=All";
+    if (targetLink.startsWith("http://") || targetLink.startsWith("https://")) {
+      window.open(targetLink, "_blank");
+    } else {
+      navigate(targetLink);
+    }
   };
 
   useEffect(() => {
@@ -96,7 +108,10 @@ const HeroSection = ({ noMargin = false }) => {
 
             return (
               <SwiperSlide key={banner._id ? `${banner._id}-${index}` : `${banner.image}-${index}`}>
-                <div className="relative w-full h-[140px] sm:h-[180px] md:h-[220px] rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                <div
+                  onClick={() => handleBannerClick(banner)}
+                  className="relative w-full h-[140px] sm:h-[180px] md:h-[220px] rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer hover:scale-[1.01]"
+                >
                   {/* Main image */}
                   <img
                     src={banner.image}

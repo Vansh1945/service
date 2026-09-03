@@ -22,12 +22,12 @@ const getBanners = async (req, res, next) => {
 // Create Banner (Admin)
 const createBanner = async (req, res, next) => {
   try {
-    const { title, subtitle, startDate, endDate, noExpiry } = req.body;
+    const { title, subtitle, startDate, endDate, noExpiry, link } = req.body;
 
     let finalStartDate = startDate ? new Date(startDate) : new Date();
     let finalEndDate = (noExpiry === 'true' || noExpiry === true) ? null : (endDate ? new Date(endDate) : null);
 
-    const bannerData = { title, subtitle, startDate: finalStartDate, endDate: finalEndDate };
+    const bannerData = { title, subtitle, link: link || '', startDate: finalStartDate, endDate: finalEndDate };
 
     // Handle image upload
     if (req.files && req.files.image && req.files.image[0]) {
@@ -66,12 +66,12 @@ const getAllBannersAdmin = async (req, res, next) => {
 const updateBanner = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { image, title, subtitle, startDate, endDate, noExpiry } = req.body;
+    const { image, title, subtitle, startDate, endDate, noExpiry, link } = req.body;
 
     let finalStartDate = startDate ? new Date(startDate) : new Date();
     let finalEndDate = (noExpiry === 'true' || noExpiry === true) ? null : (endDate ? new Date(endDate) : null);
 
-    const updateData = { title, subtitle, startDate: finalStartDate, endDate: finalEndDate };
+    const updateData = { title, subtitle, link: link !== undefined ? link : '', startDate: finalStartDate, endDate: finalEndDate };
 
     // Handle image upload
     if (req.files && req.files.image && req.files.image[0]) {

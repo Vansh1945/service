@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/auth';
-import { toast } from '../../../components/ui/Toast';
 
-import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaImage, FaTag, FaBullhorn, FaCalendar, FaUpload } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaImage, FaTag, FaBullhorn, FaCalendar, FaUpload, FaLink } from 'react-icons/fa';
 import * as SystemService from '../../../services/SystemService';
 import useCategory from '../../../hooks/useCategory';
 import { formatDate } from '../../../utils/format';
@@ -23,6 +22,7 @@ const CategoryBanner = () => {
     image: '',
     title: '',
     subtitle: '',
+    link: '',
     startDate: '',
     endDate: '',
     noExpiry: false
@@ -33,7 +33,7 @@ const CategoryBanner = () => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  const { API, _token } = useAuth();
+  const { showToast } = useAuth();
 
   useEffect(() => {
     fetchData();
@@ -79,17 +79,18 @@ const CategoryBanner = () => {
 
   const addBanner = async () => {
     if (!newBanner.image) {
-      toast.error('Please upload a banner image');
+      showToast('Please upload a banner image', 'error');
       return;
     }
 
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append('title', newBanner.title);
-      formData.append('subtitle', newBanner.subtitle);
-      formData.append('startDate', newBanner.startDate);
-      formData.append('endDate', newBanner.endDate);
+      formData.append('title', newBanner.title || '');
+      formData.append('subtitle', newBanner.subtitle || '');
+      formData.append('link', newBanner.link || '');
+      formData.append('startDate', newBanner.startDate || '');
+      formData.append('endDate', newBanner.endDate || '');
       formData.append('noExpiry', newBanner.noExpiry);
       if (newBanner.image) {
         formData.append('image', newBanner.image);
@@ -98,13 +99,13 @@ const CategoryBanner = () => {
       const response = await SystemService.createBanner(formData);
       const data = response.data;
       setBanners([...banners, data.data]);
-      setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
+      setNewBanner({ image: '', title: '', subtitle: '', link: '', startDate: '', endDate: '', noExpiry: false });
       setPreviewBanner('');
       setFileInputKey(prev => prev + 1);
-      toast.success('Banner added successfully');
+      showToast('Banner added successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to add banner');
+      showToast(error.response?.data?.message || 'Failed to add banner', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -114,10 +115,11 @@ const CategoryBanner = () => {
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append('title', newBanner.title);
-      formData.append('subtitle', newBanner.subtitle);
-      formData.append('startDate', newBanner.startDate);
-      formData.append('endDate', newBanner.endDate);
+      formData.append('title', newBanner.title || '');
+      formData.append('subtitle', newBanner.subtitle || '');
+      formData.append('link', newBanner.link || '');
+      formData.append('startDate', newBanner.startDate || '');
+      formData.append('endDate', newBanner.endDate || '');
       formData.append('noExpiry', newBanner.noExpiry);
       if (bannerImageFile) {
         formData.append('image', bannerImageFile);
@@ -126,15 +128,15 @@ const CategoryBanner = () => {
       await SystemService.updateBanner(editingBanner._id, formData);
 
       setEditingBanner(null);
-      setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
+      setNewBanner({ image: '', title: '', subtitle: '', link: '', startDate: '', endDate: '', noExpiry: false });
       setBannerImageFile(null);
       setPreviewBanner('');
       setFileInputKey(prev => prev + 1);
       fetchData();
-      toast.success('Banner updated successfully');
+      showToast('Banner updated successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to update banner');
+      showToast(error.response?.data?.message || 'Failed to update banner', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -152,10 +154,10 @@ const CategoryBanner = () => {
     try {
       await SystemService.deleteBanner(id);
       setBanners(banners.filter(banner => banner._id !== id));
-      toast.success('Banner removed successfully');
+      showToast('Banner removed successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to remove banner');
+      showToast(error.response?.data?.message || 'Failed to remove banner', 'error');
     }
   };
 
@@ -165,7 +167,7 @@ const CategoryBanner = () => {
 
   const createCategory = async () => {
     if (!newCategory.name) {
-      toast.error('Category name is required');
+      showToast('Category name is required', 'error');
       return;
     }
 
@@ -183,10 +185,10 @@ const CategoryBanner = () => {
       setNewCategory({ name: '', icon: '', description: '' });
       setCategoryIconFile(null);
       refreshCategories();
-      toast.success('Category created successfully');
+      showToast('Category created successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to create category');
+      showToast(error.response?.data?.message || 'Failed to create category', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -208,10 +210,10 @@ const CategoryBanner = () => {
       setNewCategory({ name: '', icon: '', description: '' });
       setCategoryIconFile(null);
       refreshCategories();
-      toast.success('Category updated successfully');
+      showToast('Category updated successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to update category');
+      showToast(error.response?.data?.message || 'Failed to update category', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -229,10 +231,10 @@ const CategoryBanner = () => {
     try {
       await SystemService.deleteCategory(id);
       refreshCategories();
-      toast.success('Category deleted successfully');
+      showToast('Category deleted successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to delete category');
+      showToast(error.response?.data?.message || 'Failed to delete category', 'error');
     }
   };
 
@@ -240,10 +242,10 @@ const CategoryBanner = () => {
     try {
       await SystemService.toggleCategoryStatus(id);
       refreshCategories();
-      toast.success('Category status updated successfully');
+      showToast('Category status updated successfully', 'success');
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Failed to toggle category status');
+      showToast(error.response?.data?.message || 'Failed to toggle category status', 'error');
     }
   };
 
@@ -256,8 +258,9 @@ const CategoryBanner = () => {
   const editBanner = (banner) => {
     setEditingBanner(banner);
     setNewBanner({
-      title: banner.title,
-      subtitle: banner.subtitle,
+      title: banner.title || '',
+      subtitle: banner.subtitle || '',
+      link: banner.link || '',
       startDate: banner.startDate ? banner.startDate.split('T')[0] : '',
       endDate: banner.endDate ? banner.endDate.split('T')[0] : '',
       noExpiry: !banner.endDate
@@ -267,7 +270,7 @@ const CategoryBanner = () => {
 
   const resetBannerForm = () => {
     setEditingBanner(null);
-    setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
+    setNewBanner({ image: '', title: '', subtitle: '', link: '', startDate: '', endDate: '', noExpiry: false });
     setBannerImageFile(null);
     setPreviewBanner('');
     setFileInputKey(prev => prev + 1);
@@ -413,6 +416,44 @@ const CategoryBanner = () => {
                     />
                   </div>
 
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-secondary font-inter">
+                        <FaLink className="inline mr-2 text-accent" />
+                        Redirect URL / Target Link
+                      </label>
+                      {categories && categories.length > 0 && (
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setNewBanner({ ...newBanner, link: e.target.value });
+                            }
+                          }}
+                          className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white text-secondary outline-none focus:border-accent cursor-pointer"
+                          value=""
+                        >
+                          <option value="" disabled>⚡ Quick Category Select</option>
+                          <option value="/customer/services-list?category=All">All Services (/customer/services-list?category=All)</option>
+                          {categories.map((cat) => (
+                            <option key={cat._id || cat.name} value={`/customer/services-list?category=${encodeURIComponent(cat.name)}`}>
+                              {cat.name} (/customer/services-list?category={cat.name})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. /customer/services-list?category=All or https://..."
+                      value={newBanner.link || ''}
+                      onChange={(e) => setNewBanner({ ...newBanner, link: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent/30 focus:border-accent outline-none transition-all font-inter text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      When user clicks on this banner, they will be navigated to this page.
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-secondary mb-2 font-inter">
@@ -526,7 +567,13 @@ const CategoryBanner = () => {
                       <div className="p-4">
                         <h4 className="font-semibold text-secondary mb-1 truncate font-inter">{banner.title}</h4>
                         {banner.subtitle && (
-                          <p className="text-gray-600 text-sm mb-3 truncate font-inter">{banner.subtitle}</p>
+                          <p className="text-gray-600 text-sm mb-2 truncate font-inter">{banner.subtitle}</p>
+                        )}
+                        {banner.link && (
+                          <div className="mb-3 text-xs text-teal-700 font-medium truncate flex items-center gap-1.5 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-lg">
+                            <FaLink className="shrink-0 text-teal-600" />
+                            <span className="truncate">{banner.link}</span>
+                          </div>
                         )}
                         <div className="flex justify-between text-xs text-gray-500 font-inter">
                           <span>Start: {formatDate(banner.startDate)}</span>

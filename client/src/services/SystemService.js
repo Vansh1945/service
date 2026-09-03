@@ -30,11 +30,19 @@ export const updateSystemSetting = (data) => {
 };
 
 export const createCategory = (data) => {
-    return axiosInstance.post("/system-setting/admin/categories", data);
+    return axiosInstance.post("/system-setting/admin/categories", data, {
+        headers: {
+            "Content-Type": "multipart/form-data"
+        }
+    });
 };
 
 export const updateCategory = (id, data) => {
-    return axiosInstance.put(`/system-setting/admin/categories/${id}`, data);
+    return axiosInstance.put(`/system-setting/admin/categories/${id}`, data, {
+        headers: {
+            "Content-Type": "multipart/form-data"
+        }
+    });
 };
 
 export const deleteCategory = (id) => {
@@ -46,11 +54,19 @@ export const toggleCategoryStatus = (id) => {
 };
 
 export const createBanner = (data) => {
-    return axiosInstance.post("/system-setting/admin/banners", data);
+    return axiosInstance.post("/system-setting/admin/banners", data, {
+        headers: {
+            "Content-Type": "multipart/form-data"
+        }
+    });
 };
 
 export const updateBanner = (id, data) => {
-    return axiosInstance.put(`/system-setting/admin/banners/${id}`, data);
+    return axiosInstance.put(`/system-setting/admin/banners/${id}`, data, {
+        headers: {
+            "Content-Type": "multipart/form-data"
+        }
+    });
 };
 export const deleteBanner = (id) => {
     return axiosInstance.delete(`/system-setting/admin/banners/${id}`);

@@ -102,22 +102,37 @@ export const initWebVitals = () => {
 
     import("web-vitals").then(({ onLCP, onINP, onCLS, onFCP, onTTFB }) => {
         const sendMetric = (metric) => {
-            const params = {
-                event_category: "Web Vitals",
-                value: Math.round(metric.name === "CLS" ? metric.value * 1000 : metric.value),
-                metric_id: metric.id,
-                metric_value: metric.value,
-                metric_rating: metric.rating
-            };
+            try {
+                if (!metric || !metric.name) return;
+                const params = {
+                    event_category: "Web Vitals",
+                    value: Math.round(metric.name === "CLS" ? (metric.value || 0) * 1000 : (metric.value || 0)),
+                    metric_id: metric.id,
+                    metric_value: metric.value,
+                    metric_rating: metric.rating
+                };
 
-            trackEvent(metric.name, params);
+                trackEvent(metric.name, params);
+            } catch (err) {
+                // Ignore web vitals metric tracking failures
+            }
         };
 
-        onLCP(sendMetric);
-        onINP(sendMetric);
-        onCLS(sendMetric);
-        onFCP(sendMetric);
-        onTTFB(sendMetric);
+        const safeListen = (vitalFn) => {
+            try {
+                if (typeof vitalFn === "function") {
+                    vitalFn(sendMetric);
+                }
+            } catch (err) {
+                console.warn("[Web Vitals] Error initializing metric listener:", err?.message || err);
+            }
+        };
+
+        safeListen(onLCP);
+        safeListen(onINP);
+        safeListen(onCLS);
+        safeListen(onFCP);
+        safeListen(onTTFB);
     }).catch(err => {
         console.warn("[Web Vitals] Failed to load web-vitals module:", err.message);
     });

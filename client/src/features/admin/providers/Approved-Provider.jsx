@@ -172,6 +172,15 @@ const AdminProviders = () => {
   const [statusFilter, setStatusFilter] = useState('approved');
   const [serviceFilter, setServiceFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [processingAction, setProcessingAction] = useState(null);
+  const [approvalRemarks, setApprovalRemarks] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState({ show: false, action: null });
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const [actionModal, setActionModal] = useState({ isOpen: false, type: null, provider: null });
+  const [actionRemarks, setActionRemarks] = useState('');
+  const [durationValue, setDurationValue] = useState('');
+
   const {
     currentPage,
     setCurrentPage,
@@ -181,18 +190,6 @@ const AdminProviders = () => {
     setPaginationData,
     resetPagination
   } = usePagination(1, 10);
-
-  useEffect(() => {
-    setPaginationData({ total: filteredProviders.length });
-  }, [filteredProviders.length, setPaginationData]);
-  const [loading, setLoading] = useState(false);
-  const [processingAction, setProcessingAction] = useState(null);
-  const [approvalRemarks, setApprovalRemarks] = useState('');
-  const [showConfirmModal, setShowConfirmModal] = useState({ show: false, action: null });
-  const [activeDropdownId, setActiveDropdownId] = useState(null);
-  const [actionModal, setActionModal] = useState({ isOpen: false, type: null, provider: null });
-  const [actionRemarks, setActionRemarks] = useState('');
-  const [durationValue, setDurationValue] = useState('');
 
   // ─── Derived state via useMemo (replaces two separate useEffects) ────────────────
   const filteredProviders = useMemo(() => {
@@ -219,6 +216,10 @@ const AdminProviders = () => {
     }
     return filtered;
   }, [providers, statusFilter, searchTerm, serviceFilter, ratingFilter]);
+
+  useEffect(() => {
+    setPaginationData({ total: filteredProviders.length });
+  }, [filteredProviders.length, setPaginationData]);
 
   const stats = useMemo(() => ({
     total: providers.length,
@@ -719,6 +720,107 @@ const AdminProviders = () => {
             handleStatusUpdate={handleStatusUpdate}
             handleDownloadPDF={handleDownloadPDF}
           />
+        )}
+
+        {/* Dedicated Action Confirmation Modal */}
+        {actionModal.isOpen && (
+          <Modal
+            isOpen={actionModal.isOpen}
+            onClose={() => setActionModal({ isOpen: false, type: null, provider: null })}
+            title={
+              actionModal.type === 'restricted'
+                ? 'Restrict Provider Account'
+                : actionModal.type === 'suspended'
+                  ? 'Suspend Provider Account'
+                  : actionModal.type === 'blocked'
+                    ? 'Block Provider Account'
+                    : 'Activate / Restore Provider Account'
+            }
+            size="medium"
+          >
+            <div className="space-y-4 p-1">
+              {/* Impact Guide Box */}
+              <div className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs ${actionModal.type === 'restricted'
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : actionModal.type === 'suspended'
+                    ? 'bg-rose-50 border-rose-200 text-rose-900'
+                    : actionModal.type === 'blocked'
+                      ? 'bg-red-50 border-red-200 text-red-900'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                }`}>
+                <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold uppercase tracking-wider text-[11px]">Action Impact Guide</p>
+                  <p className="leading-relaxed font-medium">
+                    {actionModal.type === 'restricted' && '⚠️ Restricting this account disables new booking assignments. The provider can still log in and view earnings history.'}
+                    {actionModal.type === 'suspended' && '⛔ Suspending this account restricts all provider login operations. The provider will be logged out immediately.'}
+                    {actionModal.type === 'blocked' && '🚫 Blocking this account results in full account termination. Active sessions will be terminated and booking dispatches blocked.'}
+                    {actionModal.type === 'active' && '✅ Restores full access. The provider will be able to log in and receive new booking assignments.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Justification Field */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">
+                  Reason / Justification {actionModal.type !== 'active' && <span className="text-rose-500">*</span>}
+                  <span className="text-neutral-400 font-normal text-[11px] block mt-0.5">
+                    This explanation will be sent in an email & push notification to the provider.
+                  </span>
+                </label>
+                <textarea
+                  value={actionRemarks}
+                  onChange={(e) => setActionRemarks(e.target.value)}
+                  placeholder={`Enter exact reason for ${actionModal.type} action...`}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white resize-none shadow-2xs font-medium"
+                  rows="3"
+                />
+              </div>
+
+              {/* Duration Field */}
+              {(actionModal.type === 'restricted' || actionModal.type === 'blocked') && (
+                <div>
+                  <label className="block text-xs font-bold text-neutral-700 mb-1">
+                    Duration in Days <span className="text-neutral-400 font-normal">(Optional - leave blank for permanent/indefinite)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder={actionModal.type === 'restricted' ? 'e.g. 7 (blank for indefinite)' : 'e.g. 30 (blank for permanent)'}
+                    value={durationValue}
+                    onChange={(e) => setDurationValue(e.target.value)}
+                    className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white shadow-2xs font-medium"
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActionModal({ isOpen: false, type: null, provider: null })}
+                  className="flex-1 py-2.5 px-4 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-all shadow-2xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmActionModal}
+                  disabled={processingAction}
+                  className={`flex-1 py-2.5 px-4 text-xs font-bold text-white rounded-xl transition-all shadow-2xs active:scale-95 disabled:opacity-50 ${actionModal.type === 'restricted'
+                      ? 'bg-amber-500 hover:bg-amber-600'
+                      : actionModal.type === 'suspended'
+                        ? 'bg-rose-600 hover:bg-rose-700'
+                        : actionModal.type === 'blocked'
+                          ? 'bg-red-700 hover:bg-red-800'
+                          : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
+                >
+                  {processingAction === actionModal.type ? 'Processing...' : `Confirm ${actionModal.type === 'active' ? 'Activation' : actionModal.type.charAt(0).toUpperCase() + actionModal.type.slice(1)}`}
+                </button>
+              </div>
+            </div>
+          </Modal>
         )}
       </div>
     </div>
@@ -1223,107 +1325,6 @@ const ProviderModal = ({
           </button>
         </div>
       </div>
-
-      {/* Dedicated Action Confirmation Modal */}
-      {actionModal.isOpen && (
-        <Modal
-          isOpen={actionModal.isOpen}
-          onClose={() => setActionModal({ isOpen: false, type: null })}
-          title={
-            actionModal.type === 'restricted'
-              ? 'Restrict Provider Account'
-              : actionModal.type === 'suspended'
-                ? 'Suspend Provider Account'
-                : actionModal.type === 'blocked'
-                  ? 'Block Provider Account'
-                  : 'Activate / Restore Provider Account'
-          }
-          size="medium"
-        >
-          <div className="space-y-4 p-1">
-            {/* Impact Guide Box */}
-            <div className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs ${actionModal.type === 'restricted'
-                ? 'bg-amber-50 border-amber-200 text-amber-900'
-                : actionModal.type === 'suspended'
-                  ? 'bg-rose-50 border-rose-200 text-rose-900'
-                  : actionModal.type === 'blocked'
-                    ? 'bg-red-50 border-red-200 text-red-900'
-                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              }`}>
-              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-bold uppercase tracking-wider text-[11px]">Action Impact Guide</p>
-                <p className="leading-relaxed font-medium">
-                  {actionModal.type === 'restricted' && '⚠️ Restricting this account disables new booking assignments. The provider can still log in and view earnings history.'}
-                  {actionModal.type === 'suspended' && '⛔ Suspending this account restricts all provider login operations. The provider will be logged out immediately.'}
-                  {actionModal.type === 'blocked' && '🚫 Blocking this account results in full account termination. Active sessions will be terminated and booking dispatches blocked.'}
-                  {actionModal.type === 'active' && '✅ Restores full access. The provider will be able to log in and receive new booking assignments.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Justification Field */}
-            <div>
-              <label className="block text-xs font-bold text-neutral-700 mb-1">
-                Reason / Justification {actionModal.type !== 'active' && <span className="text-rose-500">*</span>}
-                <span className="text-neutral-400 font-normal text-[11px] block mt-0.5">
-                  This explanation will be sent in an email & push notification to the provider.
-                </span>
-              </label>
-              <textarea
-                value={actionRemarks}
-                onChange={(e) => setActionRemarks(e.target.value)}
-                placeholder={`Enter exact reason for ${actionModal.type} action...`}
-                className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white resize-none shadow-2xs font-medium"
-                rows="3"
-              />
-            </div>
-
-            {/* Duration Field */}
-            {(actionModal.type === 'restricted' || actionModal.type === 'blocked') && (
-              <div>
-                <label className="block text-xs font-bold text-neutral-700 mb-1">
-                  Duration in Days <span className="text-neutral-400 font-normal">(Optional - leave blank for permanent/indefinite)</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder={actionModal.type === 'restricted' ? 'e.g. 7 (blank for indefinite)' : 'e.g. 30 (blank for permanent)'}
-                  value={durationValue}
-                  onChange={(e) => setDurationValue(e.target.value)}
-                  className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white shadow-2xs font-medium"
-                />
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setActionModal({ isOpen: false, type: null })}
-                className="flex-1 py-2.5 px-4 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-all shadow-2xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmActionModal}
-                disabled={processingAction}
-                className={`flex-1 py-2.5 px-4 text-xs font-bold text-white rounded-xl transition-all shadow-2xs active:scale-95 disabled:opacity-50 ${actionModal.type === 'restricted'
-                    ? 'bg-amber-500 hover:bg-amber-600'
-                    : actionModal.type === 'suspended'
-                      ? 'bg-rose-600 hover:bg-rose-700'
-                      : actionModal.type === 'blocked'
-                        ? 'bg-red-700 hover:bg-red-800'
-                        : 'bg-emerald-600 hover:bg-emerald-700'
-                  }`}
-              >
-                {processingAction === actionModal.type ? 'Processing...' : `Confirm ${actionModal.type === 'active' ? 'Activation' : actionModal.type.charAt(0).toUpperCase() + actionModal.type.slice(1)}`}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 };
