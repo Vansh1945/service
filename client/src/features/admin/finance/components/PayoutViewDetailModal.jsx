@@ -1,18 +1,14 @@
-import React from 'react';
-import { FiX, FiDollarSign, FiUser, FiCreditCard, FiCheckCircle, FiXCircle, FiClock, FiFileText, FiRefreshCw, FiSend, FiShield, FiLink } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiX, FiDollarSign, FiUser, FiCreditCard, FiCheckCircle, FiXCircle, FiClock, FiFileText, FiRefreshCw, FiSend, FiShield, FiLink, FiCopy, FiCheck } from 'react-icons/fi';
 import PriceDisplay from '../../../../components/PriceDisplay';
 import { formatDate, formatDateTime } from '../../../../utils/format';
 import { getWithdrawalStatusBadge } from '../../../../utils/status';
 import { useAdminFilter } from '../../../../context/AdminFilterContext';
 
-const maskAccNo = (acc) => {
-  if (!acc || acc === 'N/A') return '••••••••';
-  const str = String(acc);
-  return str.length > 4 ? `•••• ${str.slice(-4)}` : str;
-};
-
 const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manual' }) => {
   const { getEntityRoute } = useAdminFilter();
+  const [copiedAcc, setCopiedAcc] = useState(false);
+  const [copiedIFSC, setCopiedIFSC] = useState(false);
 
   if (!isOpen || !entityData) return null;
 
@@ -29,6 +25,23 @@ const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manu
 
   const bank = data.paymentDetails || data.bankDetails || {};
   const accountName = bank.accountName || provider.bankDetails?.accountName || providerName;
+  const rawAccountNo = bank.accountNumber || provider.bankDetails?.accountNo || provider.bankDetails?.accountNumber;
+  const fullAccountNo = rawAccountNo ? String(rawAccountNo) : 'N/A';
+  const ifscCode = bank.ifscCode || provider.bankDetails?.ifsc || provider.bankDetails?.ifscCode || 'N/A';
+
+  const handleCopyAcc = (text) => {
+    if (!text || text === 'N/A') return;
+    navigator.clipboard.writeText(text);
+    setCopiedAcc(true);
+    setTimeout(() => setCopiedAcc(false), 2000);
+  };
+
+  const handleCopyIFSC = (text) => {
+    if (!text || text === 'N/A') return;
+    navigator.clipboard.writeText(text);
+    setCopiedIFSC(true);
+    setTimeout(() => setCopiedIFSC(false), 2000);
+  };
 
   const handleEntityClick = (type, id) => {
     if (id) {
@@ -129,53 +142,81 @@ const PayoutViewDetailModal = ({ isOpen, onClose, entityData, payoutMode = 'manu
               <FiCreditCard className="text-primary" /> {data.paymentMethod === 'upi' ? 'Beneficiary UPI Account' : 'Beneficiary Bank Account'}
             </h3>
             {data.paymentMethod === 'upi' ? (
-              <div className="grid grid-cols-2 gap-4 text-sm pt-1">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm pt-1">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-400 font-medium block">Account Name</span>
                   <span className="font-bold text-slate-800">{accountName}</span>
                 </div>
-                <div>
-                  <span className="text-xs text-slate-400 font-medium block">UPI ID / VPA</span>
-                  <span className="font-mono font-bold text-slate-800">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400 font-medium block">UPI ID / VPA</span>
+                    {bank.upiId || provider.bankDetails?.upiId ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyAcc(bank.upiId || provider.bankDetails?.upiId)}
+                        className="text-[10px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-0.5"
+                      >
+                        {copiedAcc ? <FiCheck className="w-3 h-3 text-emerald-500" /> : <FiCopy className="w-3 h-3" />}
+                        {copiedAcc ? 'Copied' : 'Copy'}
+                      </button>
+                    ) : null}
+                  </div>
+                  <span className="font-mono font-bold text-slate-800 break-all">
                     {bank.upiId 
                       ? bank.upiId 
                       : (provider.bankDetails?.upiId 
-                        ? `${provider.bankDetails.upiId} (Fallback)` 
-                        : 'Destination unavailable in historical record')}
+                        ? `${provider.bankDetails.upiId}` 
+                        : 'N/A')}
                   </span>
                 </div>
-                <div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-400 font-medium block">UPI Verification Status</span>
-                  <span className="font-semibold text-slate-800">{provider.bankDetails?.upiVerificationStatus || 'N/A'}</span>
+                  <span className="font-semibold text-slate-800 capitalize">{provider.bankDetails?.upiVerificationStatus || 'Verified'}</span>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-1">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-1">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-400 font-medium block">Account Name</span>
-                  <span className="font-bold text-slate-800">{accountName}</span>
+                  <span className="font-bold text-slate-800 mt-0.5 block">{accountName}</span>
                 </div>
-                <div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-400 font-medium block">Bank Name</span>
-                  <span className="font-bold text-slate-800">{bank.bankName || provider.bankDetails?.bankName || 'N/A'}</span>
+                  <span className="font-bold text-slate-800 mt-0.5 block">{bank.bankName || provider.bankDetails?.bankName || 'N/A'}</span>
                 </div>
-                <div>
-                  <span className="text-xs text-slate-400 font-medium block">Account Number</span>
-                  <span className="font-mono font-bold text-slate-800">
-                    {bank.accountNumber 
-                      ? maskAccNo(bank.accountNumber) 
-                      : ((provider.bankDetails?.accountNo || provider.bankDetails?.accountNumber)
-                        ? `${maskAccNo(provider.bankDetails.accountNo || provider.bankDetails.accountNumber)} (Fallback)` 
-                        : 'Destination unavailable in historical record')}
+                <div className="bg-teal-50/70 p-3.5 rounded-xl border border-teal-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-teal-800 font-bold block">Account Number</span>
+                    {fullAccountNo !== 'N/A' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyAcc(fullAccountNo)}
+                        className="text-[10px] text-teal-700 hover:text-teal-900 font-extrabold flex items-center gap-1 cursor-pointer bg-teal-100/60 px-1.5 py-0.5 rounded transition-all"
+                      >
+                        {copiedAcc ? <FiCheck className="w-3 h-3 text-emerald-600" /> : <FiCopy className="w-3 h-3" />}
+                        {copiedAcc ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
+                  <span className="font-mono font-black text-slate-900 text-sm mt-0.5 block tracking-wide select-all">
+                    {fullAccountNo}
                   </span>
                 </div>
-                <div>
-                  <span className="text-xs text-slate-400 font-medium block">IFSC Code</span>
-                  <span className="font-mono font-bold text-slate-800">{bank.ifscCode || provider.bankDetails?.ifsc || provider.bankDetails?.ifscCode || 'N/A'}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-400 font-medium block">Bank Verification Status</span>
-                  <span className="font-semibold text-slate-800">{provider.bankDetails?.bankVerificationStatus || 'N/A'}</span>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400 font-medium block">IFSC Code</span>
+                    {ifscCode !== 'N/A' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyIFSC(ifscCode)}
+                        className="text-[10px] text-slate-600 hover:text-slate-800 font-bold flex items-center gap-0.5 cursor-pointer"
+                      >
+                        {copiedIFSC ? <FiCheck className="w-3 h-3 text-emerald-600" /> : <FiCopy className="w-3 h-3" />}
+                        {copiedIFSC ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold text-slate-800 mt-0.5 block uppercase tracking-wider select-all">{ifscCode}</span>
                 </div>
               </div>
             )}

@@ -387,12 +387,12 @@ const WithdrawalDetailModal = ({ isOpen, onClose, entityData, withdrawalId }) =>
                         mono 
                       />
                       <InfoRow 
-                        label="Masked Account Number" 
+                        label="Account Number" 
                         value={
                           bank.accountNumber 
-                            ? maskAccNo(bank.accountNumber) 
+                            ? String(bank.accountNumber) 
                             : ((provider.bankDetails?.accountNo || provider.bankDetails?.accountNumber)
-                              ? `${maskAccNo(provider.bankDetails.accountNo || provider.bankDetails.accountNumber)} (Fallback)` 
+                              ? `${String(provider.bankDetails.accountNo || provider.bankDetails.accountNumber)} (Fallback)` 
                               : 'Destination unavailable in historical record')
                         } 
                         mono 

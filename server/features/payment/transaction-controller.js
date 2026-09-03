@@ -1303,6 +1303,8 @@ const getAdminPaymentDetails = async (req, res, next) => {
         razorpayStoredResponse,
 
         // Amount Breakup — ALL FROM BACKEND, never calculated in React
+        amount: txn.amount || totalAmount,
+        transactionReference: txn.transactionReference || txn.referenceId || txn.transactionId || null,
         totalAmount,
         attemptedAmount,
         walletPaid,
@@ -1663,11 +1665,40 @@ const adminMarkPaid = async (req, res, next) => {
   }
 };
 
-/**
- * Get executive finance overview KPIs
- */
 const getFinanceOverview = async (req, res, next) => {
   try {
+    const { startDate, endDate, fromDate, toDate, zoneIds } = req.query;
+    const startStr = startDate || fromDate;
+    const endStr = endDate || toDate;
+
+    let dateQuery = {};
+    let bookingDateQuery = {};
+
+    if (startStr || endStr) {
+      dateQuery.createdAt = {};
+      bookingDateQuery.createdAt = {};
+      if (startStr) {
+        const s = new Date(startStr);
+        s.setHours(0, 0, 0, 0);
+        dateQuery.createdAt.$gte = s;
+        bookingDateQuery.createdAt.$gte = s;
+      }
+      if (endStr) {
+        const e = new Date(endStr);
+        e.setHours(23, 59, 59, 999);
+        dateQuery.createdAt.$lte = e;
+        bookingDateQuery.createdAt.$lte = e;
+      }
+    }
+
+    if (zoneIds) {
+      const bIds = await getBookingIdsForZones(zoneIds);
+      if (bIds.length > 0) {
+        bookingDateQuery._id = { $in: bIds };
+        dateQuery.bookingId = { $in: bIds.map(id => id.toString()) };
+      }
+    }
+
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
@@ -1685,13 +1716,28 @@ const getFinanceOverview = async (req, res, next) => {
       failedTxnCount,
       bookingEarningsAgg,
       failedSettlementRecords,
-      providerEarningStats
+      providerEarningStats,
+      allBookingsAgg,
+      // Hover detail sample previews (top 5 latest per category)
+      recentCompletedRefunds,
+      recentPendingRefunds,
+      recentOnlineTxns,
+      recentCashTxns,
+      recentWalletTxns,
+      recentMixedTxns,
+      recentFailedTxns,
+      recentDisputedTxns,
+      recentSettledTxns,
+      recentPendingSettlements,
+      recentEarnings,
+      recentBookings
     ] = await Promise.all([
-      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] } }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateQuery }).populate({ path: 'user', select: 'name email', strictPopulate: false }).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfToday } }).lean(),
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfWeek } }).lean(),
       Transaction.find({ type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, createdAt: { $gte: startOfMonth } }).lean(),
       Refund.aggregate([
+        { $match: { ...dateQuery } },
         {
           $group: {
             _id: { $toLower: { $ifNull: ["$refundStatus", "$status"] } },
@@ -1709,19 +1755,21 @@ const getFinanceOverview = async (req, res, next) => {
           }
         }
       ]),
-      Transaction.countDocuments({ type: 'payment', paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] } }),
+      Transaction.countDocuments({ type: 'payment', paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] }, ...dateQuery }),
       Booking.aggregate([
         {
           $match: {
             status: 'completed',
             paymentStatus: { $in: ['paid', 'settled'] },
             'cancellationProgress.status': { $ne: 'cancelled' },
-            refundProcessed: { $ne: true }
+            refundProcessed: { $ne: true },
+            ...bookingDateQuery
           }
         },
         {
           $group: {
             _id: null,
+            grossBookingValue: { $sum: { $ifNull: ["$totalAmount", { $ifNull: ["$amount", 0] }] } },
             commissionTotal: { $sum: { $ifNull: ["$commissionAmount", 0] } },
             surgeTotal: { $sum: { $ifNull: ["$companySurgeShare", 0] } },
             providerEarningsTotal: { $sum: { $ifNull: ["$providerEarnings", 0] } },
@@ -1733,12 +1781,30 @@ const getFinanceOverview = async (req, res, next) => {
         $or: [
           { settlementStatus: { $in: ['failed', 'rejected', 'declined', 'cancelled'] } },
           { type: 'settlement', paymentStatus: { $in: ['failed', 'rejected', 'declined'] } }
-        ]
+        ],
+        ...dateQuery
       }).lean(),
       ProviderEarning.aggregate([
-        { $match: { status: { $ne: 'cancelled' } } },
+        { $match: { status: { $ne: 'cancelled' }, ...dateQuery } },
         { $group: { _id: null, totalNet: { $sum: '$netAmount' } } }
-      ])
+      ]),
+      Booking.aggregate([
+        { $match: { status: { $ne: 'cancelled' }, ...bookingDateQuery } },
+        { $group: { _id: null, totalGmv: { $sum: { $ifNull: ["$totalAmount", { $ifNull: ["$amount", 0] }] } } } }
+      ]),
+      // Hover previews Top 5 queries
+      Refund.find({ refundStatus: 'completed', ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'customerId', select: 'name email', strictPopulate: false }).populate({ path: 'user', select: 'name email', strictPopulate: false }).populate({ path: 'providerId', select: 'name', strictPopulate: false }).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
+      Refund.find({ refundStatus: { $in: ['pending', 'processing', 'approved'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'customerId', select: 'name email', strictPopulate: false }).populate({ path: 'user', select: 'name email', strictPopulate: false }).populate({ path: 'providerId', select: 'name', strictPopulate: false }).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
+      Transaction.find({ type: 'payment', paymentMethod: { $in: ['razorpay', 'online'] }, paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).lean(),
+      Transaction.find({ type: 'payment', paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
+      Transaction.find({ type: 'payment', paymentMethod: 'wallet', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).lean(),
+      Transaction.find({ type: 'payment', paymentMethod: 'mixed', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).lean(),
+      Transaction.find({ type: 'payment', paymentStatus: { $in: ['failed', 'cancelled', 'rejected'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).lean(),
+      Transaction.find({ $or: [{ settlementStatus: 'disputed' }, { paymentStatus: 'disputed' }], ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
+      Transaction.find({ settlementStatus: 'settled', ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
+      Transaction.find({ type: 'payment', paymentMethod: { $nin: ['cash', 'cod', 'wallet'] }, settlementStatus: { $ne: 'settled' }, paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'user', select: 'name email', strictPopulate: false }).lean(),
+      ProviderEarning.find({ status: { $ne: 'cancelled' }, ...dateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean(),
+      Booking.find({ status: { $ne: 'cancelled' }, ...bookingDateQuery }).sort({ createdAt: -1 }).limit(5).populate({ path: 'customer', select: 'name email', strictPopulate: false }).populate({ path: 'user', select: 'name email', strictPopulate: false }).populate({ path: 'provider', select: 'name', strictPopulate: false }).lean()
     ]);
 
     const failedTxns = new Array(failedTxnCount).fill({});
@@ -1779,7 +1845,7 @@ const getFinanceOverview = async (req, res, next) => {
       else onlineCollectionPaise += amtPaise;
     });
 
-    const totalRevenue = totalRevenuePaise / 100;
+    const totalCollections = totalRevenuePaise / 100;
     const onlineCollection = onlineCollectionPaise / 100;
     const cashCollection = cashCollectionPaise / 100;
     const walletCollection = walletCollectionPaise / 100;
@@ -1795,6 +1861,10 @@ const getFinanceOverview = async (req, res, next) => {
       ? providerEarningStats[0].totalNet
       : totalProviderEarningsFromBookings;
 
+    const grossBookingValue = (allBookingsAgg && allBookingsAgg[0]?.totalGmv != null)
+      ? allBookingsAgg[0].totalGmv
+      : Math.max(totalCollections, bAgg.grossBookingValue || 0);
+
     const todayRevenue = (uniqueTodayTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
     const weeklyRevenue = (uniqueWeeklyTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
     const monthlyRevenue = (uniqueMonthlyTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
@@ -1809,76 +1879,12 @@ const getFinanceOverview = async (req, res, next) => {
 
     const pendingRefunds = pendingRefundsPaise / 100;
     const completedRefunds = completedRefundsPaise / 100;
+    const netCollections = Math.max(0, parseFloat((totalCollections - completedRefunds).toFixed(2)));
 
     const pStat = providerStatsAgg[0] || {};
     const providerPendingPayout = pStat.totalPendingPayout || 0;
     const completedPayout = pStat.totalWithdrawn || 0;
 
-    const rawRecentActivities = await Transaction.find({})
-      .populate('user', 'name email phone')
-      .populate('provider', 'name email phone')
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean();
-
-    const recentActivities = rawRecentActivities.map(t => {
-      const type = (t.type || 'payment').toLowerCase();
-      const pStatus = (t.paymentStatus || 'completed').toLowerCase();
-      const sStatus = (t.settlementStatus || '').toLowerCase();
-
-      let displayType = 'Payment';
-      if (type === 'refund') displayType = 'Refund';
-      else if (type === 'withdrawal') displayType = 'Withdrawal';
-      else if (type === 'commission' || type === 'commissiondeduction') displayType = 'Commission Deduction';
-      else if (type === 'settlement') displayType = 'Settlement Batch';
-      else if (type === 'wallet_topup') displayType = 'Wallet Topup';
-      else if (type === 'adjustment') displayType = 'Adjustment';
-      else if (type === 'referral') displayType = 'Referral Reward';
-
-      let displayStatus = 'Captured';
-      let isSuccessfulCollection = false;
-      let financialDirection = t.entryType || 'neutral';
-
-      if (type === 'payment') {
-        if (['failed', 'cancelled', 'rejected'].includes(pStatus)) {
-          displayStatus = 'Failed';
-          financialDirection = 'neutral';
-        } else if (['pending', 'processing', 'created'].includes(pStatus)) {
-          displayStatus = 'Pending';
-          financialDirection = 'neutral';
-        } else if (['success', 'completed', 'paid', 'captured'].includes(pStatus)) {
-          displayStatus = 'Captured';
-          isSuccessfulCollection = true;
-          financialDirection = 'credit';
-        }
-      } else if (type === 'refund') {
-        displayStatus = ['completed', 'success'].includes(pStatus) ? 'Completed' : (pStatus === 'failed' ? 'Failed' : 'Pending');
-        financialDirection = pStatus === 'failed' ? 'neutral' : 'debit';
-      } else if (type === 'withdrawal') {
-        displayStatus = ['completed', 'transferred'].includes(pStatus) ? 'Completed' : (pStatus === 'failed' ? 'Failed' : 'Processing');
-        financialDirection = pStatus === 'failed' ? 'neutral' : 'debit';
-      } else if (type === 'commission' || type === 'commissiondeduction') {
-        displayStatus = 'Applied';
-        financialDirection = 'debit';
-      } else if (type === 'settlement') {
-        displayStatus = sStatus === 'settled' || t.razorpaySettlementId ? 'Settled' : (['failed', 'rejected'].includes(sStatus) ? 'Failed' : 'Pending');
-        financialDirection = 'neutral';
-      }
-
-      return {
-        ...t,
-        displayType,
-        displayStatus,
-        isSuccessfulCollection,
-        financialDirection
-      };
-    });
-
-    const totalCaptured = onlineCollection + mixedCollection;
-
-    // Helper to determine authoritative gateway settlement status
-    // Mongoose schema defaults settlementStatus to 'queued'. A record with settlementStatus === 'settled'
-    // or with razorpaySettlementId / settlementBatchId represents a verified settled transaction.
     const isGatewaySettled = (t) => {
       if (t.razorpaySettlementId || t.settlementBatchId) return true;
       if (t.settlementDate && String(t.settlementStatus || '').toLowerCase() === 'settled') return true;
@@ -1891,49 +1897,106 @@ const getFinanceOverview = async (req, res, next) => {
       return ['failed', 'rejected', 'declined', 'cancelled'].includes(st) || (t.type === 'settlement' && ['failed', 'rejected', 'declined'].includes(ps));
     };
 
-    // Filter online & mixed payments (excluding pure cash/cod and pure wallet)
     const onlineAndMixedTxns = uniqueAllSuccessful.filter(t => {
       const method = (t.paymentMethod || '').toLowerCase();
       return method !== 'cash' && method !== 'cod' && method !== 'wallet';
     });
 
-    // 1. Authoritative settlement aggregation from transaction history
     const settledTxns = onlineAndMixedTxns.filter(t => isGatewaySettled(t));
     const totalSettled = (settledTxns.reduce((sum, t) => sum + (toPaise(t.settlementAmount || t.netSettlementAmount || t.amount) || 0), 0)) / 100;
 
-    // 2. Failed settlement aggregation
     const uniqueFailedSettlements = deduplicateByPaymentIdentity(failedSettlementRecords);
     const failedSettlementTxns = uniqueAllSuccessful.filter(t => isGatewayFailed(t));
     const allFailedSettlementTxns = deduplicateByPaymentIdentity([...failedSettlementTxns, ...uniqueFailedSettlements]);
     const failedSettlement = (allFailedSettlementTxns.reduce((sum, t) => sum + (toPaise(t.settlementAmount || t.netSettlementAmount || t.amount) || 0), 0)) / 100;
 
-    // 3. Pending settlement aggregation (online/mixed payments awaiting gateway payout)
     const pendingSettlementTxns = onlineAndMixedTxns.filter(t => !isGatewaySettled(t) && !isGatewayFailed(t));
     const pendingSettlement = (pendingSettlementTxns.reduce((sum, t) => sum + (toPaise(t.settlementAmount || t.netSettlementAmount || t.amount) || 0), 0)) / 100;
 
-    // 4. Bank received calculation based on actual settled funds
     const bankReceived = totalSettled > 0 ? Math.max(0, parseFloat((totalSettled - gatewayFees - gatewayTax).toFixed(2))) : 0;
-    const reconciliationDifference = parseFloat((totalCaptured - (totalSettled + pendingSettlement + failedSettlement)).toFixed(2));
+    const reconciliationDifference = parseFloat(((onlineCollection + mixedCollection) - (totalSettled + pendingSettlement + failedSettlement)).toFixed(2));
 
     const totalTxnsCount = allSuccessful.length + failedTxns.length;
     const paymentSuccessRate = totalTxnsCount > 0 ? parseFloat(((allSuccessful.length / totalTxnsCount) * 100).toFixed(1)) : 100;
     const totalRefundsAmount = completedRefunds + pendingRefunds;
-    const refundRate = totalRevenue > 0 ? parseFloat(((totalRefundsAmount / totalRevenue) * 100).toFixed(1)) : 0;
+    const refundRate = totalCollections > 0 ? parseFloat(((totalRefundsAmount / totalCollections) * 100).toFixed(1)) : 0;
 
-    // Cash Pending Verification
-    const pendingCashTxns = await Transaction.find({ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending' }).lean();
+    const pendingCashTxns = await Transaction.find({ paymentMethod: { $in: ['cash', 'cod'] }, paymentStatus: 'pending', ...dateQuery }).lean();
     const cashPendingVerification = (pendingCashTxns.reduce((sum, t) => sum + (toPaise(t.amount) || 0), 0)) / 100;
 
     const activeGatewayStatus = process.env.RAZORPAY_KEY_ID ? 'Razorpay (Live / Operational)' : 'Razorpay (Configured)';
 
     const settledAmount = totalSettled;
-    const disputedTxns = await Transaction.find({ $or: [{ settlementStatus: 'disputed' }, { paymentStatus: 'disputed' }] }).lean();
+    const disputedTxns = await Transaction.find({ $or: [{ settlementStatus: 'disputed' }, { paymentStatus: 'disputed' }], ...dateQuery }).lean();
     const disputedPaymentsCount = disputedTxns.length;
+
+    // Map item helper for hover detail cards
+    const formatHoverItem = (item) => {
+      let resolvedStatus = 'Completed';
+      if (item.paymentStatus && item.paymentStatus !== 'none') {
+        resolvedStatus = item.paymentStatus;
+      } else if (item.refundStatus && item.refundStatus !== 'none') {
+        resolvedStatus = item.refundStatus;
+      } else if (item.status && item.status !== 'none') {
+        resolvedStatus = item.status;
+      } else if (item.settlementStatus && item.settlementStatus !== 'none') {
+        resolvedStatus = item.settlementStatus;
+      }
+
+      return {
+        id: item._id,
+        amount: item.refundAmount || item.amount || item.netAmount || item.totalAmount || item.requestedAmount || 0,
+        customer: item.user?.name || item.customer?.name || item.customerId?.name || item.userName || 'Customer',
+        provider: item.provider?.name || item.providerId?.name || item.providerName || 'Provider',
+        bookingId: item.bookingId || item.bookingNumber || (item.booking ? String(item.booking) : null) || `#BK-${String(item._id).slice(-4).toUpperCase()}`,
+        reason: item.reason || item.refundReason || item.cancellationReason || 'Service Request',
+        paymentMethod: item.paymentMethod || item.originalPaymentMethod || item.gateway || 'Online',
+        status: resolvedStatus,
+        date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently',
+        walletAmount: item.walletAmount || item.walletUsed || 0,
+        onlineAmount: item.onlineAmount || item.paidViaGateway || 0,
+        commissionAmount: item.commissionAmount || item.commission || 0,
+        payoutId: item.payoutId || item.transactionId || `#PO-${String(item._id).slice(-4).toUpperCase()}`,
+        settlementId: item.razorpaySettlementId || item.settlementBatchId || item.transactionId || `#SET-${String(item._id).slice(-4).toUpperCase()}`
+      };
+    };
+
+    const hoverDetails = {
+      gmv: (recentBookings || []).map(formatHoverItem),
+      totalCollections: (uniqueAllSuccessful.slice(0, 5) || []).map(formatHoverItem),
+      completedRefunds: (recentCompletedRefunds || []).map(formatHoverItem),
+      pendingRefunds: (recentPendingRefunds || []).map(formatHoverItem),
+      onlineCollection: (recentOnlineTxns || []).map(formatHoverItem),
+      cashCollection: (recentCashTxns || []).map(formatHoverItem),
+      walletCollection: (recentWalletTxns || []).map(formatHoverItem),
+      mixedCollection: (recentMixedTxns || []).map(formatHoverItem),
+      platformCommission: (recentBookings.filter(b => b.commissionAmount > 0).slice(0, 5) || []).map(formatHoverItem),
+      providerEarnings: (recentEarnings || []).map(formatHoverItem),
+      providerPayable: (providerStatsAgg || []).map(p => ({
+        id: p._id || 'payable',
+        amount: p.totalPendingPayout || 0,
+        status: 'Owed / Eligible',
+        date: 'Current'
+      })),
+      providerPaid: (providerStatsAgg || []).map(p => ({
+        id: p._id || 'paid',
+        amount: p.totalWithdrawn || 0,
+        status: 'Paid out',
+        date: 'Lifetime Total'
+      })),
+      settledAmount: (recentSettledTxns || []).map(formatHoverItem),
+      pendingSettlement: (recentPendingSettlements || []).map(formatHoverItem),
+      failedPayments: (recentFailedTxns || []).map(formatHoverItem),
+      disputedPayments: (recentDisputedTxns || []).map(formatHoverItem)
+    };
 
     res.status(200).json({
       success: true,
       data: {
-        totalRevenue,
+        grossBookingValue,
+        totalRevenue: totalCollections,
+        totalCollections,
+        netCollections,
         todayRevenue,
         weeklyRevenue,
         monthlyRevenue,
@@ -1949,6 +2012,8 @@ const getFinanceOverview = async (req, res, next) => {
         failedSettlement,
         reconciliationDifference,
         providerPendingPayout,
+        providerPayable: providerPendingPayout,
+        providerPaid: completedPayout,
         totalProviderEarnings,
         completedPayout,
         platformEarnings,
@@ -1958,11 +2023,11 @@ const getFinanceOverview = async (req, res, next) => {
         refundRate,
         activeGatewayStatus,
         cashPendingVerification,
-        recentActivities,
+        hoverDetails,
         reconciliation: {
-          expectedAmount: totalCaptured,
+          expectedAmount: onlineCollection + mixedCollection,
           actualAmount: totalSettled + pendingSettlement + failedSettlement,
-          totalCaptured,
+          totalCaptured: onlineCollection + mixedCollection,
           totalSettled,
           pendingSettlement,
           failedSettlement,
@@ -1985,92 +2050,176 @@ const getFinanceOverview = async (req, res, next) => {
   }
 };
 
-
-/**
- * GET /admin/chart-trends
- * Real daily aggregations for Finance Dashboard charts (last 30 days)
- */
 const getChartTrends = async (req, res, next) => {
   try {
-    const days = parseInt(req.query.days) || 30;
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    since.setHours(0, 0, 0, 0);
+    const { startDate, endDate, fromDate, toDate, zoneIds } = req.query;
+    const startStr = startDate || fromDate;
+    const endStr = endDate || toDate;
+
+    let since;
+    let until;
+    let days = parseInt(req.query.days) || 30;
+
+    if (startStr) {
+      since = new Date(startStr);
+      since.setHours(0, 0, 0, 0);
+      if (endStr) {
+        until = new Date(endStr);
+        until.setHours(23, 59, 59, 999);
+      } else {
+        until = new Date();
+        until.setHours(23, 59, 59, 999);
+      }
+      const diffMs = until.getTime() - since.getTime();
+      days = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    } else {
+      until = new Date();
+      until.setHours(23, 59, 59, 999);
+      since = new Date();
+      since.setDate(since.getDate() - days);
+      since.setHours(0, 0, 0, 0);
+    }
+
+    let bookingFilter = {};
+    if (zoneIds) {
+      const bIds = await getBookingIdsForZones(zoneIds);
+      if (bIds.length > 0) {
+        bookingFilter._id = { $in: bIds };
+      }
+    }
 
     const Refund = require('./refund-model');
     const Booking = mongoose.model('Booking');
 
-    const dayFormat = '%Y-%m-%d'; // group key: "2026-08-13"
+    const dateFilter = { createdAt: { $gte: since, $lte: until } };
+    const bookingDateFilter = { ...bookingFilter, createdAt: { $gte: since, $lte: until } };
+
+    // If date range is > 60 days (e.g. full year), group by month (%Y-%m); otherwise group by day (%Y-%m-%d)
+    const isMonthly = days > 60;
+    const dateFormat = isMonthly ? '%Y-%m' : '%Y-%m-%d';
 
     const [revenueDays, refundDays, bookingDays] = await Promise.all([
-      // 1. Daily revenue + platform earnings from Transactions
       Transaction.aggregate([
-        { $match: { type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured'] }, createdAt: { $gte: since } } },
+        { $match: { type: 'payment', paymentStatus: { $in: ['success', 'completed', 'paid', 'captured', 'settled'] }, ...dateFilter } },
         {
           $group: {
-            _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
+            _id: { $dateToString: { format: dateFormat, date: '$createdAt', timezone: '+05:30' } },
             revenue: { $sum: '$amount' },
             earnings: { $sum: { $ifNull: ['$commission', { $ifNull: ['$commissionAmount', 0] }] } }
           }
         },
         { $sort: { _id: 1 } }
       ]),
-
-      // 2. Daily refunds (completed + pending)
       Refund.aggregate([
-        { $match: { createdAt: { $gte: since } } },
+        { $match: { ...dateFilter } },
         {
           $group: {
-            _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
-            completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$amount', 0] } },
-            pending: { $sum: { $cond: [{ $in: ['$status', ['pending', 'processing']] }, '$amount', 0] } }
+            _id: { $dateToString: { format: dateFormat, date: '$createdAt', timezone: '+05:30' } },
+            completed: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toLower: { $ifNull: ['$refundStatus', '$status'] } }, ['completed', 'approved']] },
+                  { $ifNull: ['$refundAmount', { $ifNull: ['$requestedAmount', 0] }] },
+                  0
+                ]
+              }
+            },
+            pending: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toLower: { $ifNull: ['$refundStatus', '$status'] } }, ['pending', 'processing']] },
+                  { $ifNull: ['$refundAmount', { $ifNull: ['$requestedAmount', 0] }] },
+                  0
+                ]
+              }
+            }
           }
         },
         { $sort: { _id: 1 } }
       ]),
-
-      // 3. Daily bookings count + booking revenue
       Booking.aggregate([
-        { $match: { createdAt: { $gte: since } } },
+        { $match: { ...bookingDateFilter } },
         {
           $group: {
-            _id: { $dateToString: { format: dayFormat, date: '$createdAt', timezone: '+05:30' } },
-            bookings: { $sum: 1 },
-            revenue: { $sum: { $ifNull: ['$totalAmount', '$amount', 0] } }
+            _id: { $dateToString: { format: dateFormat, date: '$createdAt', timezone: '+05:30' } },
+            bookings: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toLower: { $ifNull: ['$bookingStatus', '$status'] } }, ['completed', 'delivered', 'done', 'finished']] },
+                  1,
+                  0
+                ]
+              }
+            },
+            totalBookings: { $sum: 1 },
+            revenue: {
+              $sum: {
+                $cond: [
+                  { $in: [{ $toLower: { $ifNull: ['$bookingStatus', '$status'] } }, ['completed', 'delivered', 'done', 'finished']] },
+                  { $ifNull: ['$totalAmount', { $ifNull: ['$amount', 0] }] },
+                  0
+                ]
+              }
+            }
           }
         },
         { $sort: { _id: 1 } }
       ])
     ]);
 
-    // Build a complete date range so gaps (days with 0 txns) show as 0
     const buildRange = () => {
       const result = {};
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().split('T')[0];
-        // Short label: "13 Aug"
-        const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-        result[key] = { key, label };
+      if (isMonthly) {
+        const current = new Date(since.getFullYear(), since.getMonth(), 1);
+        const endMonth = new Date(until.getFullYear(), until.getMonth(), 1);
+        while (current <= endMonth) {
+          const yr = current.getFullYear();
+          const mo = String(current.getMonth() + 1).padStart(2, '0');
+          const key = `${yr}-${mo}`;
+          const label = current.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+          result[key] = { key, label };
+          current.setMonth(current.getMonth() + 1);
+        }
+      } else {
+        const current = new Date(since);
+        const endDay = new Date(until);
+        endDay.setHours(0, 0, 0, 0);
+        while (current <= endDay) {
+          const yr = current.getFullYear();
+          const mo = String(current.getMonth() + 1).padStart(2, '0');
+          const dy = String(current.getDate()).padStart(2, '0');
+          const key = `${yr}-${mo}-${dy}`;
+          const label = current.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+          result[key] = { key, label };
+          current.setDate(current.getDate() + 1);
+        }
       }
       return result;
     };
 
     const range = buildRange();
 
-    // Merge revenue
     const revMap = {};
     revenueDays.forEach(r => { revMap[r._id] = r; });
-    const revenueTrend = Object.values(range).map(({ key, label }) => ({
-      name: label,
-      revenue: Math.round(revMap[key]?.revenue || 0),
-      earnings: Math.round(revMap[key]?.earnings || 0)
-    }));
-
-    // Merge refunds
     const refMap = {};
     refundDays.forEach(r => { refMap[r._id] = r; });
+    const bookMap = {};
+    bookingDays.forEach(b => { bookMap[b._id] = b; });
+
+    const revenueTrend = Object.values(range).map(({ key, label }) => {
+      const rev = Math.round(revMap[key]?.revenue || 0);
+      const ref = Math.round(refMap[key]?.completed || 0);
+      const net = Math.max(0, rev - ref);
+      return {
+        name: label,
+        grossCollections: rev,
+        completedRefunds: ref,
+        netCollections: net,
+        revenue: rev,
+        earnings: Math.round(revMap[key]?.earnings || 0)
+      };
+    });
+
     const refundTrend = Object.values(range).map(({ key, label }) => ({
       name: label,
       completed: Math.round(refMap[key]?.completed || 0),
@@ -2078,9 +2227,6 @@ const getChartTrends = async (req, res, next) => {
       total: Math.round((refMap[key]?.completed || 0) + (refMap[key]?.pending || 0))
     }));
 
-    // Merge bookings
-    const bookMap = {};
-    bookingDays.forEach(b => { bookMap[b._id] = b; });
     const bookingVsRevenue = Object.values(range).map(({ key, label }) => ({
       name: label,
       bookings: bookMap[key]?.bookings || 0,
@@ -2530,23 +2676,64 @@ const getSettlements = async (req, res, next) => {
       Transaction.countDocuments(filter)
     ]);
 
-    const stats = await Transaction.aggregate([
-      { $match: filter },
+    // Calculate provider net earnings, gross collections, commission, and pending payout difference
+    const bookingMatch = {};
+    if (req.query.startDate || req.query.endDate) {
+      bookingMatch.createdAt = {};
+      if (req.query.startDate) bookingMatch.createdAt.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) {
+        const end = new Date(req.query.endDate);
+        end.setHours(23, 59, 59, 999);
+        bookingMatch.createdAt.$lte = end;
+      }
+    }
+    if (req.query.zoneIds) {
+      const zoneBookingIds = await getBookingIdsForZones(req.query.zoneIds);
+      bookingMatch._id = { $in: zoneBookingIds };
+    }
+
+    const bookingStats = await Booking.aggregate([
+      { $match: { ...bookingMatch, paymentStatus: { $in: ['paid', 'completed', 'success', 'escrowhold'] } } },
       {
         $group: {
-          _id: '$type',
-          totalAmount: { $sum: '$amount' }
+          _id: null,
+          grossCollections: { $sum: '$totalAmount' },
+          providerEarnings: { $sum: '$providerEarnings' },
+          platformCommission: { $sum: '$commissionAmount' }
         }
       }
     ]);
 
-    let bookingSettlement = 0, providerSettlement = 0, commissionSettlement = 0, walletSettlement = 0;
-    stats.forEach(s => {
-      if (s._id === 'payment') bookingSettlement += s.totalAmount;
-      else if (s._id === 'settlement' || s._id === 'withdrawal') providerSettlement += s.totalAmount;
-      else if (s._id === 'commissiondeduction') commissionSettlement += s.totalAmount;
-      else if (s._id === 'wallet_topup') walletSettlement += s.totalAmount;
-    });
+    const bookingSettlement = bookingStats[0]?.grossCollections || 0;
+    const providerTotalEarnings = bookingStats[0]?.providerEarnings || 0;
+    const commissionSettlement = bookingStats[0]?.platformCommission || 0;
+
+    // Fetch total completed/processed provider payouts
+    const payoutMatch = { status: { $in: ['completed', 'processed', 'approved', 'transferred'] } };
+    if (req.query.startDate || req.query.endDate) {
+      payoutMatch.createdAt = filter.createdAt;
+    }
+    const completedPayouts = await PaymentRecord.aggregate([
+      { $match: payoutMatch },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const totalProviderPaid = completedPayouts[0]?.total || 0;
+
+    // Calculate realized platform commission from settled transactions / completed payouts
+    const realizedCommissionStats = await Transaction.aggregate([
+      {
+        $match: {
+          type: 'commissiondeduction',
+          paymentStatus: { $in: ['completed', 'success', 'settled', 'paid', 'processed'] }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const realizedCommission = realizedCommissionStats[0]?.total || 0;
+
+    // Pending Provider Payable (Unsettled Difference) = Provider Net Earnings - Total Provider Paid
+    const providerSettlement = Math.max(0, parseFloat((providerTotalEarnings - totalProviderPaid).toFixed(2)));
+    const settlementDifference = providerSettlement;
 
     res.status(200).json({
       success: true,
@@ -2559,8 +2746,9 @@ const getSettlements = async (req, res, next) => {
           bookingSettlement,
           providerSettlement,
           commissionSettlement,
-          walletSettlement,
-          settlementDifference: bookingSettlement - (providerSettlement + commissionSettlement)
+          realizedCommission,
+          totalProviderPaid,
+          settlementDifference
         }
       }
     });

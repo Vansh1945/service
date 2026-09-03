@@ -53,15 +53,20 @@ const StatusChip = ({ label, type = 'default' }) => {
 };
 
 // Conditional tab definitions
-const buildTabs = (paymentType, hasVerification) => {
+const buildTabs = (paymentType, hasVerification, isWithdrawal) => {
   const base = [
     { id: 'overview', label: 'Overview', icon: FiDollarSign },
-    { id: 'booking', label: 'Booking', icon: FiBriefcase },
   ];
+
+  if (isWithdrawal) {
+    base.push({ id: 'withdrawal', label: 'Withdrawal Payout', icon: FiLayers });
+  } else {
+    base.push({ id: 'booking', label: 'Booking', icon: FiBriefcase });
+  }
 
   if (paymentType === 'online') {
     base.push({ id: 'gateway', label: 'Gateway', icon: FiZap });
-  } else if (paymentType === 'wallet') {
+  } else if (paymentType === 'wallet' && !isWithdrawal) {
     base.push({ id: 'wallet_ledger', label: 'Wallet Ledger', icon: FiLayers });
   } else if (paymentType === 'cash') {
     base.push({ id: 'cash_verify', label: 'Payment Verification', icon: FiCheck });
@@ -74,12 +79,19 @@ const buildTabs = (paymentType, hasVerification) => {
     base.push({ id: 'cash_verify', label: 'Payment Verification', icon: FiCheck });
   }
 
+  base.push({ id: 'transaction', label: 'Transaction', icon: FiActivity });
+
+  // Only show Refund and Complaint for customer booking payments
+  if (!isWithdrawal) {
+    base.push(
+      { id: 'refund', label: 'Refund', icon: FiRotateCcw },
+      { id: 'complaint', label: 'Complaint', icon: FiMessageSquare }
+    );
+  }
+
   base.push(
-    { id: 'transaction', label: 'Transaction', icon: FiActivity },
-    { id: 'refund', label: 'Refund', icon: FiRotateCcw },
-    { id: 'complaint', label: 'Complaint', icon: FiMessageSquare },
     { id: 'settlement', label: 'Settlement', icon: FiTrendingUp },
-    { id: 'audit', label: 'Audit', icon: FiShield },
+    { id: 'audit', label: 'Audit', icon: FiShield }
   );
   return base;
 };
@@ -97,11 +109,21 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
   const [gatewayLoading, setGatewayLoading] = useState(false);
 
   const rawData = initialData || entityData;
-  const paymentType = (details?.paymentType || (rawData?.paymentMethod || 'online')).toLowerCase();
+  const d = details || (typeof rawData === 'object' ? rawData : {});
+  const paymentType = (d?.paymentType || (rawData?.paymentMethod || 'online')).toLowerCase();
+  
+  const isWithdrawal = Boolean(
+    paymentType === 'wallet' || paymentType === 'withdrawal' || paymentType === 'payout' ||
+    d?.type === 'withdrawal' || d?.type === 'payout_withdrawal' ||
+    (d?.transactionReference && String(d.transactionReference).startsWith('WDL-')) ||
+    (d?.bookingId && String(d.bookingId).startsWith('WDL-')) ||
+    (rawData?.bookingId && String(rawData.bookingId).startsWith('WDL-'))
+  );
+
   const pvData = details?.paymentVerification || details?.booking?.paymentVerification;
   const isActualQR = Boolean(pvData?.method === 'qr_code' || pvData?.qrCodeId || details?.paymentMethod === 'qr_code' || details?.paymentMethod === 'upi_qr');
   const hasVerification = Boolean(paymentType === 'cash' || isActualQR);
-  const tabs = buildTabs(paymentType, hasVerification);
+  const tabs = buildTabs(paymentType, hasVerification, isWithdrawal);
 
   const loadDetails = useCallback(async (txnId) => {
     if (!txnId) return;
@@ -156,10 +178,12 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
   // Early Return (After all hooks)
   if (!isOpen || !rawData) return null;
 
-  const d = details || (typeof rawData === 'object' ? rawData : {});
   const txnId = d.razorpayPaymentId || d.transactionId || d._id || (typeof rawData === 'string' ? rawData : 'N/A');
   const orderId = d.razorpayOrderId || '—';
   const payStatus = (d.paymentStatus || 'pending').toLowerCase();
+  
+  const payoutRef = d.transactionReference || d.withdrawalRef || d.bookingId || d.booking?.bookingId || d.transactionId || d._id || (typeof rawData === 'string' ? rawData : 'N/A');
+  const payoutAmt = d.amount || d.totalAmount || d.attemptedAmount || (typeof rawData === 'object' ? rawData?.amount : 0) || 0;
 
   const nav = {
     booking: (id) => navigate(`/admin/bookings?search=${encodeURIComponent(id || '')}&openDetail=true`),
@@ -267,15 +291,15 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                     <div className="p-3 bg-white rounded-xl border border-neutral-200">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase">Gross Amount</p>
-                      <p className="text-base font-black text-neutral-900 mt-0.5"><PriceDisplay amount={d.amount || d.totalAmount || 0} /></p>
+                      <p className="text-base font-black text-neutral-900 mt-0.5"><PriceDisplay amount={payoutAmt} /></p>
                     </div>
                     <div className="p-3 bg-white rounded-xl border border-neutral-200">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase">Platform Fee</p>
-                      <p className="text-base font-bold text-teal-600 mt-0.5"><PriceDisplay amount={d.commissionRule?.platformFee || d.gatewayFee || 0} /></p>
+                      <p className="text-base font-bold text-teal-600 mt-0.5"><PriceDisplay amount={isWithdrawal ? 0 : (d.commissionRule?.platformFee || d.gatewayFee || 0)} /></p>
                     </div>
                     <div className="p-3 bg-white rounded-xl border border-neutral-200">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase">Provider Net</p>
-                      <p className="text-base font-bold text-emerald-600 mt-0.5"><PriceDisplay amount={d.providerEarnings || 0} /></p>
+                      <p className="text-base font-bold text-emerald-600 mt-0.5"><PriceDisplay amount={isWithdrawal ? payoutAmt : (d.providerEarnings || 0)} /></p>
                     </div>
                     <div className="p-3 bg-white rounded-xl border border-neutral-200">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase">Payment Status</p>
@@ -287,27 +311,51 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     <SectionCard title="Payment Summary" icon={FiDollarSign}>
                       <InfoRow label="Transaction ID" value={txnId} mono />
                       <InfoRow label="Razorpay Order ID" value={orderId} mono />
-                      <InfoRow label="Payment Method" value={(d.paymentMethod || 'Online').toUpperCase()} />
+                      <InfoRow label="Payment Method" value={(d.paymentMethod || (isWithdrawal ? 'WALLET' : 'Online')).toUpperCase()} />
                       <InfoRow label="Payment Date" value={fmtDate(d.createdAt)} />
-                      <InfoRow label="Total Paid" badge={<AmtCell amount={d.amount || d.totalAmount || 0} />} />
+                      <InfoRow label="Total Paid" badge={<AmtCell amount={payoutAmt} />} />
                     </SectionCard>
 
                     <SectionCard title="Parties Involved" icon={FiUser}>
                       <InfoRow
                         label="Customer"
-                        value={d.user?.name || d.customer?.name || 'N/A'}
+                        value={d.user?.name || d.customer?.name || (isWithdrawal ? 'N/A (Provider Payout)' : 'N/A')}
                       />
                       <InfoRow
                         label="Provider"
                         value={d.provider?.name || 'Assigned Provider'}
                       />
                       <InfoRow
-                        label="Booking Ref"
-                        value={d.booking?.bookingId || 'N/A'}
+                        label={isWithdrawal ? "Payout Ref" : "Booking Ref"}
+                        value={payoutRef}
+                        mono
+                        onClick={payoutRef && payoutRef !== 'N/A' ? () => (isWithdrawal ? nav.payout(payoutRef) : nav.booking(payoutRef)) : null}
                       />
                     </SectionCard>
                   </div>
                 </div>
+              )}
+
+              {/* TAB: WITHDRAWAL PAYOUT */}
+              {activeTab === 'withdrawal' && (
+                <SectionCard title="Provider Withdrawal / Payout Request Details" icon={FiLayers}>
+                  <InfoRow
+                    label="Payout Reference ID"
+                    value={payoutRef}
+                    mono
+                    onClick={payoutRef && payoutRef !== 'N/A' ? () => nav.payout(payoutRef) : null}
+                  />
+                  <InfoRow label="Provider Name" value={d.provider?.name || 'Vansh'} />
+                  <InfoRow label="Payout Amount" badge={<AmtCell amount={payoutAmt} colorClass="text-emerald-600" />} />
+                  <InfoRow label="Payout Type" value={d.withdrawalType === 'manual_bulk' ? 'Manual Bulk Transfer' : 'Direct Wallet Payout'} />
+                  <InfoRow label="Payout Status" badge={<StatusChip label={(d.payoutStatus || d.paymentStatus || 'completed').toUpperCase()} type="success" />} />
+                  {d.paymentDetails?.accountNumber && (
+                    <InfoRow label="Destination Account" value={`${d.paymentDetails.bankName || 'Bank'} (${d.paymentDetails.accountNumber})`} mono />
+                  )}
+                  {d.paymentDetails?.ifscCode && (
+                    <InfoRow label="IFSC Code" value={d.paymentDetails.ifscCode} mono />
+                  )}
+                </SectionCard>
               )}
 
               {/* TAB 2: BOOKING */}
@@ -345,8 +393,8 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     </SectionCard>
 
                     <SectionCard title="Settlement & Fees" icon={FiTrendingUp}>
-                      <InfoRow label="Gateway Fee" badge={<AmtCell amount={gatewayData?.fee || d.gatewayFee || 4.02} />} />
-                      <InfoRow label="Gateway Tax" badge={<AmtCell amount={gatewayData?.tax || d.gatewayTax || 0.62} />} />
+                      <InfoRow label="Gateway Fee" badge={<AmtCell amount={gatewayData?.fee || d.gatewayFee || 0} />} />
+                      <InfoRow label="Gateway Tax" badge={<AmtCell amount={gatewayData?.tax || d.gatewayTax || 0} />} />
                       <InfoRow label="Settlement Status" badge={<StatusChip label="PROCESSING" type="warning" />} />
                       <InfoRow label="Settlement ID" value="Awaiting Settlement Batch" />
                     </SectionCard>
@@ -360,8 +408,8 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                   <InfoRow label="Transaction Ref" value={txnId} mono />
                   <InfoRow label="Payment Type" value={(d.paymentType || d.paymentMethod || 'online').toUpperCase()} />
                   <InfoRow label="Gross Credit" badge={<AmtCell amount={d.amount || 0} colorClass="text-emerald-600" />} />
-                  <InfoRow label="Platform Commission" badge={<AmtCell amount={d.commissionRule?.platformFee || 0} colorClass="text-teal-600" />} />
-                  <InfoRow label="Provider Share" badge={<AmtCell amount={d.providerEarnings || 0} colorClass="text-neutral-900" />} />
+                  <InfoRow label="Platform Commission" badge={<AmtCell amount={isWithdrawal ? 0 : (d.commissionRule?.platformFee || 0)} colorClass="text-teal-600" />} />
+                  <InfoRow label="Provider Share" badge={<AmtCell amount={isWithdrawal ? (d.amount || 0) : (d.providerEarnings || 0)} colorClass="text-neutral-900" />} />
                 </SectionCard>
               )}
 
@@ -400,9 +448,9 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
               {activeTab === 'settlement' && (
                 <SectionCard title="Settlement Breakdown" icon={FiTrendingUp}>
                   <InfoRow label="Gross Amount" badge={<AmtCell amount={d.amount || 0} />} />
-                  <InfoRow label="Gateway Charges" badge={<AmtCell amount={d.gatewayFee || 4.02} />} />
-                  <InfoRow label="Net Settled" badge={<AmtCell amount={(d.amount || 0) - (d.gatewayFee || 4.02)} colorClass="text-emerald-600" />} />
-                  <InfoRow label="Settlement Cycle" value="T+1 Auto Payout" />
+                  <InfoRow label="Gateway Charges" badge={<AmtCell amount={isWithdrawal ? 0 : (d.gatewayFee || 0)} />} />
+                  <InfoRow label="Net Settled" badge={<AmtCell amount={isWithdrawal ? (d.amount || 0) : ((d.amount || 0) - (d.gatewayFee || 0))} colorClass="text-emerald-600" />} />
+                  <InfoRow label="Settlement Cycle" value={isWithdrawal ? "Direct Provider Transfer" : "T+1 Auto Payout"} />
                 </SectionCard>
               )}
 

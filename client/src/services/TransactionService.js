@@ -49,12 +49,13 @@ export const adminMarkPaid = (id, reason) => {
     return axiosInstance.post(`/transaction/admin/mark-paid/${id}`, { reason });
 };
 
-export const getFinanceOverview = () => {
-    return axiosInstance.get("/transaction/admin/finance-overview");
+export const getFinanceOverview = (params) => {
+    return axiosInstance.get("/transaction/admin/finance-overview", { params });
 };
 
-export const getChartTrends = (days = 30) => {
-    return axiosInstance.get("/transaction/admin/chart-trends", { params: { days } });
+export const getChartTrends = (params = { days: 30 }) => {
+    const queryParams = typeof params === 'number' ? { days: params } : params;
+    return axiosInstance.get("/transaction/admin/chart-trends", { params: queryParams });
 };
 
 export const getCashLedger = (params) => {

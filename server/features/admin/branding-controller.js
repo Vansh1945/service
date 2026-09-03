@@ -416,19 +416,20 @@ const getBrandingManifest = async (req, res, next) => {
 const getBrandingLogoRedirect = async (req, res, next) => {
   try {
     const { role = 'customer' } = req.query;
-    const config = await SystemConfig.findOne();
-    if (!config) {
-      return res.status(404).send('Config not found');
-    }
-    const branding = config[`${role}Branding`] || {};
-    const logoUrl = branding.logo || branding.icon || config.logo;
+    const config = await getCachedConfig();
+    const branding = config ? (config[`${role}Branding`] || {}) : {};
+    const logoUrl = config?.logo || branding.logo || config?.favicon || branding.favicon || branding.icon;
     if (logoUrl) {
-      return res.redirect(logoUrl);
+      return res.redirect(302, logoUrl);
     }
-    res.status(404).send('Logo not found');
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(DEFAULT_BRAND_FAVICON_SVG);
   } catch (error) {
     global.logger.error(`[BrandingController.getBrandingLogoRedirect] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
-    next(error);
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(DEFAULT_BRAND_FAVICON_SVG);
   }
 };
 
@@ -436,19 +437,20 @@ const getBrandingLogoRedirect = async (req, res, next) => {
 const getBrandingFaviconRedirect = async (req, res, next) => {
   try {
     const { role = 'customer' } = req.query;
-    const config = await SystemConfig.findOne();
-    if (!config) {
-      return res.status(404).send('Config not found');
-    }
-    const branding = config[`${role}Branding`] || {};
-    const faviconUrl = branding.favicon || config.favicon || branding.icon || config.logo;
+    const config = await getCachedConfig();
+    const branding = config ? (config[`${role}Branding`] || {}) : {};
+    const faviconUrl = config?.favicon || branding.favicon || config?.logo || branding.logo || branding.icon;
     if (faviconUrl) {
-      return res.redirect(faviconUrl);
+      return res.redirect(302, faviconUrl);
     }
-    res.status(404).send('Favicon not found');
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(DEFAULT_BRAND_FAVICON_SVG);
   } catch (error) {
     global.logger.error(`[BrandingController.getBrandingFaviconRedirect] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
-    next(error);
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(DEFAULT_BRAND_FAVICON_SVG);
   }
 };
 

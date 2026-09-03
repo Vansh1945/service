@@ -80,25 +80,32 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
     payment.paymentMethod || settlement.paymentMethod || entityData?.paymentMethod || 'online'
   ).toLowerCase();
   const isCash = paymentMethod === 'cash' || paymentMethod === 'cod';
+  const isManualPayout = ['wallet', 'banktransfer', 'bank_transfer', 'upi', 'manual_bulk'].includes(paymentMethod) || entityData?.type === 'withdrawal' || entityData?.withdrawalType === 'manual_bulk';
 
   // Gross, Gateway Fee, Gateway Tax, Net Settlement
   const grossAmount = settlement.grossAmount ?? entityData?.grossAmount ?? payment.amountPaid ?? entityData?.amount ?? 0;
-  const gatewayFee = isCash ? 0 : (settlement.gatewayFee ?? gateway.gatewayFee ?? entityData?.gatewayFee ?? 0);
-  const gatewayTax = isCash ? 0 : (settlement.gatewayTax ?? gateway.gatewayTax ?? entityData?.gatewayTax ?? 0);
-  const netSettlement = isCash
+  const gatewayFee = (isCash || isManualPayout) ? 0 : (settlement.gatewayFee ?? gateway.gatewayFee ?? entityData?.gatewayFee ?? 0);
+  const gatewayTax = (isCash || isManualPayout) ? 0 : (settlement.gatewayTax ?? gateway.gatewayTax ?? entityData?.gatewayTax ?? 0);
+  const netSettlement = (isCash || isManualPayout)
     ? grossAmount
     : (settlement.netPlatformAmount ?? settlement.settlementAmount ?? (grossAmount - gatewayFee - gatewayTax));
 
   // Settlement Identification & Gateway Details
   const sId = settlement.settlementId || entityData?.settlementId || (entityData?._id ? `#${entityData._id.slice(-8)}` : 'N/A');
   const sDate = settlement.settlementDate || entityData?.settlementDate || entityData?.updatedAt || entityData?.createdAt;
-  const gatewayName = isCash ? 'CASH (Direct Collection)' : (gateway.gateway || 'Razorpay');
-  const gatewaySettlementId = isCash ? 'N/A' : (gateway.settlementId || entityData?.razorpaySettlementId || 'N/A');
-  const bankReference = isCash ? 'N/A' : (gateway.bankReference || entityData?.bankReference || 'N/A');
+  const gatewayName = isCash 
+    ? 'CASH (Direct Collection)' 
+    : (isManualPayout 
+      ? `DIRECT PAYOUT (${paymentMethod.toUpperCase()})` 
+      : (gateway.gateway || 'Razorpay'));
+  const gatewaySettlementId = (isCash || isManualPayout) 
+    ? (settlement.transactionReference || entityData?.transactionReference || entityData?.utrNo || 'N/A') 
+    : (gateway.settlementId || entityData?.razorpaySettlementId || 'N/A');
+  const bankReference = (isCash || isManualPayout) 
+    ? (settlement.utrNo || entityData?.utrNo || settlement.transactionReference || entityData?.transactionReference || 'N/A') 
+    : (gateway.bankReference || entityData?.bankReference || 'N/A');
   
-  const rawStatus = (settlement.settlementStatus || entityData?.settlementStatus || 'Settled').toLowerCase();
-  const statusLabel = isCash ? 'COLLECTED (CASH)' : (settlement.settlementStatus || entityData?.settlementStatus || 'Settled');
-  const reconciliationStatus = isCash ? 'N/A (Cash Collection)' : (settlement.reconciliationStatus || 'Reconciled');
+  const reconciliationStatus = isCash ? 'N/A (Cash Collection)' : (isManualPayout ? 'Reconciled (Direct Payout)' : (settlement.reconciliationStatus || 'Reconciled'));
 
   // Payment Details
   const pId = payment.paymentId || gateway.paymentId || entityData?.paymentId || entityData?.transactionId || (entityData?._id ? `#${entityData._id.slice(-8)}` : 'N/A');
@@ -110,6 +117,16 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
   const commission = provider.commission ?? entityData?.commission ?? entityData?.platformCommission ?? 0;
   const providerNet = provider.netShare ?? entityData?.providerNetShare ?? (providerGross - commission);
   const providerPayoutStatus = provider.payoutStatus || entityData?.payoutStatus || 'Processed';
+
+  const isProcessedOrPaid = ['processed', 'completed', 'transferred', 'settled', 'paid', 'approved'].includes(String(providerPayoutStatus).toLowerCase()) || ['processed', 'completed', 'transferred', 'settled', 'paid', 'approved'].includes(String(entityData?.settlementStatus || settlement?.settlementStatus).toLowerCase());
+
+  const gatewaySettlementStatusLabel = (isCash || isManualPayout)
+    ? (isProcessedOrPaid ? 'COMPLETED (DIRECT PAYOUT)' : 'PROCESSING')
+    : (settlement.settlementStatus || entityData?.settlementStatus || 'Settled');
+  const gatewaySettlementStatusType = ['completed', 'processed', 'approved', 'transferred', 'success', 'paid', 'settled', 'collected (cash)', 'completed (direct payout)'].includes(String(gatewaySettlementStatusLabel).toLowerCase()) ? 'success' : 'warning';
+
+  const headerStatusLabel = isProcessedOrPaid ? 'PROCESSED (PROVIDER PAID)' : String(gatewaySettlementStatusLabel).toUpperCase();
+  const headerStatusType = isProcessedOrPaid ? 'success' : 'warning';
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-secondary/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
@@ -125,8 +142,8 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white">Settlement Details</h2>
                 <StatusChip
-                  label={String(statusLabel).toUpperCase()}
-                  type={['settled', 'success', 'completed', 'collected (cash)'].includes(String(statusLabel).toLowerCase()) ? 'success' : 'warning'}
+                  label={headerStatusLabel}
+                  type={headerStatusType}
                 />
               </div>
               <p className="text-xs text-neutral-400 mt-0.5 font-mono">
@@ -190,7 +207,7 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
               <InfoRow label="Gateway" value={gatewayName} />
               <InfoRow label="Gateway Settlement ID" value={gatewaySettlementId} mono />
               <InfoRow label="Bank Reference" value={bankReference} mono />
-              <InfoRow label="Settlement Status" badge={<StatusChip label={String(statusLabel).toUpperCase()} type="success" />} />
+              <InfoRow label="Gateway Settlement Status" badge={<StatusChip label={String(gatewaySettlementStatusLabel).toUpperCase()} type={gatewaySettlementStatusType} />} />
               <InfoRow label="Reconciliation Status" value={reconciliationStatus} />
             </SectionCard>
 
@@ -201,6 +218,22 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
               <InfoRow label="Gross Payment Amount" badge={<span className="font-bold text-secondary"><PriceDisplay amount={grossAmount} /></span>} />
               {isCash && (
                 <InfoRow label="Collection Method" badge={<StatusChip label="CASH" type="warning" />} />
+              )}
+              {isManualPayout && (
+                <>
+                  <InfoRow label="Payout Method" badge={<StatusChip label="MANUAL / WALLET TRANSFER" type="info" />} />
+                  <InfoRow 
+                    label="Withdrawal / Payout Link" 
+                    badge={
+                      <a
+                        href={`/admin/payout?search=${encodeURIComponent(settlement.bookingId || entityData?.bookingId || pId)}&openDetail=true`}
+                        className="text-emerald-700 hover:underline font-mono font-bold inline-flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs"
+                      >
+                        View Payout Details ↗
+                      </a>
+                    } 
+                  />
+                </>
               )}
             </SectionCard>
           </div>
@@ -213,7 +246,13 @@ const SettlementDetailModal = ({ isOpen, onClose, entityData, settlementId }) =>
                 <InfoRow label="Provider Gross Amount" badge={<span className="font-bold text-secondary"><PriceDisplay amount={providerGross} /></span>} />
                 <InfoRow label="Commission" badge={<span className="font-bold text-danger"><PriceDisplay amount={commission} /></span>} />
                 <InfoRow label="Provider Net Amount" badge={<span className="font-black text-success"><PriceDisplay amount={providerNet} /></span>} />
-                <InfoRow label="Provider Payout Status" badge={<StatusChip label={String(providerPayoutStatus).toUpperCase()} type="info" />} />
+                <InfoRow label="Provider Payout Status" badge={<StatusChip label={String(providerPayoutStatus).toUpperCase()} type={['processed', 'completed', 'settled', 'paid', 'transferred', 'approved'].includes(String(providerPayoutStatus).toLowerCase()) ? 'success' : 'info'} />} />
+                {entityData?.paymentDetails?.accountNumber && (
+                  <InfoRow label="Transfer Account" value={`${entityData.paymentDetails.bankName || 'Bank'} (${entityData.paymentDetails.accountNumber})`} mono />
+                )}
+                {entityData?.paymentDetails?.ifscCode && (
+                  <InfoRow label="IFSC Code" value={entityData.paymentDetails.ifscCode} mono />
+                )}
               </div>
             </SectionCard>
           )}

@@ -259,19 +259,19 @@ app.use((req, res, next) => {
     const url = req.originalUrl || req.url || '';
     // Personalized/authenticated routes must never be cached by shared or browser caches
     const isPrivate = url.includes('/admin') ||
-                      url.includes('/customer') ||
-                      url.includes('/provider') ||
-                      url.includes('/auth') ||
-                      url.includes('/booking') ||
-                      url.includes('/transaction') ||
-                      url.includes('/complaint') ||
-                      url.includes('/feedback') ||
-                      url.includes('/chat') ||
-                      url.includes('/notifications') ||
-                      url.includes('/payment') ||
-                      url.includes('/referral/customer') ||
-                      url.includes('/referral/provider') ||
-                      url.includes('/referral/admin');
+      url.includes('/customer') ||
+      url.includes('/provider') ||
+      url.includes('/auth') ||
+      url.includes('/booking') ||
+      url.includes('/transaction') ||
+      url.includes('/complaint') ||
+      url.includes('/feedback') ||
+      url.includes('/chat') ||
+      url.includes('/notifications') ||
+      url.includes('/payment') ||
+      url.includes('/referral/customer') ||
+      url.includes('/referral/provider') ||
+      url.includes('/referral/admin');
 
     if (isPrivate) {
       res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');

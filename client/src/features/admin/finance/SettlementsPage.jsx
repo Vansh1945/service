@@ -109,6 +109,9 @@ const SettlementsPage = () => {
         </div>
         <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
           <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Provider Share Payable</p>
+          <p className="text-[11px] font-bold text-emerald-600 mt-1.5 flex items-center gap-1">
+            ✓ Transferred: <PriceDisplay amount={data.summary?.totalProviderPaid || 0} />
+          </p>
           <h3 className="text-2xl font-black text-blue-600 mt-1">
             <PriceDisplay amount={data.summary?.providerSettlement || 0} />
           </h3>
@@ -124,12 +127,12 @@ const SettlementsPage = () => {
           <h3 className="text-2xl font-black mt-1 flex items-center gap-1.5">
             {data.summary?.settlementDifference != null ? (
               Math.abs(data.summary.settlementDifference) < 0.01 ? (
-                <span className="text-emerald-600 flex items-center gap-1.5">
-                  <FiCheckCircle className="w-5 h-5 text-emerald-500" /> Balanced
+                <span className="text-emerald-600 flex items-center gap-1.5 text-lg">
+                  <FiCheckCircle className="w-5 h-5 text-emerald-500" /> Balanced ( ₹0.00 )
                 </span>
               ) : (
-                <span className="text-rose-600 flex items-center gap-1.5 text-lg">
-                  <FiAlertTriangle className="w-5 h-5 text-rose-500" /> Unbalanced (<PriceDisplay amount={data.summary.settlementDifference} />)
+                <span className="text-amber-600 flex items-center gap-1.5 text-lg">
+                  <FiAlertTriangle className="w-5 h-5 text-amber-500" /> Pending Payout (<PriceDisplay amount={data.summary.settlementDifference} />)
                 </span>
               )
             ) : (
@@ -187,11 +190,41 @@ const SettlementsPage = () => {
                       : ((s.booking?.commissionAmount !== undefined && s.booking?.commissionAmount !== null)
                         ? s.booking.commissionAmount
                         : null));
-                  const rawSettlementStatus = s.settlementStatus || (s.payoutStatus ? s.payoutStatus : null);
-                  const rawStatusLower = String(rawSettlementStatus || '').toLowerCase();
-                  const isSettled = ['success', 'completed', 'settled', 'paid'].includes(rawStatusLower);
-                  const isPending = ['pending', 'processing', 'queued', 'initiated'].includes(rawStatusLower);
-                  const isFailed = ['failed', 'rejected', 'declined', 'cancelled'].includes(rawStatusLower);
+                  const pMethodLower = String(s.paymentMethod || '').toLowerCase();
+                  const bId = s.booking?.bookingId || s.bookingId || '';
+                  const isPayoutRef = bId.startsWith('WDL-') || s.type === 'withdrawal' || ['wallet', 'banktransfer', 'bank_transfer', 'upi', 'manual_bulk'].includes(pMethodLower);
+                  const isRazorpayPayment = pMethodLower === 'razorpay' || pMethodLower === 'online' || !!s.razorpayPaymentId || !!s.razorpayOrderId;
+                  const isCashPayment = ['cash', 'cod'].includes(pMethodLower);
+
+                  const pStatus = String(s.paymentStatus || '').toLowerCase();
+                  const payoutStatus = String(s.payoutStatus || '').toLowerCase();
+                  const setlStatus = String(s.settlementStatus || '').toLowerCase();
+
+                  let isSettled = false;
+                  if (isRazorpayPayment) {
+                    // For Razorpay online payments: strictly check if Razorpay gateway batch is settled or has razorpaySettlementId
+                    isSettled = setlStatus === 'settled' || setlStatus === 'processed' || !!s.razorpaySettlementId;
+                  } else if (isPayoutRef) {
+                    // For Provider Payouts / Withdrawals: check if payout transfer is completed/processed
+                    isSettled = ['completed', 'success', 'paid', 'processed', 'settled', 'transferred', 'approved'].includes(pStatus)
+                      || ['completed', 'success', 'paid', 'processed', 'settled', 'transferred', 'approved'].includes(payoutStatus)
+                      || setlStatus === 'settled';
+                  } else if (isCashPayment) {
+                    isSettled = ['completed', 'success', 'paid', 'settled'].includes(pStatus);
+                  } else {
+                    isSettled = ['completed', 'success', 'paid', 'processed', 'settled'].includes(pStatus) || setlStatus === 'settled';
+                  }
+
+                  const isPending = !isSettled && ['pending', 'processing', 'queued', 'initiated'].includes(setlStatus || pStatus || 'queued');
+                  const isFailed = ['failed', 'rejected', 'declined', 'cancelled'].includes(pStatus || setlStatus);
+
+                  const displayGateway = s.gateway
+                    ? s.gateway
+                    : (isCashPayment
+                      ? 'CASH'
+                      : (isPayoutRef
+                        ? (pMethodLower === 'wallet' ? 'WALLET PAYOUT' : (pMethodLower === 'upi' ? 'UPI PAYOUT' : 'MANUAL PAYOUT'))
+                        : (isRazorpayPayment ? 'RAZORPAY' : 'DIRECT PAYOUT')));
 
                   return (
                     <tr key={s._id} className="hover:bg-emerald-50/20 transition-colors">
@@ -201,13 +234,13 @@ const SettlementsPage = () => {
                         {s.settlementId || s.razorpaySettlementId || s.transactionId || `#${s._id.slice(-6)}`}
                       </td>
 
-                      {/* 2. Booking ID */}
-                      <td className="p-3.5 font-bold text-slate-900">
+                      {/* 2. Booking ID / Payout Ref */}
+                      <td className="p-3.5 font-bold text-slate-900 whitespace-nowrap">
                         <a
-                          href={getEntityRoute('booking', s.booking?._id || s.booking)}
-                          className="text-blue-600 hover:underline font-mono"
+                          href={bId.startsWith('WDL-') ? getEntityRoute('payout', bId) : getEntityRoute('booking', s.booking?._id || s.booking)}
+                          className={`${bId.startsWith('WDL-') ? 'text-emerald-700' : 'text-blue-600'} hover:underline font-mono`}
                         >
-                          {s.booking?.bookingId || s.bookingId || 'N/A'}
+                          {bId || 'N/A'}
                         </a>
                       </td>
 
@@ -223,7 +256,7 @@ const SettlementsPage = () => {
 
                       {/* 4. Gateway */}
                       <td className="p-3.5 font-bold uppercase text-slate-500">
-                        {s.gateway || (s.paymentMethod === 'razorpay' ? 'Razorpay' : (s.paymentMethod || 'Razorpay'))}
+                        {displayGateway}
                       </td>
 
                       {/* 5. Customer */}
