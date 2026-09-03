@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import usePagination from '../../../hooks/usePagination';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import Avatar from '../../../components/ui/Avatar';
 import Table from '../../../components/ui/Table';
@@ -16,24 +17,17 @@ import {
     UserX,
     UserPlus,
     BookOpen,
-    Filter,
-    ChevronLeft,
-    ChevronRight,
     Eye,
     Mail,
     Phone,
     MapPin,
     Calendar,
-    FileText,
-    Home,
     User,
     Award,
-    TrendingUp,
     Sparkles,
     CheckCircle,
     XCircle,
     Clock,
-    Star,
     Wallet,
     Edit3,
     Trash2,
@@ -105,8 +99,20 @@ const AdminCustomersDashboard = () => {
 
     const [statusFilter, setStatusFilter] = useState('all');
     const [bookingFilter, setBookingFilter] = useState('all');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10);
+
+    const {
+        currentPage,
+        setCurrentPage,
+        limit: itemsPerPage,
+        totalPages,
+        onPageChange,
+        setPaginationData,
+        resetPagination
+    } = usePagination(1, 10);
+
+    useEffect(() => {
+        setPaginationData({ total: filteredCustomers.length });
+    }, [filteredCustomers.length, setPaginationData]);
 
     // Stats state
     const [stats, setStats] = useState({
@@ -421,7 +427,6 @@ const AdminCustomersDashboard = () => {
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentCustomers = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
 
     return (
         <div className="min-h-screen p-4 md:p-6">

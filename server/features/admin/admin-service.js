@@ -1,16 +1,12 @@
 const Admin = require('./admin-model');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const Provider = require('../provider/provider-model');
 const User = require('../user/user-model');
 const Booking = require('../booking/booking-model');
 const Service = require('../catalog/service-model');
 const Complaint = require('../complaint/complaint-model');
 const Transaction = require('../payment/transaction-model');
-const Coupon = require('../coupon/coupon-model');
 const ProviderEarning = require('../provider/provider-earning-model');
 const PaymentRecord = require('../payment/payment-record-model');
-const Feedback = require('../feedback/feedback-model');
 const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
@@ -19,7 +15,7 @@ const mongoose = require('mongoose');
 const { sendNotification } = require('../notification/notification-helper');
 const generateProviderId = require('../../shared/utils/generate-unique-id');
 const { sendMail } = require('../../shared/utils/sendmail');
-const { getPrecomputedAnalytics, refreshAnalytics } = require('../analytics/analytics-service'); // Updated import path for services/
+const { getPrecomputedAnalytics } = require('../analytics/analytics-service'); // Updated import path for services/
 
 
 const deleteFile = async (publicId) => {
@@ -842,6 +838,12 @@ class AdminService {
                     }
                 }
 
+                provider.approved = true;
+                provider.kycStatus = 'approved';
+                provider.isActive = true;
+                provider.isSuspended = false;
+                provider.suspensionReason = '';
+
                 provider.bankDetails = provider.bankDetails || {};
                 provider.bankDetails.verified = true;
                 provider.bankDetails.bankVerificationStatus = 'verified';
@@ -994,7 +996,6 @@ class AdminService {
                 });
             }
 
-            const oldStatus = provider.approved ? 'approved' : 'pending';
 
             // 1. Apply manual admin state changes
             if (status === 'approved' || status === 'active') {
@@ -1010,9 +1011,13 @@ class AdminService {
                     provider.performanceScore.restrictedUntil = null;
                     provider.performanceScore.restrictionReason = '';
                 }
-                if (provider.bankDetails) {
-                    provider.bankDetails.verified = true;
-                }
+                provider.bankDetails = provider.bankDetails || {};
+                provider.bankDetails.verified = true;
+                provider.bankDetails.bankVerificationStatus = 'verified';
+                provider.bankDetails.payoutEnabled = true;
+                provider.bankDetails.bankVerifiedAt = provider.bankDetails.bankVerifiedAt || new Date();
+                provider.bankDetails.bankVerifiedBy = provider.bankDetails.bankVerifiedBy || req.admin?._id || null;
+                provider.bankDetails.bankRejectReason = null;
                 if (!provider.providerId) {
                     provider.providerId = generateProviderId();
                 }
@@ -1020,80 +1025,84 @@ class AdminService {
                 if (global.logger) global.logger.info(`Provider manual activation/approval by Admin: ${provider._id}`);
 
                 await provider.save();
-
-                // Send notification
-                try {
-                    sendNotification(
-                        provider._id,
-                        'provider',
-                        'Account Approved & Active 🎓',
-                        `Congratulations! Your provider account is now fully active. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
-                        'approved',
-                        provider._id
-                    );
-                    const { triggerEventNotification } = require('../notification/notification-helper');
-                    await triggerEventNotification('provider_verification_approved', {
-                        remarks: finalRemarks || '',
-                        provider
-                    }, provider._id);
-                } catch (fcmError) {
-                    console.error('Failed to send activation notification:', fcmError);
-                }
-
-                try {
-                    // Generate and upload Approval Letter PDF
-                    const { generateApprovalLetter, generateAgreement, uploadPdfBuffer } = require('../booking/agreement-generator');
-                    const approvalPdfBuffer = await generateApprovalLetter(provider, finalRemarks);
-                    if (provider.approvalLetterPublicId) {
-                        await deleteFile(provider.approvalLetterPublicId);
-                    }
-                    const approvalPdfUpload = await uploadPdfBuffer(approvalPdfBuffer, 'provider_approval_letters', `approval_${provider._id}`);
-                    provider.approvalLetterUrl = approvalPdfUpload.secure_url;
-                    provider.approvalLetterPublicId = approvalPdfUpload.public_id;
-
-                    // Generate and upload Agreement PDF
-                    const agreementPdfBuffer = await generateAgreement(provider);
-                    if (provider.agreementPdfPublicId) {
-                        await deleteFile(provider.agreementPdfPublicId);
-                    }
-                    const agreementPdfUpload = await uploadPdfBuffer(agreementPdfBuffer, 'provider_agreements', `agreement_${provider._id}`);
-                    provider.agreementPdfUrl = agreementPdfUpload.secure_url;
-                    provider.agreementPdfPublicId = agreementPdfUpload.public_id;
-
-                    await provider.save();
-
-                    await sendMail({
-                        to: provider.email,
-                        templateType: 'providerApproval',
-                        variables: {
-                            name: provider.name,
-                            providerName: provider.providerId,
-                            reason: finalRemarks,
-                            email: `${process.env.FRONTEND_URL}/login`,
-                            agreementPdfUrl: provider.agreementPdfUrl,
-                            approvalLetterUrl: provider.approvalLetterUrl
-                        },
-                        attachments: [
-                            {
-                                content: approvalPdfBuffer.toString('base64'),
-                                name: `Approval_Letter_${provider.providerId || provider._id}.pdf`
-                            },
-                            {
-                                content: agreementPdfBuffer.toString('base64'),
-                                name: `Service_Agreement_${provider.providerId || provider._id}.pdf`
-                            }
-                        ]
-                    });
-                } catch (mailError) {
-                    console.error('Failed to send approval email/PDF:', mailError);
-                }
-
                 emitProviderStatusChange(provider, status);
-                return res.status(200).json({
+
+                res.status(200).json({
                     success: true,
                     message: 'Provider manual activation/approval successful',
                     provider: provider.toJSON()
                 });
+
+                // Offload heavy background operations (PDF generation, Cloudinary uploads, email/notifications)
+                setImmediate(async () => {
+                    // Send notification
+                    try {
+                        sendNotification(
+                            provider._id,
+                            'provider',
+                            'Account Approved & Active 🎓',
+                            `Congratulations! Your provider account is now fully active. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
+                            'approved',
+                            provider._id
+                        );
+                        const { triggerEventNotification } = require('../notification/notification-helper');
+                        await triggerEventNotification('provider_verification_approved', {
+                            remarks: finalRemarks || '',
+                            provider
+                        }, provider._id);
+                    } catch (fcmError) {
+                        console.error('Failed to send activation notification:', fcmError);
+                    }
+
+                    try {
+                        // Generate and upload Approval Letter PDF
+                        const { generateApprovalLetter, generateAgreement, uploadPdfBuffer } = require('../booking/agreement-generator');
+                        const approvalPdfBuffer = await generateApprovalLetter(provider, finalRemarks);
+                        if (provider.approvalLetterPublicId) {
+                            await deleteFile(provider.approvalLetterPublicId);
+                        }
+                        const approvalPdfUpload = await uploadPdfBuffer(approvalPdfBuffer, 'provider_approval_letters', `approval_${provider._id}`);
+                        provider.approvalLetterUrl = approvalPdfUpload.secure_url;
+                        provider.approvalLetterPublicId = approvalPdfUpload.public_id;
+
+                        // Generate and upload Agreement PDF
+                        const agreementPdfBuffer = await generateAgreement(provider);
+                        if (provider.agreementPdfPublicId) {
+                            await deleteFile(provider.agreementPdfPublicId);
+                        }
+                        const agreementPdfUpload = await uploadPdfBuffer(agreementPdfBuffer, 'provider_agreements', `agreement_${provider._id}`);
+                        provider.agreementPdfUrl = agreementPdfUpload.secure_url;
+                        provider.agreementPdfPublicId = agreementPdfUpload.public_id;
+
+                        await provider.save();
+
+                        await sendMail({
+                            to: provider.email,
+                            templateType: 'providerApproval',
+                            variables: {
+                                name: provider.name,
+                                providerName: provider.providerId,
+                                reason: finalRemarks,
+                                email: `${process.env.FRONTEND_URL}/login`,
+                                agreementPdfUrl: provider.agreementPdfUrl,
+                                approvalLetterUrl: provider.approvalLetterUrl
+                            },
+                            attachments: [
+                                {
+                                    content: approvalPdfBuffer.toString('base64'),
+                                    name: `Approval_Letter_${provider.providerId || provider._id}.pdf`
+                                },
+                                {
+                                    content: agreementPdfBuffer.toString('base64'),
+                                    name: `Service_Agreement_${provider.providerId || provider._id}.pdf`
+                                }
+                            ]
+                        });
+                    } catch (mailError) {
+                        console.error('Failed to send approval email/PDF:', mailError);
+                    }
+                });
+                return;
             }
 
             if (status === 'rejected') {
@@ -1167,6 +1176,18 @@ class AdminService {
                     );
                 } catch (fcmError) { }
 
+                try {
+                    await sendMail({
+                        to: provider.email,
+                        templateType: 'providerRestricted',
+                        variables: {
+                            name: provider.name,
+                            reason: finalRemarks,
+                            durationDays: durationDays || 'Indefinite'
+                        }
+                    });
+                } catch (mailError) { }
+
                 emitProviderStatusChange(provider, status);
                 return res.status(200).json({
                     success: true,
@@ -1196,6 +1217,17 @@ class AdminService {
                         provider._id
                     );
                 } catch (fcmError) { }
+
+                try {
+                    await sendMail({
+                        to: provider.email,
+                        templateType: 'providerSuspended',
+                        variables: {
+                            name: provider.name,
+                            reason: finalRemarks
+                        }
+                    });
+                } catch (mailError) { }
 
                 emitProviderStatusChange(provider, status);
                 return res.status(200).json({
@@ -1227,6 +1259,18 @@ class AdminService {
                         provider._id
                     );
                 } catch (fcmError) { }
+
+                try {
+                    await sendMail({
+                        to: provider.email,
+                        templateType: 'providerBlocked',
+                        variables: {
+                            name: provider.name,
+                            reason: finalRemarks,
+                            durationDays: durationDays || 'Permanent'
+                        }
+                    });
+                } catch (mailError) { }
 
                 emitProviderStatusChange(provider, status);
                 return res.status(200).json({
@@ -1695,7 +1739,6 @@ class AdminService {
 
     static async getDashboardStats(req, res) {
         try {
-            const cacheKey = 'admin_dashboard_stats';
 
             // 1. Try In-Memory Precomputed Analytics (Fastest)
             const precomputed = getPrecomputedAnalytics();
@@ -2553,12 +2596,10 @@ class AdminService {
     static async getDashboardAnalytics(req, res) {
         try {
             const { period = '7d' } = req.query;
-            const cacheKey = `dashboard_analytics_${period}`;
 
 
 
             let startDate;
-            const now = new Date();
 
             switch (period) {
                 case '1d':
@@ -2956,7 +2997,7 @@ class AdminService {
 
         try {
             const { bookingId } = req.params;
-            const { amount, reason, type, absorption = 'shared' } = req.body; // type: 'full' or 'partial'
+            const { amount, reason, type } = req.body; // type: 'full' or 'partial'
 
             const booking = await Booking.findById(bookingId).populate('complaint').session(session);
             if (!booking) {
@@ -3246,7 +3287,7 @@ class AdminService {
 
     static async createManualRefund(req, res) {
         try {
-            const { bookingId, amount, reason, refundType = 'manual', refundSource = 'manual_refund', refundDestination = 'wallet', customerChoice, notes } = req.body;
+            const { bookingId, amount, reason, refundSource = 'manual_refund', refundDestination = 'wallet', customerChoice, notes } = req.body;
             const Booking = require('../booking/booking-model');
             const RefundEngineService = require('../payment/refund-engine-service');
 

@@ -13,57 +13,115 @@ import { useConfirm } from '../../../context/ConfirmContext';
 const TEMPLATE_METADATA = {
   forgotPasswordOtp: {
     name: 'Forgot Password OTP',
-    description: 'Email sent when a user requests an OTP to reset their password.',
+    triggerEvent: '🔑 Password Reset Request',
+    recipientRole: 'User / Provider',
+    description: 'Sent automatically when a user or provider clicks "Forgot Password" to request an OTP code.',
     icon: <FiMail className="w-5 h-5" />,
     variables: ['otp', 'email', 'expiry']
   },
   providerRegistrationOtp: {
     name: 'Provider Registration OTP',
-    description: 'Email containing registration verification OTP for service providers.',
+    triggerEvent: '📝 Provider Signup Step 1',
+    recipientRole: 'Provider Applicant',
+    description: 'Sent automatically during step 1 of provider registration to verify email via OTP.',
     icon: <FiMail className="w-5 h-5" />,
     variables: ['otp', 'email', 'expiry']
   },
   providerApproval: {
-    name: 'Provider Approved',
-    description: 'Notification sent when a service provider profile is successfully approved by the admin.',
-    icon: <FiCheck className="w-5 h-5" />,
+    name: 'Provider Account Approved',
+    triggerEvent: '🎓 Admin Approves Provider Account',
+    recipientRole: 'Service Provider',
+    description: 'Sent when Admin clicks "Approve Provider". Contains account activation confirmation & PDF agreement download links.',
+    icon: <FiCheck className="w-5 h-5 text-emerald-600" />,
     variables: ['name', 'providerName', 'reason', 'email', 'agreementPdfUrl', 'approvalLetterUrl']
   },
   providerRejection: {
-    name: 'Provider Rejected',
-    description: 'Notification sent when a service provider profile is rejected by the admin.',
-    icon: <FiX className="w-5 h-5" />,
+    name: 'Provider Application Rejected',
+    triggerEvent: '❌ Admin Rejects Provider Registration Application',
+    recipientRole: 'Service Provider Applicant',
+    description: 'Sent when Admin rejects a new provider registration request. Includes reason for rejection.',
+    icon: <FiX className="w-5 h-5 text-rose-600" />,
     variables: ['name', 'reason']
   },
+  providerRestricted: {
+    name: 'Provider Account Restricted',
+    triggerEvent: '⚠️ Admin Restricts Provider Account',
+    recipientRole: 'Service Provider',
+    description: 'Sent when Admin restricts a provider profile. Explains booking dispatch pause, remarks, and restriction duration.',
+    icon: <FiInfo className="w-5 h-5 text-amber-600" />,
+    variables: ['name', 'reason', 'durationDays']
+  },
+  providerSuspended: {
+    name: 'Provider Account Suspended',
+    triggerEvent: '⛔ Admin Suspends Provider Account',
+    recipientRole: 'Service Provider',
+    description: 'Sent when Admin suspends a provider account. Explains total login/dispatch pause and suspension reason.',
+    icon: <FiX className="w-5 h-5 text-rose-600" />,
+    variables: ['name', 'reason']
+  },
+  providerBlocked: {
+    name: 'Provider Account Blocked',
+    triggerEvent: '🚫 Admin Blocks Provider Account',
+    recipientRole: 'Service Provider',
+    description: 'Sent when Admin blocks a provider account. Explains session termination, block duration, and termination reason.',
+    icon: <FiX className="w-5 h-5 text-red-700" />,
+    variables: ['name', 'reason', 'durationDays']
+  },
   contactReply: {
-    name: 'Contact Form Reply',
-    description: 'Email response dispatched when replying to a user support ticket or inquiry.',
+    name: 'Contact Inquiry Reply',
+    triggerEvent: '💬 Support Team Replies to Message',
+    recipientRole: 'Customer / Provider',
+    description: 'Sent when Admin responds to a contact support inquiry from the Admin Panel.',
     icon: <FiMail className="w-5 h-5" />,
     variables: ['name', 'remark', 'reason', 'email']
   },
   withdrawApproved: {
-    name: 'Withdrawal Approved',
-    description: 'Notification sent to provider upon approval of their earnings withdrawal request.',
-    icon: <FiActivity className="w-5 h-5" />,
+    name: 'Payout Withdrawal Approved',
+    triggerEvent: '💸 Admin Approves Earnings Payout',
+    recipientRole: 'Service Provider',
+    description: 'Sent when Admin approves a provider wallet/earnings withdrawal request.',
+    icon: <FiActivity className="w-5 h-5 text-emerald-600" />,
     variables: ['name', 'withdrawAmount', 'remark', 'date']
   },
   withdrawRejected: {
-    name: 'Withdrawal Rejected',
-    description: 'Notification sent to provider when their earnings withdrawal request is rejected.',
-    icon: <FiX className="w-5 h-5" />,
+    name: 'Payout Withdrawal Rejected',
+    triggerEvent: '❌ Admin Rejects Payout Request',
+    recipientRole: 'Service Provider',
+    description: 'Sent when Admin rejects a provider wallet withdrawal request with explanation.',
+    icon: <FiX className="w-5 h-5 text-rose-600" />,
     variables: ['name', 'withdrawAmount', 'reason', 'date']
   },
+  complaintResponse: {
+    name: 'Complaint Status Update',
+    triggerEvent: '📋 Admin Resolves / Responds to Complaint',
+    recipientRole: 'Customer',
+    description: 'Sent when Admin resolves or updates a booking complaint status.',
+    icon: <FiInfo className="w-5 h-5 text-blue-600" />,
+    variables: ['name', 'bookingId', 'status', 'remark']
+  },
   adminBookingCancelledCustomer: {
-    name: 'Booking Cancelled (Customer)',
-    description: 'Notification email sent to the customer when their booking is cancelled by support team.',
-    icon: <FiX className="w-5 h-5" />,
+    name: 'Booking Cancelled (Sent to Customer)',
+    triggerEvent: '🚫 Support Team Cancels Booking',
+    recipientRole: 'Customer',
+    description: 'Sent to customer when support team cancels a booking. Includes refund breakdown.',
+    icon: <FiX className="w-5 h-5 text-rose-600" />,
     variables: ['name', 'bookingId', 'serviceName', 'cancellationReason', 'complaintId', 'refundAmount', 'platformFeeRetained', 'refundDestination', 'expectedRefundTimeline']
   },
   adminBookingCancelledProvider: {
-    name: 'Booking Cancelled (Provider)',
-    description: 'Notification email sent to the assigned service provider when booking is cancelled by support team.',
-    icon: <FiX className="w-5 h-5" />,
+    name: 'Booking Cancelled (Sent to Provider)',
+    triggerEvent: '🚫 Support Team Cancels Assigned Booking',
+    recipientRole: 'Service Provider',
+    description: 'Sent to assigned provider when support team cancels a booking.',
+    icon: <FiX className="w-5 h-5 text-rose-600" />,
     variables: ['name', 'bookingId', 'customerName', 'cancellationReason', 'complaintId']
+  },
+  refundCompleted: {
+    name: 'Refund Completed Confirmation',
+    triggerEvent: '💰 Refund Processed to Customer',
+    recipientRole: 'Customer',
+    description: 'Sent to customer when refund is successfully processed to wallet or bank account.',
+    icon: <FiCheck className="w-5 h-5 text-emerald-600" />,
+    variables: ['customerName', 'bookingId', 'refundId', 'amount', 'walletRefundAmount', 'gatewayRefundAmount', 'refundDestination']
   }
 };
 
@@ -404,9 +462,21 @@ const EmailTemplate = () => {
                 </button>
               </div>
             </div>
-            <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">
-              {currentMeta?.description}
-            </p>
+            <div className="mt-3 p-3 bg-teal-50/70 rounded-xl border border-teal-100 text-xs space-y-1.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="font-bold text-teal-900 flex items-center gap-1.5">
+                  <FiInfo className="text-teal-600 w-4 h-4" /> Trigger Event: {currentMeta?.triggerEvent}
+                </span>
+                {currentMeta?.recipientRole && (
+                  <span className="bg-teal-100 text-teal-800 font-semibold px-2.5 py-0.5 rounded-md text-[11px]">
+                    Target Recipient: {currentMeta.recipientRole}
+                  </span>
+                )}
+              </div>
+              <p className="text-teal-700 text-xs leading-relaxed">
+                {currentMeta?.description}
+              </p>
+            </div>
           </div>
 
           {/* Form Fields */}

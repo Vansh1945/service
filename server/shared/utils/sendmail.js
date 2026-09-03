@@ -5,181 +5,100 @@ const { SystemConfig } = require('../../features/system-setting/system-setting-m
 /**
  * Default templates defined internally in the server
  */
+/**
+ * Lightweight dynamic HTML layout builder
+ */
+const buildLayout = (title, bodyContent) => `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+  <h2 style="color: #2c3e50; text-align: center;">${title}</h2>
+  ${bodyContent}
+  <p style="color: #6b7280; font-size: 12px; margin-top: 24px; text-align: center;">Regards,<br/><strong>Support Team</strong></p>
+</div>`;
+
+/**
+ * Default templates initialized in database
+ */
 const DEFAULT_EMAIL_TEMPLATES = {
   forgotPasswordOtp: {
     subject: "Your Verification Code",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-  <h2 style="color: #333; text-align: center;">Verification Code</h2>
-  <p style="color: #555; font-size: 16px;">Hello,</p>
-  <p style="color: #555; font-size: 16px;">Your One-Time Password (OTP) for verification is:</p>
-  <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 4px; margin: 20px 0;">
-    <strong style="font-size: 24px; color: #2c3e50; letter-spacing: 2px;">{{otp}}</strong>
-  </div>
-  <p style="color: #555; font-size: 14px;">This code will expire in {{expiry}} minutes.</p>
-  <p style="color: #555; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
-</div>`,
+    body: buildLayout("Verification Code", `<p>Hello,</p><p>Your One-Time Password (OTP) for verification is:</p><div style="background:#f4f4f4;padding:15px;text-align:center;border-radius:4px;margin:20px 0;"><strong style="font-size:24px;color:#2c3e50;">{{otp}}</strong></div><p>This code will expire in {{expiry}} minutes.</p>`),
     isActive: true,
     allowedVariables: ["otp", "email", "expiry"]
   },
   providerRegistrationOtp: {
     subject: "Your Provider Registration OTP",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-  <h2 style="color: #333; text-align: center;">Registration OTP</h2>
-  <p style="color: #555; font-size: 16px;">Hello,</p>
-  <p style="color: #555; font-size: 16px;">Your One-Time Password (OTP) for provider registration is:</p>
-  <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 4px; margin: 20px 0;">
-    <strong style="font-size: 24px; color: #2c3e50; letter-spacing: 2px;">{{otp}}</strong>
-  </div>
-  <p style="color: #555; font-size: 14px;">This code will expire in {{expiry}} minutes.</p>
-  <p style="color: #555; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
-</div>`,
+    body: buildLayout("Registration OTP", `<p>Hello,</p><p>Your registration OTP is:</p><div style="background:#f4f4f4;padding:15px;text-align:center;border-radius:4px;margin:20px 0;"><strong style="font-size:24px;color:#2c3e50;">{{otp}}</strong></div><p>This code will expire in {{expiry}} minutes.</p>`),
     isActive: true,
     allowedVariables: ["otp", "email", "expiry"]
   },
   providerApproval: {
     subject: "Congratulations! Your Provider Account is Active",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #2c3e50; text-align: center;">Account Active!</h2>
-    <p>Dear {{name}},</p>
-    <p>Your provider account has been manually activated and approved by the administrator.</p>
-    <p>Your Provider ID is: <strong>{{providerName}}</strong></p>
-    {{#if reason}}
-    <p><strong>Admin Remarks:</strong> {{reason}}</p>
-    {{/if}}
-    <div style="text-align: center; margin-top: 30px;">
-        <a href="{{email}}" style="background-color: #0D9488; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to Dashboard</a>
-    </div>
-</div>`,
+    body: buildLayout("Account Active!", `<p>Dear {{name}},</p><p>Your provider account has been approved and activated.</p><p>Provider ID: <strong>{{providerName}}</strong></p>{{#if reason}}<p><strong>Remarks:</strong> {{reason}}</p>{{/if}}`),
     isActive: true,
     allowedVariables: ["name", "providerName", "reason", "email", "agreementPdfUrl", "approvalLetterUrl"]
   },
   providerRejection: {
-    subject: "Update Regarding Your Provider Account",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #c0392b; text-align: center;">Account Update</h2>
-    <p>Dear {{name}},</p>
-    <p>We regret to inform you that your provider account application has been <strong>Rejected</strong>.</p>
-    <p><strong>Reason for Rejection:</strong> {{reason}}</p>
-</div>`,
+    subject: "Update Regarding Your Provider Account Application",
+    body: buildLayout("Application Status Update", `<p>Dear {{name}},</p><p>We regret to inform you that your provider account application has been <strong>Rejected</strong>.</p><p><strong>Reason:</strong> {{reason}}</p>`),
     isActive: true,
     allowedVariables: ["name", "reason"]
   },
+  providerRestricted: {
+    subject: "Notice: Temporary Restrictions Applied to Your Provider Account",
+    body: buildLayout("Account Restricted", `<p>Dear {{name}},</p><p>Temporary account restrictions have been applied to your provider profile.</p><p><strong>Reason:</strong> {{reason}}</p>{{#if durationDays}}<p><strong>Duration:</strong> {{durationDays}} Days</p>{{/if}}`),
+    isActive: true,
+    allowedVariables: ["name", "reason", "durationDays"]
+  },
+  providerSuspended: {
+    subject: "Important: Your Provider Account Has Been Suspended",
+    body: buildLayout("Account Suspended", `<p>Dear {{name}},</p><p>Your provider account has been <strong>Suspended</strong> by administration.</p><p><strong>Reason:</strong> {{reason}}</p>`),
+    isActive: true,
+    allowedVariables: ["name", "reason"]
+  },
+  providerBlocked: {
+    subject: "Urgent: Your Provider Account Has Been Blocked",
+    body: buildLayout("Account Blocked", `<p>Dear {{name}},</p><p>Your provider account has been <strong>Blocked</strong> by administration.</p><p><strong>Reason:</strong> {{reason}}</p>{{#if durationDays}}<p><strong>Duration:</strong> {{durationDays}} Days</p>{{/if}}`),
+    isActive: true,
+    allowedVariables: ["name", "reason", "durationDays"]
+  },
   contactReply: {
-    subject: "Re: {{subject}}",
-    body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
-  <div style="background:#4f46e5;padding:24px;text-align:center;">
-    <h2 style="color:#ffffff;margin:0;">Reply to Your Message</h2>
-  </div>
-  <div style="padding:28px 32px;background:#ffffff;">
-    <p style="color:#374151;font-size:15px;">Hi <strong>{{name}}</strong>,</p>
-    <p style="color:#374151;font-size:15px;">Thank you for reaching out. Here is our response to your inquiry:</p>
-    <div style="background:#f3f4f6;border-left:4px solid #4f46e5;padding:16px 20px;border-radius:4px;margin:20px 0;">
-      <p style="margin:0;color:#1f2937;font-size:15px;white-space:pre-line;">{{remark}}</p>
-    </div>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
-    <p style="color:#6b7280;font-size:13px;margin-bottom:4px;"><strong>Your original message:</strong></p>
-    <p style="color:#6b7280;font-size:13px;font-style:italic;white-space:pre-line;">{{reason}}</p>
-    <p style="color:#374151;font-size:14px;margin-top:24px;">If you have further questions, feel free to contact us again.</p>
-    <p style="color:#374151;font-size:14px;margin:0;">Regards,<br/><strong>Support Team</strong></p>
-  </div>
-  <div style="background:#f9fafb;padding:16px;text-align:center;">
-    <p style="color:#9ca3af;font-size:12px;margin:0;">This is an automated email. Please do not reply directly to this message.</p>
-  </div>
-</div>`,
+    subject: "Re: Support Inquiry Reply",
+    body: buildLayout("Support Reply", `<p>Hi <strong>{{name}}</strong>,</p><p>{{remark}}</p>`),
     isActive: true,
     allowedVariables: ["name", "remark", "reason", "email"]
   },
   withdrawApproved: {
     subject: "Withdrawal Request Approved",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #2c3e50; text-align: center;">Withdrawal Approved!</h2>
-    <p>Dear {{name}},</p>
-    <p>Your withdrawal request for <strong>₹{{withdrawAmount}}</strong> has been successfully approved and processed.</p>
-    {{#if remark}}
-    <p><strong>Remarks:</strong> {{remark}}</p>
-    {{/if}}
-    <p>Date: {{date}}</p>
-</div>`,
+    body: buildLayout("Withdrawal Approved", `<p>Dear {{name}},</p><p>Your withdrawal request for <strong>₹{{withdrawAmount}}</strong> has been approved.</p>{{#if remark}}<p><strong>Remarks:</strong> {{remark}}</p>{{/if}}`),
     isActive: true,
     allowedVariables: ["name", "withdrawAmount", "remark", "date"]
   },
   withdrawRejected: {
     subject: "Withdrawal Request Rejected",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #c0392b; text-align: center;">Withdrawal Rejected</h2>
-    <p>Dear {{name}},</p>
-    <p>Your withdrawal request for <strong>₹{{withdrawAmount}}</strong> has been rejected.</p>
-    <p><strong>Reason:</strong> {{reason}}</p>
-    <p>Date: {{date}}</p>
-</div>`,
+    body: buildLayout("Withdrawal Rejected", `<p>Dear {{name}},</p><p>Your withdrawal request for <strong>₹{{withdrawAmount}}</strong> has been rejected.</p><p><strong>Reason:</strong> {{reason}}</p>`),
     isActive: true,
     allowedVariables: ["name", "withdrawAmount", "reason", "date"]
   },
   complaintResponse: {
     subject: "Complaint Response Update",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #2c3e50; text-align: center;">Complaint Response</h2>
-    <p>Hello {{name}},</p>
-    <p>Your complaint regarding Booking <strong>#{{bookingId}}</strong> has been updated. Status: <strong>{{status}}</strong>.</p>
-    <p><strong>Remarks / Resolution Details:</strong> {{remark}}</p>
-</div>`,
+    body: buildLayout("Complaint Update", `<p>Hello {{name}},</p><p>Your complaint regarding Booking <strong>#{{bookingId}}</strong> is updated to: <strong>{{status}}</strong>.</p><p><strong>Remarks:</strong> {{remark}}</p>`),
     isActive: true,
     allowedVariables: ["name", "bookingId", "status", "remark"]
   },
   adminBookingCancelledCustomer: {
     subject: "Booking Cancelled By Support Team",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #c0392b; text-align: center;">Booking Cancelled By Support Team</h2>
-    <p>Hello {{name}},</p>
-    <p>We would like to inform you that your booking has been cancelled by our support team.</p>
-    <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f3f4f6;">
-      <p style="margin: 4px 0;"><strong>Booking ID:</strong> {{bookingId}}</p>
-      <p style="margin: 4px 0;"><strong>Service Name:</strong> {{serviceName}}</p>
-      <p style="margin: 4px 0;"><strong>Cancellation Reason:</strong> {{cancellationReason}}</p>
-      <p style="margin: 4px 0;"><strong>Complaint ID:</strong> {{complaintId}}</p>
-      <p style="margin: 4px 0;"><strong>Refund Amount:</strong> ₹{{refundAmount}}</p>
-      <p style="margin: 4px 0;"><strong>Platform Fee Retained:</strong> ₹{{platformFeeRetained}}</p>
-      <p style="margin: 4px 0;"><strong>Refund Destination:</strong> {{refundDestination}}</p>
-    </div>
-    <p style="color: #555;"><strong>Timeline note:</strong> If refunded to original payment method, the amount may take 2–10 business days to reflect depending on your bank or payment provider. If refunded to Customer Wallet, the credit is instant.</p>
-    <p>Regards,<br/><strong>Support Team</strong></p>
-</div>`,
+    body: buildLayout("Booking Cancelled", `<p>Hello {{name}},</p><p>Your booking <strong>#{{bookingId}}</strong> has been cancelled.</p><p><strong>Reason:</strong> {{cancellationReason}}</p><p><strong>Refund Amount:</strong> ₹{{refundAmount}}</p>`),
     isActive: true,
     allowedVariables: ["name", "bookingId", "serviceName", "cancellationReason", "complaintId", "refundAmount", "platformFeeRetained", "refundDestination", "expectedRefundTimeline"]
   },
   adminBookingCancelledProvider: {
     subject: "Assigned Booking Cancelled",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #c0392b; text-align: center;">Assigned Booking Cancelled</h2>
-    <p>Hello {{name}},</p>
-    <p>Please note that the booking assigned to you has been cancelled by the support team/admin.</p>
-    <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f3f4f6;">
-      <p style="margin: 4px 0;"><strong>Booking ID:</strong> {{bookingId}}</p>
-      <p style="margin: 4px 0;"><strong>Customer Name:</strong> {{customerName}}</p>
-      <p style="margin: 4px 0;"><strong>Cancellation Reason:</strong> {{cancellationReason}}</p>
-      <p style="margin: 4px 0;"><strong>Complaint ID:</strong> {{complaintId}}</p>
-    </div>
-    <p style="color: #e74c3c;">The slot is now available. Provider earnings split and recalculations have been applied where applicable.</p>
-</div>`,
+    body: buildLayout("Booking Cancelled", `<p>Hello {{name}},</p><p>The booking <strong>#{{bookingId}}</strong> assigned to you has been cancelled.</p><p><strong>Reason:</strong> {{cancellationReason}}</p>`),
     isActive: true,
     allowedVariables: ["name", "bookingId", "customerName", "cancellationReason", "complaintId"]
   },
   refundCompleted: {
     subject: "Refund Processed for Booking #{{bookingId}}",
-    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-    <h2 style="color: #0d9488; text-align: center;">Refund Processed</h2>
-    <p>Dear {{customerName}},</p>
-    <p>Your refund for Booking <strong>#{{bookingId}}</strong> has been successfully processed.</p>
-    <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f3f4f6;">
-      <p style="margin: 4px 0;"><strong>Refund ID:</strong> {{refundId}}</p>
-      <p style="margin: 4px 0;"><strong>Total Refund Amount:</strong> ₹{{amount}}</p>
-      {{#if walletRefundAmount}}<p style="margin: 4px 0;"><strong>Wallet Credit:</strong> ₹{{walletRefundAmount}}</p>{{/if}}
-      {{#if gatewayRefundAmount}}<p style="margin: 4px 0;"><strong>Gateway Refund:</strong> ₹{{gatewayRefundAmount}}</p>{{/if}}
-      <p style="margin: 4px 0;"><strong>Refund Destination:</strong> {{refundDestination}}</p>
-    </div>
-    <p style="color: #555;">If credited to your Customer Wallet, the funds are available immediately. If refunded to your original payment method, processing times vary between 2–10 business days depending on your bank.</p>
-    <p>Regards,<br/><strong>Support Team</strong></p>
-</div>`,
+    body: buildLayout("Refund Processed", `<p>Dear {{customerName}},</p><p>Your refund of <strong>₹{{amount}}</strong> for Booking <strong>#{{bookingId}}</strong> is completed.</p><p><strong>Destination:</strong> {{refundDestination}}</p>`),
     isActive: true,
     allowedVariables: ["customerName", "bookingId", "refundId", "amount", "walletRefundAmount", "gatewayRefundAmount", "refundDestination"]
   }

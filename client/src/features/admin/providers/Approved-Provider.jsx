@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import usePagination from '../../../hooks/usePagination';
 import Table from '../../../components/ui/Table';
-import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Modal from '../../../components/ui/Modal';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import {
-  Filter,
   Eye,
   CheckCircle,
   XCircle,
@@ -27,7 +26,8 @@ import {
   AlertTriangle,
   Info,
   X,
-  FileText
+  FileText,
+  MoreVertical
 } from 'lucide-react';
 import { toast } from '../../../components/ui/Toast';
 
@@ -172,12 +172,27 @@ const AdminProviders = () => {
   const [statusFilter, setStatusFilter] = useState('approved');
   const [serviceFilter, setServiceFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const {
+    currentPage,
+    setCurrentPage,
+    limit: itemsPerPage,
+    totalPages,
+    onPageChange,
+    setPaginationData,
+    resetPagination
+  } = usePagination(1, 10);
+
+  useEffect(() => {
+    setPaginationData({ total: filteredProviders.length });
+  }, [filteredProviders.length, setPaginationData]);
   const [loading, setLoading] = useState(false);
   const [processingAction, setProcessingAction] = useState(null);
   const [approvalRemarks, setApprovalRemarks] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState({ show: false, action: null });
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const [actionModal, setActionModal] = useState({ isOpen: false, type: null, provider: null });
+  const [actionRemarks, setActionRemarks] = useState('');
+  const [durationValue, setDurationValue] = useState('');
 
   // ─── Derived state via useMemo (replaces two separate useEffects) ────────────────
   const filteredProviders = useMemo(() => {
@@ -231,6 +246,12 @@ const AdminProviders = () => {
 
   useEffect(() => { fetchProviders(); }, [fetchProviders]);
 
+  useEffect(() => {
+    const handleOutsideClick = () => setActiveDropdownId(null);
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
+
   const handleViewClick = useCallback((provider) => {
     setSelectedProvider(provider);
     setShowViewModal(true);
@@ -245,10 +266,33 @@ const AdminProviders = () => {
       setSearchTerm('');
     }, fetchProviders);
   }, [reset, fetchProviders]);
-  const handleStatusUpdate = async (action, durationDays = null) => {
-    if (!selectedProvider) return;
 
-    if ((action === 'rejected' || action === 'restricted' || action === 'suspended' || action === 'blocked') && !approvalRemarks.trim()) {
+  const openActionModal = (type, providerTarget = null) => {
+    const target = providerTarget || selectedProvider;
+    setActionModal({ isOpen: true, type, provider: target });
+    setActionRemarks('');
+    setDurationValue('');
+  };
+
+  const handleConfirmActionModal = async () => {
+    const targetProvider = actionModal.provider || selectedProvider;
+    if (!targetProvider) return;
+
+    if ((actionModal.type === 'restricted' || actionModal.type === 'suspended' || actionModal.type === 'blocked') && !actionRemarks.trim()) {
+      showToast('Please enter a reason or remarks for this action', 'error');
+      return;
+    }
+    const days = durationValue.trim();
+    await handleStatusUpdate(actionModal.type, days ? Number(days) : null, actionRemarks, targetProvider);
+    setActionModal({ isOpen: false, type: null, provider: null });
+  };
+
+  const handleStatusUpdate = async (action, durationDays = null, remarksOverride = null, targetProviderOverride = null) => {
+    const target = targetProviderOverride || selectedProvider;
+    if (!target) return;
+    const remarksToUse = remarksOverride !== null ? remarksOverride : approvalRemarks;
+
+    if ((action === 'rejected' || action === 'restricted' || action === 'suspended' || action === 'blocked') && !remarksToUse.trim()) {
       showToast('Please provide a reason or remarks for this action', 'error');
       return;
     }
@@ -257,34 +301,34 @@ const AdminProviders = () => {
       setProcessingAction(action);
       const payload = {
         status: action,
-        remarks: approvalRemarks,
-        rejectionReason: approvalRemarks
+        remarks: remarksToUse,
+        rejectionReason: remarksToUse
       };
-      if (durationDays !== null) {
+      if (durationDays !== null && durationDays !== undefined && durationDays !== '') {
         payload.durationDays = Number(durationDays);
       }
 
-      const res = await AdminService.updateProviderStatus(selectedProvider._id, payload);
+      const res = await AdminService.updateProviderStatus(target._id, payload);
       const data = res.data;
 
       if (data.success) {
-        let msg = 'Provider approval updated successfully.';
-        if (action === 'approved') msg = 'Your provider account has been approved. You can now receive service requests.';
-        if (action === 'rejected') msg = 'Your provider application could not be approved at this time. Please review the information provided or contact support.';
+        let msg = 'Provider status updated successfully.';
+        if (action === 'approved' || action === 'active') msg = 'Provider account activated successfully.';
+        if (action === 'restricted') msg = 'Provider account restricted successfully.';
+        if (action === 'suspended') msg = 'Provider account suspended successfully.';
+        if (action === 'blocked') msg = 'Provider account blocked successfully.';
 
         showToast(msg, 'success');
         fetchProviders(true);
 
-        // Update local state without closing the modal or refresh to meet "no page refresh required"
         if (data.provider) {
-          setSelectedProvider(data.provider);
+          if (selectedProvider && selectedProvider._id === data.provider._id) {
+            setSelectedProvider(data.provider);
+          }
           setProviders(prev => prev.map(p => p._id === data.provider._id ? data.provider : p));
-        } else {
-          setShowViewModal(false);
         }
-        setShowConfirmModal({ show: false, action: null });
       } else {
-        showToast(data.message || 'Unable to update provider status. Please refresh and try again.', 'error');
+        showToast(data.message || 'Unable to update provider status. Please try again.', 'error');
       }
     } catch (error) {
       console.error('Error updating status:', error);
@@ -312,7 +356,6 @@ const AdminProviders = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentProviders = filteredProviders.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredProviders.length / itemsPerPage);
 
   const filterFields = [
     {
@@ -433,6 +476,7 @@ const AdminProviders = () => {
         {/* Providers Table */}
         <Table
           isLoading={loading}
+          className="min-h-[280px]"
           data={currentProviders}
           rowKey="_id"
           emptyTitle="No providers found"
@@ -541,17 +585,114 @@ const AdminProviders = () => {
             {
               header: 'Actions',
               key: 'actions',
-              accessor: (provider) => (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleViewClick(provider)}
-                    className="text-primary hover:text-teal-800 p-1 rounded transition-colors duration-200"
-                    title="View Details"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                </div>
-              )
+              accessor: (provider, idx) => {
+                const isBlocked = provider.blockedTill && new Date(provider.blockedTill) > new Date();
+                const isSuspended = provider.isSuspended;
+                const isRestricted = provider.performanceScore?.restrictionsActive;
+                const isOpen = activeDropdownId === provider._id;
+                const isNearBottom = idx > 0 && currentProviders.length >= 3 && idx >= currentProviders.length - 2;
+
+                return (
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveDropdownId(isOpen ? null : provider._id);
+                      }}
+                      className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-600 transition-colors"
+                      title="Actions"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+
+                    {isOpen && (
+                      <div
+                        className={`absolute right-0 z-40 w-44 bg-white rounded-xl shadow-xl border border-neutral-200 py-1 text-xs font-medium animate-in fade-in duration-150 ${isNearBottom ? 'bottom-full mb-1' : 'top-8'
+                          }`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => {
+                            setActiveDropdownId(null);
+                            handleViewClick(provider);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-neutral-50 flex items-center gap-2 text-neutral-700 font-semibold"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-primary" /> View Details
+                        </button>
+
+                        {isBlocked ? (
+                          <button
+                            onClick={() => {
+                              setActiveDropdownId(null);
+                              openActionModal('active', provider);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center gap-2 text-emerald-700 font-semibold"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" /> Unblock Account
+                          </button>
+                        ) : (
+                          <>
+                            {isRestricted ? (
+                              <button
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  openActionModal('active', provider);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center gap-2 text-emerald-700 font-semibold"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" /> Remove Restriction
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  openActionModal('restricted', provider);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-amber-50 flex items-center gap-2 text-amber-700 font-semibold"
+                              >
+                                <AlertTriangle className="w-3.5 h-3.5" /> Restrict Account
+                              </button>
+                            )}
+
+                            {isSuspended ? (
+                              <button
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  openActionModal('active', provider);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center gap-2 text-emerald-700 font-semibold"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" /> Unsuspend Account
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  openActionModal('suspended', provider);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-rose-50 flex items-center gap-2 text-rose-700 font-semibold"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" /> Suspend Account
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                setActiveDropdownId(null);
+                                openActionModal('blocked', provider);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-red-700 font-semibold"
+                            >
+                              <X className="w-3.5 h-3.5" /> Block Account
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
             }
           ]}
         />
@@ -618,8 +759,8 @@ const ProviderModal = ({
   handleStatusUpdate,
   handleDownloadPDF
 }) => {
-  const [showDurationInput, setShowDurationInput] = useState(false);
-  const [durationType, setDurationType] = useState('restricted'); // or 'blocked'
+  const [actionModal, setActionModal] = useState({ isOpen: false, type: null });
+  const [actionRemarks, setActionRemarks] = useState('');
   const [durationValue, setDurationValue] = useState('');
 
   if (!provider) return null;
@@ -628,7 +769,22 @@ const ProviderModal = ({
   const isBlocked = provider.blockedTill && new Date(provider.blockedTill) > new Date();
   const isSuspended = provider.isSuspended;
   const isRestricted = ps.restrictionsActive;
-  const isAnyNegativeState = isBlocked || isSuspended || isRestricted;
+
+  const openActionModal = (type) => {
+    setActionModal({ isOpen: true, type });
+    setActionRemarks('');
+    setDurationValue('');
+  };
+
+  const handleConfirmActionModal = () => {
+    if ((actionModal.type === 'restricted' || actionModal.type === 'suspended' || actionModal.type === 'blocked') && !actionRemarks.trim()) {
+      toast.error('Please enter a reason or remarks for this action');
+      return;
+    }
+    const days = durationValue.trim();
+    handleStatusUpdate(actionModal.type, days ? Number(days) : null, actionRemarks);
+    setActionModal({ isOpen: false, type: null });
+  };
 
   const handlePermanentDelete = async (providerId) => {
     if (!window.confirm('Are you sure you want to permanently delete this provider account? This action cannot be undone.')) return;
@@ -872,13 +1028,12 @@ const ProviderModal = ({
                 )}
                 <div className="sm:col-span-2 flex items-center justify-between pt-2 border-t border-neutral-100">
                   <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Verification Status</span>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                    bd.bankVerificationStatus === 'verified'
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${bd.bankVerificationStatus === 'verified'
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : bd.bankVerificationStatus === 'rejected'
                         ? 'bg-rose-50 text-rose-700 border border-rose-200'
                         : 'bg-amber-50 text-amber-700 border border-amber-200'
-                  }`}>
+                    }`}>
                     {bd.bankVerificationStatus === 'verified'
                       ? '✓ Verified & Active'
                       : bd.bankVerificationStatus === 'rejected'
@@ -1016,10 +1171,10 @@ const ProviderModal = ({
             )}
           </SectionCard>
 
-          {/* Account Controls */}
-          <SectionCard title="Account Controls" icon={Shield} iconColor="text-neutral-600" bgColor="bg-neutral-50/60">
-            {provider.deletionRequested && (
-              <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+          {/* Deletion Request Alert */}
+          {provider.deletionRequested && (
+            <SectionCard title="Account Deletion Request" icon={Shield} iconColor="text-rose-600" bgColor="bg-rose-50/60">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-rose-800 text-xs">
                     <AlertCircle size={15} className="text-rose-600" />
@@ -1053,106 +1208,9 @@ const ProviderModal = ({
                   </button>
                 </div>
               </div>
-            )}
+            </SectionCard>
+          )}
 
-            <div className="mb-3 p-3 bg-white rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-neutral-800 text-[11px] uppercase tracking-wider">
-                <Info size={13} className="text-neutral-500" />
-                <span>Actions Guide</span>
-              </div>
-              <p className="text-[11px] text-neutral-500 leading-relaxed">
-                <span className="font-semibold text-amber-700">Restrict:</span> Disables new booking assignments. &bull; <span className="font-semibold text-rose-700">Suspend:</span> Restricts provider login operations. &bull; <span className="font-semibold text-red-700">Block:</span> Full account termination & logout.
-              </p>
-            </div>
-
-            <div className="mb-3">
-              <label className="block text-xs font-bold text-neutral-700 mb-1">
-                Remarks / Justification <span className="text-rose-500 font-normal">(Required for Restrict, Suspend)</span>
-              </label>
-              <textarea
-                value={approvalRemarks}
-                onChange={(e) => setApprovalRemarks(e.target.value)}
-                className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white resize-none shadow-2xs font-medium"
-                placeholder="Enter justification..."
-                rows="2"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-              {isBlocked ? (
-                <button
-                  onClick={() => handleStatusUpdate('active')}
-                  disabled={processingAction}
-                  className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  <CheckCircle size={14} />
-                  {processingAction === 'active' ? 'Unblocking…' : 'Unblock Account'}
-                </button>
-              ) : (
-                <>
-                  {/* Restriction buttons */}
-                  {isRestricted ? (
-                    <button
-                      onClick={() => handleStatusUpdate('active')}
-                      disabled={processingAction}
-                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      <CheckCircle size={14} />
-                      {processingAction === 'active' ? 'Activating…' : 'Remove Restriction'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setDurationType('restricted');
-                        setDurationValue('');
-                        setShowDurationInput(true);
-                      }}
-                      disabled={processingAction}
-                      className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      <AlertTriangle size={14} />
-                      Restrict Account
-                    </button>
-                  )}
-
-                  {/* Suspension buttons */}
-                  {isSuspended ? (
-                    <button
-                      onClick={() => handleStatusUpdate('active')}
-                      disabled={processingAction}
-                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      <CheckCircle size={14} />
-                      {processingAction === 'active' ? 'Activating…' : 'Unsuspend Account'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleStatusUpdate('suspended')}
-                      disabled={processingAction}
-                      className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      <AlertCircle size={14} />
-                      {processingAction === 'suspended' ? 'Suspending…' : 'Suspend Account'}
-                    </button>
-                  )}
-
-                  {/* Block button */}
-                  <button
-                    onClick={() => {
-                      setDurationType('blocked');
-                      setDurationValue('');
-                      setShowDurationInput(true);
-                    }}
-                    disabled={processingAction}
-                    className="py-2.5 px-4 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    <X size={14} />
-                    Block Account
-                  </button>
-                </>
-              )}
-            </div>
-          </SectionCard>
         </div>
 
         {/* ── Sticky Footer ── */}
@@ -1166,51 +1224,101 @@ const ProviderModal = ({
         </div>
       </div>
 
-      {showDurationInput && (
+      {/* Dedicated Action Confirmation Modal */}
+      {actionModal.isOpen && (
         <Modal
-          isOpen={showDurationInput}
-          onClose={() => setShowDurationInput(false)}
-          title={durationType === 'restricted' ? 'Restrict Provider Account' : 'Block Provider Account'}
-          size="small"
+          isOpen={actionModal.isOpen}
+          onClose={() => setActionModal({ isOpen: false, type: null })}
+          title={
+            actionModal.type === 'restricted'
+              ? 'Restrict Provider Account'
+              : actionModal.type === 'suspended'
+                ? 'Suspend Provider Account'
+                : actionModal.type === 'blocked'
+                  ? 'Block Provider Account'
+                  : 'Activate / Restore Provider Account'
+          }
+          size="medium"
         >
-          <div className="p-1">
-            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              {durationType === 'restricted'
-                ? 'Specify the number of days to restrict this provider. Leave blank for an indefinite restriction.'
-                : 'Specify the number of days to block this provider. Leave blank for a permanent block.'}
-            </p>
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                Duration (Days)
+          <div className="space-y-4 p-1">
+            {/* Impact Guide Box */}
+            <div className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs ${actionModal.type === 'restricted'
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : actionModal.type === 'suspended'
+                  ? 'bg-rose-50 border-rose-200 text-rose-900'
+                  : actionModal.type === 'blocked'
+                    ? 'bg-red-50 border-red-200 text-red-900'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold uppercase tracking-wider text-[11px]">Action Impact Guide</p>
+                <p className="leading-relaxed font-medium">
+                  {actionModal.type === 'restricted' && '⚠️ Restricting this account disables new booking assignments. The provider can still log in and view earnings history.'}
+                  {actionModal.type === 'suspended' && '⛔ Suspending this account restricts all provider login operations. The provider will be logged out immediately.'}
+                  {actionModal.type === 'blocked' && '🚫 Blocking this account results in full account termination. Active sessions will be terminated and booking dispatches blocked.'}
+                  {actionModal.type === 'active' && '✅ Restores full access. The provider will be able to log in and receive new booking assignments.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Justification Field */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 mb-1">
+                Reason / Justification {actionModal.type !== 'active' && <span className="text-rose-500">*</span>}
+                <span className="text-neutral-400 font-normal text-[11px] block mt-0.5">
+                  This explanation will be sent in an email & push notification to the provider.
+                </span>
               </label>
-              <input
-                type="number"
-                min="1"
-                placeholder={durationType === 'restricted' ? 'e.g. 7 (blank for indefinite)' : 'e.g. 30 (blank for permanent)'}
-                value={durationValue}
-                onChange={(e) => setDurationValue(e.target.value)}
-                className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white"
+              <textarea
+                value={actionRemarks}
+                onChange={(e) => setActionRemarks(e.target.value)}
+                placeholder={`Enter exact reason for ${actionModal.type} action...`}
+                className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white resize-none shadow-2xs font-medium"
+                rows="3"
               />
             </div>
-            <div className="flex items-center gap-3 w-full mt-6">
+
+            {/* Duration Field */}
+            {(actionModal.type === 'restricted' || actionModal.type === 'blocked') && (
+              <div>
+                <label className="block text-xs font-bold text-neutral-700 mb-1">
+                  Duration in Days <span className="text-neutral-400 font-normal">(Optional - leave blank for permanent/indefinite)</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder={actionModal.type === 'restricted' ? 'e.g. 7 (blank for indefinite)' : 'e.g. 30 (blank for permanent)'}
+                  value={durationValue}
+                  onChange={(e) => setDurationValue(e.target.value)}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white shadow-2xs font-medium"
+                />
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setShowDurationInput(false)}
-                className="flex-1 py-2 px-4 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
+                onClick={() => setActionModal({ isOpen: false, type: null })}
+                className="flex-1 py-2.5 px-4 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-all shadow-2xs"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowDurationInput(false);
-                  const days = durationValue.trim();
-                  handleStatusUpdate(durationType, days ? Number(days) : null);
-                }}
-                className={`flex-1 py-2 px-4 text-xs font-bold text-white rounded-lg transition-all ${durationType === 'restricted' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-700 hover:bg-red-800'
+                onClick={handleConfirmActionModal}
+                disabled={processingAction}
+                className={`flex-1 py-2.5 px-4 text-xs font-bold text-white rounded-xl transition-all shadow-2xs active:scale-95 disabled:opacity-50 ${actionModal.type === 'restricted'
+                    ? 'bg-amber-500 hover:bg-amber-600'
+                    : actionModal.type === 'suspended'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : actionModal.type === 'blocked'
+                        ? 'bg-red-700 hover:bg-red-800'
+                        : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
               >
-                Confirm
+                {processingAction === actionModal.type ? 'Processing...' : `Confirm ${actionModal.type === 'active' ? 'Activation' : actionModal.type.charAt(0).toUpperCase() + actionModal.type.slice(1)}`}
               </button>
             </div>
           </div>

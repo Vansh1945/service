@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import usePagination from '../../../hooks/usePagination';
 import Table from '../../../components/ui/Table';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import {
@@ -44,6 +45,20 @@ const AdminProvidersPage = () => {
   const urlSearch = searchParams.get('search') || '';
   const [searchTerm, setSearchTerm] = useState(urlSearch);
 
+  const {
+    currentPage,
+    setCurrentPage,
+    limit: itemsPerPage,
+    totalPages,
+    onPageChange,
+    setPaginationData,
+    resetPagination
+  } = usePagination(1, 20);
+
+  useEffect(() => {
+    setPaginationData({ total: filteredProviders.length });
+  }, [filteredProviders.length, setPaginationData]);
+
   useEffect(() => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
@@ -70,8 +85,6 @@ const AdminProvidersPage = () => {
   const [processingAction, setProcessingAction] = useState(null);
 
   const [activeTab, setActiveTab] = useState('pending_providers'); // 'pending_providers' | 'bank_pending'
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
   const [showFilters, setShowFilters] = useState(false);
   const [documentView, setDocumentView] = useState({
     visible: false,
@@ -441,7 +454,6 @@ const AdminProvidersPage = () => {
   };
 
   // Pagination
-  const totalPages = Math.ceil(filteredProviders.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentProviders = filteredProviders.slice(startIndex, endIndex);
@@ -694,9 +706,8 @@ const AdminProvidersPage = () => {
               accessor: (provider) => {
                 const daysPending = getDaysPending(provider.registrationDate || provider.createdAt);
                 return (
-                  <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                    daysPending > 7 ? 'bg-accent text-white shadow-2xs' : 'bg-amber-100 text-amber-800'
-                  }`}>
+                  <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold transition-all ${daysPending > 7 ? 'bg-accent text-white shadow-2xs' : 'bg-amber-100 text-amber-800'
+                    }`}>
                     <Clock className="w-3 h-3 mr-1" />
                     {daysPending} days
                   </div>
@@ -1238,10 +1249,10 @@ const ProviderDetailsModal = ({
                     <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
                       <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Verification Status</span>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.bankVerificationStatus === 'verified'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : selectedProvider.bankDetails.bankVerificationStatus === 'rejected'
-                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : selectedProvider.bankDetails.bankVerificationStatus === 'rejected'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
                         {selectedProvider.bankDetails.bankVerificationStatus ? selectedProvider.bankDetails.bankVerificationStatus.toUpperCase() : (selectedProvider.bankDetails.verified ? 'VERIFIED' : 'PENDING')}
                       </span>
@@ -1365,10 +1376,10 @@ const ProviderDetailsModal = ({
                             <div className="flex justify-between">
                               <span>Verification Status:</span>
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${selectedProvider.bankDetails?.bankVerificationStatus === 'verified'
-                                  ? 'bg-emerald-50 text-emerald-700'
-                                  : selectedProvider.bankDetails?.bankVerificationStatus === 'rejected'
-                                    ? 'bg-rose-50 text-rose-600'
-                                    : 'bg-amber-50 text-amber-600'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : selectedProvider.bankDetails?.bankVerificationStatus === 'rejected'
+                                  ? 'bg-rose-50 text-rose-600'
+                                  : 'bg-amber-50 text-amber-600'
                                 }`}>
                                 {selectedProvider.bankDetails?.bankVerificationStatus || 'pending'}
                               </span>

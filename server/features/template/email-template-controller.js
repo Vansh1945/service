@@ -62,18 +62,8 @@ const updateEmailTemplate = async (req, res, next) => {
     const { type } = req.params;
     const { subject, body, isActive } = req.body;
 
-    const allowedTypes = [
-      'forgotPasswordOtp', 'providerRegistrationOtp', 'providerApproval',
-      'providerRejection', 'contactReply', 'withdrawApproved',
-      'withdrawRejected', 'complaintResponse',
-      'adminBookingCancelledCustomer', 'adminBookingCancelledProvider'
-    ];
-
-    if (!allowedTypes.includes(type)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid template type'
-      });
+    if (!DEFAULT_EMAIL_TEMPLATES[type]) {
+      return res.status(400).json({ success: false, message: 'Invalid template type' });
     }
 
     let config = await SystemConfig.findOne();
