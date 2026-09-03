@@ -43,6 +43,7 @@ const HeroSection = ({ noMargin = false }) => {
 
         const today = new Date();
         const activeBanners = data.filter((b) => {
+          if (b.isDeleted) return false;
           if (!b.startDate || !b.endDate) return true;
           return (
             today >= new Date(b.startDate) &&
@@ -50,7 +51,7 @@ const HeroSection = ({ noMargin = false }) => {
           );
         });
 
-        // 1. Remove duplicates manually by _id or image
+        // Remove duplicates by _id or image
         const uniqueBanners = [];
         const seen = new Set();
         for (const banner of activeBanners) {
@@ -71,8 +72,7 @@ const HeroSection = ({ noMargin = false }) => {
 
         setBanners(finalBanners);
       } catch (error) {
-      console.error(error);
-      console.error(error);
+        console.error(error);
         setBanners([defaultBanner]);
       } finally {
         setLoading(false);
@@ -87,7 +87,7 @@ const HeroSection = ({ noMargin = false }) => {
   }
 
   return (
-    <section className={`max-w-7xl mx-auto overflow-hidden px-4 sm:px-6 lg:px-8 pb-2 md:pb-3 relative ${noMargin ? 'pt-0 md:pt-0' : 'pt-4 md:pt-6 mt-16 md:mt-18 lg:mt-20'}`}>
+    <section className={`w-full overflow-hidden px-2 pb-2 md:pb-3 relative ${noMargin ? 'pt-0 md:pt-0' : 'pt-4 md:pt-6 mt-16 md:mt-18 lg:mt-20'}`}>
       <div className="relative w-full group">
         <Swiper
           modules={[Autoplay, Pagination]}

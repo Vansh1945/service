@@ -6,7 +6,7 @@ const getBanners = async (req, res, next) => {
   try {
     let banners = cache.get('banners');
     if (!banners) {
-      banners = await Banner.find();
+      banners = await Banner.find({ isDeleted: { $ne: true } });
       cache.set('banners', banners, 300);
     }
     res.status(200).json({

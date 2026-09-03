@@ -31,7 +31,9 @@ const ServiceListing = () => {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const getInitialCategories = () => {
     const cats = searchParams.get('categories') || searchParams.get('category');
-    return cats ? cats.split(',') : [];
+    if (!cats) return [];
+    const INVALID = ['/', 'All', 'all', ''];
+    return cats.split(',').map(c => c.trim()).filter(c => c && !INVALID.includes(c));
   };
   const [selectedCategories, setSelectedCategories] = useState(getInitialCategories());
   const [priceRange, setPriceRange] = useState([0, 10000]);
@@ -79,7 +81,8 @@ const ServiceListing = () => {
   useEffect(() => {
     const searchVal = searchParams.get('search') || '';
     const cats = searchParams.get('categories') || searchParams.get('category');
-    const categoriesVal = cats ? cats.split(',') : [];
+    const INVALID = ['/', 'All', 'all', ''];
+    const categoriesVal = cats ? cats.split(',').map(c => c.trim()).filter(c => c && !INVALID.includes(c)) : [];
     const sortVal = searchParams.get('sort') || 'popular';
 
     if (searchVal !== lastPushedSearchRef.current) {
@@ -287,7 +290,7 @@ const ServiceListing = () => {
     setSelectedCategories([]);
     lastPushedCategoriesRef.current = [];
     setPriceRange([0, maxPrice]);
-    setSortBy('popular');
+    setSortByState('popular');
     setSelectedRatings([]);
     setSearchParams({});
     setVisibleCount(10);
@@ -418,7 +421,7 @@ const ServiceListing = () => {
                 toggleRating={toggleRating}
                 resetFilters={resetFilters}
                 sortBy={sortBy}
-                setSortBy={setSortBy}
+                setSortBy={handleSortChange}
               />
             </aside>
           </div>
