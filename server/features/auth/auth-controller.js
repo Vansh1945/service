@@ -258,12 +258,6 @@ exports.Login = async (req, res, next) => {
           message: 'Your profile is incomplete. Please complete registration.'
         });
       }
-      if (!user.approved) {
-        return res.status(403).json({
-          success: false,
-          message: 'Your account is pending approval. Please contact support for assistance.'
-        });
-      }
     }
 
     // Generate access token (dynamic)

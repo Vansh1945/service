@@ -71,6 +71,11 @@ router.post('/save-token', flexAuth, validateBody(saveTokenSchema), notification
 // POST /api/notifications/remove-token
 router.post('/remove-token', flexAuth, validateBody(removeTokenSchema), notificationController.removeToken);
 
+const { uploadBannerImage, handleUploadErrors } = require('../../shared/middlewares/upload');
+
+// POST /api/notifications/upload-image — Admin only
+router.post('/upload-image', flexAuth, adminOnly, uploadBannerImage.fields([{ name: 'image', maxCount: 1 }]), handleUploadErrors, notificationController.uploadNotificationImage);
+
 // POST /api/notifications/send-broadcast — Admin only
 router.post('/send-broadcast', flexAuth, adminOnly, adminActionLimiter, validateBody(sendBroadcastSchema), notificationController.sendBroadcast);
 

@@ -983,8 +983,8 @@ const PayoutProfileTab = ({ showToast, profileData }) => {
 
             {/* MODAL FOR ADD / EDIT ACCOUNT */}
             {modal.isOpen && (
-                <div className="fixed inset-0 z-[100] bg-black/25 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-xl border border-slate-100 animate-in fade-in zoom-in duration-150 font-inter">
+                <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-150 font-inter">
                         <div className="flex items-center justify-between border-b border-slate-100 p-4 sm:p-6 pb-3 flex-shrink-0">
                             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 font-poppins">
                                 {modal.type === 'bank_account' ? <CreditCard className="w-5 h-5 text-primary" /> : <QrCode className="w-5 h-5 text-emerald-600" />}

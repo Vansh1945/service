@@ -26,50 +26,45 @@ const RefundPolicy = () => {
 
   const sections = [
     {
-      title: "Refund Eligibility & Protection",
+      title: "100% Refund Eligibility",
       icon: <CheckCircle2 className="w-5 h-5 text-primary" />,
-      description: "Refunds are processed to keep customers safe and protected under the following eligibility criteria:",
+      description: "Full refunds are guaranteed under the following conditions:",
       items: [
-        "Booking cancelled by customer before provider dispatch.",
+        "Booking cancelled by customer before a provider is dispatched.",
         "Provider No-Show (provider fails to arrive within 30 minutes of scheduled time).",
-        "Critical safety incident, theft, violence, or harassment reported (subject to immediate police and platform review).",
-        "Incomplete services or severe, verified damage caused to customer property during execution.",
-        "Provider fraud (e.g., provider marks job as complete without visiting)."
+        "Booking cancelled by the provider or system due to provider unavailability.",
+        "Unsatisfactory service or verified property damage after internal safety review."
       ],
       bgColor: "bg-primary/5"
     },
     {
-      title: "Non-Refund Cases",
+      title: "Non-Refundable Scenarios",
       icon: <XCircle className="w-5 h-5 text-danger" />,
-      description: "Refunds will not be issued in cases of platform misuse:",
+      description: "Refunds will not be applicable under these circumstances:",
       items: [
-        "Service is fully completed and signed off.",
-        "Last-minute cancellation after the provider has reached the customer's site.",
-        "Attempt to bypass platform payment systems by paying providers directly in cash/offline."
+        "Service is fully completed and confirmed by the customer.",
+        "Cancellation after the provider has already arrived at the customer location (travel fee applies).",
+        "Direct cash payments made offline outside the platform payment gateway."
       ],
       bgColor: "bg-danger/5"
     },
     {
-      title: "Mandatory Incident Verification",
+      title: "Cancellation Fee & Travel Allowance",
       icon: <AlertCircle className="w-5 h-5 text-warning" />,
-      description: "For safety, damage, or fraud refund claims, customers must submit verification proof (photos, videos, chats, or a police complaint copy) within 24 hours. The platform will put the provider's payout on hold and assist in filing police reports where necessary.",
+      description: "If a booking is cancelled after the provider is en route or at your doorstep, a nominal travel compensation fee (₹50 - ₹100) will be deducted to compensate the provider's travel time.",
       bgColor: "bg-warning/5"
     },
     {
-      title: "Refund Process & Timeline",
+      title: "Refund Processing Timelines",
       icon: <Clock className="w-5 h-5 text-accent" />,
-      description: "Once an incident is verified and approved, refunds are credited back to the original online payment method within 5–7 working days.",
+      description: "Approved refunds are processed instantly and credited back to your original payment source (UPI, Credit/Debit Card, Net Banking) or platform wallet within 3 to 5 business days.",
       bgColor: "bg-accent/5"
     },
     {
-      title: "Late Cancellation Penalty",
-      icon: <AlertCircle className="w-5 h-5 text-danger" />,
-      description: "Important notes on cancellation fees:",
-      items: [
-        "Cancellations done after the provider reaches the location will incur a 15% convenience fee to compensate the provider's travel.",
-        "Abusing the cancellation system will result in permanent customer account suspension."
-      ],
-      bgColor: "bg-warning/5"
+      title: "Disputes & Support Claim",
+      icon: <Mail className="w-5 h-5 text-primary" />,
+      description: "To report an issue or claim a refund, go to 'My Bookings' -> 'Report Issue' or contact support within 24 hours of service completion.",
+      bgColor: "bg-primary/5"
     }
   ];
 

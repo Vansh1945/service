@@ -204,7 +204,9 @@ const validateIfsc = async (req, res) => {
     try {
       const isValid = ifsc.validate(cleanCode);
       if (isValid) {
-        const fetchedDetails = await ifsc.fetchDetails(cleanCode);
+        const fetchPromise = ifsc.fetchDetails(cleanCode);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('IFSC lookup timeout')), 2000));
+        const fetchedDetails = await Promise.race([fetchPromise, timeoutPromise]);
         if (fetchedDetails) {
           details = {
             BANK: fetchedDetails.BANK || '',

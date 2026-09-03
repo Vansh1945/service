@@ -11,7 +11,7 @@ import {
   FiBriefcase,
   FiMail
 } from 'react-icons/fi';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import * as SystemService from '../services/SystemService';
 import { useAuth } from '../context/auth';
 
@@ -20,9 +20,20 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
-  const { API, isDeepLink, isAuthenticated, resetDeepLink, role, systemSettings = {} } = useAuth();
+  const { API, isDeepLink, isAuthenticated, resetDeepLink, role, user, logoutUser, systemSettings = {} } = useAuth();
+
+  const handleDashboardClick = () => {
+    resetDeepLink();
+    if (role === 'provider' && user?.profileComplete === false) {
+      if (typeof logoutUser === 'function') {
+        logoutUser(false);
+      }
+      navigate('/login', { replace: true });
+    }
+  };
 
   // Handle scroll effect with smoother transition
   useEffect(() => {
@@ -129,7 +140,7 @@ const Navbar = () => {
                 text="Dashboard"
                 variant="primary"
                 path={role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services'}
-                onClick={resetDeepLink}
+                onClick={handleDashboardClick}
               />
             ) : (
               <>
@@ -203,7 +214,10 @@ const Navbar = () => {
                 variant="primary"
                 fullWidth
                 path={role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services'}
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false);
+                  handleDashboardClick();
+                }}
               />
             ) : (
               <>

@@ -94,7 +94,7 @@ export const IfscBankDetails = ({
       }
     } catch (err) {
       setIfscSuccess(false);
-      setIfscError(err.response?.data?.message || err.message || 'Failed to fetch IFSC details');
+      setIfscError(err.response?.data?.message || 'Could not verify IFSC details. Please check the IFSC code and try again.');
 
       setFetchedInfo({
         bankName: '',
@@ -270,28 +270,28 @@ export const IfscBankDetails = ({
 
       {/* ─── Auto-populated Read-Only Branch Details ─── */}
       {ifscSuccess && displayBank && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-gray-50/50 rounded-xl border border-gray-150 animate-in fade-in duration-200">
-          <div className="md:col-span-2">
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bank Name & Branch</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 animate-in fade-in duration-200">
+          <div className="sm:col-span-2">
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Bank Name & Branch</label>
             <div className={readOnlyCls}>{displayBank}</div>
           </div>
           {displayDistrict && displayDistrict !== 'N/A' && (
             <div>
-              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">District</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">District</label>
               <div className={readOnlyCls}>{displayDistrict}</div>
             </div>
           )}
           {displayCity && displayCity !== 'N/A' && (
             <div>
-              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">City</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">City</label>
               <div className={readOnlyCls}>
                 {displayCity}
               </div>
             </div>
           )}
           {displayAddress && displayAddress !== 'N/A' && (
-            <div className="md:col-span-2">
-              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Branch Address</label>
+            <div className="sm:col-span-2">
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Branch Address</label>
               <div className={`${readOnlyCls} whitespace-normal text-xs`}>{displayAddress}</div>
             </div>
           )}
@@ -301,7 +301,7 @@ export const IfscBankDetails = ({
       {/* ─── Optional Account Holder's Name ─── */}
       {showAccountName && onAccountNameChange && (
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-secondary uppercase tracking-wide">
+          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
             Account Holder's Name *
           </label>
           <input
@@ -316,7 +316,7 @@ export const IfscBankDetails = ({
       )}
 
       {/* ─── Account Numbers Row ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
         <div className="flex flex-col gap-1 min-w-0">
           <label className="text-xs font-semibold text-secondary uppercase tracking-wide">
             Account Number *

@@ -642,47 +642,71 @@ export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   return cleanUrl;
 };
 
-export const compressImage = (file, options = {}) => {
-  return new Promise((resolve) => {
-    const { maxWidth = 1600, maxHeight = 1600, quality = 0.82 } = options;
-    if (!file || !file.type.startsWith('image/')) return resolve(file);
+export const compressImage = async (file, options = {}) => {
+  if (!file || !(file instanceof File || file instanceof Blob) || !file.type?.startsWith('image/')) {
+    return file;
+  }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-        if (width > maxWidth || height > maxHeight) {
-          if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+  // Skip compression for images already under 1MB - instant return in 0ms!
+  if (file.size < 1024 * 1024) {
+    return file;
+  }
 
-        canvas.toBlob((blob) => {
-          if (!blob) return resolve(file);
-          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpeg", {
-            type: "image/jpeg",
-            lastModified: Date.now()
-          });
-          resolve(compressedFile.size < file.size ? compressedFile : file);
-        }, "image/jpeg", quality);
-      };
-      img.onerror = () => resolve(file);
-      img.src = event.target.result;
-    };
-    reader.onerror = () => resolve(file);
-    reader.readAsDataURL(file);
-  });
+  const { maxWidth = 1600, maxHeight = 1600, quality = 0.8 } = options;
+
+  try {
+    let img;
+    let objectUrl = null;
+
+    if (typeof createImageBitmap === 'function') {
+      img = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+      img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = objectUrl;
+      });
+    }
+
+    let width = img.width;
+    let height = img.height;
+
+    if (width > maxWidth || height > maxHeight) {
+      if (width > height) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      } else {
+        width = Math.round((width * maxHeight) / height);
+        height = maxHeight;
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(img, 0, 0, width, height);
+
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    if (img.close) img.close();
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', quality);
+    });
+
+    if (!blob) return file;
+
+    const compressedFile = new File([blob], (file.name || 'image').replace(/\.[^/.]+$/, "") + ".jpg", {
+      type: "image/jpeg",
+      lastModified: Date.now()
+    });
+
+    return compressedFile.size < file.size ? compressedFile : file;
+  } catch (err) {
+    return file;
+  }
 };
 
 export const buildAddressPreview = (address = {}) => {

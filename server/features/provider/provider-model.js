@@ -501,6 +501,10 @@ const providerSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+    lastReminderSentAt: {
+        type: Date,
+        default: null
+    },
 
     // Wallet Information
     wallet: walletSchema,

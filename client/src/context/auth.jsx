@@ -296,7 +296,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     // Logout function
-    const logoutUser = () => {
+    const logoutUser = (showNotification = true) => {
         // Trigger backend logout to clear HttpOnly cookie
         AuthService.logoutApi({}).catch(() => {});
 
@@ -337,7 +337,9 @@ export const AuthProvider = ({ children }) => {
         setRefreshToken(null);
         setRole(null);
         setUser(null);
-        showToast('Logged out successfully');
+        if (showNotification) {
+            showToast('Logged out successfully');
+        }
         navigate('/login');
 
         // Execute backend logout API in the background to clear HttpOnly refresh cookie

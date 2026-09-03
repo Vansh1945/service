@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import Table from '../../../components/ui/Table';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import {
   Users,
@@ -599,60 +600,150 @@ const AdminProvidersPage = () => {
         />
 
         {/* Content */}
-        {loading ? (
-          <LoadingSpinner />
-        ) : filteredProviders.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12 text-center hover:shadow-xl transition-shadow duration-300">
-            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">No Pending Providers</h3>
-            <p className="text-gray-600">
-              {searchTerm || Object.values(filters).some(f => f)
-                ? 'Try adjusting your search or filters'
-                : 'No pending providers at the moment.'}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow duration-300">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-primary to-teal-600">
-                    <tr>
-                      {['Provider', 'Phone', 'Location', 'Services', 'Experience', 'Registered', 'Days Pending', 'Actions'].map((header) => (
-                        <th key={header} className="p-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {currentProviders.map(provider => (
-                      <ProviderTableRow
-                        key={provider._id}
-                        provider={provider}
-                        onViewDetails={fetchProviderDetails}
-                        onApprove={handleApproveProvider}
-                        onReject={handleRejectProvider}
-                        daysPending={getDaysPending(provider.registrationDate || provider.createdAt)}
-                        status={getProviderStatus(provider)}
+        <Table
+          isLoading={loading}
+          data={currentProviders}
+          rowKey="_id"
+          emptyTitle="No Pending Providers"
+          emptyMessage={
+            searchTerm || Object.values(filters).some(f => f)
+              ? 'Try adjusting your search or filters'
+              : 'No pending providers at the moment.'
+          }
+          columns={[
+            {
+              header: 'Provider',
+              key: 'name',
+              accessor: (provider) => (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 shadow-xs">
+                    {provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg' ? (
+                      <img
+                        src={provider.profilePicUrl}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
                       />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            {totalPages > 1 && (
-              <div className="mt-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalItems={filteredProviders.length}
-                  limit={itemsPerPage}
-                  onPageChange={setCurrentPage}
-                />
-              </div>
-            )}
-          </>
+                    ) : (
+                      <User className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-secondary flex items-center gap-2">
+                      {provider.name}
+                      {provider.providerId && (
+                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-primary/20">
+                          {provider.providerId}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 flex items-center mt-1">
+                      <Mail className="w-3 h-3 mr-1" />
+                      {provider.email}
+                    </div>
+                  </div>
+                </div>
+              )
+            },
+            {
+              header: 'Phone',
+              key: 'phone',
+              accessor: (provider) => (
+                <div className="text-sm text-gray-900 font-medium">{provider.phone}</div>
+              )
+            },
+            {
+              header: 'Location',
+              key: 'location',
+              accessor: (provider) => (
+                <div className="text-sm text-gray-900 flex items-center">
+                  <MapPin className="w-3 h-3 mr-1 text-primary" />
+                  {provider.serviceArea || (provider.address?.city || 'N/A')}
+                </div>
+              )
+            },
+            {
+              header: 'Services',
+              key: 'services',
+              accessor: (provider) => (
+                <div className="text-sm text-gray-900">
+                  {provider.services?.slice(0, 2).join(', ')}
+                  {provider.services?.length > 2 && '...'}
+                </div>
+              )
+            },
+            {
+              header: 'Experience',
+              key: 'experience',
+              accessor: (provider) => (
+                <div className="text-sm text-gray-900 font-medium">{provider.experience || '0'} yrs</div>
+              )
+            },
+            {
+              header: 'Registered',
+              key: 'registered',
+              accessor: (provider) => (
+                <div className="text-sm text-gray-900">
+                  {formatDate(provider.createdAt || provider.registrationDate)}
+                </div>
+              )
+            },
+            {
+              header: 'Days Pending',
+              key: 'daysPending',
+              accessor: (provider) => {
+                const daysPending = getDaysPending(provider.registrationDate || provider.createdAt);
+                return (
+                  <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                    daysPending > 7 ? 'bg-accent text-white shadow-2xs' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    <Clock className="w-3 h-3 mr-1" />
+                    {daysPending} days
+                  </div>
+                );
+              }
+            },
+            {
+              header: 'Actions',
+              key: 'actions',
+              accessor: (provider) => (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchProviderDetails(provider._id)}
+                    className="p-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all duration-200 shadow-2xs"
+                    title="View Details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleApproveProvider(provider)}
+                    className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all duration-200 shadow-2xs"
+                    title="Approve"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleRejectProvider(provider)}
+                    className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-all duration-200 shadow-2xs"
+                    title="Reject"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            }
+          ]}
+        />
+        {totalPages > 1 && (
+          <div className="mt-4 bg-white p-4 rounded-xl shadow-2xs border border-neutral-200/80">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredProviders.length}
+              limit={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
+          </div>
         )}
 
         {/* Modals */}
@@ -843,154 +934,158 @@ const ProviderDetailsModal = ({
   if (!selectedProvider) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-secondary">Provider Details</h2>
-            <button
-              onClick={closeModal}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-neutral-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full my-6 max-h-[90vh] flex flex-col overflow-hidden border border-neutral-200/80 animate-scale-up">
+        {/* Sticky Header */}
+        <div className="bg-neutral-50/80 px-6 py-4 border-b border-neutral-200/70 sticky top-0 z-20 flex items-center justify-between backdrop-blur-xs">
+          <h2 className="text-lg font-bold text-neutral-800">Provider Details</h2>
+          <button
+            onClick={closeModal}
+            className="p-1.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200/60 rounded-full transition-all"
+            aria-label="Close modal"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="p-6">
-          {/* Profile Header */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 mb-8 pb-6 border-b">
-            <div className="w-24 h-24 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden shadow-lg">
-              {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
-                <img
-                  src={selectedProvider.profilePicUrl}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User className="w-12 h-12 text-white" />
-              )}
-            </div>
-            <div className="flex-1 text-center sm:text-left">
-              <h3 className="text-2xl font-bold text-secondary">{selectedProvider.name}</h3>
-              <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 text-gray-600">
-                <span className="flex items-center">
-                  <Mail className="w-4 h-4 mr-2" />
-                  {selectedProvider.email}
-                </span>
-                <span className="flex items-center">
-                  <Phone className="w-4 h-4 mr-2" />
-                  {selectedProvider.phone}
-                </span>
+        <div className="p-6 overflow-y-auto space-y-6">
+          {/* Profile Header Card */}
+          <div className="bg-neutral-50/50 p-5 rounded-xl border border-neutral-200/70 flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
+              <div className="w-16 h-16 bg-white border border-neutral-200 rounded-full flex items-center justify-center overflow-hidden shadow-2xs shrink-0">
+                {selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg' ? (
+                  <img
+                    src={selectedProvider.profilePicUrl}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-8 h-8 text-neutral-400" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-neutral-800">{selectedProvider.name}</h3>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-1.5 text-xs text-neutral-500 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-neutral-400" />
+                    {selectedProvider.email}
+                  </span>
+                  {selectedProvider.phone && (
+                    <span className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-neutral-400" />
+                      {selectedProvider.phone}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <div>
-              <span className={`px-4 py-2 rounded-full text-sm font-semibold ${status === 'approved'
-                ? 'bg-green-100 text-green-800 border border-green-200'
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wider ${status === 'approved'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                 : status === 'rejected'
-                  ? 'bg-red-100 text-red-800 border border-red-200'
-                  : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
                 }`}>
                 {status.toUpperCase()}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Personal Information */}
-            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                <User className="w-5 h-5 mr-2 text-primary" />
+            <div className="bg-white rounded-xl p-5 border border-neutral-200/80 shadow-2xs space-y-3">
+              <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center border-b border-neutral-100 pb-3">
+                <User className="w-4 h-4 mr-2 text-primary" />
                 Personal Information
               </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Date of Birth</span>
-                  <span className="font-medium text-secondary">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Date of Birth</span>
+                  <span className="font-semibold text-neutral-800">
                     {formatDate(selectedProvider.dateOfBirth)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Age</span>
-                  <span className="font-medium text-secondary">{selectedProvider.age || 'N/A'} years</span>
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Age</span>
+                  <span className="font-semibold text-neutral-800">{selectedProvider.age || 'N/A'} years</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Registration Date</span>
-                  <span className="font-medium text-secondary">
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Registration Date</span>
+                  <span className="font-semibold text-neutral-800">
                     {formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Profile Complete</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.profileComplete
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Profile Complete</span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${selectedProvider.profileComplete
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
                     }`}>
                     {selectedProvider.profileComplete ? 'Yes' : 'No'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Referral Code</span>
-                  <span className="font-bold text-secondary font-mono bg-gray-200/50 px-2 py-0.5 rounded">{selectedProvider.referralCode || 'N/A'}</span>
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Referral Code</span>
+                  <span className="font-bold text-neutral-800 font-mono bg-neutral-100 px-2 py-0.5 rounded text-xs">{selectedProvider.referralCode || 'N/A'}</span>
                 </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Referred By Code</span>
-                  <span className="font-bold text-secondary font-mono bg-gray-200/50 px-2 py-0.5 rounded">{selectedProvider.referredBy || 'Direct Signup'}</span>
+                <div className="flex justify-between items-center py-2 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Referred By Code</span>
+                  <span className="font-bold text-neutral-800 font-mono bg-neutral-100 px-2 py-0.5 rounded text-xs">{selectedProvider.referredBy || 'Direct Signup'}</span>
                 </div>
               </div>
             </div>
 
             {/* Professional Details */}
-            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                <Briefcase className="w-5 h-5 mr-2 text-primary" />
+            <div className="bg-white rounded-xl p-5 border border-neutral-200/80 shadow-2xs space-y-3">
+              <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center border-b border-neutral-100 pb-3">
+                <Briefcase className="w-4 h-4 mr-2 text-primary" />
                 Professional Details
               </h3>
-              <div className="space-y-3">
-                <div>
-                  <span className="text-sm text-gray-600">Services</span>
-                  <div className="flex flex-wrap gap-2 mt-2">
+              <div className="space-y-2">
+                <div className="py-2 border-b border-neutral-100/70">
+                  <span className="text-xs font-medium text-neutral-500 block mb-1.5">Services Offered</span>
+                  <div className="flex flex-wrap gap-1.5">
                     {selectedProvider.services?.map((service, index) => (
-                      <span key={index} className="px-3 py-1 bg-gradient-to-r from-primary to-teal-600 text-white rounded-full text-xs font-medium">
+                      <span key={index} className="px-2.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-md text-xs font-semibold">
                         {service.name || service}
                       </span>
-                    )) || <span className="text-secondary text-sm">N/A</span>}
+                    )) || <span className="text-neutral-500 text-xs">N/A</span>}
                   </div>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Experience</span>
-                  <span className="font-medium text-secondary">{selectedProvider.experience || '0'} years</span>
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Experience</span>
+                  <span className="font-semibold text-neutral-800">{selectedProvider.experience || '0'} years</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Service Area</span>
-                  <span className="font-medium text-secondary">{selectedProvider.serviceArea || 'N/A'}</span>
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Service Area</span>
+                  <span className="font-semibold text-neutral-800">{selectedProvider.serviceArea || 'N/A'}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                  <span className="text-sm text-gray-600">Test Status</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.testPassed
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
+                <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                  <span className="text-neutral-500 font-medium">Test Status</span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${selectedProvider.testPassed
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
                     }`}>
                     {selectedProvider.testPassed ? 'Passed' : 'Not Taken'}
                   </span>
                 </div>
                 {selectedProvider.approved && (
                   <>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">Rating</span>
-                      <span className="font-medium text-secondary">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium">Rating</span>
+                      <span className="font-semibold text-neutral-800">
                         ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600">On-Time</span>
-                      <span className="font-medium text-secondary">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium">On-Time</span>
+                      <span className="font-semibold text-neutral-800">
                         {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-sm text-gray-600">Completion</span>
-                      <span className="font-medium text-secondary">
+                    <div className="flex justify-between items-center py-2 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium">Completion</span>
+                      <span className="font-semibold text-neutral-800">
                         {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
                       </span>
                     </div>
@@ -1000,16 +1095,16 @@ const ProviderDetailsModal = ({
             </div>
 
             {/* Address Information */}
-            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                <Home className="w-5 h-5 mr-2 text-primary" />
+            <div className="bg-white rounded-xl p-5 border border-neutral-200/80 shadow-2xs space-y-3">
+              <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center border-b border-neutral-100 pb-3">
+                <Home className="w-4 h-4 mr-2 text-primary" />
                 Address Information
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {selectedProvider.currentAddress ? (
                   <div>
-                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Current Address</h4>
-                    <p className="text-sm text-secondary leading-relaxed bg-white p-3 rounded-lg border border-teal-50">
+                    <h4 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Current Address</h4>
+                    <p className="text-xs sm:text-sm text-neutral-800 leading-relaxed bg-neutral-50 p-3 rounded-lg border border-neutral-200/70">
                       {selectedProvider.currentAddress.houseNumber && `${selectedProvider.currentAddress.houseNumber}, `}
                       {selectedProvider.currentAddress.street && `${selectedProvider.currentAddress.street}, `}
                       {selectedProvider.currentAddress.landmark && `${selectedProvider.currentAddress.landmark}, `}
@@ -1021,20 +1116,20 @@ const ProviderDetailsModal = ({
                   </div>
                 ) : (
                   <div>
-                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Current Address</h4>
-                    <p className="text-xs text-gray-400 italic">No current address</p>
+                    <h4 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Current Address</h4>
+                    <p className="text-xs text-neutral-400 italic">No current address</p>
                   </div>
                 )}
 
                 {selectedProvider.addressSame ? (
                   <div>
-                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Permanent Address</h4>
-                    <p className="text-xs text-teal-600 font-semibold italic bg-teal-50/50 p-2.5 rounded-lg border border-teal-100/50">Same as Current Address</p>
+                    <h4 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Permanent Address</h4>
+                    <p className="text-xs text-emerald-700 font-semibold italic bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200/60">Same as Current Address</p>
                   </div>
                 ) : selectedProvider.permanentAddress ? (
                   <div>
-                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Permanent Address</h4>
-                    <p className="text-sm text-secondary leading-relaxed bg-white p-3 rounded-lg border border-teal-50">
+                    <h4 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Permanent Address</h4>
+                    <p className="text-xs sm:text-sm text-neutral-800 leading-relaxed bg-neutral-50 p-3 rounded-lg border border-neutral-200/70">
                       {selectedProvider.permanentAddress.houseNumber && `${selectedProvider.permanentAddress.houseNumber}, `}
                       {selectedProvider.permanentAddress.street && `${selectedProvider.permanentAddress.street}, `}
                       {selectedProvider.permanentAddress.landmark && `${selectedProvider.permanentAddress.landmark}, `}
@@ -1046,42 +1141,42 @@ const ProviderDetailsModal = ({
                   </div>
                 ) : (
                   <div>
-                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Permanent Address</h4>
-                    <p className="text-xs text-gray-400 italic">No permanent address</p>
+                    <h4 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Permanent Address</h4>
+                    <p className="text-xs text-neutral-400 italic">No permanent address</p>
                   </div>
                 )}
 
                 {selectedProvider.address && (
                   <div>
-                    <h4 className="text-xs font-bold text-teal-700 uppercase mb-2">Map Routing Coordinates Location</h4>
-                    <p className="text-sm text-secondary bg-white p-3 rounded-lg border border-teal-50">{selectedProvider.address.formattedAddress || selectedProvider.address.street || 'N/A'}</p>
+                    <h4 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Map Routing Location</h4>
+                    <p className="text-xs sm:text-sm text-neutral-800 bg-neutral-50 p-3 rounded-lg border border-neutral-200/70">{selectedProvider.address.formattedAddress || selectedProvider.address.street || 'N/A'}</p>
                     {/* S2 Geofence Telemetry */}
                     {(selectedProvider.address?.s2CellId || selectedProvider.address?.s2CellIdPrecise) && (
-                      <div className="mt-3 bg-slate-900 p-3 rounded-lg border border-slate-700">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <div className="mt-3 bg-neutral-900 text-neutral-100 p-3.5 rounded-xl border border-neutral-800">
+                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                           <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
                         </p>
                         <div className="space-y-1.5">
                           {selectedProvider.address?.s2CellId && (
                             <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
-                              <span className="font-mono text-[10px] text-teal-300 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-800/50">
+                              <span className="text-[11px] text-neutral-400 font-medium">Level 13 (≈1km²)</span>
+                              <span className="font-mono text-xs text-teal-300 font-semibold bg-teal-950/60 px-2 py-0.5 rounded border border-teal-800/60">
                                 {selectedProvider.address.s2CellId}
                               </span>
                             </div>
                           )}
                           {selectedProvider.address?.s2CellIdPrecise && (
                             <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
-                              <span className="font-mono text-[10px] text-emerald-300 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">
+                              <span className="text-[11px] text-neutral-400 font-medium">Level 15 (≈150m²)</span>
+                              <span className="font-mono text-xs text-emerald-300 font-semibold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">
                                 {selectedProvider.address.s2CellIdPrecise}
                               </span>
                             </div>
                           )}
                           {selectedProvider.address?.lat && selectedProvider.address?.lng && (
-                            <div className="flex justify-between items-center pt-1 border-t border-slate-700">
-                              <span className="text-[10px] text-slate-500">Coordinates</span>
-                              <span className="font-mono text-[10px] text-slate-300">
+                            <div className="flex justify-between items-center pt-1 border-t border-neutral-800">
+                              <span className="text-[11px] text-neutral-400 font-medium">Coordinates</span>
+                              <span className="font-mono text-xs text-neutral-300">
                                 {parseFloat(selectedProvider.address.lat).toFixed(6)}, {parseFloat(selectedProvider.address.lng).toFixed(6)}
                               </span>
                             </div>
@@ -1095,90 +1190,90 @@ const ProviderDetailsModal = ({
             </div>
 
             {/* Bank Details */}
-            <div className="bg-gradient-to-br from-teal-50 to-white rounded-xl p-5 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold mb-4 text-secondary flex items-center">
-                <CreditCard className="w-5 h-5 mr-2 text-primary" />
+            <div className="bg-white rounded-xl p-5 border border-neutral-200/80 shadow-2xs space-y-3">
+              <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center border-b border-neutral-100 pb-3">
+                <CreditCard className="w-4 h-4 mr-2 text-primary" />
                 Bank Details
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-1">
                 {selectedProvider.bankDetails ? (
                   <>
-                    <div className="flex justify-between items-start py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Account Holder Name</span>
-                      <span className="font-medium text-secondary text-right max-w-[70%] break-words">
+                    <div className="flex justify-between items-start py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Account Holder Name</span>
+                      <span className="font-semibold text-neutral-800 text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.accountName || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Account Number</span>
-                      <span className="font-medium text-secondary font-mono text-right max-w-[70%] break-words">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Account Number</span>
+                      <span className="font-semibold text-neutral-800 font-mono text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.accountNo || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">IFSC Code</span>
-                      <span className="font-medium text-secondary font-mono text-right max-w-[70%] break-words">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">IFSC Code</span>
+                      <span className="font-semibold text-neutral-800 font-mono text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.ifsc || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-start py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Bank Name</span>
-                      <span className="font-medium text-secondary text-right max-w-[70%] break-words">
+                    <div className="flex justify-between items-start py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Bank Name</span>
+                      <span className="font-semibold text-neutral-800 text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.bankName || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">District</span>
-                      <span className="font-medium text-secondary text-right max-w-[70%] break-words">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">District</span>
+                      <span className="font-semibold text-neutral-800 text-right max-w-[70%] break-words">
                         {selectedProvider.bankDetails.district || 'N/A'}
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-start py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Branch Address</span>
-                      <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                    <div className="flex justify-between items-start py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Branch Address</span>
+                      <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
                         {selectedProvider.bankDetails.address || 'N/A'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verification Status</span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.bankVerificationStatus === 'verified'
-                          ? 'bg-green-100 text-green-800'
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Verification Status</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${selectedProvider.bankDetails.bankVerificationStatus === 'verified'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : selectedProvider.bankDetails.bankVerificationStatus === 'rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
                         {selectedProvider.bankDetails.bankVerificationStatus ? selectedProvider.bankDetails.bankVerificationStatus.toUpperCase() : (selectedProvider.bankDetails.verified ? 'VERIFIED' : 'PENDING')}
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Document Uploaded At</span>
-                      <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Document Uploaded At</span>
+                      <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
                         {selectedProvider.bankDetails.uploadedAt ? new Date(selectedProvider.bankDetails.uploadedAt).toLocaleString() : 'N/A'}
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                      <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Uploaded By</span>
-                      <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                    <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                      <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Uploaded By</span>
+                      <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
                         Provider
                       </span>
                     </div>
 
                     {selectedProvider.bankDetails.bankVerifiedAt && (
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verified At</span>
-                        <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                      <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                        <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Verified At</span>
+                        <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
                           {new Date(selectedProvider.bankDetails.bankVerifiedAt).toLocaleString()}
                         </span>
                       </div>
                     )}
 
                     {selectedProvider.bankDetails.bankVerifiedBy && (
-                      <div className="flex justify-between items-center py-2 border-b border-teal-50">
-                        <span className="text-sm text-gray-600 flex-shrink-0 mr-4">Verified By</span>
-                        <span className="font-medium text-secondary text-right text-xs max-w-[70%] break-words">
+                      <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                        <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Verified By</span>
+                        <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
                           {selectedProvider.bankDetails.bankVerifiedBy.name || selectedProvider.bankDetails.bankVerifiedBy.email || 'Admin'}
                         </span>
                       </div>
@@ -1186,23 +1281,26 @@ const ProviderDetailsModal = ({
 
                     {selectedProvider.bankDetails.bankRejectReason && (
                       <div className="py-2">
-                        <span className="text-sm text-red-500 font-bold block mb-1">Bank Reject Reason</span>
-                        <span className="text-xs text-red-700 bg-red-50 p-2.5 rounded-lg block font-medium">
+                        <span className="text-xs text-rose-600 font-bold block mb-1">Bank Reject Reason</span>
+                        <span className="text-xs text-rose-700 bg-rose-50 p-2.5 rounded-lg block font-medium border border-rose-200">
                           {selectedProvider.bankDetails.bankRejectReason}
                         </span>
                       </div>
                     )}
                   </>
                 ) : (
-                  <p className="text-gray-500 text-center py-4">Bank details not provided</p>
+                  <p className="text-neutral-400 text-center py-4 text-xs italic">Bank details not provided</p>
                 )}
               </div>
             </div>
           </div>
 
           {/* Documents Section */}
-          <div className="mt-8 bg-gradient-to-br from-teal-50 to-white rounded-xl p-6 border border-teal-100 shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="text-lg font-semibold mb-6 text-secondary">Documents</h3>
+          <div className="bg-white rounded-xl p-5 border border-neutral-200/80 shadow-2xs space-y-4">
+            <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center border-b border-neutral-100 pb-3">
+              <FileImage className="w-4 h-4 mr-2 text-primary" />
+              Documents
+            </h3>
             {(() => {
               const docs = [];
               if (selectedProvider.profilePicUrl && selectedProvider.profilePicUrl !== 'default-provider.jpg') {
@@ -1225,20 +1323,20 @@ const ProviderDetailsModal = ({
               }
 
               if (docs.length === 0) {
-                return <p className="text-gray-400 text-center py-6">No documents uploaded yet</p>;
+                return <p className="text-neutral-400 text-center py-6 text-xs italic">No documents uploaded yet</p>;
               }
 
               return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {docs.map((doc) => {
                     const IconComp = doc.icon;
                     return (
-                      <div key={doc.type} className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-center mb-4">
-                          <IconComp className="w-5 h-5 mr-2 text-primary" />
-                          <span className="font-semibold text-secondary">{doc.label}</span>
+                      <div key={doc.type} className="bg-neutral-50/60 p-4 rounded-xl border border-neutral-200/80 shadow-2xs hover:shadow-sm transition-all">
+                        <div className="flex items-center mb-3">
+                          <IconComp className="w-4 h-4 mr-2 text-primary" />
+                          <span className="font-semibold text-neutral-800 text-xs sm:text-sm">{doc.label}</span>
                         </div>
-                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 border border-teal-100">
+                        <div className="aspect-square bg-neutral-100 rounded-lg overflow-hidden mb-3 border border-neutral-200">
                           <img
                             src={doc.src}
                             alt={doc.label}
@@ -1248,26 +1346,26 @@ const ProviderDetailsModal = ({
                         </div>
                         <button
                           onClick={() => viewDocument(selectedProvider, doc.type)}
-                          className="w-full py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs"
+                          className="w-full py-2 bg-neutral-800 hover:bg-neutral-900 text-white rounded-lg transition-all font-semibold text-xs shadow-2xs"
                         >
                           View Full Size
                         </button>
                         {doc.type === 'passbook' && (
-                          <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-[11px] text-gray-500 font-medium">
+                          <div className="mt-3 pt-3 border-t border-neutral-200/70 space-y-1.5 text-[11px] text-neutral-500 font-medium">
                             <div className="flex justify-between">
                               <span>Uploaded Date:</span>
-                              <span className="text-secondary font-bold">
+                              <span className="text-neutral-800 font-bold">
                                 {selectedProvider.bankDetails?.uploadedAt ? new Date(selectedProvider.bankDetails.uploadedAt).toLocaleDateString() : 'N/A'}
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span>Uploaded By:</span>
-                              <span className="text-secondary font-bold">Provider</span>
+                              <span className="text-neutral-800 font-bold">Provider</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Verification Status:</span>
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${selectedProvider.bankDetails?.bankVerificationStatus === 'verified'
-                                  ? 'bg-green-50 text-green-700'
+                                  ? 'bg-emerald-50 text-emerald-700'
                                   : selectedProvider.bankDetails?.bankVerificationStatus === 'rejected'
                                     ? 'bg-rose-50 text-rose-600'
                                     : 'bg-amber-50 text-amber-600'
@@ -1276,7 +1374,7 @@ const ProviderDetailsModal = ({
                               </span>
                             </div>
                             {selectedProvider.bankDetails?.bankRejectReason && (
-                              <div className="text-[10px] text-red-500 font-bold bg-rose-50/50 p-2 rounded-lg mt-1">
+                              <div className="text-[10px] text-rose-600 font-bold bg-rose-50 p-2 rounded-lg mt-1 border border-rose-200">
                                 Reject Reason: {selectedProvider.bankDetails.bankRejectReason}
                               </div>
                             )}
@@ -1285,7 +1383,7 @@ const ProviderDetailsModal = ({
                               download={`passbook_${selectedProvider.name}.jpg`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full py-2 bg-gradient-to-r from-teal-500 to-teal-700 text-white rounded-lg hover:from-teal-600 hover:to-teal-800 transition-all duration-200 font-bold text-center block mt-2 text-[10px]"
+                              className="w-full py-2 bg-neutral-800 hover:bg-neutral-900 text-white rounded-lg transition-all font-bold text-center block mt-2 text-[10px] shadow-2xs"
                             >
                               Download Passbook Document
                             </a>
@@ -1300,47 +1398,47 @@ const ProviderDetailsModal = ({
           </div>
 
           {/* Agreement PDF and Approval Letter PDF */}
-          <div className="bg-white p-4 rounded-lg border border-teal-200 shadow-sm hover:shadow-md transition-shadow col-span-1 md:col-span-3">
-            <div className="flex items-center mb-4">
-              <FileText className="w-5 h-5 mr-2 text-primary" />
-              <span className="font-semibold text-secondary">Legal Contracts & Signatures</span>
+          <div className="bg-white p-5 rounded-xl border border-neutral-200/80 shadow-2xs space-y-3">
+            <div className="flex items-center border-b border-neutral-100 pb-3">
+              <FileText className="w-4 h-4 mr-2 text-primary" />
+              <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Legal Contracts & Signatures</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+              <div className="border border-neutral-200/80 p-4 rounded-xl bg-neutral-50/50 flex flex-col justify-between">
                 <div>
-                  <h4 className="font-bold text-secondary text-sm mb-1">Provider Service Agreement</h4>
-                  <p className="text-xs text-gray-500 mb-3">Dynamically compiled legal contract containing self declaration and digital signature logs.</p>
+                  <h4 className="font-bold text-neutral-800 text-xs sm:text-sm mb-1">Provider Service Agreement</h4>
+                  <p className="text-xs text-neutral-500 mb-3 leading-relaxed">Dynamically compiled legal contract containing self declaration and digital signature logs.</p>
                 </div>
                 {selectedProvider.legalAcceptance?.agreementAccepted ? (
                   <button
                     type="button"
                     onClick={() => handleDownloadPDF(selectedProvider._id, 'agreement')}
-                    className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
+                    className="text-center py-2 px-3 bg-neutral-800 hover:bg-neutral-900 text-white rounded-lg transition-all duration-200 font-semibold text-xs block w-full shadow-2xs"
                   >
                     Download/View Agreement PDF
                   </button>
                 ) : (
-                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                  <button disabled className="py-2 px-3 bg-neutral-100 text-neutral-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
                     Agreement Pending Acceptance
                   </button>
                 )}
               </div>
 
-              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+              <div className="border border-neutral-200/80 p-4 rounded-xl bg-neutral-50/50 flex flex-col justify-between">
                 <div>
-                  <h4 className="font-bold text-secondary text-sm mb-1">Official Approval Letter</h4>
-                  <p className="text-xs text-gray-500 mb-3">System generated registration confirmation letter containing approved service details and admin comments.</p>
+                  <h4 className="font-bold text-neutral-800 text-xs sm:text-sm mb-1">Official Approval Letter</h4>
+                  <p className="text-xs text-neutral-500 mb-3 leading-relaxed">System generated registration confirmation letter containing approved service details and admin comments.</p>
                 </div>
                 {selectedProvider.approved ? (
                   <button
                     type="button"
                     onClick={() => handleDownloadPDF(selectedProvider._id, 'approval')}
-                    className="text-center py-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 font-medium text-xs block w-full"
+                    className="text-center py-2 px-3 bg-neutral-800 hover:bg-neutral-900 text-white rounded-lg transition-all duration-200 font-semibold text-xs block w-full shadow-2xs"
                   >
                     Download/View Approval Letter
                   </button>
                 ) : (
-                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                  <button disabled className="py-2 px-3 bg-neutral-100 text-neutral-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
                     Approval Letter Pending Activation
                   </button>
                 )}
@@ -1348,7 +1446,7 @@ const ProviderDetailsModal = ({
             </div>
 
             {selectedProvider.legalAcceptance?.acceptedAt && (
-              <div className="mt-4 pt-3 border-t border-teal-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-gray-500 font-medium">
+              <div className="mt-4 pt-3 border-t border-neutral-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-neutral-500 font-medium">
                 <div>Accepted At: {new Date(selectedProvider.legalAcceptance.acceptedAt).toLocaleString()}</div>
                 <div>Signature Version: {selectedProvider.legalAcceptance.version}</div>
                 <div>IP Address: {selectedProvider.legalAcceptance.ipAddress || 'N/A'}</div>
@@ -1362,38 +1460,37 @@ const ProviderDetailsModal = ({
             )}
           </div>
 
-
           {activeTab === 'pending_providers' ? (
-            <div className="mt-8 flex gap-4">
+            <div className="pt-2 flex gap-3">
               <button
                 onClick={() => openApprovalModal('approved', selectedProvider)}
-                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+                className="flex-1 flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all duration-200 shadow-2xs font-semibold text-xs sm:text-sm gap-2"
               >
-                <CheckCircle className="w-5 h-5 mr-2" />
+                <CheckCircle className="w-4 h-4" />
                 Approve Provider
               </button>
               <button
                 onClick={() => openApprovalModal('rejected', selectedProvider)}
-                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+                className="flex-1 flex items-center justify-center px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all duration-200 shadow-2xs font-semibold text-xs sm:text-sm gap-2"
               >
-                <XCircle className="w-5 h-5 mr-2" />
+                <XCircle className="w-4 h-4" />
                 Reject Provider
               </button>
             </div>
           ) : (
-            <div className="mt-8 flex gap-4">
+            <div className="pt-2 flex gap-3">
               <button
                 onClick={() => openApprovalModal('bank_approved', selectedProvider)}
-                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+                className="flex-1 flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all duration-200 shadow-2xs font-semibold text-xs sm:text-sm gap-2"
               >
-                <CheckCircle className="w-5 h-5 mr-2" />
+                <CheckCircle className="w-4 h-4" />
                 Approve Bank Update
               </button>
               <button
                 onClick={() => openApprovalModal('bank_rejected', selectedProvider)}
-                className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+                className="flex-1 flex items-center justify-center px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all duration-200 shadow-2xs font-semibold text-xs sm:text-sm gap-2"
               >
-                <XCircle className="w-5 h-5 mr-2" />
+                <XCircle className="w-4 h-4" />
                 Reject Bank Update
               </button>
             </div>

@@ -52,7 +52,7 @@ const parseJsonOrObject = (val) => {
 const addressValidationSchema = z.object({
   houseNumber: z.string().min(1, "House Number is required"),
   street: z.string().min(1, "Street is required"),
-  landmark: z.string().min(1, "Landmark is required"),
+  landmark: z.string().optional().or(z.literal('')),
   villageCity: z.string().min(1, "Village/City is required"),
   district: z.string().min(1, "District is required"),
   state: z.string().min(1, "State is required"),

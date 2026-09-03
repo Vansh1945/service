@@ -626,15 +626,17 @@ const initSocket = (httpServer) => {
                 const updateFields = { isOnline };
                 if (isOnline) {
                     const provider = await Provider.findById(userId);
-                    if (provider) {
-                        updateFields.notificationPreferences = {
-                            ...provider.notificationPreferences,
-                            bookingAlertTone: true,
-                            bookingVibration: true,
-                            booking: true,
-                            pushEnabled: true
-                        };
+                    if (!provider || provider.approved === false || provider.testPassed === false) {
+                        socket.emit('error-message', { message: 'Account pending admin approval or skill test. Cannot go online.' });
+                        return;
                     }
+                    updateFields.notificationPreferences = {
+                        ...provider.notificationPreferences,
+                        bookingAlertTone: true,
+                        bookingVibration: true,
+                        booking: true,
+                        pushEnabled: true
+                    };
                 }
                 
                 await Provider.findByIdAndUpdate(userId, updateFields);

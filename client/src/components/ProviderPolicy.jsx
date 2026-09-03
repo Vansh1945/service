@@ -50,34 +50,25 @@ export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
         >
           {type === 'agreement' && (
             <div className="space-y-4">
-              <p className="font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">⚠️ IMPORTANT WARNING: This is a legally binding contract. Any breach, misconduct, or unlawful activity will result in immediate termination, holding of payouts, and immediate criminal prosecution/police complaints.</p>
+              <p className="font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">⚠️ IMPORTANT LEGAL AGREEMENT: This contract governs provider onboarding, KYC verification, earnings payouts, and service standards.</p>
               <div className="border-l-4 border-primary/40 pl-3 italic text-gray-500 my-2">
                 Last Updated: {lastUpdated}
               </div>
               
-              <h4 className="font-bold text-secondary text-sm mt-3">1. Scope of Services</h4>
-              <p>As a verified provider on the platform, you agree to offer high-quality services matching your chosen categories. You will receive booking requests, and it is your responsibility to respond to them promptly, safely, and professionally.</p>
+              <h4 className="font-bold text-secondary text-sm mt-3">1. Registration & Verification Requirements</h4>
+              <p>You must complete 4-step registration: OTP verification, Live Selfie photo, identity documents (Aadhaar/PAN), address, and active Bank Account / UPI details. Providing forged documents will lead to immediate rejection and account termination.</p>
               
-              <h4 className="font-bold text-secondary text-sm">2. SLA, Reliability & Cancellation Penalties</h4>
-              <p>You agree to adhere strictly to booking timings. Unannounced cancellations, delays, or no-shows (failure to arrive within 30 minutes of scheduled time) will lower your reliability rating, lead to fines deducted from your balance, or result in temporary/permanent account suspension.</p>
+              <h4 className="font-bold text-secondary text-sm">2. Admin Approval & Payout Activation</h4>
+              <p>Only Admin-approved providers with complete profiles and verified bank details can receive booking dispatches and direct earnings payouts. Incomplete accounts are restricted from dashboard access.</p>
               
-              <h4 className="font-bold text-secondary text-sm">3. Platform Fees & Commission</h4>
-              <p>The platform charges a percentage commission on each completed booking as defined in the fee structure. The remainder of the payment, including any convenience fees collected, will be processed and transferred to your registered bank account weekly or instantly depending on terms.</p>
+              <h4 className="font-bold text-secondary text-sm">3. Service SLAs & Booking Execution</h4>
+              <p>You agree to arrive promptly at scheduled customer locations. Unannounced no-shows or last-minute cancellations without valid reasons will lower your reliability score and may lead to temporary account suspension.</p>
               
-              <h4 className="font-bold text-secondary text-sm">4. Independent Contractor & Personal Liability</h4>
-              <p>You are registered strictly as an independent professional and NOT an employee of the platform. You are personally, financially, and criminally liable under Indian Law for your actions, behavior, negligence, misconduct, or civil/criminal offenses while providing services. The platform is not responsible for your acts.</p>
+              <h4 className="font-bold text-secondary text-sm">4. Independent Partner & Personal Liability</h4>
+              <p>You operate strictly as an independent service partner, not an employee. You are personally and legally responsible for executing quality work and maintaining professional conduct under Indian Law.</p>
 
-              <h4 className="font-bold text-secondary text-sm">5. Zero Tolerance for Criminal Activities</h4>
-              <p>The platform enforces a zero-tolerance policy. Any illegal or criminal acts—including theft, robbery, burglary, assault, physical violence, sexual harassment, property damage, fraud, extortion, intimidation, or any other offenses—committed during or in connection with a service will result in an immediate permanent ban. The platform will file an FIR with local police authorities, surrender your identity, location history, and documents, and fully cooperate with the investigation.</p>
-
-              <h4 className="font-bold text-secondary text-sm">6. KYC and Identity Verification (Aadhaar & PAN)</h4>
-              <p>You must provide genuine, valid, and un-tampered identity documents, including PAN card, Aadhaar card, current address proof, and active bank account details. Submitting fake, forged, or altered documents is a serious criminal offense under Indian Law. Discovery of fake details will lead to immediate account termination, withholding of all pending payouts, and referral to cyber/police cells.</p>
-
-              <h4 className="font-bold text-secondary text-sm">7. Customer Safety & On-site Conduct</h4>
-              <p>You must maintain professional, respectful, and non-intrusive behavior. Any form of harassment, unauthorized entry into rooms, misuse of customer property, or contact of customers post-service (via call or messaging) is strictly prohibited and constitutes grounds for an immediate permanent ban.</p>
-
-              <h4 className="font-bold text-secondary text-sm">8. Account Suspension, Payout Holds & Evidence Preservation</h4>
-              <p>If a safety or fraud incident is reported, the platform reserves the right to immediately suspend your account, hold all pending payouts/earnings during the investigation, and preserve chat histories, device details, and location tracking information to assist law enforcement.</p>
+              <h4 className="font-bold text-secondary text-sm">5. Zero Tolerance & Legal Compliance</h4>
+              <p>Zero tolerance for theft, fraud, harassment, property damage, or offline payment bypass. Any safety incident will result in immediate account ban, payout hold, and FIR submission to police authorities with complete device and location logs.</p>
 
               <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg text-xs text-gray-400 text-center mt-6">
                 --- End of Provider Agreement ---
@@ -87,22 +78,22 @@ export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
 
           {type === 'terms' && (
             <div className="space-y-4">
-              <p className="font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">⚠️ TERMS OF USE: Strict penalties apply for platform bypass, fraud, or violations of code of conduct.</p>
+              <p className="font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">⚠️ TERMS OF SERVICE: Rules governing platform usage, account security, and fair partner policies.</p>
               <div className="border-l-4 border-primary/40 pl-3 italic text-gray-500 my-2">
                 Last Updated: {lastUpdated}
               </div>
 
-              <h4 className="font-bold text-secondary text-sm mt-3">1. Account Registration & Security</h4>
-              <p>You are solely responsible for all activities occurring under your registered account. You agree to provide true and accurate documents, including PAN and Aadhaar card details. Lending your account to unverified third parties is strictly banned and results in an immediate lifetime ban.</p>
+              <h4 className="font-bold text-secondary text-sm mt-3">1. Account Security & Verification</h4>
+              <p>Your provider account is personal to you. Lending your account or dispatching unverified third parties to customer sites is strictly prohibited and results in permanent account ban.</p>
 
-              <h4 className="font-bold text-secondary text-sm">2. Fair Usage & Platform Bypass Warning</h4>
-              <p>You agree not to bypass the platform by arranging direct, offline payments or soliciting customers for direct service leads. Offline transactions are highly unsafe, bypass safety monitoring, and will lead to an immediate ban and forfeiture of all platform credits.</p>
+              <h4 className="font-bold text-secondary text-sm">2. Platform Bypass Prohibition</h4>
+              <p>All bookings, work extensions, and customer transactions must be recorded through the platform. Off-platform cash deals or soliciting customers directly is grounds for instant termination and forfeiture of pending credits.</p>
 
-              <h4 className="font-bold text-secondary text-sm">3. Platform Role & Dispute Resolution</h4>
-              <p>The platform acts solely as a digital matching marketplace and does not authorize, direct, or encourage any illegal or negligent acts. Disputes arising under these terms are governed by the laws of India, subject to exclusive court jurisdiction.</p>
+              <h4 className="font-bold text-secondary text-sm">3. Automated Notifications & Reminders</h4>
+              <p>You consent to receive transactional SMS, push notifications via FCM, and 12-hour onboarding reminders to complete missing profile or bank details.</p>
 
-              <h4 className="font-bold text-secondary text-sm">4. Mandatory Auditing & Background Verification</h4>
-              <p>We reserve the right to audit, inspect, and run background/police verification on any provider profile. The submission of false documentation or refusal to undergo verification will result in instant termination of platform access.</p>
+              <h4 className="font-bold text-secondary text-sm">4. Account Suspension & Investigation</h4>
+              <p>The platform reserves the right to suspend accounts, audit KYC files, and hold pending payouts during active complaint or fraud investigations.</p>
 
               <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg text-xs text-gray-400 text-center mt-6">
                 --- End of Terms and Conditions ---
@@ -117,17 +108,17 @@ export const ProviderPolicy = ({ isOpen, type, onClose, onAccept }) => {
                 Last Updated: {lastUpdated}
               </div>
 
-              <h4 className="font-bold text-secondary text-sm mt-3">1. Data We Collect & Store</h4>
-              <p>We collect and securely store personal information, including your name, email, contact number, real-time location history (to match you with local customer jobs), bank details (for payout processing), and KYC verification documents (PAN, Aadhaar cards, and profile pictures/selfies).</p>
+              <h4 className="font-bold text-secondary text-sm mt-3">1. Data Collected for Onboarding</h4>
+              <p>We collect your mobile number (OTP verified), Live camera selfie, identity documents (Aadhaar/PAN), residential address, and bank/UPI payout credentials to perform KYC verification and process automated earnings transfers.</p>
 
-              <h4 className="font-bold text-secondary text-sm">2. Location Tracking for Dispatch & Safety</h4>
-              <p>Your location coordinates are tracked to locate and assign jobs near you, as well as to ensure customer safety and live tracking during active bookings. Disabling location permissions will restrict your ability to receive bookings.</p>
+              <h4 className="font-bold text-secondary text-sm">2. Live Location Tracking During Service</h4>
+              <p>Real-time GPS location is tracked during active booking dispatches to route you to customer locations, provide customer ETA tracking, and ensure safety. Disabling location services will prevent job dispatches.</p>
 
-              <h4 className="font-bold text-secondary text-sm">3. Direct Data Sharing with Law Enforcement</h4>
-              <p>We work closely with law enforcement. In the event of a safety incident, threat, fraud, or criminal report, we will immediately share provider identification documents, contact logs, location records, and bank accounts with police and legal authorities without requiring prior notice to you.</p>
+              <h4 className="font-bold text-secondary text-sm">3. Document Security & Encryption</h4>
+              <p>All uploaded KYC documents and payment credentials are encrypted and accessible only by authorized Admin personnel for verification purposes.</p>
 
-              <h4 className="font-bold text-secondary text-sm">4. Data Security & Encryption</h4>
-              <p>All sensitive documents and data transactions are fully encrypted in transit and at rest using modern secure protocols to protect information from unauthorized access.</p>
+              <h4 className="font-bold text-secondary text-sm">4. Law Enforcement & Safety Disclosure</h4>
+              <p>In case of criminal incidents, fraud, or serious safety complaints, we will cooperate fully with police authorities by sharing identity docs, location logs, and contact records.</p>
 
               <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg text-xs text-gray-400 text-center mt-6">
                 --- End of Privacy Policy ---

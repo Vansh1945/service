@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import Table from '../../../components/ui/Table';
 import TableSkeleton from '../../../components/ui-skeletons/TableSkeleton';
 import Modal from '../../../components/ui/Modal';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
@@ -430,133 +431,141 @@ const AdminProviders = () => {
         />
 
         {/* Providers Table */}
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          {(!loading && currentProviders.length === 0) ? (
-            <div className="text-center py-12 md:py-16">
-              <Users className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
-              <p className="text-gray-600 text-md md:text-lg">No providers found</p>
-              <p className="text-gray-400 text-sm mt-1 md:mt-2">
-                {searchTerm || statusFilter !== 'approved' || serviceFilter !== 'all' || ratingFilter !== 'all'
-                  ? 'Try adjusting your search or filters'
-                  : 'No approved providers found'
-                }
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Services</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {loading ? (
-                      <TableSkeleton rows={8} cols={8} />
-                    ) : (
-                      currentProviders.map((provider) => (
-                        <tr key={provider._id} className="hover:bg-gray-50 transition-colors duration-200">
-                          <td className="px-4 md:px-6 py-4">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                <img
-                                  className="h-10 w-10 rounded-full object-cover"
-                                  src={provider.profilePicUrl || '/default-avatar.png'}
-                                  alt={provider.name || "Provider profile photo"}
-                                  loading="lazy"
-                                  decoding="async"
-                                  width={40}
-                                  height={40}
-                                  onError={(e) => {
-                                    e.target.src = '/default-avatar.png';
-                                  }}
-                                />
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-secondary">{provider.name}</div>
-                                {provider.providerId && (
-                                  <div className="text-[10px] font-bold text-primary tracking-wider uppercase">{provider.providerId}</div>
-                                )}
-                                <div className="text-sm text-gray-500">
-                                  Joined {formatDate(provider.registrationDate || provider.createdAt)}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 md:px-6 py-4">
-                            <div className="text-sm text-gray-900">{provider.email}</div>
-                            <div className="text-sm text-gray-500">{provider.phone}</div>
-                          </td>
-                          <td className="px-4 md:px-6 py-4">
-                            <div className="flex flex-wrap">
-                              {getServiceBadges(provider.services)}
-                            </div>
-                          </td>
-                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-gray-600">
-                              {provider.experience || 0} {provider.experience === 1 ? 'year' : 'years'}
-                            </span>
-                          </td>
-                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {provider.completedBookings || 0} completed
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {provider.canceledBookings || 0} canceled
-                            </div>
-                          </td>
-                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                            <div className="flex flex-col gap-1">
-                              <div>{getRatingStars(provider.performanceScore?.rating || 0)}</div>
-                              <div className="text-xs text-gray-500 flex items-center mt-1">
-                                <Clock className="w-3 h-3 mr-1" /> On-Time: {provider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
-                              </div>
-                              <div className="text-xs text-gray-500 flex items-center">
-                                <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
-                              </div>
-                              <div className="text-xs font-semibold flex items-center mt-0.5">
-                                <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Badge: <span className="ml-1 font-bold text-gray-800 font-mono capitalize">{provider.performanceBadge || provider.performanceScore?.badge || 'bronze'}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                            {getStatusBadge(provider)}
-                          </td>
-                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => handleViewClick(provider)}
-                                className="text-primary hover:text-teal-800 p-1 rounded transition-colors duration-200"
-                                title="View Details"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+        <Table
+          isLoading={loading}
+          data={currentProviders}
+          rowKey="_id"
+          emptyTitle="No providers found"
+          emptyMessage={
+            searchTerm || statusFilter !== 'approved' || serviceFilter !== 'all' || ratingFilter !== 'all'
+              ? 'Try adjusting your search or filters'
+              : 'No approved providers found'
+          }
+          columns={[
+            {
+              header: 'Provider',
+              key: 'name',
+              accessor: (provider) => (
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 h-10 w-10">
+                    <img
+                      className="h-10 w-10 rounded-full object-cover"
+                      src={provider.profilePicUrl || '/default-avatar.png'}
+                      alt={provider.name || "Provider profile photo"}
+                      loading="lazy"
+                      decoding="async"
+                      width={40}
+                      height={40}
+                      onError={(e) => {
+                        e.target.src = '/default-avatar.png';
+                      }}
+                    />
+                  </div>
+                  <div className="ml-4">
+                    <div className="text-sm font-medium text-secondary">{provider.name}</div>
+                    {provider.providerId && (
+                      <div className="text-[10px] font-bold text-primary tracking-wider uppercase">{provider.providerId}</div>
                     )}
-                  </tbody>
-                </table>
-              </div>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={filteredProviders.length}
-                limit={itemsPerPage}
-                onPageChange={setCurrentPage}
-              />
-            </>
-          )}
-        </div>
+                    <div className="text-sm text-gray-500">
+                      Joined {formatDate(provider.registrationDate || provider.createdAt)}
+                    </div>
+                  </div>
+                </div>
+              )
+            },
+            {
+              header: 'Contact',
+              key: 'contact',
+              accessor: (provider) => (
+                <div>
+                  <div className="text-sm text-gray-900">{provider.email}</div>
+                  <div className="text-sm text-gray-500">{provider.phone}</div>
+                </div>
+              )
+            },
+            {
+              header: 'Services',
+              key: 'services',
+              accessor: (provider) => (
+                <div className="flex flex-wrap">
+                  {getServiceBadges(provider.services)}
+                </div>
+              )
+            },
+            {
+              header: 'Experience',
+              key: 'experience',
+              accessor: (provider) => (
+                <span className="text-sm text-gray-600">
+                  {provider.experience || 0} {provider.experience === 1 ? 'year' : 'years'}
+                </span>
+              )
+            },
+            {
+              header: 'Bookings',
+              key: 'bookings',
+              accessor: (provider) => (
+                <div>
+                  <div className="text-sm text-gray-900">
+                    {provider.completedBookings || 0} completed
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {provider.canceledBookings || 0} canceled
+                  </div>
+                </div>
+              )
+            },
+            {
+              header: 'Performance',
+              key: 'performance',
+              accessor: (provider) => (
+                <div className="flex flex-col gap-1">
+                  <div>{getRatingStars(provider.performanceScore?.rating || 0)}</div>
+                  <div className="text-xs text-gray-500 flex items-center mt-1">
+                    <Clock className="w-3 h-3 mr-1" /> On-Time: {provider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-500 flex items-center">
+                    <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs font-semibold flex items-center mt-0.5">
+                    <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Badge: <span className="ml-1 font-bold text-gray-800 font-mono capitalize">{provider.performanceBadge || provider.performanceScore?.badge || 'bronze'}</span>
+                  </div>
+                </div>
+              )
+            },
+            {
+              header: 'Status',
+              key: 'status',
+              accessor: (provider) => getStatusBadge(provider)
+            },
+            {
+              header: 'Actions',
+              key: 'actions',
+              accessor: (provider) => (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleViewClick(provider)}
+                    className="text-primary hover:text-teal-800 p-1 rounded transition-colors duration-200"
+                    title="View Details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            }
+          ]}
+        />
+        {filteredProviders.length > 0 && (
+          <div className="mt-4">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredProviders.length}
+              limit={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
 
         {/* View Provider Modal */}
         {showViewModal && selectedProvider && (
@@ -578,25 +587,25 @@ const AdminProviders = () => {
 // ─── Provider Detail Modal ──────────────────────────────────────────────────
 const InfoRow = ({ label, value, mono = false }) => (
   <div className="flex flex-col gap-0.5">
-    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
-    <span className={`text-sm font-medium text-gray-800 break-all ${mono ? 'font-mono' : ''}`}>{value || 'N/A'}</span>
+    <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">{label}</span>
+    <span className={`text-xs sm:text-sm font-semibold text-neutral-800 break-all ${mono ? 'font-mono text-xs' : ''}`}>{value || 'N/A'}</span>
   </div>
 );
 
-const SectionCard = ({ title, icon: Icon, iconColor = 'text-teal-600', bgColor = 'bg-white', children }) => (
-  <div className={`${bgColor} rounded-2xl border border-gray-100 shadow-sm overflow-hidden`}>
-    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-100">
-      {Icon && <Icon className={`w-4.5 h-4.5 ${iconColor}`} size={18} />}
-      <h4 className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">{title}</h4>
+const SectionCard = ({ title, icon: Icon, iconColor = 'text-primary', bgColor = 'bg-white', children }) => (
+  <div className={`${bgColor} rounded-xl border border-neutral-200/80 shadow-2xs overflow-hidden transition-all`}>
+    <div className="flex items-center gap-2 px-4 py-3 bg-neutral-50/60 border-b border-neutral-100">
+      {Icon && <Icon className={`w-4 h-4 ${iconColor}`} size={16} />}
+      <h4 className="text-xs font-bold text-neutral-700 uppercase tracking-wider">{title}</h4>
     </div>
-    <div className="p-5">{children}</div>
+    <div className="p-4 sm:p-5">{children}</div>
   </div>
 );
 
-const StatPill = ({ label, value, color }) => (
-  <div className={`flex flex-col items-center justify-center rounded-xl p-3 ${color}`}>
-    <span className="text-lg font-extrabold leading-none">{value}</span>
-    <span className="text-[10px] font-semibold mt-1 opacity-80 text-center leading-tight">{label}</span>
+const StatPill = ({ label, value }) => (
+  <div className="flex flex-col items-center justify-center rounded-xl p-3.5 bg-white border border-neutral-200/80 shadow-2xs transition-all">
+    <span className="text-xl font-bold text-neutral-800 leading-tight">{value}</span>
+    <span className="text-[10px] font-medium text-neutral-400 uppercase tracking-wider mt-1 text-center">{label}</span>
   </div>
 );
 
@@ -657,18 +666,17 @@ const ProviderModal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal Panel */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
-
-        {/* ── Integrated Header ── */}
-        <div className="bg-slate-900 text-white p-5 sm:p-6 flex-shrink-0 relative border-b border-slate-800">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-neutral-200/80 animate-scale-up">
+        {/* Header */}
+        <div className="bg-neutral-50/80 p-5 sm:p-6 relative border-b border-neutral-200/70">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-all"
+            className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200/60 rounded-full transition-all"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -681,36 +689,36 @@ const ProviderModal = ({
                   src={provider.profilePicUrl || '/default-avatar.png'}
                   alt={provider.name || "Provider profile photo"}
                   onError={(e) => { e.target.src = '/default-avatar.png'; }}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-teal-500/40 bg-slate-800 shadow-md shrink-0"
+                  className="w-14 h-14 rounded-full object-cover border border-neutral-200 bg-white shadow-2xs shrink-0"
                 />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-bold text-white tracking-tight">{provider.name}</h2>
+                  <h2 className="text-xl font-bold text-neutral-800 tracking-tight">{provider.name}</h2>
                   {getStatusBadge(provider)}
                   {ps.restrictionsActive && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 border border-amber-500/20">
                       <Shield size={10} /> Restricted
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 text-xs text-slate-300 mt-1.5 flex-wrap font-medium">
-                  <span className="font-mono text-teal-300 bg-teal-950/80 px-2.5 py-0.5 rounded-md border border-teal-700/50 text-[11px] font-bold">
+                <div className="flex items-center gap-3 text-xs text-neutral-500 mt-1.5 flex-wrap font-medium">
+                  <span className="font-mono text-neutral-700 bg-neutral-200/60 px-2 py-0.5 rounded-md text-[11px] font-bold">
                     #{provider.providerId || provider._id?.slice(-8)}
                   </span>
-                  <span className="flex items-center gap-1"><Mail size={12} className="text-slate-400" />{provider.email}</span>
-                  {provider.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-slate-400" />{provider.phone}</span>}
-                  <span className="flex items-center gap-1"><Calendar size={12} className="text-slate-400" />Joined {formatDate(provider.registrationDate || provider.createdAt)}</span>
+                  <span className="flex items-center gap-1"><Mail size={12} className="text-neutral-400" />{provider.email}</span>
+                  {provider.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-neutral-400" />{provider.phone}</span>}
+                  <span className="flex items-center gap-1"><Calendar size={12} className="text-neutral-400" />Joined {formatDate(provider.registrationDate || provider.createdAt)}</span>
                 </div>
               </div>
             </div>
 
             {provider.averageRating > 0 && (
-              <div className="bg-slate-800/90 border border-slate-700 px-3.5 py-2 rounded-xl flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                <Star size={18} className="text-amber-400 fill-amber-400" />
+              <div className="bg-amber-500/10 border border-amber-500/20 px-3.5 py-2 rounded-xl flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <Star size={18} className="text-amber-500 fill-amber-500" />
                 <div className="text-right">
-                  <span className="text-base font-black text-white leading-none block">{provider.averageRating.toFixed(1)}</span>
-                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">Avg Rating</span>
+                  <span className="text-base font-bold text-amber-800 leading-none block">{provider.averageRating.toFixed(1)}</span>
+                  <span className="text-[9px] text-amber-600 font-semibold uppercase tracking-wider block mt-0.5">Avg Rating</span>
                 </div>
               </div>
             )}
@@ -722,7 +730,7 @@ const ProviderModal = ({
 
           {/* Restriction Alert */}
           {ps.restrictionsActive && (
-            <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 flex items-start gap-3">
+            <div className="bg-danger-light/40 border border-danger/20 rounded-xl p-4 flex items-start gap-3">
               <AlertCircle size={16} className="text-danger flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-bold text-danger">Account Restricted</p>
@@ -743,27 +751,23 @@ const ProviderModal = ({
             <StatPill
               label="Completed Jobs"
               value={provider.completedBookings || 0}
-              color="bg-success-light text-success"
             />
             <StatPill
               label="Cancelled Jobs"
               value={provider.canceledBookings || 0}
-              color="bg-danger-light text-danger"
             />
             <StatPill
               label="Experience"
               value={`${provider.experience || 0}y`}
-              color="bg-info-light text-info"
             />
             <StatPill
               label="Performance Badge"
               value={ps.badge || 'bronze'}
-              color="bg-warning-light text-warning"
             />
           </div>
 
           {/* Performance Metrics */}
-          <SectionCard title="Performance Metrics" icon={TrendingUp} iconColor="text-teal-600">
+          <SectionCard title="Performance Metrics" icon={TrendingUp} iconColor="text-primary">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <InfoRow label="Rating" value={ps.rating > 0 ? `⭐ ${ps.rating.toFixed(1)}` : 'No ratings yet'} />
               <InfoRow label="On-Time %" value={`${ps.onTimePercentage?.toFixed(1) || '0.0'}%`} />
@@ -771,16 +775,16 @@ const ProviderModal = ({
               <InfoRow label="Cancellation Ratio" value={`${ps.cancellationRatio?.toFixed(1) || '0.0'}%`} />
               <InfoRow label="Complaint Ratio" value={`${ps.complaintRatio?.toFixed(1) || '0.0'}%`} />
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">COD Risk</span>
-                <span className={`text-sm font-bold ${ps.codAbuseRisk === 'HIGH' ? 'text-red-600' :
-                  ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-500' : 'text-emerald-600'
+                <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">COD Risk</span>
+                <span className={`text-xs sm:text-sm font-bold ${ps.codAbuseRisk === 'HIGH' ? 'text-danger' :
+                  ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-600' : 'text-emerald-600'
                   }`}>{ps.codAbuseRisk || 'LOW'}</span>
               </div>
             </div>
           </SectionCard>
 
           {/* Contact Information */}
-          <SectionCard title="Contact Information" icon={Mail} iconColor="text-blue-500">
+          <SectionCard title="Contact Information" icon={Mail} iconColor="text-primary">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <InfoRow label="Email" value={provider.email} />
               <InfoRow label="Phone" value={provider.phone} />
@@ -788,27 +792,27 @@ const ProviderModal = ({
               <InfoRow label="Address" value={formatAddress(provider.address)} />
             </div>
             {(provider.address?.s2CellId || provider.address?.s2CellIdPrecise) && (
-              <div className="mt-4 bg-slate-900 p-3 rounded-xl">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <MapPin size={10} className="text-teal-400" /> S2 Geofence Telemetry
+              <div className="mt-4 bg-neutral-900 text-neutral-100 p-3.5 rounded-xl border border-neutral-800">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <MapPin size={12} className="text-teal-400" /> S2 Geofence Telemetry
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {provider.address?.s2CellId && (
-                    <div className="flex justify-between items-center bg-slate-800 p-2 rounded-lg">
-                      <span className="text-[10px] text-slate-400">Level 13 (≈1km²)</span>
-                      <span className="font-mono text-[10px] text-teal-300">{provider.address.s2CellId}</span>
+                    <div className="flex justify-between items-center bg-neutral-800 px-3 py-2 rounded-lg">
+                      <span className="text-[11px] text-neutral-400 font-medium">Level 13 (≈1km²)</span>
+                      <span className="font-mono text-xs text-teal-300 font-semibold">{provider.address.s2CellId}</span>
                     </div>
                   )}
                   {provider.address?.s2CellIdPrecise && (
-                    <div className="flex justify-between items-center bg-slate-800 p-2 rounded-lg">
-                      <span className="text-[10px] text-slate-400">Level 15 (≈150m²)</span>
-                      <span className="font-mono text-[10px] text-emerald-300">{provider.address.s2CellIdPrecise}</span>
+                    <div className="flex justify-between items-center bg-neutral-800 px-3 py-2 rounded-lg">
+                      <span className="text-[11px] text-neutral-400 font-medium">Level 15 (≈150m²)</span>
+                      <span className="font-mono text-xs text-emerald-300 font-semibold">{provider.address.s2CellIdPrecise}</span>
                     </div>
                   )}
                   {provider.address?.lat && provider.address?.lng && (
-                    <div className="flex justify-between items-center bg-slate-800 p-2 rounded-lg">
-                      <span className="text-[10px] text-slate-400">Coords</span>
-                      <span className="font-mono text-[10px] text-slate-300">
+                    <div className="flex justify-between items-center bg-neutral-800 px-3 py-2 rounded-lg">
+                      <span className="text-[11px] text-neutral-400 font-medium">Coords</span>
+                      <span className="font-mono text-xs text-neutral-300">
                         {parseFloat(provider.address.lat).toFixed(5)}, {parseFloat(provider.address.lng).toFixed(5)}
                       </span>
                     </div>
@@ -819,30 +823,30 @@ const ProviderModal = ({
           </SectionCard>
 
           {/* Professional Information */}
-          <SectionCard title="Professional Information" icon={Briefcase} iconColor="text-purple-500">
+          <SectionCard title="Professional Information" icon={Briefcase} iconColor="text-primary">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Services Offered</span>
+                <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block mb-2">Services Offered</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {getServiceBadges(provider.services) || <span className="text-sm text-gray-500">N/A</span>}
+                  {getServiceBadges(provider.services) || <span className="text-xs text-neutral-500">N/A</span>}
                 </div>
               </div>
               <InfoRow label="Service Area" value={provider.serviceArea} />
               <div>
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">KYC Status</span>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.kycStatus === 'approved' ? 'bg-green-100 text-green-800' :
-                  provider.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
+                <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block mb-1.5">KYC Status</span>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.kycStatus === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                  provider.kycStatus === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                    'bg-rose-50 text-rose-700 border border-rose-200'
                   }`}>
                   {provider.kycStatus?.charAt(0).toUpperCase() + provider.kycStatus?.slice(1) || 'N/A'}
                 </span>
                 {provider.rejectionReason && (
-                  <p className="text-xs text-red-500 mt-1">Reason: {provider.rejectionReason}</p>
+                  <p className="text-xs text-rose-600 mt-1">Reason: {provider.rejectionReason}</p>
                 )}
               </div>
               <div>
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Test Status</span>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.testPassed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block mb-1.5">Test Status</span>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.testPassed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
                   }`}>
                   {provider.testPassed ? '✓ Passed' : 'Not Passed'}
                 </span>
@@ -850,9 +854,9 @@ const ProviderModal = ({
             </div>
           </SectionCard>
 
-          {/* Bank & Payout Details (PART 9) */}
+          {/* Bank & Payout Details */}
           {provider.bankDetails && (
-            <SectionCard title="Bank & Payout Verification" icon={Banknote} iconColor="text-emerald-600">
+            <SectionCard title="Bank & Payout Verification" icon={Banknote} iconColor="text-primary">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoRow label="Account Name" value={bd.accountName} />
                 <InfoRow label="Account Number" value={bd.accountNo} mono />
@@ -866,14 +870,14 @@ const ProviderModal = ({
                     <InfoRow label="Branch Address" value={bd.address} />
                   </div>
                 )}
-                <div className="sm:col-span-2 flex items-center justify-between pt-2 border-t border-gray-100">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Verification Status</span>
+                <div className="sm:col-span-2 flex items-center justify-between pt-2 border-t border-neutral-100">
+                  <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Verification Status</span>
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
                     bd.bankVerificationStatus === 'verified'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : bd.bankVerificationStatus === 'rejected'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
                   }`}>
                     {bd.bankVerificationStatus === 'verified'
                       ? '✓ Verified & Active'
@@ -901,7 +905,7 @@ const ProviderModal = ({
                 const changedFields = fields.filter(f => (f.curr || '').trim() !== (f.proposed || '').trim());
 
                 return (
-                  <div className="mt-4 pt-3 border-t border-gray-100 bg-amber-50/50 p-4 rounded-xl border border-amber-200">
+                  <div className="mt-4 pt-3 border-t border-neutral-100 bg-amber-50/40 p-4 rounded-xl border border-amber-200/80">
                     <span className="text-xs font-bold text-amber-900 uppercase tracking-wider block mb-2">
                       ⚠️ Visual Comparison (Current Verified vs New Proposed)
                     </span>
@@ -913,9 +917,9 @@ const ProviderModal = ({
                           const isChanged = (f.curr || '').trim() !== (f.proposed || '').trim();
                           return (
                             <div key={f.label} className={`grid grid-cols-3 gap-2 text-xs p-2 rounded-lg ${isChanged ? 'bg-amber-100 border border-amber-300 font-bold' : 'bg-white/60'}`}>
-                              <span className="text-gray-500 font-semibold">{f.label}</span>
-                              <span className="text-gray-700">Current: {f.curr || '—'}</span>
-                              <span className={isChanged ? 'text-amber-900 font-extrabold' : 'text-gray-700'}>
+                              <span className="text-neutral-500 font-semibold">{f.label}</span>
+                              <span className="text-neutral-700">Current: {f.curr || '—'}</span>
+                              <span className={isChanged ? 'text-amber-900 font-extrabold' : 'text-neutral-700'}>
                                 New: {f.proposed || '—'} {isChanged && '✏️'}
                               </span>
                             </div>
@@ -929,24 +933,24 @@ const ProviderModal = ({
 
               {/* Passbook / Cancelled Cheque Image */}
               {bd.passbookImage && (
-                <div className="mt-4 pt-3 border-t border-gray-100">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Passbook / Cheque Document</span>
+                <div className="mt-4 pt-3 border-t border-neutral-100">
+                  <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block mb-2">Passbook / Cheque Document</span>
                   <a href={bd.passbookImage} target="_blank" rel="noopener noreferrer" className="inline-block">
-                    <img src={bd.passbookImage} alt="Passbook/Cheque" className="w-32 h-24 object-cover rounded-xl border border-gray-200 hover:opacity-90 transition-opacity shadow-sm" />
+                    <img src={bd.passbookImage} alt="Passbook/Cheque" className="w-32 h-24 object-cover rounded-xl border border-neutral-200 hover:opacity-90 transition-opacity shadow-2xs" />
                   </a>
                 </div>
               )}
 
               {/* Verification History Timeline */}
               {Array.isArray(bd.verificationHistory) && bd.verificationHistory.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-gray-100">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Verification Timeline</span>
+                <div className="mt-4 pt-3 border-t border-neutral-100">
+                  <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block mb-2">Verification Timeline</span>
                   <div className="space-y-2">
                     {bd.verificationHistory.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded-lg border border-gray-100">
-                        <span className="font-semibold uppercase tracking-wider text-gray-600">{item.status}</span>
-                        <span className="text-gray-400">{new Date(item.timestamp).toLocaleString()}</span>
-                        <span className="text-gray-500 italic">{item.reason || 'No remarks'}</span>
+                      <div key={idx} className="flex items-center justify-between text-xs bg-neutral-50 p-2.5 rounded-lg border border-neutral-200/60">
+                        <span className="font-semibold uppercase tracking-wider text-neutral-700">{item.status}</span>
+                        <span className="text-neutral-400">{new Date(item.timestamp).toLocaleString()}</span>
+                        <span className="text-neutral-500 italic">{item.reason || 'No remarks'}</span>
                       </div>
                     ))}
                   </div>
@@ -956,49 +960,49 @@ const ProviderModal = ({
           )}
 
           {/* Legal Contracts & Signatures */}
-          <SectionCard title="Legal Contracts & Signatures" icon={FileText} iconColor="text-teal-600">
+          <SectionCard title="Legal Contracts & Signatures" icon={FileText} iconColor="text-primary">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+              <div className="border border-neutral-200/80 p-4 rounded-xl bg-neutral-50/50 flex flex-col justify-between">
                 <div>
-                  <h4 className="font-bold text-gray-700 text-sm mb-1">Provider Service Agreement</h4>
-                  <p className="text-xs text-gray-500 mb-3">Legal contract containing self declaration and digital signature logs.</p>
+                  <h4 className="font-bold text-neutral-800 text-xs sm:text-sm mb-1">Provider Service Agreement</h4>
+                  <p className="text-xs text-neutral-500 mb-3 leading-relaxed">Legal contract containing self declaration and digital signature logs.</p>
                 </div>
                 {provider.legalAcceptance?.agreementAccepted ? (
                   <button
                     type="button"
                     onClick={() => handleDownloadPDF(provider._id, 'agreement')}
-                    className="text-center py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium text-xs block w-full"
+                    className="text-center py-2 px-3 bg-neutral-800 hover:bg-neutral-900 text-white rounded-lg transition-all duration-200 font-semibold text-xs block w-full shadow-2xs"
                   >
                     Download/View Agreement PDF
                   </button>
                 ) : (
-                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                  <button disabled className="py-2 px-3 bg-neutral-100 text-neutral-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
                     Agreement Pending Acceptance
                   </button>
                 )}
               </div>
-              <div className="border border-teal-100 p-3.5 rounded-lg bg-teal-50/30 flex flex-col justify-between">
+              <div className="border border-neutral-200/80 p-4 rounded-xl bg-neutral-50/50 flex flex-col justify-between">
                 <div>
-                  <h4 className="font-bold text-gray-700 text-sm mb-1">Official Approval Letter</h4>
-                  <p className="text-xs text-gray-500 mb-3">Registration confirmation letter with approved service details.</p>
+                  <h4 className="font-bold text-neutral-800 text-xs sm:text-sm mb-1">Official Approval Letter</h4>
+                  <p className="text-xs text-neutral-500 mb-3 leading-relaxed">Registration confirmation letter with approved service details.</p>
                 </div>
                 {provider.approved ? (
                   <button
                     type="button"
                     onClick={() => handleDownloadPDF(provider._id, 'approval')}
-                    className="text-center py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium text-xs block w-full"
+                    className="text-center py-2 px-3 bg-neutral-800 hover:bg-neutral-900 text-white rounded-lg transition-all duration-200 font-semibold text-xs block w-full shadow-2xs"
                   >
                     Download/View Approval Letter
                   </button>
                 ) : (
-                  <button disabled className="py-2 bg-gray-100 text-gray-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
+                  <button disabled className="py-2 px-3 bg-neutral-100 text-neutral-400 rounded-lg font-medium text-xs cursor-not-allowed w-full">
                     Approval Letter Pending Activation
                   </button>
                 )}
               </div>
             </div>
             {provider.legalAcceptance?.acceptedAt && (
-              <div className="mt-4 pt-3 border-t border-teal-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-gray-500 font-medium">
+              <div className="mt-4 pt-3 border-t border-neutral-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-neutral-500 font-medium">
                 <div>Accepted At: {new Date(provider.legalAcceptance.acceptedAt).toLocaleString()}</div>
                 <div>Version: {provider.legalAcceptance.version}</div>
                 <div>IP: {provider.legalAcceptance.ipAddress || 'N/A'}</div>
@@ -1013,19 +1017,19 @@ const ProviderModal = ({
           </SectionCard>
 
           {/* Account Controls */}
-          <SectionCard title="Account Controls" icon={Shield} iconColor="text-slate-600" bgColor="bg-slate-50">
+          <SectionCard title="Account Controls" icon={Shield} iconColor="text-neutral-600" bgColor="bg-neutral-50/60">
             {provider.deletionRequested && (
-              <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-2">
+              <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-extrabold text-red-800 text-xs">
-                    <AlertCircle size={15} className="text-red-600" />
+                  <div className="flex items-center gap-1.5 font-bold text-rose-800 text-xs">
+                    <AlertCircle size={15} className="text-rose-600" />
                     <span>Provider Requested Account Deletion</span>
                   </div>
-                  <span className="text-[10px] text-red-600 font-bold">
+                  <span className="text-[10px] text-rose-600 font-bold">
                     Requested: {provider.deletionRequestedAt ? formatDate(provider.deletionRequestedAt) : 'Recently'}
                   </span>
                 </div>
-                <p className="text-xs text-red-700 font-medium">
+                <p className="text-xs text-rose-700 font-medium">
                   Reason: <span className="italic">{provider.deletionReason || 'Provider requested account deletion'}</span>
                 </p>
                 <div className="flex items-center gap-2 pt-1">
@@ -1033,7 +1037,7 @@ const ProviderModal = ({
                     type="button"
                     onClick={() => handlePermanentDelete(provider._id)}
                     disabled={processingAction}
-                    className="py-2 px-3 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                    className="py-2 px-3 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 disabled:opacity-50"
                   >
                     <X size={13} />
                     {processingAction === 'permanent_delete' ? 'Deleting…' : 'Approve & Permanently Delete Account'}
@@ -1042,7 +1046,7 @@ const ProviderModal = ({
                     type="button"
                     onClick={() => handleRejectDeletion(provider._id)}
                     disabled={processingAction}
-                    className="py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                    className="py-2 px-3 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 disabled:opacity-50"
                   >
                     <CheckCircle size={13} />
                     {processingAction === 'reject_deletion' ? 'Rejecting…' : 'Reject Deletion Request'}
@@ -1051,24 +1055,24 @@ const ProviderModal = ({
               </div>
             )}
 
-            <div className="mb-3 p-3 bg-slate-100/70 rounded-xl border border-slate-200/60 text-xs text-slate-600 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px] uppercase tracking-wider">
-                <Info size={13} className="text-slate-500" />
+            <div className="mb-3 p-3 bg-white rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-neutral-800 text-[11px] uppercase tracking-wider">
+                <Info size={13} className="text-neutral-500" />
                 <span>Actions Guide</span>
               </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
+              <p className="text-[11px] text-neutral-500 leading-relaxed">
                 <span className="font-semibold text-amber-700">Restrict:</span> Disables new booking assignments. &bull; <span className="font-semibold text-rose-700">Suspend:</span> Restricts provider login operations. &bull; <span className="font-semibold text-red-700">Block:</span> Full account termination & logout.
               </p>
             </div>
 
             <div className="mb-3">
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Remarks / Justification <span className="text-red-500 font-normal">(Required for Restrict, Suspend)</span>
+              <label className="block text-xs font-bold text-neutral-700 mb-1">
+                Remarks / Justification <span className="text-rose-500 font-normal">(Required for Restrict, Suspend)</span>
               </label>
               <textarea
                 value={approvalRemarks}
                 onChange={(e) => setApprovalRemarks(e.target.value)}
-                className="w-full p-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white resize-none shadow-2xs font-medium"
+                className="w-full p-2.5 text-xs sm:text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white resize-none shadow-2xs font-medium"
                 placeholder="Enter justification..."
                 rows="2"
               />
@@ -1079,7 +1083,7 @@ const ProviderModal = ({
                 <button
                   onClick={() => handleStatusUpdate('active')}
                   disabled={processingAction}
-                  className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <CheckCircle size={14} />
                   {processingAction === 'active' ? 'Unblocking…' : 'Unblock Account'}
@@ -1091,7 +1095,7 @@ const ProviderModal = ({
                     <button
                       onClick={() => handleStatusUpdate('active')}
                       disabled={processingAction}
-                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
                       <CheckCircle size={14} />
                       {processingAction === 'active' ? 'Activating…' : 'Remove Restriction'}
@@ -1104,7 +1108,7 @@ const ProviderModal = ({
                         setShowDurationInput(true);
                       }}
                       disabled={processingAction}
-                      className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
                       <AlertTriangle size={14} />
                       Restrict Account
@@ -1116,7 +1120,7 @@ const ProviderModal = ({
                     <button
                       onClick={() => handleStatusUpdate('active')}
                       disabled={processingAction}
-                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
                       <CheckCircle size={14} />
                       {processingAction === 'active' ? 'Activating…' : 'Unsuspend Account'}
@@ -1125,7 +1129,7 @@ const ProviderModal = ({
                     <button
                       onClick={() => handleStatusUpdate('suspended')}
                       disabled={processingAction}
-                      className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
                       <AlertCircle size={14} />
                       {processingAction === 'suspended' ? 'Suspending…' : 'Suspend Account'}
@@ -1140,7 +1144,7 @@ const ProviderModal = ({
                       setShowDurationInput(true);
                     }}
                     disabled={processingAction}
-                    className="py-2.5 px-4 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    className="py-2.5 px-4 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-xl transition-all shadow-2xs active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     <X size={14} />
                     Block Account
@@ -1152,10 +1156,10 @@ const ProviderModal = ({
         </div>
 
         {/* ── Sticky Footer ── */}
-        <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex justify-end">
+        <div className="flex-shrink-0 px-6 py-3.5 border-t border-neutral-200/80 bg-neutral-50/50 flex justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            className="px-5 py-2 text-xs font-semibold text-neutral-700 bg-white border border-neutral-300 rounded-xl hover:bg-neutral-100 transition-colors shadow-2xs"
           >
             Close
           </button>

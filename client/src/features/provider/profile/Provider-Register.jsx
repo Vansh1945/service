@@ -16,6 +16,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
 import useCategory from '../../../hooks/useCategory';
+import { useAuth } from '../../../context/auth';
 import * as ProviderService from '../../../services/ProviderService';
 import { formatTime, compressImage, buildStreetAddress, smartAddressBuilder } from '../../../utils/format';
 
@@ -283,34 +284,17 @@ const SelfieCaptureField = ({ value, onChange, onRemove, progress }) => {
             <User className="w-7 h-7 text-primary" />
           </div>
           <h4 className="text-xs font-bold text-secondary mb-1">Live Selfie Verification</h4>
-          <p className="text-[10px] text-gray-400 mb-4 max-w-xs mx-auto">Please capture a clear photo of your face, or upload a portrait photo from your device.</p>
+          <p className="text-[10px] text-gray-400 mb-4 max-w-xs mx-auto">Please capture a clear photo of your face directly using your camera.</p>
 
-          <div className="flex flex-col sm:flex-row gap-2 justify-center items-center max-w-xs mx-auto">
+          <div className="flex justify-center items-center max-w-xs mx-auto">
             <button
               type="button"
               onClick={startCamera}
-              className="w-full sm:w-auto px-4 py-2 bg-primary text-background rounded-lg text-xs font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5"
+              className="w-full sm:w-auto px-6 py-2.5 bg-primary text-background rounded-lg text-xs font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-xs"
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-4 h-4" />
               Take Live Photo
             </button>
-
-            <div className="relative w-full sm:w-auto">
-              <input
-                type="file"
-                id="liveSelfie"
-                name="liveSelfie"
-                onChange={(e) => onChange(e.target.files[0])}
-                accept="image/*"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              />
-              <button
-                type="button"
-                className="w-full sm:w-auto px-4 py-2 bg-gray-100 text-secondary rounded-lg text-xs font-bold hover:bg-gray-200 transition-all"
-              >
-                Upload from Files
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -466,7 +450,7 @@ const ProgressIndicator = ({ step }) => (
 
 const ProviderRegistration = () => {
   const navigate = useNavigate();
-  const { API, loginUser, systemSettings = {} } = useAuth();
+  const { API, loginUser, logoutUser, systemSettings = {}, user, isAuthenticated, role } = useAuth();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -793,9 +777,10 @@ const ProviderRegistration = () => {
       }
     })();
     toast.promise(promise, {
+      loading: 'Sending OTP...',
       pending: 'Sending OTP...',
-      success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 },
+      success: (res) => (typeof res === 'string' ? res : res?.data || res?.message || 'OTP sent successfully! Check your email.'),
+      error: (err) => (typeof err === 'string' ? err : err?.message || 'Failed to send OTP'),
     });
   };
 
@@ -828,9 +813,10 @@ const ProviderRegistration = () => {
       }
     })();
     toast.promise(promise, {
+      loading: 'Registering...',
       pending: 'Registering...',
-      success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 },
+      success: (res) => (typeof res === 'string' ? res : res?.data || res?.message || 'Registration successful!'),
+      error: (err) => (typeof err === 'string' ? err : err?.message || 'Registration failed'),
     });
   };
 
@@ -857,9 +843,10 @@ const ProviderRegistration = () => {
       }
     })();
     toast.promise(promise, {
+      loading: 'Logging in...',
       pending: 'Logging in...',
-      success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 },
+      success: (res) => (typeof res === 'string' ? res : res?.data || res?.message || 'Login successful!'),
+      error: (err) => (typeof err === 'string' ? err : err?.message || 'Login failed'),
     });
   };
 
@@ -884,36 +871,22 @@ const ProviderRegistration = () => {
           throw new Error('You must accept all declarations/agreements and sign before submitting');
         }
 
-        // Compress registration files on the client side before packaging
-        let profilePicFile = formData.profilePic;
-        if (profilePicFile) {
-          profilePicFile = await compressImage(profilePicFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
-        }
-
-        let aadhaarFrontFile = formData.aadhaarFront;
-        if (aadhaarFrontFile) {
-          aadhaarFrontFile = await compressImage(aadhaarFrontFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-        }
-
-        let aadhaarBackFile = formData.aadhaarBack;
-        if (aadhaarBackFile) {
-          aadhaarBackFile = await compressImage(aadhaarBackFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-        }
-
-        let panCardFile = formData.panCard;
-        if (panCardFile) {
-          panCardFile = await compressImage(panCardFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-        }
-
-        let liveSelfieFile = formData.liveSelfie;
-        if (liveSelfieFile && liveSelfieFile instanceof File) {
-          liveSelfieFile = await compressImage(liveSelfieFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-        }
-
-        let passbookImageFile = formData.passbookImage;
-        if (passbookImageFile) {
-          passbookImageFile = await compressImage(passbookImageFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-        }
+        // Compress registration files in parallel using Promise.all
+        const [
+          profilePicFile,
+          aadhaarFrontFile,
+          aadhaarBackFile,
+          panCardFile,
+          liveSelfieFile,
+          passbookImageFile
+        ] = await Promise.all([
+          formData.profilePic ? compressImage(formData.profilePic, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 }) : null,
+          formData.aadhaarFront ? compressImage(formData.aadhaarFront, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+          formData.aadhaarBack ? compressImage(formData.aadhaarBack, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+          formData.panCard ? compressImage(formData.panCard, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+          (formData.liveSelfie && formData.liveSelfie instanceof File) ? compressImage(formData.liveSelfie, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : formData.liveSelfie,
+          formData.passbookImage ? compressImage(formData.passbookImage, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null
+        ]);
 
         const formDataWithServices = {
           ...formData,
@@ -957,15 +930,9 @@ const ProviderRegistration = () => {
 
         const response = await ProviderService.completeProfile(fd, config);
 
-        // Clear all auth cookies before navigating to prevent stale auth state
-        setCookie('token', '', -1);
-        setCookie('role', '', -1);
-        setCookie('user', '', -1);
-        setCookie('refreshToken', '', -1);
-
-        // Navigate to login after a short delay so the success toast is visible
+        // Redirect provider directly to profile payout settings to add bank details / UPI ID
         setTimeout(() => {
-          navigate('/login', { replace: true });
+          navigate('/provider/profile', { replace: true, state: { tab: 'payout' } });
         }, 1500);
 
         return 'Your verification documents have been submitted successfully. Your provider account is waiting for approval.';
@@ -976,9 +943,10 @@ const ProviderRegistration = () => {
       }
     })();
     toast.promise(promise, {
+      loading: 'Completing profile...',
       pending: 'Completing profile...',
-      success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 2000 },
+      success: (res) => (typeof res === 'string' ? res : res?.data || res?.message || 'Verification documents submitted successfully!'),
+      error: (err) => (typeof err === 'string' ? err : err?.message || 'Profile completion failed'),
     });
   };
 
@@ -1007,9 +975,10 @@ const ProviderRegistration = () => {
       }
     })();
     toast.promise(promise, {
+      loading: 'Resending OTP...',
       pending: 'Resending OTP...',
-      success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 },
+      success: (res) => (typeof res === 'string' ? res : res?.data || res?.message || 'New OTP sent successfully!'),
+      error: (err) => (typeof err === 'string' ? err : err?.message || 'Resend OTP failed'),
     });
   };
 
@@ -1530,8 +1499,8 @@ const ProviderRegistration = () => {
                   type="button"
                   onClick={() => {
                     const c = formData.currentAddress;
-                    if (!c.houseNumber || (!c.street && !c.road) || !c.landmark || (!c.villageCity && !c.city) || !c.state || !c.pincode) {
-                      toast.error('All Current Address fields are required');
+                    if (!c.houseNumber || (!c.street && !c.road) || (!c.villageCity && !c.city) || !c.state || !c.pincode) {
+                      toast.error('All required Current Address fields must be filled');
                       return;
                     }
                     if (!/^\d{6}$/.test(c.pincode)) {
@@ -1632,8 +1601,8 @@ const ProviderRegistration = () => {
                   type="button"
                   onClick={() => {
                     const p = formData.permanentAddress;
-                    if (!p.houseNumber || (!p.street && !p.road) || !p.landmark || (!p.villageCity && !p.city) || !p.state || !p.pincode) {
-                      toast.error('All Permanent Address fields are required');
+                    if (!p.houseNumber || (!p.street && !p.road) || (!p.villageCity && !p.city) || !p.state || !p.pincode) {
+                      toast.error('All required Permanent Address fields must be filled');
                       return;
                     }
                     if (!/^\d{6}$/.test(p.pincode)) {

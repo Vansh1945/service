@@ -5,7 +5,7 @@ import { useSocket } from '../../../socket/SocketContext';
 import * as NotificationService from '../../../services/NotificationService';
 import {
     FiBell, FiSend, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
-    FiLoader, FiMessageSquare, FiTarget, FiClock, FiSmile, FiLayers, FiImage
+    FiLoader, FiMessageSquare, FiTarget, FiClock, FiSmile, FiLayers, FiImage, FiUploadCloud
 } from 'react-icons/fi';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -33,6 +33,7 @@ const ComposeNotification = () => {
 
     const [form, setForm] = useState({
         audience: 'all',
+        providerStatus: 'all', // 'all' | 'approved' | 'pending'
         title: '',
         body: '',
         url: '/',
@@ -53,6 +54,35 @@ const ComposeNotification = () => {
     const [logoLoaded, setLogoLoaded] = useState(false);
     const [estimatedCount, setEstimatedCount] = useState(null);
     const [estimating, setEstimating] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+
+    const handleImageFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image size must be less than 5MB');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        setUploadingImage(true);
+        try {
+            const res = await NotificationService.uploadNotificationImage(formData);
+            if (res.data?.success && res.data?.url) {
+                setForm(prev => ({ ...prev, imageUrl: res.data.url }));
+                toast.success('Image uploaded successfully!');
+            } else {
+                toast.error(res.data?.message || 'Upload failed');
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Upload failed');
+        } finally {
+            setUploadingImage(false);
+        }
+    };
 
     const fetchZones = async () => {
         try {
@@ -137,6 +167,7 @@ const ComposeNotification = () => {
         try {
             const res = await NotificationService.sendBroadcast({
                 audience: form.audience,
+                providerStatus: form.audience === 'provider' ? form.providerStatus : 'all',
                 title: form.title.trim(),
                 body: form.body.trim(),
                 url: form.url.trim() || '/',
@@ -250,39 +281,60 @@ const ComposeNotification = () => {
 
                         {/* Audience Selection */}
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                 <FiTarget className="text-primary" /> Target Audience *
                             </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 {AUDIENCE_OPTIONS.map(opt => (
-                                    <label
+                                    <button
                                         key={opt.value}
-                                        className={`relative flex flex-col p-4 cursor-pointer rounded-xl border-2 transition-all duration-200 ${form.audience === opt.value
-                                            ? 'border-primary bg-primary/5 shadow-sm'
-                                            : 'border-gray-200 hover:border-primary/20 bg-gray-50'
+                                        type="button"
+                                        onClick={() => setForm(prev => ({ ...prev, audience: opt.value }))}
+                                        className={`py-2.5 px-3 rounded-xl border text-left transition-all duration-200 flex items-center gap-2.5 ${form.audience === opt.value
+                                            ? 'border-primary bg-primary/10 text-primary shadow-xs ring-1 ring-primary/30'
+                                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                             }`}
                                     >
-                                        <input
-                                            type="radio"
-                                            name="audience"
-                                            value={opt.value}
-                                            checked={form.audience === opt.value}
-                                            onChange={handleChange}
-                                            className="sr-only"
-                                        />
-                                        <div className="text-2xl mb-2">{opt.icon}</div>
-                                        <span className={`font-bold text-sm ${form.audience === opt.value ? 'text-primary' : 'text-gray-800'}`}>
-                                            {opt.label}
-                                        </span>
-                                        <span className="text-xs text-gray-500 mt-1">{opt.desc}</span>
-                                        {form.audience === opt.value && (
-                                            <div className="absolute top-3 right-3 text-primary">
-                                                <FiCheckCircle size={18} />
+                                        <span className="text-lg shrink-0">{opt.icon}</span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold text-xs truncate">{opt.label}</span>
+                                                {form.audience === opt.value && <FiCheckCircle size={14} className="text-primary shrink-0 ml-1" />}
                                             </div>
-                                        )}
-                                    </label>
+                                        </div>
+                                    </button>
                                 ))}
                             </div>
+
+                            {form.audience === 'provider' && (
+                                <div className="mt-3 p-3 bg-emerald-50/50 rounded-xl border border-emerald-200/60 animate-fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="shrink-0">
+                                        <span className="text-xs font-bold text-emerald-900 block">Filter Provider Status</span>
+                                        <span className="text-[10px] text-emerald-700 font-medium">Target specific provider groups</span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto">
+                                        {[
+                                            { value: 'all', label: 'All Providers', icon: '👥' },
+                                            { value: 'approved', label: 'Approved', icon: '✅' },
+                                            { value: 'pending', label: 'Pending', icon: '⏳' }
+                                        ].map(opt => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setForm(prev => ({ ...prev, providerStatus: opt.value }))}
+                                                className={`py-1.5 px-3 text-xs font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
+                                                    form.providerStatus === opt.value
+                                                        ? 'bg-primary text-white border-primary shadow-xs'
+                                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span className="text-xs">{opt.icon}</span>
+                                                <span>{opt.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Priority Selector */}
@@ -374,19 +426,42 @@ const ComposeNotification = () => {
                                 )}
                             </div>
 
-                            {/* Image Url */}
+                            {/* Notification Image File Upload */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-755 mb-1.5 flex items-center gap-2">
-                                    <FiImage className="text-gray-400" /> Notification Image URL (Optional)
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <FiImage className="text-primary" /> Notification Image (Optional)
                                 </label>
-                                <input
-                                    type="url"
-                                    name="imageUrl"
-                                    value={form.imageUrl}
-                                    onChange={handleChange}
-                                    placeholder="https://example.com/image.png"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono text-xs transition-all"
-                                />
+
+                                {form.imageUrl ? (
+                                    <div className="flex items-center justify-between gap-3 p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-xl max-w-sm animate-fade-in">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <img src={form.imageUrl} alt="Uploaded notification preview" className="w-10 h-10 object-cover rounded-lg border border-emerald-200 shrink-0" />
+                                            <div className="min-w-0">
+                                                <span className="text-xs font-bold text-emerald-900 block truncate">Image Attached</span>
+                                                <span className="text-[10px] text-emerald-700 font-medium flex items-center gap-1"><FiCheckCircle size={11} /> Ready to send</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm(prev => ({ ...prev, imageUrl: '' }))}
+                                            className="px-2.5 py-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all shrink-0"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label className={`inline-flex items-center gap-2 px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl font-bold text-xs cursor-pointer transition-all ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                        {uploadingImage ? <FiLoader className="animate-spin" size={15} /> : <FiUploadCloud size={15} />}
+                                        <span>{uploadingImage ? 'Uploading Image...' : 'Upload Image File'}</span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageFileUpload}
+                                            disabled={uploadingImage}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                )}
                             </div>
 
                             {/* CTA Button Text */}

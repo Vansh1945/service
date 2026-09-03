@@ -263,6 +263,59 @@ const startCronJobs = () => {
             } catch (abandonedErr) {
                 console.error('[CronScheduler] Error in abandoned mixed checkout cron rollback:', abandonedErr);
             }
+
+            // 7. 12-Hour Automated Provider Onboarding & Bank Account FCM Reminder Engine
+            try {
+                const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
+                // Find providers registered >= 12 hours ago who haven't completed profile OR are missing bank details
+                const providersNeedingReminder = await Provider.find({
+                    isDeleted: { $ne: true },
+                    $or: [
+                        { profileComplete: false },
+                        { 'bankDetails.accountNo': { $in: [null, '', undefined] } }
+                    ],
+                    $and: [
+                        {
+                            $or: [
+                                { registrationDate: { $lte: twelveHoursAgo } },
+                                { createdAt: { $lte: twelveHoursAgo } }
+                            ]
+                        },
+                        {
+                            $or: [
+                                { lastReminderSentAt: { $exists: false } },
+                                { lastReminderSentAt: null },
+                                { lastReminderSentAt: { $lte: twelveHoursAgo } }
+                            ]
+                        }
+                    ]
+                });
+
+                if (providersNeedingReminder.length > 0) {
+                    console.log(`[CronScheduler] Found ${providersNeedingReminder.length} provider(s) needing 12-hour FCM onboarding/bank reminders.`);
+
+                    const { triggerEventNotification } = require('../../features/notification/notification-helper');
+
+                    for (const p of providersNeedingReminder) {
+                        const eventId = (!p.profileComplete) ? 'provider_incomplete_reminder' : 'provider_missing_bank_reminder';
+
+                        // Dynamically fetch template from DB & dispatch notification + FCM push
+                        await triggerEventNotification(eventId, {
+                            name: p.name || 'Provider',
+                            email: p.email || '',
+                            phone: p.phone || ''
+                        }, p._id);
+
+                        // Update lastReminderSentAt timestamp
+                        p.lastReminderSentAt = new Date();
+                        await p.save();
+                        console.log(`[CronScheduler] 12h Dynamic FCM Reminder sent to provider ${p.name} (Event: ${eventId})`);
+                    }
+                }
+            } catch (reminderErr) {
+                console.error('[CronScheduler] Error in 12h Provider Reminder engine:', reminderErr);
+            }
         } catch (error) {
             console.error('[CronScheduler] Error in cron job:', error);
         }

@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
     FiMenu, FiHome, FiDollarSign, FiMessageSquare, FiUser, FiChevronDown,
     FiLogOut, FiCheckCircle, FiActivity, FiHeadphones, FiVolumeX, FiAward,
-    FiCalendar, FiChevronRight, FiArrowLeft, FiFileText, FiSettings, FiCreditCard
+    FiCalendar, FiChevronRight, FiArrowLeft, FiFileText, FiSettings, FiCreditCard, FiAlertCircle
 } from 'react-icons/fi';
 import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
@@ -38,8 +38,13 @@ const ProviderLayout = () => {
     const avatarRef = useRef(null);
 
     useEffect(() => {
-        if (user && typeof user.isOnline === 'boolean') {
-            setIsOnline(user.isOnline);
+        if (user) {
+            const canGoOnline = user.approved !== false && user.testPassed !== false;
+            if (!canGoOnline) {
+                setIsOnline(false);
+            } else if (typeof user.isOnline === 'boolean') {
+                setIsOnline(user.isOnline);
+            }
         }
     }, [user]);
 
@@ -116,6 +121,15 @@ const ProviderLayout = () => {
     }, [isOnline, activeBookingId, socket, isConnected]);
 
     const toggleOnlineStatus = async () => {
+        if (user?.approved === false) {
+            toast.error('Account Pending Verification! Admin approval is required before going online.');
+            return;
+        }
+        if (user?.testPassed === false) {
+            toast.error('Qualification Test Required! You must pass the skill test before going online.');
+            return;
+        }
+
         const prevState = isOnline;
         const nextState = !isOnline;
         setIsOnline(nextState);
@@ -168,6 +182,10 @@ const ProviderLayout = () => {
             { name: 'Profile Settings', path: '/provider/profile', icon: <FiUser className="w-5 h-5" /> }
         ];
 
+        if (user?.approved === false) {
+            return items;
+        }
+
         if (!user?.requireTest || testPassed) {
             items.push({ name: 'Job Calendar', path: '/provider/calendar', icon: <FiCalendar className="w-5 h-5" /> });
             items.push({ name: 'Refer Partners', path: '/provider/refer-providers', icon: <FiAward className="w-5 h-5" /> });
@@ -182,6 +200,11 @@ const ProviderLayout = () => {
     };
 
     const getDesktopNavItems = () => {
+        if (user?.approved === false) {
+            return [
+                { name: 'Profile Settings', path: '/provider/profile', icon: <FiUser className="w-5 h-5" /> }
+            ];
+        }
         const navItems = [
             { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" /> }
         ];
@@ -341,6 +364,29 @@ const ProviderLayout = () => {
             {/* Main Content */}
             <main className="min-h-[calc(100vh-80px)] pt-16 md:pt-20 pb-20 md:pb-6">
                 <div className="w-full pt-1 pb-4">
+                    {user?.approved === false && (
+                        <div className="max-w-7xl mx-auto px-4 mb-4">
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 shadow-xs">
+                                <div className="p-2 bg-amber-100 rounded-lg text-amber-700 shrink-0 mt-0.5">
+                                    <FiAlertCircle className="w-5 h-5" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <h4 className="text-sm font-bold text-amber-900">Account Pending Verification</h4>
+                                    <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                                        Your provider account is currently undergoing admin verification. Please complete adding your <strong>Bank Account Details & UPI ID</strong> under Payout Settings so you can receive direct earnings once approved!
+                                    </p>
+                                    <Link
+                                        to="/provider/profile"
+                                        state={{ tab: 'payout' }}
+                                        className="inline-flex items-center gap-1.5 mt-2.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+                                    >
+                                        <FiCreditCard className="w-4 h-4" />
+                                        <span>Add Bank Account & UPI ID</span>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     <Outlet />
                 </div>
             </main>

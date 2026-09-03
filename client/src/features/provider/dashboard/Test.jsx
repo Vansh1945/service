@@ -265,7 +265,7 @@ const MultiCategorySelect = React.memo(({ selectedCategories, onToggleCategory, 
 });
 
 const ProviderTestPage = () => {
-  const { token, API, showToast } = useAuth();
+  const { user, token, API, showToast } = useAuth();
 
   const [activeTab, setActiveTab] = useState('start');
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -472,21 +472,17 @@ const ProviderTestPage = () => {
   }, [showToast, fetchTestHistory]);
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const res = await TestService.getTestCategories();
-        const data = res.data;
-        if (data.success) {
-          setCategories(data.data.categories || []);
-          setCooldown(data.data.cooldown || null);
-        }
-      } catch (error) {
-        console.error('Fetch categories error:', error);
-        showToast(error.response?.data?.message || 'Failed to fetch categories', 'error');
+    TestService.getTestCategories().then(res => {
+      const cats = res.data?.data?.categories || [];
+      setCategories(cats);
+      setCooldown(res.data?.data?.cooldown || null);
+      if (cats.length) {
+        const svcs = (user?.services || []).map(s => String(s?._id || s));
+        const matched = cats.filter(c => svcs.includes(String(c._id)) || svcs.includes(c.name)).map(c => c._id);
+        setSelectedCategories(matched.length ? matched.slice(0, 3) : [cats[0]._id]);
       }
-    };
-    fetchCategories();
-  }, [showToast]);
+    }).catch(err => console.error('Fetch categories error:', err));
+  }, [user]);
 
   useEffect(() => {
     const attemptsUsed = testHistory.length;
@@ -734,9 +730,10 @@ const ProviderTestPage = () => {
 
               <div className="space-y-3">
                 {currentTest.questions[currentQuestionIndex].options.map((option, index) => (
-                  <label
+                  <div
                     key={index}
-                    className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${answers[currentTest.questions[currentQuestionIndex].questionId] === index
+                    onClick={() => handleAnswerSelect(currentTest.questions[currentQuestionIndex].questionId, index)}
+                    className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 select-none ${answers[currentTest.questions[currentQuestionIndex].questionId] === index
                       ? 'border-primary bg-primary/10 shadow-sm'
                       : 'border-gray-200/70 hover:border-primary/50 hover:bg-primary/5'
                       }`}
@@ -746,14 +743,14 @@ const ProviderTestPage = () => {
                       name={`question-${currentTest.questions[currentQuestionIndex].questionId}`}
                       value={index}
                       checked={answers[currentTest.questions[currentQuestionIndex].questionId] === index}
-                      onChange={() => handleAnswerSelect(currentTest.questions[currentQuestionIndex].questionId, index)}
-                      className="w-4 h-4 text-primary border-gray-300 focus:ring-primary mr-4"
+                      readOnly
+                      className="w-4 h-4 text-primary border-gray-300 focus:ring-primary mr-4 pointer-events-none"
                     />
-                    <span className="text-secondary flex-1">{option}</span>
+                    <span className="text-secondary flex-1 font-medium">{option}</span>
                     {answers[currentTest.questions[currentQuestionIndex].questionId] === index && (
-                      <CheckCircle className="w-5 h-5 text-primary ml-2" />
+                      <CheckCircle className="w-5 h-5 text-primary ml-2 shrink-0" />
                     )}
-                  </label>
+                  </div>
                 ))}
               </div>
             </div>

@@ -194,7 +194,7 @@ export const normalizeApiError = (error) => {
   } else if (status === 403) {
     code = 'HTTP_403';
     title = 'Access Denied';
-    message = 'You do not have permission to access this resource or perform this action.';
+    message = backendMessage || 'You do not have permission to access this resource or perform this action.';
     isForbidden = true;
   } else if (status === 404) {
     code = 'HTTP_404';
@@ -204,7 +204,7 @@ export const normalizeApiError = (error) => {
   } else if (status === 429) {
     code = 'HTTP_429';
     title = 'Too Many Requests';
-    message = 'You have sent too many requests in a short period. Please slow down and try again.';
+    message = backendMessage || 'You have sent too many requests in a short period. Please slow down and try again.';
     isRateLimited = true;
   } else if (status >= 500 && status <= 599) {
     code = `HTTP_${status}`;

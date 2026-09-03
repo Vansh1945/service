@@ -478,18 +478,16 @@ class ProviderService {
                     if (!isIfscValid) {
                         return res.status(400).json({
                             success: false,
-                            message: 'Invalid IFSC code. Validation failed.'
+                            message: 'Please enter a valid 11-character IFSC code (e.g. SBIN0001234).'
                         });
                     }
 
                     try {
-                        ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
-                        if (!ifscDetails) throw new Error('Details not found');
+                        const fetchPromise = require('ifsc').fetchDetails(cleanIfsc);
+                        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2000));
+                        ifscDetails = (await Promise.race([fetchPromise, timeoutPromise])) || { BANK: bankName || cleanIfsc };
                     } catch (err) {
-                        return res.status(400).json({
-                            success: false,
-                            message: 'Failed to fetch details for the provided IFSC code'
-                        });
+                        ifscDetails = { BANK: bankName || cleanIfsc };
                     }
                 }
 
@@ -980,7 +978,14 @@ class ProviderService {
                 if (providerReliabilityScore !== undefined) updates.providerReliabilityScore = parseFloat(providerReliabilityScore);
 
                 if (isOnline !== undefined) {
-                    updates.isOnline = isOnline === 'true' || isOnline === true;
+                    const wantOnline = isOnline === 'true' || isOnline === true;
+                    if (wantOnline && (currentProvider.approved === false || currentProvider.testPassed === false)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Account pending admin approval or skill test. Cannot go online.'
+                        });
+                    }
+                    updates.isOnline = wantOnline;
                     if (updates.isOnline) {
                         updates.notificationPreferences = {
                             ...currentProvider.notificationPreferences,
@@ -1204,7 +1209,7 @@ class ProviderService {
             }
 
             if (!updateType || updateType === 'bank' || req.body.upiId !== undefined || req.body.preferredMethod !== undefined) {
-                const { isSameBankDetails, isSameUPIDetails } = require('../../utils/bankComparison');
+                const { isSameBankDetails, isSameUPIDetails } = require('../../shared/utils/bankComparison');
                 const reqUpi = req.body.upiId !== undefined ? req.body.upiId.trim() : null;
                 const reqPref = req.body.preferredMethod;
 
@@ -1327,17 +1332,15 @@ class ProviderService {
                         if (!isIfscValid) {
                             return res.status(400).json({
                                 success: false,
-                                message: 'Invalid IFSC code. Validation failed.'
+                                message: 'Please enter a valid 11-character IFSC code (e.g. SBIN0001234).'
                             });
                         }
                         try {
-                            ifscDetails = await require('ifsc').fetchDetails(cleanIfsc);
-                            if (!ifscDetails) throw new Error('Details not found');
+                            const fetchPromise = require('ifsc').fetchDetails(cleanIfsc);
+                            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2000));
+                            ifscDetails = (await Promise.race([fetchPromise, timeoutPromise])) || { BANK: bankName || cleanIfsc };
                         } catch (err) {
-                            return res.status(400).json({
-                                success: false,
-                                message: 'Failed to fetch details for the provided IFSC code'
-                            });
+                            ifscDetails = { BANK: bankName || cleanIfsc };
                         }
                     }
 
@@ -1650,6 +1653,21 @@ class ProviderService {
                 } catch (pdfErr) {
                     console.error('Failed to regenerate PDFs during profile update:', pdfErr);
                 }
+            }
+
+            // Send notification to provider reminding them to verify/add bank details
+            try {
+                const { sendNotification } = require('../notification/notification-helper');
+                sendNotification(
+                    updatedProvider._id,
+                    'provider',
+                    'Add Bank Account & UPI Details 🏦',
+                    'Please make sure your Bank Account & UPI ID details are updated under Payout Settings so you can receive direct earnings once approved by Admin.',
+                    'system',
+                    updatedProvider._id
+                );
+            } catch (notifErr) {
+                console.error('Failed to send bank detail reminder notification:', notifErr);
             }
 
             res.status(200).json({

@@ -85,3 +85,9 @@ export const deleteTemplate = (id) => {
 export const getActiveEvents = () => {
     return axiosInstance.get("/notifications/active-events");
 };
+
+export const uploadNotificationImage = (formData) => {
+    return axiosInstance.post("/notifications/upload-image", formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+};

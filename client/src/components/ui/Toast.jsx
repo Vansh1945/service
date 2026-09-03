@@ -56,22 +56,48 @@ toast.update = (toastId, newOptions = {}) => {
 };
 
 toast.promise = async (promise, msgs = {}, options = {}) => {
-  const id = toast.loading(msgs.loading || 'Loading...', options);
+  const id = toast.loading(msgs.loading || msgs.pending || 'Loading...', options);
   try {
     const result = await promise;
+    let successMsg = 'Success!';
+    if (typeof msgs.success === 'function') {
+      successMsg = msgs.success(result) || (typeof result === 'string' ? result : 'Success!');
+    } else if (typeof msgs.success === 'string') {
+      successMsg = msgs.success;
+    } else if (msgs.success && typeof msgs.success.render === 'function') {
+      successMsg = msgs.success.render({ data: result }) || 'Success!';
+    } else if (typeof result === 'string') {
+      successMsg = result;
+    }
+
     toast.update(id, {
       type: 'success',
-      message: typeof msgs.success === 'function' ? msgs.success(result) : (msgs.success || 'Success!'),
-      autoClose: options.duration || 4000
+      message: successMsg,
+      autoClose: (msgs.success && typeof msgs.success.autoClose === 'number') ? msgs.success.autoClose : (options.duration || 4000)
     });
     return result;
   } catch (err) {
+    let errorMsg = 'An error occurred';
+    if (typeof msgs.error === 'function') {
+      errorMsg = msgs.error(err) || (typeof err === 'string' ? err : err?.message || 'An error occurred');
+    } else if (typeof msgs.error === 'string') {
+      errorMsg = msgs.error;
+    } else if (msgs.error && typeof msgs.error.render === 'function') {
+      errorMsg = msgs.error.render({ data: err }) || 'An error occurred';
+    } else if (typeof err === 'string') {
+      errorMsg = err;
+    } else if (err && typeof err.message === 'string') {
+      errorMsg = err.message;
+    }
+
     toast.update(id, {
       type: 'error',
-      message: typeof msgs.error === 'function' ? msgs.error(err) : (msgs.error || err.message || 'An error occurred'),
-      autoClose: options.duration || 5000
+      message: errorMsg,
+      autoClose: (msgs.error && typeof msgs.error.autoClose === 'number') ? msgs.error.autoClose : (options.duration || 5000)
     });
-    throw err;
+    if (options.rethrow) {
+      throw err;
+    }
   }
 };
 

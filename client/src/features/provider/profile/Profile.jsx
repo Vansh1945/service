@@ -282,36 +282,22 @@ const ProviderProfile = () => {
       const formData = new FormData();
       formData.append('updateType', updateType);
 
-      // Compress upload files if present before packaging into FormData
-      let profilePicFile = fileUploads.profilePic;
-      if (profilePicFile) {
-        profilePicFile = await compressImage(profilePicFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
-      }
-
-      let aadhaarFrontFile = fileUploads.aadhaarFront;
-      if (aadhaarFrontFile) {
-        aadhaarFrontFile = await compressImage(aadhaarFrontFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-      }
-
-      let aadhaarBackFile = fileUploads.aadhaarBack;
-      if (aadhaarBackFile) {
-        aadhaarBackFile = await compressImage(aadhaarBackFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-      }
-
-      let panCardFile = fileUploads.panCard;
-      if (panCardFile) {
-        panCardFile = await compressImage(panCardFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-      }
-
-      let liveSelfieFile = fileUploads.liveSelfie;
-      if (liveSelfieFile) {
-        liveSelfieFile = await compressImage(liveSelfieFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-      }
-
-      let passbookImageFile = fileUploads.passbookImage;
-      if (passbookImageFile) {
-        passbookImageFile = await compressImage(passbookImageFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
-      }
+      // Compress upload files in parallel using Promise.all
+      const [
+        profilePicFile,
+        aadhaarFrontFile,
+        aadhaarBackFile,
+        panCardFile,
+        liveSelfieFile,
+        passbookImageFile
+      ] = await Promise.all([
+        fileUploads.profilePic ? compressImage(fileUploads.profilePic, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 }) : null,
+        fileUploads.aadhaarFront ? compressImage(fileUploads.aadhaarFront, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+        fileUploads.aadhaarBack ? compressImage(fileUploads.aadhaarBack, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+        fileUploads.panCard ? compressImage(fileUploads.panCard, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+        fileUploads.liveSelfie ? compressImage(fileUploads.liveSelfie, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null,
+        fileUploads.passbookImage ? compressImage(fileUploads.passbookImage, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }) : null
+      ]);
 
       switch (updateType) {
         case 'basic':

@@ -30,92 +30,68 @@ const TermsAndConditions = () => {
   const sections = [
     {
       id: 'introduction',
-      title: 'Introduction',
+      title: '1. Platform Scope & Agreement',
       icon: <FileText className="w-5 h-5 text-primary" />,
       content: [
-        'We provide a platform to connect users with service providers for various home and professional services.',
-        'By using our platform, you agree to comply with these terms and conditions.'
+        `Welcome to ${companyName}. We connect customers with verified independent electrical and home service providers.`,
+        'By registering, booking, or using our platform, you agree to these Terms & Conditions.'
       ]
     },
     {
       id: 'responsibilities',
-      title: 'User Responsibilities',
+      title: '2. User & Customer Responsibilities',
       icon: <UserCheck className="w-5 h-5 text-primary" />,
       content: [
-        'Users must provide accurate, current, and complete information during the registration and service booking process.',
-        'Misuse of the platform, fraudulent activities, or providing false documentation is strictly prohibited and may lead to legal action.'
+        'Users must provide accurate contact details, service location, and clear description of required work.',
+        'Users agree to provide a safe, respectful working environment for service providers.',
+        'Bypassing the platform to hire providers directly offline is strictly prohibited.'
+      ]
+    },
+    {
+      id: 'provider-onboarding',
+      title: '3. Provider Verification & KYC Terms',
+      icon: <ShieldCheck className="w-5 h-5 text-primary" />,
+      content: [
+        'Providers must complete 4-step registration: OTP verification, Live Selfie, identity docs (Aadhaar/PAN), and bank details.',
+        'Only Admin-approved providers with complete profiles and verified bank details can accept bookings.',
+        'Submitting forged or stolen documents will result in permanent ban and legal action.'
       ]
     },
     {
       id: 'booking-payments',
-      title: 'Booking & Payments',
+      title: '4. Bookings, Pricing & Payouts',
       icon: <CreditCard className="w-5 h-5 text-primary" />,
       content: [
-        'Users can book services through the platform after agreeing to the estimated service charges.',
-        'Payment methods supported include Online (Credit/Debit Cards, UPI, Net Banking) and Pay after Service (where applicable).',
-        'The platform reserves the right to charge an advance fee or full payment before the service is initiated for specific high-value tasks.'
+        'Service prices are displayed before booking. Additional spare parts or work will be quoted before execution.',
+        'Payments can be made online via UPI/Card or Pay After Service.',
+        'Provider earnings are credited directly to their registered Bank Account / UPI ID after commission deduction.'
       ]
     },
     {
       id: 'cancellation',
-      title: 'Cancellation Policy',
+      title: '5. Cancellation & Rescheduling',
       icon: <CalendarX className="w-5 h-5 text-primary" />,
       content: [
-        'Users can cancel their booking before the service provider reaches the location.',
-        'Cancellations made after the provider has arrived or frequent last-minute cancellations may incur a convenience fee or penalty charges.'
-      ]
-    },
-    {
-      id: 'provider-responsibility',
-      title: 'Provider Responsibility & Zero Tolerance',
-      icon: <ShieldCheck className="w-5 h-5 text-primary" />,
-      content: [
-        'Service providers are strictly independent professionals and NOT employees, agents, or partners of the platform.',
-        'Providers are solely responsible for their actions, negligence, or misconduct. Under Indian law, they are personally liable for any civil damage or criminal offenses.',
-        'The platform has zero tolerance for theft, robbery, burglary, assault, physical violence, sexual harassment, property damage, fraud, or intimidation. Immediate police FIR filings and account termination will apply.'
+        'Free cancellation is available before provider dispatch.',
+        'Late cancellations after provider arrival may incur a minor travel convenience charge.'
       ]
     },
     {
       id: 'liability',
-      title: 'Platform Role & Limitation of Liability',
+      title: '6. Zero Tolerance & Liability Limitation',
       icon: <AlertTriangle className="w-5 h-5 text-primary" />,
       content: [
-        'The platform acts strictly as a matching marketplace and does not directly employ, direct, or encourage any illegal acts or negligent service.',
-        'We do not guarantee the work quality or safety of independent providers. To the maximum extent permitted by law, platform liability is strictly limited to the platform booking fees collected.'
+        'Zero tolerance for theft, violence, property damage, or harassment. Accounts will be banned and reported to police.',
+        'The platform acts as a technology marketplace. Independent providers are responsible for executing quality work.'
       ]
     },
     {
       id: 'suspension',
-      title: 'Immediate Ban & Payout Hold',
+      title: '7. Account Termination & Law Disputes',
       icon: <UserMinus className="w-5 h-5 text-primary" />,
       content: [
-        'Accounts will be suspended or permanently banned instantly for complaints of misbehavior, fraud, or platform bypass (offline service bookings).',
-        'We reserve the right to put payouts on hold during active safety investigations and will share all device logs, location data, and chats with police authorities.'
-      ]
-    },
-    {
-      id: 'indemnification',
-      title: 'Indemnification Warning',
-      icon: <ShieldCheck className="w-5 h-5 text-primary" />,
-      content: [
-        'You agree to fully defend, indemnify, and hold harmless the platform and its officers from any claims, losses, or legal liabilities arising from your misconduct, breach of these terms, or negligence.'
-      ]
-    },
-    {
-      id: 'disputes',
-      title: 'Governing Law & Legal Disputes',
-      icon: <FileText className="w-5 h-5 text-primary" />,
-      content: [
-        'These Terms and Conditions are governed by Indian laws. Any legal disputes or claims shall be resolved exclusively within local jurisdiction courts.'
-      ]
-    },
-    {
-      id: 'changes',
-      title: 'Changes to Terms',
-      icon: <RefreshCw className="w-5 h-5 text-primary" />,
-      content: [
-        'We reserve the right to update these terms and conditions at any time without prior specific notice.',
-        'Users will be notified of major changes through the platform or via email. Continued use of the platform after changes constitutes acceptance.'
+        'We reserve the right to suspend or terminate accounts violating safety guidelines, forging KYC, or bypassing payments.',
+        'These terms are governed by Indian law and local jurisdiction courts.'
       ]
     }
   ];

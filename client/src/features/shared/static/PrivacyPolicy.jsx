@@ -29,69 +29,68 @@ const PrivacyPolicy = () => {
   const sections = [
     {
       id: "info-collect",
-      title: "Information We Collect & Store",
+      title: "Information We Collect",
       icon: <Database className="w-5 h-5 text-primary" />,
       content: [
-        "Personal details: Name, active email, verified phone number, and location history.",
-        "Provider verification files: Encrypted files of identity documents (PAN, Aadhaar cards), bank account credentials (for automated payouts), and verification selfies.",
-        "Device and activity data: IP address, browser type, device logs, and transaction details to secure profiles."
+        "Customer & Provider Data: Name, mobile number (OTP verified), email address, and service delivery addresses.",
+        "KYC & Verification Docs: Live camera selfie, Aadhaar card, PAN card, and bank account/UPI details for payouts.",
+        "Location & Device Logs: Real-time GPS location during active service bookings, device IDs, and IP logs."
       ]
     },
     {
       id: "data-use",
-      title: "How We Use Your Data",
+      title: "How We Use Your Information",
       icon: <Eye className="w-5 h-5 text-primary" />,
       content: [
-        "To process and manage your service bookings and live-track active providers.",
-        "To perform strict background verification and security auditing.",
-        "To investigate and resolve complaints, disputes, safety incidents, and platform usage violations.",
-        "To process secure, fraud-free payments and payouts through verified gateways."
+        "To match customers with nearby verified service providers and enable live booking status updates.",
+        "To verify provider identity, perform KYC background checks, and process automated earnings payouts.",
+        "To send push notifications, SMS OTPs, and booking confirmations.",
+        "To detect fraud, prevent fake accounts, and resolve customer complaints or safety issues."
       ]
     },
     {
       id: "data-sharing",
-      title: "Data Sharing & Law Enforcement Disclosure",
+      title: "Data Sharing & Disclosure",
       icon: <Share2 className="w-5 h-5 text-primary" />,
       content: [
-        "We share verification data with designated background screening agencies.",
-        "We share payment details with payment processors (e.g. Razorpay) to complete bookings.",
-        "⚠️ CRITICAL: We will share your complete identity details, KYC files, coordinates, and contact records immediately with police and law enforcement authorities to investigate safety incidents, fraud, or criminal acts."
+        "Shared with service providers/customers strictly as needed to complete the booked service (Name, Phone, Address).",
+        "Processed securely via payment gateways (e.g. Razorpay) and cloud storage providers.",
+        "⚠️ Law Enforcement Compliance: KYC files, location logs, and contact details will be shared with police and legal authorities if required to investigate fraud or safety incidents."
       ]
     },
     {
       id: "data-security",
-      title: "Data Security & Fraud Control",
+      title: "Security & Encryption",
       icon: <Lock className="w-5 h-5 text-primary" />,
       content: [
-        "We implement modern end-to-end encryption protocols to secure files and details in transit and at rest.",
-        "We deploy robust monitoring and security tools to detect and block fake accounts, forged documents, and fraudulent activities."
+        "End-to-end encryption for stored identity documents and payment information.",
+        "Strict access controls: Only authorized admin personnel can review provider KYC documents."
       ]
     },
     {
       id: "cookies",
-      title: "Cookies",
+      title: "Cookies & Session Data",
       icon: <Cookie className="w-5 h-5 text-primary" />,
       content: [
-        "We use cookies to enhance your browsing experience and remember your preferences.",
-        "Users have the option to disable cookies through their browser settings, though some platform features may be affected."
+        "We use secure local storage and essential session cookies to keep you logged in and preserve booking states.",
+        "You can manage cookie settings in your web browser at any time."
       ]
     },
     {
       id: "user-rights",
-      title: "User Rights",
+      title: "User Rights & Data Control",
       icon: <UserCircle className="w-5 h-5 text-primary" />,
       content: [
-        "Users can request the deletion of their personal data from our systems.",
-        "Users have the right to update or correct their information at any time through their profile settings.",
-        "Users are free to delete their account if they no longer wish to use our services."
+        "You can update your profile, phone number, and address anytime from settings.",
+        "You have the right to request account deletion or data anonymization by contacting support."
       ]
     },
     {
       id: "contact",
-      title: "Contact Information",
+      title: "Contact & Privacy Support",
       icon: <Mail className="w-5 h-5 text-primary" />,
       content: [
-        "If you have any privacy-related concerns or questions, please reach out to us."
+        "For any privacy queries, data requests, or support, email us at support@rajelectricalservices.com."
       ]
     }
   ];

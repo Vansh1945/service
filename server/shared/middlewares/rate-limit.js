@@ -3,7 +3,7 @@ const rateLimit = require('express-rate-limit');
 // Generic friendly message structure
 const friendlyMessage = {
   success: false,
-  message: 'Too many requests. Please wait a moment and try again.'
+  message: 'Too many requests. Please wait 15 minutes and try again.'
 };
 
 // Rate limiter for Auth endpoints (Login, Reset Password, OTP, etc.)
@@ -17,11 +17,11 @@ const authLimiter = rateLimit({
 
 // Rate limiter for Signup endpoints
 const signupLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Limit each IP to 5 signup attempts per hour
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 signup attempts per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many signup attempts. Please try again after an hour.' }
+  message: { success: false, message: 'Too many signup attempts. Please try again after 15 minutes.' }
 });
 
 // Moderate rate limiter for Booking Creation
@@ -100,11 +100,11 @@ const webhookLimiter = rateLimit({
 
 // Rate limiter for Admin Registration
 const adminRegisterLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Limit each IP to 5 admin registration attempts per hour
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 admin registration attempts per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many admin registration attempts. Please try again after an hour.' }
+  message: { success: false, message: 'Too many admin registration attempts. Please try again after 15 minutes.' }
 });
 
 module.exports = {

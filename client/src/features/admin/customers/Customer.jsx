@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
 import SectionHeader from '../../../components/ui/SectionHeader';
 import Avatar from '../../../components/ui/Avatar';
+import Table from '../../../components/ui/Table';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import { useAuth } from '../../../context/auth';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
@@ -58,11 +59,29 @@ const AdminCustomersDashboard = () => {
         title: ''
     });
     const [activeDropdownId, setActiveDropdownId] = useState(null);
+    const [dropdownPos, setDropdownPos] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchParams, setSearchParams] = useSearchParams();
     const urlSearch = searchParams.get('search') || '';
     const [searchTerm, setSearchTerm] = useState(urlSearch);
     const hasAutoOpenedRef = useRef(false);
+
+    const handleDropdownToggle = (e, customerId) => {
+        e.stopPropagation();
+        if (activeDropdownId === customerId) {
+            setActiveDropdownId(null);
+            setDropdownPos(null);
+        } else {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const opensUpward = spaceBelow < 180;
+            setDropdownPos({
+                top: opensUpward ? rect.top - 165 : rect.bottom + 4,
+                right: window.innerWidth - rect.right
+            });
+            setActiveDropdownId(customerId);
+        }
+    };
 
     // Edit form state
     const [editForm, setEditForm] = useState({
@@ -507,163 +526,166 @@ const AdminCustomersDashboard = () => {
                     ]}
                 />
 
-                {/* Loading State */}
-                {loading && (
-                    <div className="bg-white rounded-xl shadow-md p-8 mb-6 text-center">
-                        <div className=" rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Loading customers...</p>
-                    </div>
-                )}
-
                 {/* Customers Table */}
-                {!loading && (
-                    <div className="bg-white rounded-xl shadow-md overflow-hidden">
-                        {currentCustomers.length === 0 ? (
-                            <div className="text-center py-12 md:py-16">
-                                <Users className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
-                                <p className="text-gray-600 text-md md:text-lg">No customers found</p>
-                                <p className="text-gray-400 text-sm mt-1 md:mt-2">
-                                    {searchTerm || statusFilter !== 'all' || bookingFilter !== 'all'
-                                        ? 'Try adjusting your search or filters'
-                                        : 'No customers found'
-                                    }
-                                </p>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
-                                            <tr>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Booking</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Wallet</th>
-                                                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                            {currentCustomers.map((customer) => (
-                                                <tr key={customer._id} className="hover:bg-gray-50 transition-colors duration-200">
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        <div className="flex items-center">
-                                                            <Avatar src={customer.profilePicUrl} name={customer.name} size="md" />
-                                                            <div className="ml-4">
-                                                                <div className="text-sm font-medium text-secondary">{customer.name}</div>
-                                                                <div className="text-sm text-gray-500">
-                                                                    {formatDate(customer.createdAt)}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        <div className="text-sm text-gray-900">{customer.email}</div>
-                                                        <div className="text-sm text-gray-500">{customer.phone || 'N/A'}</div>
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        <div className="text-sm text-gray-900">{customer.address?.city || 'N/A'}</div>
-                                                        <div className="text-sm text-gray-500">{customer.address?.state || 'N/A'}</div>
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {customer.totalBookings || 0}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        {getFirstBookingBadge(customer.firstBookingUsed)}
-                                                    </td>
-
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        <div className="text-sm text-gray-900">
-                                                            {formatDate(customer.createdAt)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3">
-                                                        {getStatusBadge(customer)}
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3 font-bold text-teal-600">
-                                                        ₹{(customer.wallet?.availableBalance || 0).toLocaleString()}
-                                                    </td>
-                                                    <td className="px-4 md:px-6 py-3 relative">
-                                                        <div className="flex items-center justify-start">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setActiveDropdownId(activeDropdownId === customer._id ? null : customer._id);
-                                                                }}
-                                                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"
-                                                                title="Actions"
-                                                            >
-                                                                <MoreVertical className="w-4 h-4" />
-                                                            </button>
-
-                                                            {activeDropdownId === customer._id && (
-                                                                <>
-                                                                    <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownId(null)} />
-                                                                    <div className="absolute right-full mr-2 bottom-0 w-40 bg-white rounded-xl shadow-xl border border-gray-200/80 py-1.5 z-20 animate-in fade-in slide-in-from-right-1 duration-150 font-sans">
-                                                                        <button
-                                                                            onClick={() => { handleViewClick(customer); setActiveDropdownId(null); }}
-                                                                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                                                                        >
-                                                                            <Eye className="w-3.5 h-3.5 text-gray-400" /> View Details
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => { handleEditClick(customer); setActiveDropdownId(null); }}
-                                                                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                                                                        >
-                                                                            <Edit3 className="w-3.5 h-3.5 text-gray-400" /> Edit Profile
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => { handleToggleBlock(customer); setActiveDropdownId(null); }}
-                                                                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                                                                        >
-                                                                            {customer.isSuspended ? (
-                                                                                <>
-                                                                                    <Unlock className="w-3.5 h-3.5 text-green-500" /> Unblock User
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <Lock className="w-3.5 h-3.5 text-red-400" /> Block User
-                                                                                </>
-                                                                            )}
-                                                                        </button>
-                                                                        <hr className="border-gray-100 my-1" />
-                                                                        <button
-                                                                            onClick={() => { handleDeleteClick(customer); setActiveDropdownId(null); }}
-                                                                            className="w-full text-left px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium transition-colors"
-                                                                        >
-                                                                            <Trash2 className="w-3.5 h-3.5 text-red-500" /> Deactivate
-                                                                        </button>
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                <Table
+                    isLoading={loading}
+                    data={currentCustomers}
+                    rowKey="_id"
+                    emptyTitle="No customers found"
+                    emptyMessage={
+                        searchTerm || statusFilter !== 'all' || bookingFilter !== 'all'
+                            ? 'Try adjusting your search or filters'
+                            : 'No customers found'
+                    }
+                    columns={[
+                        {
+                            header: 'Customer',
+                            key: 'name',
+                            accessor: (customer) => (
+                                <div className="flex items-center">
+                                    <Avatar src={customer.profilePicUrl} name={customer.name} size="md" />
+                                    <div className="ml-4">
+                                        <div className="text-sm font-medium text-secondary">{customer.name}</div>
+                                        <div className="text-sm text-gray-500">
+                                            {formatDate(customer.createdAt)}
+                                        </div>
+                                    </div>
                                 </div>
-
-                                {/* Pagination */}
-                                <div className="mt-4 border-t border-gray-200">
-                                    <Pagination
-                                        currentPage={currentPage}
-                                        totalPages={totalPages}
-                                        totalItems={filteredCustomers.length}
-                                        limit={itemsPerPage}
-                                        onPageChange={setCurrentPage}
-                                    />
+                            )
+                        },
+                        {
+                            header: 'Contact',
+                            key: 'email',
+                            accessor: (customer) => (
+                                <div>
+                                    <div className="text-sm text-gray-900">{customer.email}</div>
+                                    <div className="text-sm text-gray-500">{customer.phone || 'N/A'}</div>
                                 </div>
-                            </>
-                        )}
-                    </div>
-                )}
+                            )
+                        },
+                        {
+                            header: 'Location',
+                            key: 'location',
+                            accessor: (customer) => (
+                                <div>
+                                    <div className="text-sm text-gray-900">{customer.address?.city || 'N/A'}</div>
+                                    <div className="text-sm text-gray-500">{customer.address?.state || 'N/A'}</div>
+                                </div>
+                            )
+                        },
+                        {
+                            header: 'Bookings',
+                            key: 'totalBookings',
+                            accessor: (customer) => (
+                                <div className="text-sm font-medium text-gray-900">
+                                    {customer.totalBookings || 0}
+                                </div>
+                            )
+                        },
+                        {
+                            header: 'First Booking',
+                            key: 'firstBooking',
+                            accessor: (customer) => getFirstBookingBadge(customer.firstBookingUsed)
+                        },
+                        {
+                            header: 'Joined',
+                            key: 'createdAt',
+                            accessor: (customer) => (
+                                <div className="text-sm text-gray-900">
+                                    {formatDate(customer.createdAt)}
+                                </div>
+                            )
+                        },
+                        {
+                            header: 'Status',
+                            key: 'status',
+                            accessor: (customer) => getStatusBadge(customer)
+                        },
+                        {
+                            header: 'Wallet',
+                            key: 'wallet',
+                            accessor: (customer) => (
+                                <div className="font-bold text-teal-600">
+                                    ₹{(customer.wallet?.availableBalance || 0).toLocaleString()}
+                                </div>
+                            )
+                        },
+                        {
+                            header: 'Actions',
+                            key: 'actions',
+                            accessor: (customer) => (
+                                <div className="flex items-center justify-start">
+                                    <button
+                                        onClick={(e) => handleDropdownToggle(e, customer._id)}
+                                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"
+                                        title="Actions"
+                                    >
+                                        <MoreVertical className="w-4 h-4" />
+                                    </button>
 
+                                    {activeDropdownId === customer._id && dropdownPos && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={() => { setActiveDropdownId(null); setDropdownPos(null); }} />
+                                            <div
+                                                style={{
+                                                    position: 'fixed',
+                                                    top: `${dropdownPos.top}px`,
+                                                    right: `${dropdownPos.right}px`
+                                                }}
+                                                className="w-44 bg-white rounded-xl shadow-xl border border-gray-200/80 py-1.5 z-50 font-sans animate-in fade-in zoom-in-95 duration-150"
+                                            >
+                                                <button
+                                                    onClick={() => { handleViewClick(customer); setActiveDropdownId(null); setDropdownPos(null); }}
+                                                    className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5 text-gray-400" /> View Details
+                                                </button>
+                                                <button
+                                                    onClick={() => { handleEditClick(customer); setActiveDropdownId(null); setDropdownPos(null); }}
+                                                    className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                                >
+                                                    <Edit3 className="w-3.5 h-3.5 text-gray-400" /> Edit Profile
+                                                </button>
+                                                <button
+                                                    onClick={() => { handleToggleBlock(customer); setActiveDropdownId(null); setDropdownPos(null); }}
+                                                    className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                                                >
+                                                    {customer.isSuspended ? (
+                                                        <>
+                                                            <Unlock className="w-3.5 h-3.5 text-green-500" /> Unblock User
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Lock className="w-3.5 h-3.5 text-red-400" /> Block User
+                                                        </>
+                                                    )}
+                                                </button>
+                                                <hr className="border-gray-100 my-1" />
+                                                <button
+                                                    onClick={() => { handleDeleteClick(customer); setActiveDropdownId(null); setDropdownPos(null); }}
+                                                    className="w-full text-left px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium transition-colors"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5 text-red-500" /> Deactivate
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )
+                        }
+                    ]}
+                />
+
+                {/* Pagination */}
+                <div className="mt-4 border-t border-gray-200">
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={filteredCustomers.length}
+                        limit={itemsPerPage}
+                        onPageChange={setCurrentPage}
+                    />
+                </div>
                 {/* Edit Customer Modal */}
                 {showEditModal && selectedCustomer && (
                     <Modal

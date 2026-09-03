@@ -520,7 +520,8 @@ const sendBroadcast = async (req, res, next) => {
             city: finalCity,
             targetZones: req.body.targetZones || [],
             category: finalCategory,
-            minBookings
+            minBookings,
+            providerStatus: req.body.providerStatus
         };
 
         const result = await sendBroadcastNotification(finalAudience, {
@@ -1024,26 +1025,28 @@ const getActiveEventsList = () => {
     if (cachedActiveEvents) return cachedActiveEvents;
 
     const activeEvents = new Set();
-    const serverDir = path.join(__dirname, '..');
+    const serverDir = path.join(__dirname, '../../');
 
     const scanDir = (dir) => {
-        const files = fs.readdirSync(dir);
-        for (const file of files) {
-            const fullPath = path.join(dir, file);
-            const stat = fs.statSync(fullPath);
-            if (stat.isDirectory()) {
-                if (file !== 'node_modules' && file !== '.git') {
-                    scanDir(fullPath);
-                }
-            } else if (stat.isFile() && file.endsWith('.js')) {
-                const content = fs.readFileSync(fullPath, 'utf8');
-                const regex = /triggerEventNotification\s*\(\s*['"`]([a-zA-Z0-9_-]+)['"`]/g;
-                let match;
-                while ((match = regex.exec(content)) !== null) {
-                    activeEvents.add(match[1]);
+        try {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+                const fullPath = path.join(dir, file);
+                const stat = fs.statSync(fullPath);
+                if (stat.isDirectory()) {
+                    if (file !== 'node_modules' && file !== '.git') {
+                        scanDir(fullPath);
+                    }
+                } else if (stat.isFile() && file.endsWith('.js')) {
+                    const content = fs.readFileSync(fullPath, 'utf8');
+                    const regex = /triggerEventNotification\s*\(\s*['"`]([a-zA-Z0-9_-]+)['"`]/g;
+                    let match;
+                    while ((match = regex.exec(content)) !== null) {
+                        activeEvents.add(match[1]);
+                    }
                 }
             }
-        }
+        } catch (_) {}
     };
 
     try {
@@ -1059,7 +1062,9 @@ const getActiveEventsList = () => {
             'booking_completed',
             'provider_verification_approved',
             'provider_verification_rejected',
-            'payment_success'
+            'payment_success',
+            'provider_incomplete_reminder',
+            'provider_missing_bank_reminder'
         ];
     }
     return cachedActiveEvents;
@@ -1077,9 +1082,8 @@ const getActiveEvents = async (req, res, next) => {
 
 const getTemplates = async (req, res, next) => {
     try {
-        const activeEvents = getActiveEventsList();
         const NotificationTemplate = mongoose.model('NotificationTemplate');
-        const templates = await NotificationTemplate.find({ eventId: { $in: activeEvents } }).sort({ eventId: 1 });
+        const templates = await NotificationTemplate.find({ isActive: { $ne: false } }).sort({ eventId: 1 });
         return res.status(200).json({ success: true, data: templates });
     } catch (error) {
         global.logger.error(`[NotificationController.getTemplates] Route: ${req.originalUrl || req.url} - getTemplates error: ${error.message}`, error);
@@ -1137,82 +1141,19 @@ const deleteTemplate = async (req, res, next) => {
     }
 };
 
-const seedDefaultTemplates = async () => {
+const uploadNotificationImage = async (req, res, next) => {
     try {
-        const activeEvents = getActiveEventsList();
-        const NotificationTemplate = mongoose.model('NotificationTemplate');
-        
-        // Clean up any unimplemented templates from the database
-        await NotificationTemplate.deleteMany({ eventId: { $nin: activeEvents } });
-
-        const count = await NotificationTemplate.countDocuments();
-        if (count > 0) return;
-
-        const allDefaults = [
-            {
-                eventId: 'booking_created',
-                title: 'New Booking Request: {{serviceName}}',
-                message: 'You have a new booking request for {{serviceName}} at {{street}}.',
-                targetAudience: { role: 'provider', providerStatus: 'available' }
-            },
-            {
-                eventId: 'provider_assigned',
-                title: 'Provider Assigned',
-                message: 'Your booking has been assigned to {{providerName}}. Live tracking started!',
-                targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'provider_accepted',
-                title: 'Booking Accepted',
-                message: '{{providerName}} has accepted your booking request.',
-                targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'work_started',
-                title: 'Job Started',
-                message: 'Work on your booking has started.',
-                targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'payment_success',
-                title: 'Payment Successful',
-                message: 'Payment of {{amount}} for booking {{bookingId}} is successful.',
-                targetAudience: { role: 'all' }
-            },
-            {
-                eventId: 'booking_completed',
-                title: 'Booking Completed',
-                message: 'Your booking has been completed successfully. Please leave a review!',
-                targetAudience: { role: 'customer' }
-            },
-            {
-                eventId: 'provider_verification_approved',
-                title: 'Verification Approved',
-                message: 'Congratulations! Your provider profile has been verified.',
-                targetAudience: { role: 'provider' }
-            },
-            {
-                eventId: 'provider_verification_rejected',
-                title: 'Verification Rejected',
-                message: 'Your provider profile verification was rejected: {{reason}}',
-                targetAudience: { role: 'provider' }
-            }
-        ];
-
-        const filteredDefaults = allDefaults.filter(d => activeEvents.includes(d.eventId));
-
-        await NotificationTemplate.insertMany(filteredDefaults);
-        global.logger.info('[NotificationService] Seeded default notification templates successfully.');
-    } catch (e) {
-        global.logger.error('Error seeding default templates: ' + e.message, e);
+        const imageFile = req.files?.image?.[0] || req.file;
+        if (!imageFile) {
+            return res.status(400).json({ success: false, message: 'Please select an image file' });
+        }
+        const url = imageFile.path || imageFile.secure_url || imageFile.location;
+        return res.status(200).json({ success: true, url });
+    } catch (error) {
+        global.logger.error(`[NotificationController.uploadNotificationImage] Upload error: ${error.message}`, error);
+        next(error);
     }
 };
-
-if (mongoose.connection.readyState === 1) {
-    seedDefaultTemplates();
-} else {
-    mongoose.connection.once('open', seedDefaultTemplates);
-}
 
 module.exports = {
     getNotifications,
@@ -1236,6 +1177,6 @@ module.exports = {
     updateTemplate,
     deleteTemplate,
     getActiveEvents,
-    seedDefaultTemplates
+    uploadNotificationImage
 };
 

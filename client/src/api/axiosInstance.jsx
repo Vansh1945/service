@@ -221,7 +221,8 @@ api.interceptors.response.use(
         const normalized = normalizeApiError(error);
         error.normalizedError = normalized;
 
-        const skipToast = originalRequest?.skipErrorToast || originalRequest?.headers?.['x-skip-error-toast'];
+        const isAuthEndpoint = originalRequest?.url?.includes('/auth/') || originalRequest?.url?.includes('/register');
+        const skipToast = originalRequest?.skipErrorToast || originalRequest?.headers?.['x-skip-error-toast'] || isAuthEndpoint;
 
         // Global toast handlers for 403, 429, and 500-599 errors if not explicitly suppressed
         if (!skipToast) {
@@ -236,8 +237,6 @@ api.interceptors.response.use(
 
         // Standardized 401 Unauthenticated Handling
         if (error.response?.status === 401) {
-            const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || originalRequest?.url?.includes('/auth/register');
-
             if (!originalRequest._retry && !isAuthEndpoint) {
                 if (isRefreshing) {
                     try {

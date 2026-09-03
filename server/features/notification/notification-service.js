@@ -291,7 +291,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
 
         let allTokens = [];
         let notificationsToSave = [];
-        const { city, targetZones = [], category, minBookings = 0 } = filters;
+        const { city, targetZones = [], category, minBookings = 0, providerStatus } = filters;
 
         let users = [];
         const isCustomerAlertsEnabled = !config || !config.notificationSettings || config.notificationSettings.customerAlerts !== false;
@@ -354,6 +354,12 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
             if (city) providerQuery['address.city'] = new RegExp(city, 'i');
             if (category) providerQuery.services = category; // category ID
             if (minBookings > 0) providerQuery.completedBookings = { $gte: minBookings };
+
+            if (providerStatus === 'approved') {
+                providerQuery.approved = true;
+            } else if (providerStatus === 'pending') {
+                providerQuery.approved = false;
+            }
 
             if (targetZones && targetZones.length > 0) {
                 const eligibleZoneIds = await getZoneAndDescendants(targetZones);
