@@ -283,11 +283,13 @@ export const ToastContainer = ({ position = 'top-right', maxToasts = 5 }) => {
         setToasts(prev => prev.map(t => {
           if (t.id === event.id) {
             const newType = event.payload.type || t.type;
+            const newMessage = event.payload.message || event.payload.render || t.message;
             return {
               ...t,
               ...event.payload,
+              message: newMessage,
               type: newType,
-              autoClose: newType === 'loading' ? false : (event.payload.autoClose !== undefined ? event.payload.autoClose : 2000)
+              autoClose: newType === 'loading' ? false : (event.payload.autoClose !== undefined ? event.payload.autoClose : 5000)
             };
           }
           return t;

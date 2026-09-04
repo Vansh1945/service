@@ -1138,6 +1138,20 @@ class BookingService {
           totalAmount
         } = priceDetails;
 
+        // Disallow mixed payment if wallet balance covers full amount or is zero
+        if (paymentMethod === 'mixed') {
+          const User = mongoose.model('User');
+          const userDoc = session ? await User.findById(req.user._id).session(session) : await User.findById(req.user._id);
+          const userWalletBal = userDoc?.wallet?.availableBalance || 0;
+
+          if (userWalletBal >= totalAmount) {
+            throw new Error('Wallet balance is sufficient to cover the full amount. Please select Wallet Payment.');
+          }
+          if (userWalletBal <= 0) {
+            throw new Error('No wallet balance available for mixed payment. Please select another payment method.');
+          }
+        }
+
         // CHECKOUT EDIT & IDEMPOTENCY: Check if an existing checkout session / idempotency key / booking ID exists
         let existingDraft = null;
         if (idempotencyKey) {
@@ -1417,21 +1431,29 @@ class BookingService {
         }
       }
 
-      const isDomainError = error.message && (
-        error.message.includes('outside our active service') ||
-        error.message.includes('unavailable') ||
-        error.message.includes('not found') ||
-        error.message.includes('only allowed for completed') ||
-        error.message.includes('required') ||
-        error.message.includes('disabled') ||
-        error.message.includes('Invalid') ||
-        error.message.includes('profile') ||
-        error.name === 'ValidationError'
+      const realMessage = error.cause?.message || error.message || '';
+      const isDomainError = realMessage && (
+        realMessage.includes('provider') ||
+        realMessage.includes('available') ||
+        realMessage.includes('outside our active service') ||
+        realMessage.includes('unavailable') ||
+        realMessage.includes('not found') ||
+        realMessage.includes('only allowed for completed') ||
+        realMessage.includes('required') ||
+        realMessage.includes('disabled') ||
+        realMessage.includes('Invalid') ||
+        realMessage.includes('profile') ||
+        error.name === 'ValidationError' ||
+        error.status
       );
       const statusCode = error.status || (isDomainError ? 400 : 500);
-      res.status(statusCode).json({
+      const finalMessage = isDomainError
+        ? realMessage
+        : (realMessage && !realMessage.includes('Transaction') ? realMessage : "We couldn't complete your booking right now. Please try again.");
+
+      return res.status(statusCode).json({
         success: false,
-        message: isDomainError ? error.message : "We couldn't complete your booking right now. Please try again."
+        message: finalMessage
       });
     }
   }
@@ -1515,6 +1537,10 @@ class BookingService {
 
             if (walletBal <= 0) {
               throw new Error('No wallet balance available for mixed payment. Please use online payment.');
+            }
+
+            if (walletBal >= booking.totalAmount) {
+              throw new Error('Wallet balance is sufficient to cover the full amount. Please select Wallet Payment.');
             }
 
             const walletDeduction = Math.min(walletBal, booking.totalAmount);

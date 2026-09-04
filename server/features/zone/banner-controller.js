@@ -7,7 +7,7 @@ const getBanners = async (req, res, next) => {
     let banners = cache.get('banners');
     if (!banners) {
       banners = await Banner.find({ isDeleted: { $ne: true } });
-      cache.set('banners', banners, 300);
+      cache.set('banners', banners, 60);
     }
     res.status(200).json({
       success: true,
@@ -51,7 +51,7 @@ const createBanner = async (req, res, next) => {
 // Get All Banners Admin (Admin)
 const getAllBannersAdmin = async (req, res, next) => {
   try {
-    const banners = await Banner.find();
+    const banners = await Banner.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       data: banners
@@ -107,26 +107,18 @@ const updateBanner = async (req, res, next) => {
 const deleteBanner = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const banner = await Banner.findByIdAndUpdate(
-      id,
-      {
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: req.user?._id || null
-      },
-      { new: true }
-    );
+    const banner = await Banner.findByIdAndDelete(id);
     if (!banner) {
       return res.status(404).json({
         success: false,
         message: 'Banner not found'
       });
     }
+    cache.del('banners');
     res.status(200).json({
       success: true,
       message: 'Banner deleted successfully'
     });
-    cache.del('banners');
   } catch (error) {
     global.logger.error(`[BannerController.deleteBanner] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
     next(error);

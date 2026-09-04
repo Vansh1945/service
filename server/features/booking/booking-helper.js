@@ -268,10 +268,21 @@ const enrichBookingData = (booking, transaction = null) => {
     }
   }
 
+  const mergedServicePrice = (b.subtotal || 0) + (b.demandSurge || 0);
+  const platformFee = b.platformFee || 0;
+  const additionalCharges = (b.rainCharge || 0) +
+    (b.trafficCharge || 0) +
+    (b.nightCharge || 0) +
+    (b.festivalCharge || 0) +
+    (b.customCharges || 0);
+
   b.pricingBreakdown = {
     servicePrice,
-    visitingCharges,
+    mergedServicePrice,
+    platformFee,
     emergencyCharges,
+    additionalCharges,
+    visitingCharges,
     surgeCharges,
     discount: b.totalDiscount || 0,
     walletUsed,

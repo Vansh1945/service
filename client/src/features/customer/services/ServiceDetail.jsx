@@ -26,17 +26,20 @@ const parseArrayField = (field) => {
     return field.flatMap(item => parseArrayField(item)).filter(Boolean);
   }
   if (typeof field === 'string') {
-    try {
-      return parseArrayField(JSON.parse(field));
-    } catch (e) {
-      console.error(e);
-      return field
-        .replace(/[[\]"\\]/g, ' ')
-        .trim()
-        .split(',')
-        .map(item => item.trim())
-        .filter(Boolean);
+    const trimmed = field.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        return parseArrayField(JSON.parse(trimmed));
+      } catch (e) {
+        // fallback to plain string splitting
+      }
     }
+    return field
+      .replace(/[[\]"\\]/g, ' ')
+      .trim()
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
   }
   return [String(field)];
 };

@@ -58,18 +58,21 @@ const parseArrayField = (field) => {
     return field.flatMap(item => parseArrayField(item)).filter(Boolean);
   }
   if (typeof field === 'string') {
-    try {
-      const parsed = JSON.parse(field);
-      return parseArrayField(parsed);
-    } catch (e) {
-      console.error(e);
-      return field
-        .replace(/[[\]"\\]/g, ' ')
-        .trim()
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
+    const trimmed = field.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return parseArrayField(parsed);
+      } catch (e) {
+        // fallback
+      }
     }
+    return field
+      .replace(/[[\]"\\]/g, ' ')
+      .trim()
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
   }
   return [String(field)];
 };
@@ -694,18 +697,21 @@ const AdminServices = () => {
       return field.flatMap(item => parseArrayField(item)).filter(Boolean);
     }
     if (typeof field === 'string') {
-      try {
-        const parsed = JSON.parse(field);
-        return parseArrayField(parsed);
-      } catch (e) {
-        console.error(e);
-        return field
-          .replace(/[[\]"\\]/g, ' ')
-          .trim()
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean);
+      const trimmed = field.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return parseArrayField(parsed);
+        } catch (e) {
+          // fallback
+        }
       }
+      return field
+        .replace(/[[\]"\\]/g, ' ')
+        .trim()
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
     }
     return [String(field)];
   };

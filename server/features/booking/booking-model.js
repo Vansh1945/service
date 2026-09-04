@@ -1186,10 +1186,21 @@ bookingSchema.virtual('pricingBreakdown').get(function () {
     }
   }
 
+  const mergedServicePrice = (this.subtotal || 0) + (this.demandSurge || 0);
+  const platformFee = this.platformFee || 0;
+  const additionalCharges = (this.rainCharge || 0) +
+    (this.trafficCharge || 0) +
+    (this.nightCharge || 0) +
+    (this.festivalCharge || 0) +
+    (this.customCharges || 0);
+
   return {
     servicePrice,
-    visitingCharges,
+    mergedServicePrice,
+    platformFee,
     emergencyCharges,
+    additionalCharges,
+    visitingCharges,
     surgeCharges,
     discount,
     walletUsed,

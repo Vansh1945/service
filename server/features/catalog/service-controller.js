@@ -602,12 +602,12 @@ const getPublicServiceById = async (req, res, next) => {
         const minutes = Math.round((service.duration - hours) * 60);
         const durationFormatted = `${hours > 0 ? `${hours} hr` : ''} ${minutes > 0 ? `${minutes} min` : ''}`.trim();
 
-        // Update service with calculated values if they differ
+        // Update service with calculated values if they differ (non-blocking)
         if (service.averageRating !== averageRating || service.ratingCount !== ratingCount) {
-            await Service.findByIdAndUpdate(id, {
+            Service.findByIdAndUpdate(id, {
                 averageRating,
                 ratingCount
-            });
+            }).catch(err => global.logger?.error?.('Error updating rating:', err));
         }
 
         // Prepare final response

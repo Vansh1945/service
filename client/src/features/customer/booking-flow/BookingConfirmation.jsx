@@ -180,6 +180,14 @@ const BookingConfirmation = () => {
     if (!isInitialized) initializeComponent();
   }, [bookingId, isAuthenticated, token, loc.state, isInitialized]);
 
+  // Disallow mixed payment if wallet balance covers 100% of total amount
+  useEffect(() => {
+    const total = bookingDetails?.totalAmount || 0;
+    if (total > 0 && walletBalance >= total && paymentMethod === 'mixed') {
+      setPaymentMethod('wallet');
+    }
+  }, [walletBalance, bookingDetails?.totalAmount, paymentMethod]);
+
 
   const getServiceInfo = () => {
     if (serviceDetails) {
@@ -563,12 +571,21 @@ const BookingConfirmation = () => {
   const pb = bookingDetails.pricingBreakdown || {};
   const hasPb = !!bookingDetails.pricingBreakdown;
 
-  const servicePrice = hasPb ? pb.servicePrice : (bookingDetails.subtotal || serviceInfo.basePrice * quantity);
-  const visitingCharge = hasPb ? pb.visitingCharges : (bookingDetails.visitingCharge || 0);
-  const emergencyCharge = hasPb ? pb.emergencyCharges : (bookingDetails.emergencySurge || 0);
-  const surgeCharge = hasPb ? pb.surgeCharges : ((bookingDetails.rainCharge || 0) + (bookingDetails.trafficCharge || 0) + (bookingDetails.nightCharge || 0) + (bookingDetails.demandSurge || 0) + (bookingDetails.platformFee || 0));
-  const discount = hasPb ? pb.discount : (bookingDetails.totalDiscount || 0);
-  const totalAmount = hasPb ? pb.customerTotal : (bookingDetails.totalAmount || (servicePrice + visitingCharge + emergencyCharge + surgeCharge - discount));
+  const servicePrice = hasPb && pb.mergedServicePrice !== undefined
+    ? pb.mergedServicePrice
+    : ((bookingDetails.subtotal || serviceInfo.basePrice * quantity) + (bookingDetails.demandSurge || 0));
+
+  const platformFee = (hasPb && pb.platformFee !== undefined) ? pb.platformFee : (bookingDetails.platformFee || 0);
+  const emergencyCharge = (hasPb && pb.emergencyCharges !== undefined) ? pb.emergencyCharges : (bookingDetails.emergencySurge || 0);
+  const additionalCharges = (hasPb && pb.additionalCharges !== undefined)
+    ? pb.additionalCharges
+    : ((bookingDetails.rainCharge || 0) + (bookingDetails.trafficCharge || 0) + (bookingDetails.nightCharge || 0) + (bookingDetails.festivalCharge || 0) + (bookingDetails.customCharges || 0));
+  const visitingCharge = (hasPb && pb.visitingCharges !== undefined) ? pb.visitingCharges : (bookingDetails.visitingCharge || 0);
+  const discount = (hasPb && pb.discount !== undefined) ? pb.discount : (bookingDetails.totalDiscount || 0);
+  const totalAmount = (hasPb && pb.customerTotal !== undefined)
+    ? pb.customerTotal
+    : (bookingDetails.totalAmount || (servicePrice + platformFee + emergencyCharge + additionalCharges + visitingCharge - discount));
+  const isFullWalletBalance = totalAmount > 0 && walletBalance >= totalAmount;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -777,39 +794,60 @@ const BookingConfirmation = () => {
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Service Price</span>
+                    <span className="text-gray-500">Service Price ({quantity} item)</span>
                     <PriceDisplay amount={servicePrice} type="secondary" />
                   </div>
 
-                  {visitingCharge > 0 && (
+                  {discount > 0 && (
+                    <>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">
+                          {bookingDetails.couponApplied?.isReferralCoupon ? 'Referral Coupon Discount (Company Funded)' : 'Coupon Discount'}
+                        </span>
+                        <PriceDisplay amount={discount} type="discount" prefix="-" />
+                      </div>
+                      <div className="flex justify-between text-xs pt-1 border-t border-gray-50">
+                        <span className="text-gray-600 font-semibold">Price after Discount</span>
+                        <PriceDisplay amount={servicePrice - discount} type="secondary" />
+                      </div>
+                    </>
+                  )}
+
+                  {platformFee > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Visiting Charges</span>
-                      <PriceDisplay amount={visitingCharge} type="secondary" prefix="+" />
+                      <span className="text-gray-500 flex items-center gap-1 group relative cursor-pointer">
+                        Platform Fee
+                        <span className="text-gray-400 hover:text-gray-600 font-semibold text-[10px]">ⓘ</span>
+                        <span className="absolute bottom-full left-0 mb-2 w-48 hidden group-hover:block bg-gray-900 text-white text-[10px] p-2 rounded shadow-lg z-50 text-left font-normal leading-tight">
+                          Platform Fee is non-refundable as it covers secure transaction processing and platform operational costs.
+                        </span>
+                      </span>
+                      <PriceDisplay amount={platformFee} type="secondary" prefix="+" />
                     </div>
                   )}
 
                   {emergencyCharge > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-red-655 font-semibold">Emergency Charges</span>
-                      <PriceDisplay amount={emergencyCharge} type="secondary" prefix="+" />
+                      <span className="text-gray-500">Emergency Charges</span>
+                      <PriceDisplay amount={emergencyCharge} type="secondary" prefix="+" className="text-red-500 font-semibold" />
                     </div>
                   )}
 
-                  {surgeCharge > 0 && (
+                  {additionalCharges > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-505">Surge Charges</span>
-                      <PriceDisplay amount={surgeCharge} type="secondary" prefix="+" />
+                      <span className="text-gray-500">Additional Service Charges</span>
+                      <PriceDisplay amount={additionalCharges} type="secondary" prefix="+" className="text-red-500 font-semibold" />
                     </div>
                   )}
 
-                  {discount > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">
-                        {bookingDetails.couponApplied?.isReferralCoupon ? 'Referral Coupon Discount (Company Funded)' : 'Coupon Discount'}
-                      </span>
-                      <PriceDisplay amount={discount} type="discount" prefix="-" />
-                    </div>
-                  )}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Visiting Charges</span>
+                    {visitingCharge > 0 ? (
+                      <PriceDisplay amount={visitingCharge} type="secondary" prefix="+" className="text-green-600 font-semibold italic" />
+                    ) : (
+                      <span className="text-green-600 font-semibold italic">Free</span>
+                    )}
+                  </div>
 
                   <div className="border-t border-gray-100 pt-3 mt-1">
                     <div className="flex justify-between items-center">
@@ -885,26 +923,42 @@ const BookingConfirmation = () => {
 
                         {/* Wallet + Online Mixed */}
                         <div
-                          className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'mixed'
-                            ? 'border-primary bg-primary/5 shadow-sm'
-                            : 'border-gray-100 hover:border-gray-200'
+                          className={`flex items-center gap-3 p-2.5 border rounded-xl transition-all ${isFullWalletBalance
+                            ? 'border-gray-100 bg-gray-50/50 opacity-50 cursor-not-allowed'
+                            : paymentMethod === 'mixed'
+                              ? 'border-primary bg-primary/5 shadow-sm cursor-pointer'
+                              : 'border-gray-100 hover:border-gray-200 cursor-pointer'
                             }`}
-                          onClick={() => setPaymentMethod('mixed')}
+                          onClick={() => {
+                            if (isFullWalletBalance) {
+                              showToast('Your wallet balance covers the full amount. Please use Wallet Payment.', 'info');
+                              return;
+                            }
+                            if (walletBalance <= 0) {
+                              showToast('No wallet balance available for mixed payment.', 'error');
+                              return;
+                            }
+                            setPaymentMethod('mixed');
+                          }}
                         >
-                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
-                            {paymentMethod === 'mixed' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' && !isFullWalletBalance ? 'border-primary' : 'border-gray-300'}`}>
+                            {paymentMethod === 'mixed' && !isFullWalletBalance && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-1.5">
                               <p className="text-xs font-bold text-secondary">Wallet + Online Mixed</p>
-                              {walletBalance <= 0 && (
+                              {isFullWalletBalance ? (
+                                <span className="text-[8px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">Full Balance</span>
+                              ) : walletBalance <= 0 ? (
                                 <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">₹0 Balance</span>
-                              )}
+                              ) : null}
                             </div>
                             <p className="text-[9px] text-gray-400">
-                              {walletBalance > 0 && walletBalance < totalAmount
-                                ? `Use ₹${walletBalance} from wallet + pay remaining online`
-                                : 'Combine wallet balance with online payment'}
+                              {isFullWalletBalance
+                                ? 'Not applicable when wallet balance covers full amount'
+                                : walletBalance > 0 && walletBalance < totalAmount
+                                  ? `Use ₹${walletBalance} from wallet + pay remaining online`
+                                  : 'Combine wallet balance with online payment'}
                             </p>
                           </div>
                           <div className="flex gap-0.5 text-gray-300">
@@ -935,7 +989,7 @@ const BookingConfirmation = () => {
                   </div>
 
                   {/* Mixed payment deduction details */}
-                  {paymentMethod === 'mixed' && walletBalance > 0 && (
+                  {paymentMethod === 'mixed' && walletBalance > 0 && !isFullWalletBalance && (
                     <div className="mb-4 p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-1">
                       <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Mixed Payment Breakdown</p>
                       <div className="flex justify-between text-xs font-medium text-amber-900">

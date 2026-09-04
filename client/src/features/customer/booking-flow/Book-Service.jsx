@@ -210,19 +210,6 @@ const BookService = () => {
   };
 
   // Fetch user addresses
-  const fetchUserAddresses = async () => {
-    try {
-      const res = await CustomerService.getSavedAddresses();
-      if (res.data?.success && res.data.savedAddresses?.length > 0) {
-        return res.data.savedAddresses;
-      }
-      const profileRes = await CustomerService.getProfile();
-      return profileRes.data?.user?.address ? [profileRes.data.user.address] : [];
-    } catch (err) {
-      console.error('Error fetching user addresses:', err);
-      return [];
-    }
-  };
 
   // Fetch available coupons
   const fetchAvailableCoupons = async () => {
@@ -367,20 +354,6 @@ const BookService = () => {
   ]);
 
   // Calculate surcharges
-  const calculateSurcharges = () => {
-    if (!pricingEstimate) return { totalSurcharge: 0, breakdowns: [] };
-    const breakdowns = (pricingEstimate.surchargeBreakdown || []).map((s, idx) => ({
-      id: s.chargeType || idx,
-      name: s.chargeType === 'platform' ? 'Platform Fee' : `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Surcharge`,
-      amount: s.amount,
-      mode: s.mode,
-      value: s.value
-    }));
-    return {
-      totalSurcharge: pricingEstimate.totalSurcharge || 0,
-      breakdowns
-    };
-  };
 
   // Calculate discount
   const calculateDiscount = () => {
@@ -391,16 +364,14 @@ const BookService = () => {
     return pricingEstimate ? pricingEstimate.totalAmount : 0;
   };
 
-  const getVisitingAndAdditionalCharges = () => {
-    if (!pricingEstimate) return { visiting: 0, additional: 0 };
-    return {
-      visiting: pricingEstimate.visitingCharge || 0,
-      additional: (pricingEstimate.rainCharge || 0) +
-        (pricingEstimate.trafficCharge || 0) +
-        (pricingEstimate.nightCharge || 0) +
-        (pricingEstimate.emergencySurge || 0)
-    };
-  };
+  // Disallow mixed payment if wallet balance covers 100% of total amount
+  useEffect(() => {
+    const currentTotal = calculateTotal();
+    if (currentTotal > 0 && walletBalance >= currentTotal && formData.paymentMethod === 'mixed') {
+      setFormData(prev => ({ ...prev, paymentMethod: 'wallet' }));
+    }
+  }, [walletBalance, pricingEstimate, formData.paymentMethod]);
+
 
   const getCustomerPricingBreakdown = () => {
     if (!pricingEstimate) return {
@@ -420,17 +391,24 @@ const BookService = () => {
     if (pricingEstimate.rainCharge > 0) additionalBreakdown.push({ name: 'Rain Charge', amount: pricingEstimate.rainCharge });
     if (pricingEstimate.trafficCharge > 0) additionalBreakdown.push({ name: 'Traffic Charge', amount: pricingEstimate.trafficCharge });
     if (pricingEstimate.nightCharge > 0) additionalBreakdown.push({ name: 'Night Charge', amount: pricingEstimate.nightCharge });
+    if (pricingEstimate.festivalCharge > 0) additionalBreakdown.push({ name: 'Festival Surcharge', amount: pricingEstimate.festivalCharge });
+    if (pricingEstimate.customCharges > 0) additionalBreakdown.push({ name: 'Custom Charge', amount: pricingEstimate.customCharges });
     if (pricingEstimate.emergencySurge > 0) additionalBreakdown.push({ name: 'Emergency Surcharge', amount: pricingEstimate.emergencySurge });
+
+    const additional = (pricingEstimate.rainCharge || 0) +
+      (pricingEstimate.trafficCharge || 0) +
+      (pricingEstimate.nightCharge || 0) +
+      (pricingEstimate.festivalCharge || 0) +
+      (pricingEstimate.customCharges || 0);
+
+    const emergency = pricingEstimate.emergencySurge || 0;
 
     return {
       mergedServicePrice,
       visiting: pricingEstimate.visitingCharge || 0,
       platformFee: pricingEstimate.platformFee || 0,
-      additional: (pricingEstimate.rainCharge || 0) +
-        (pricingEstimate.trafficCharge || 0) +
-        (pricingEstimate.nightCharge || 0) +
-        (pricingEstimate.emergencySurge || 0),
-      additionalBreakdown,
+      additional,
+      emergency,
       demand
     };
   };
@@ -467,35 +445,7 @@ const BookService = () => {
           setFormData(prev => ({ ...prev, addressId: defaultAddr._id }));
         }
 
-        // Fetch initial surcharges immediately to avoid rendering delays
-        let initialLat = null;
-        let initialLng = null;
-        if (prefillBooking?.address?.lat && prefillBooking?.address?.lng) {
-          initialLat = prefillBooking.address.lat;
-          initialLng = prefillBooking.address.lng;
-        } else if (addressesData.length > 0) {
-          initialLat = addressesData[0].lat;
-          initialLng = addressesData[0].lng;
-        }
 
-        const params = {
-          subtotal: serviceData ? serviceData.basePrice : undefined
-        };
-        if (initialLat && initialLng) {
-          params.lat = initialLat;
-          params.lng = initialLng;
-        }
-
-        try {
-          const surgeRes = await resolveActiveSurcharges(params);
-          if (surgeRes.data?.success) {
-            setActiveSurcharges(surgeRes.data.data || []);
-            setDetectedZoneId(surgeRes.data.zoneId || null);
-            setZoneAncestry(surgeRes.data.zoneAncestry || []);
-          }
-        } catch (surgeErr) {
-          console.error("Initial surcharges load failed:", surgeErr);
-        }
 
         if (prefillBooking) {
           const restoredDate = prefillBooking.date ? new Date(prefillBooking.date) : new Date();
@@ -583,48 +533,6 @@ const BookService = () => {
   });
   const [inlineModalErrors, setInlineModalErrors] = useState({});
 
-  const handleSaveNewAddressModal = async (e) => {
-    if (e) e.preventDefault();
-    const errs = {};
-    const code = (inlineModalAddressForm.pincode || inlineModalAddressForm.postalCode || '').trim();
-    if (!code) errs['address.pincode'] = 'Pincode is required';
-    else if (!/^\d{6}$/.test(code)) errs['address.pincode'] = 'Enter valid 6-digit PIN code';
-
-    if (!inlineModalAddressForm.houseNumber?.trim()) errs['address.houseNumber'] = 'House/Flat No. required';
-    if (!inlineModalAddressForm.road?.trim() && !inlineModalAddressForm.street?.trim()) errs['address.road'] = 'Road/Street required';
-    if (!inlineModalAddressForm.city?.trim()) errs['address.city'] = 'City required';
-    if (!inlineModalAddressForm.state?.trim()) errs['address.state'] = 'State required';
-
-    setInlineModalErrors(errs);
-    if (Object.keys(errs).length > 0) {
-      toast.error('Please fill all mandatory address fields (House No, Road/Street, City, State, Pincode)');
-      return;
-    }
-
-    try {
-      setAddressActionLoading(true);
-      const res = await CustomerService.createSavedAddress(inlineModalAddressForm);
-      if (res.data?.success) {
-        toast.success('Address saved and selected!');
-        const updatedList = res.data.savedAddresses || [];
-        setAddresses(updatedList);
-        const newlyCreated = res.data.address || updatedList[updatedList.length - 1];
-        if (newlyCreated && newlyCreated._id) {
-          setFormData(prev => ({
-            ...prev,
-            addressId: newlyCreated._id,
-            useCustomAddress: false
-          }));
-        }
-        setIsAddAddressModalOpen(false);
-      }
-    } catch (err) {
-      console.error('Error saving new address:', err);
-      toast.error(err.response?.data?.message || 'Failed to save address');
-    } finally {
-      setAddressActionLoading(false);
-    }
-  };
 
   const handleQuantityChange = (action) => {
     setFormData(prev => {
@@ -701,6 +609,18 @@ const BookService = () => {
     if (formData.paymentMethod === 'wallet' && walletBalance < calculateTotal()) {
       toast.error('Insufficient wallet balance for full wallet payment.');
       return false;
+    }
+
+    if (formData.paymentMethod === 'mixed') {
+      const currentTotal = calculateTotal();
+      if (walletBalance >= currentTotal) {
+        toast.error('Wallet balance covers the full booking amount. Please use Wallet Payment.');
+        return false;
+      }
+      if (walletBalance <= 0) {
+        toast.error('No wallet balance available for mixed payment.');
+        return false;
+      }
     }
 
     return true;
@@ -786,11 +706,9 @@ const BookService = () => {
         autoClose: 2500
       });
 
-      setTimeout(() => {
-        navigate(`/customer/booking-confirm/${bookingId}`, {
-          state: { booking: response.data.data, service: service, fromBookingPage: true }
-        });
-      }, 1000);
+      navigate(`/customer/booking-confirm/${bookingId}`, {
+        state: { booking: response.data.data, service: service, fromBookingPage: true }
+      });
     } catch (err) {
       console.error('Booking error:', err);
       let errorMessage = "We couldn't complete your booking right now. Please try again.";
@@ -799,19 +717,20 @@ const BookService = () => {
       } else if (err.response?.status === 401) {
         errorMessage = 'Your session has expired. Please sign in again.';
         setTimeout(() => navigate('/login'), 2000);
-      } else if (err.response?.status === 409 || err.response?.data?.message?.toLowerCase().includes('provider')) {
-        errorMessage = 'No service provider is currently available for this time slot. Please choose another time.';
       } else if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
+      } else if (err.response?.status === 409) {
+        errorMessage = 'No service provider is currently available for this time slot. Please choose another time.';
       }
-      toast.update(toastId, { render: errorMessage, type: 'error', isLoading: false, autoClose: 5000 });
+      toast.dismiss(toastId);
+      toast.error(errorMessage, { autoClose: 6000 });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const totalAmount = calculateTotal();
-  const baseAmount = (service?.discountPrice || service?.basePrice) * (formData.quantity || 1) || 0;
+  const isFullWalletBalance = totalAmount > 0 && walletBalance >= totalAmount;
   const discountAmount = calculateDiscount();
 
   if (isLoading || !service) {
@@ -925,15 +844,15 @@ const BookService = () => {
                       {service.discountPrice ? (
                         <>
                           <span className="text-base sm:text-lg font-black text-green-600">
-                            {formatCurrency(getMergedPrice(service.discountPrice, activeSurcharges))}
+                            {formatCurrency((getCustomerPricingBreakdown().mergedServicePrice || service.discountPrice) / (formData.quantity || 1))}
                           </span>
                           <span className="text-xs line-through text-gray-400 font-normal">
-                            {formatCurrency(getMergedPrice(service.basePrice, activeSurcharges))}
+                            {formatCurrency(service.basePrice)}
                           </span>
                         </>
                       ) : (
                         <span className="text-base sm:text-lg font-black text-primary">
-                          {formatCurrency(getMergedPrice(service.basePrice, activeSurcharges))}
+                          {formatCurrency((getCustomerPricingBreakdown().mergedServicePrice || service.basePrice) / (formData.quantity || 1))}
                         </span>
                       )}
                       <span className="text-xs text-gray-400">/service</span>
@@ -1495,11 +1414,17 @@ const BookService = () => {
                       </span>
                     </div>
                   )}
+                  {getCustomerPricingBreakdown().emergency > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Emergency Charges</span>
+                      <span className="text-red-500 font-semibold">
+                        +{formatCurrency(getCustomerPricingBreakdown().emergency)}
+                      </span>
+                    </div>
+                  )}
                   {getCustomerPricingBreakdown().additional > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">
-                        {formData.isEmergency ? "Emergency Charges" : "Additional Service Charges"}
-                      </span>
+                      <span className="text-gray-500">Additional Service Charges</span>
                       <span className="text-red-500 font-semibold">
                         +{formatCurrency(getCustomerPricingBreakdown().additional)}
                       </span>
@@ -1601,28 +1526,42 @@ const BookService = () => {
 
                   {/* Wallet + Online Mixed */}
                   <div
-                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'mixed'
-                      ? 'border-primary bg-primary/5 shadow-sm'
-                      : 'border-gray-100 hover:border-gray-200'
+                    className={`flex items-center gap-3 p-3 border rounded-xl transition-all ${isFullWalletBalance
+                      ? 'border-gray-100 bg-gray-50/50 opacity-50 cursor-not-allowed'
+                      : formData.paymentMethod === 'mixed'
+                        ? 'border-primary bg-primary/5 shadow-sm cursor-pointer'
+                        : 'border-gray-100 hover:border-gray-200 cursor-pointer'
                       }`}
                     onClick={() => {
+                      if (isFullWalletBalance) {
+                        toast.info('Your wallet balance covers the full amount. Please use Wallet Payment.');
+                        return;
+                      }
+                      if (walletBalance <= 0) {
+                        toast.error('No wallet balance available for mixed payment.');
+                        return;
+                      }
                       setFormData(prev => ({ ...prev, paymentMethod: 'mixed' }));
                     }}
                   >
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
-                      {formData.paymentMethod === 'mixed' && <div className="w-2 h-2 bg-primary rounded-full" />}
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'mixed' && !isFullWalletBalance ? 'border-primary' : 'border-gray-300'}`}>
+                      {formData.paymentMethod === 'mixed' && !isFullWalletBalance && <div className="w-2 h-2 bg-primary rounded-full" />}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-1.5">
                         <p className="text-xs font-bold text-secondary">Wallet + Online Payment</p>
-                        {walletBalance <= 0 && (
+                        {isFullWalletBalance ? (
+                          <span className="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">Full Balance</span>
+                        ) : walletBalance <= 0 ? (
                           <span className="text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">₹0 Balance</span>
-                        )}
+                        ) : null}
                       </div>
                       <p className="text-[10px] text-gray-400">
-                        {walletBalance > 0 && walletBalance < totalAmount
-                          ? `Use ₹${walletBalance} from wallet + pay remaining online`
-                          : 'Combine wallet balance with online payment'}
+                        {isFullWalletBalance
+                          ? 'Not applicable when wallet balance covers full amount'
+                          : walletBalance > 0 && walletBalance < totalAmount
+                            ? `Use ₹${walletBalance} from wallet + pay remaining online`
+                            : 'Combine wallet balance with online payment'}
                       </p>
                     </div>
                     <div className="flex gap-0.5 text-gray-300">
@@ -1634,7 +1573,7 @@ const BookService = () => {
                 </div>
 
                 {/* Mixed payment deduction details */}
-                {formData.paymentMethod === 'mixed' && walletBalance > 0 && (
+                {formData.paymentMethod === 'mixed' && walletBalance > 0 && !isFullWalletBalance && (
                   <div className="mt-3 p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-1">
                     <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Mixed Payment Breakdown</p>
                     <div className="flex justify-between text-xs font-medium text-amber-900">

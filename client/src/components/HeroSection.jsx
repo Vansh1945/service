@@ -41,14 +41,16 @@ const HeroSection = ({ noMargin = false }) => {
         const res = await getBanners();
         const data = res?.data?.data || [];
 
-        const today = new Date();
         const activeBanners = data.filter((b) => {
+          // Safety net: skip soft-deleted (backend already filters this)
           if (b.isDeleted) return false;
-          if (!b.startDate || !b.endDate) return true;
-          return (
-            today >= new Date(b.startDate) &&
-            today <= new Date(b.endDate)
-          );
+          const now = new Date();
+          // If startDate is set, banner must have started
+          if (b.startDate && now < new Date(b.startDate)) return false;
+          // If endDate is set, banner must not have expired
+          if (b.endDate && now > new Date(b.endDate)) return false;
+          // No date restrictions or within valid range → show
+          return true;
         });
 
         // Remove duplicates by _id or image

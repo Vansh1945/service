@@ -200,23 +200,32 @@ const PaymentDetails = ({ booking }) => {
   const pb = booking.pricingBreakdown || {};
   const hasPb = !!booking.pricingBreakdown;
 
-  const servicePrice = hasPb ? pb.servicePrice : (booking.subtotal || 0);
-  const visitingCharge = hasPb ? pb.visitingCharges : (booking.visitingCharge || 0);
-  const emergencyCharge = hasPb ? pb.emergencyCharges : (booking.emergencySurge || 0);
-  const surgeCharge = hasPb ? pb.surgeCharges : ((booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0) + (booking.demandSurge || 0) + (booking.platformFee || 0));
-  const discount = hasPb ? pb.discount : (booking.totalDiscount || 0);
-  const grandTotal = hasPb ? pb.customerTotal : (booking.totalAmount || 0);
-  const walletUsed = hasPb ? pb.walletUsed : (booking.walletAmountUsed || booking.fullData?.walletAmountUsed || 0);
+  const quantity = booking.services?.[0]?.quantity || 1;
+  const servicePrice = (hasPb && pb.mergedServicePrice !== undefined)
+    ? pb.mergedServicePrice
+    : ((booking.subtotal || 0) + (booking.demandSurge || 0));
+
+  const platformFee = (hasPb && pb.platformFee !== undefined) ? pb.platformFee : (booking.platformFee || 0);
+  const visitingCharge = (hasPb && pb.visitingCharges !== undefined) ? pb.visitingCharges : (booking.visitingCharge || 0);
+  const emergencyCharge = (hasPb && pb.emergencyCharges !== undefined) ? pb.emergencyCharges : (booking.emergencySurge || 0);
+  const additionalCharges = (hasPb && pb.additionalCharges !== undefined)
+    ? pb.additionalCharges
+    : ((booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0) + (booking.festivalCharge || 0) + (booking.customCharges || 0));
+
+  const discount = (hasPb && pb.discount !== undefined) ? pb.discount : (booking.totalDiscount || 0);
+  const grandTotal = (hasPb && pb.customerTotal !== undefined) ? pb.customerTotal : (booking.totalAmount || 0);
+  const walletUsed = (hasPb && pb.walletUsed !== undefined) ? pb.walletUsed : (booking.walletAmountUsed || booking.fullData?.walletAmountUsed || 0);
   const refundAmount = booking.refundAmount || booking.cancellationProgress?.refundAmount || 0;
-  const cashRemaining = hasPb ? pb.cashRemaining : (booking.paymentMethod === 'cash' ? grandTotal : 0);
-  const onlinePaid = hasPb ? pb.onlinePaid : (booking.paymentMethod === 'online' || booking.paymentMethod === 'mixed' ? (grandTotal - walletUsed) : 0);
+  const cashRemaining = (hasPb && pb.cashRemaining !== undefined) ? pb.cashRemaining : (booking.paymentMethod === 'cash' ? grandTotal : 0);
+  const onlinePaid = (hasPb && pb.onlinePaid !== undefined) ? pb.onlinePaid : (['online', 'mixed'].includes(booking.paymentMethod) ? Math.max(0, grandTotal - walletUsed) : 0);
 
   const rows = [
-    { label: 'Service Price', val: servicePrice, type: 'default' },
+    { label: `Service Price (${quantity} item)`, val: servicePrice, type: 'default' },
     discount > 0 && { label: 'Coupon Discount', val: discount, type: 'discount', prefix: '-' },
-    visitingCharge > 0 && { label: 'Visiting Charges', val: visitingCharge, type: 'default', prefix: '+' },
-    emergencyCharge > 0 && { label: 'Emergency Charge', val: emergencyCharge, type: 'charge', prefix: '+' },
-    surgeCharge > 0 && { label: 'Platform Charges', val: surgeCharge, type: 'charge', prefix: '+' },
+    platformFee > 0 && { label: 'Platform Fee', val: platformFee, type: 'default', prefix: '+' },
+    emergencyCharge > 0 && { label: 'Emergency Charges', val: emergencyCharge, type: 'charge', prefix: '+' },
+    additionalCharges > 0 && { label: 'Additional Service Charges', val: additionalCharges, type: 'charge', prefix: '+' },
+    { label: 'Visiting Charges', val: visitingCharge > 0 ? visitingCharge : null, text: visitingCharge > 0 ? null : 'Free', type: 'default', prefix: visitingCharge > 0 ? '+' : '' },
     walletUsed > 0 && { label: 'Wallet Used', val: walletUsed, type: 'purple-bold', prefix: '-' },
     onlinePaid > 0 && { label: 'Online Paid', val: onlinePaid, type: 'default' },
     cashRemaining > 0 && { label: 'Cash To Pay', val: cashRemaining, type: 'default' },
@@ -242,10 +251,14 @@ const PaymentDetails = ({ booking }) => {
             {isPaid ? 'Paid' : booking.paymentStatus === 'refunded' ? 'Refunded' : 'Pending'}
           </span>
         </div>
-        {rows.map(({ label, val, type, prefix }) => (
+        {rows.map(({ label, val, text, type, prefix }) => (
           <div key={label} className="flex justify-between items-center animate-fadeIn">
             <span className="text-gray-500">{label}</span>
-            <PriceDisplay amount={val} type={type} prefix={prefix} />
+            {text ? (
+              <span className="text-green-600 font-semibold italic text-xs">{text}</span>
+            ) : (
+              <PriceDisplay amount={val} type={type} prefix={prefix} />
+            )}
           </div>
         ))}
         <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary text-base">
