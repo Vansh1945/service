@@ -420,8 +420,12 @@ const PaymentViewDetailModal = ({ isOpen, onClose, initialData, entityData }) =>
                     <div className="space-y-1">
                       <InfoRow label="Refund ID" value={d.refund.refundId || `#${d.refund._id?.slice(-6)}`} mono />
                       <InfoRow label="Refund Amount" badge={<AmtCell amount={d.refund.refundAmount} colorClass="text-emerald-600" />} />
-                      <InfoRow label="Refund Mode" value={d.refund.refundMode || 'instant'} />
-                      <InfoRow label="Status" badge={<StatusChip label={(d.refund.refundStatus || 'completed').toUpperCase()} type="success" />} />
+                      <InfoRow label="Status" badge={
+                        <StatusChip 
+                          label={d.refund.refundStatus === 'processing' ? 'PROCESSING (5-7 DAYS)' : (d.refund.refundStatus || 'COMPLETED').toUpperCase()} 
+                          type={d.refund.refundStatus === 'completed' ? 'success' : d.refund.refundStatus === 'processing' ? 'warning' : 'danger'} 
+                        />
+                      } />
                     </div>
                   ) : (
                     <p className="text-xs text-neutral-400 py-4 text-center">No refund associated with this transaction.</p>

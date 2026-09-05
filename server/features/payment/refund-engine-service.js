@@ -744,9 +744,11 @@ class RefundEngineService {
         }
       }
 
-      // Complete refund status upon successful payout dispatches
-      refundDoc.refundStatus = 'completed';
-      refundDoc.completedAt = new Date();
+      const isGatewayPayout = (destination === 'original_payment');
+
+      // Complete refund status upon successful payout dispatches (processing for gateway bank SLA, completed for instant wallet)
+      refundDoc.refundStatus = isGatewayPayout ? 'processing' : 'completed';
+      refundDoc.completedAt = isGatewayPayout ? null : new Date();
       refundDoc.processedBy = refundDoc.approvedBy || customerId;
       await refundDoc.save(saveOpts);
 
@@ -755,9 +757,15 @@ class RefundEngineService {
       if (!booking.cancellationProgress) {
         booking.cancellationProgress = {};
       }
-      booking.cancellationProgress.status = 'refundcompleted';
+      booking.refundDestination = destination;
+      booking.refundStatus = isGatewayPayout ? 'processing' : 'completed';
+      booking.refundReference = refundDoc.gatewayRefundId || refundDoc.walletTransactionId || refundDoc.refundId;
+      booking.cancellationProgress.status = isGatewayPayout ? 'processingrefund' : 'refundcompleted';
+      booking.cancellationProgress.destination = destination;
       booking.cancellationProgress.refundAmount = totalRefund;
-      booking.cancellationProgress.refundCompletedAt = new Date();
+      if (!isGatewayPayout) {
+        booking.cancellationProgress.refundCompletedAt = new Date();
+      }
       booking.cancellationProgress.refundId = refundDoc.refundId;
       await booking.save(saveOpts);
 

@@ -269,6 +269,7 @@ app.use((req, res, next) => {
       url.includes('/chat') ||
       url.includes('/notifications') ||
       url.includes('/payment') ||
+      url.includes('/system-setting') ||
       url.includes('/referral/customer') ||
       url.includes('/referral/provider') ||
       url.includes('/referral/admin');

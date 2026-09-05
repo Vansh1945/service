@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiX, FiCreditCard, FiUser, FiActivity, FiArrowUpRight, FiArrowDownLeft } from 'react-icons/fi';
 import PriceDisplay from '../../../../components/PriceDisplay';
+import { formatDateTime } from '../../../../utils/format';
 
 const WalletViewDetailModal = ({ isOpen, onClose, entityData }) => {
   if (!isOpen || !entityData) return null;
@@ -69,7 +70,7 @@ const WalletViewDetailModal = ({ isOpen, onClose, entityData }) => {
                       )}
                       <div>
                         <p className="font-bold text-slate-800">{txn.description || txn.type}</p>
-                        <p className="text-[10px] text-slate-400">{txn.date ? new Date(txn.date).toLocaleString('en-IN') : 'Recent'}</p>
+                        <p className="text-[10px] text-slate-400">{txn.date ? formatDateTime(txn.date) : 'Recent'}</p>
                       </div>
                     </div>
                     <span className={`font-black ${txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>

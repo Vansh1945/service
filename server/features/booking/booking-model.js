@@ -812,6 +812,14 @@ const bookingSchema = new Schema({
     ignoredProviders: [{ type: Schema.Types.ObjectId, ref: 'Provider' }],
     assignedAt: Date
   },
+  overdueAlertSent: {
+    type: Boolean,
+    default: false
+  },
+  lastOverdueAlertAt: {
+    type: Date,
+    default: null
+  },
   // BOOKING LOCK UPGRADE
   lockedBy: {
     type: Schema.Types.ObjectId,

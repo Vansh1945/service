@@ -60,7 +60,7 @@ const SurgeManagement = () => {
   const [surgeRules, setSurgeRules] = useState([]);
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const [togglingRuleId, setTogglingRuleId] = useState(null);
   // Tabs
   const [activeTab, setActiveTab] = useState('all');
 
@@ -84,22 +84,6 @@ const SurgeManagement = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // Zone cascade for create
-  const [createStateSearch] = useState('');
-  const [createStateOpen] = useState(false);
-  const [createCitySearch] = useState('');
-  const [createCityOpen] = useState(false);
-  const [createMicroSearch] = useState('');
-  const [createMicroOpen] = useState(false);
-
-  // Zone cascade for edit
-  const [editStateSearch] = useState('');
-  const [editStateOpen] = useState(false);
-  const [editCitySearch] = useState('');
-  const [editCityOpen] = useState(false);
-  const [editMicroSearch] = useState('');
-  const [editMicroOpen] = useState(false);
 
   // Forms
   const defaultForm = {
@@ -360,7 +344,8 @@ const SurgeManagement = () => {
 
   // ----- Derived Status Helper -----
   const getRuleDisplayStatus = (rule) => {
-    if (!rule || !rule.active) {
+    const isActive = rule && (rule.active === true || rule.active === 'true');
+    if (!rule || !isActive) {
       return { label: 'Inactive', badgeClass: 'bg-red-50 text-red-600 border border-red-200' };
     }
     const today = new Date();
@@ -399,10 +384,17 @@ const SurgeManagement = () => {
 
       const response = await SurgeService.createSurgeRule(payload);
       if (response.data?.success) {
+        const newRule = response.data.data;
         toast.success(response.data.message || 'Surge rule created');
-        fetchSurgeRules();
+        // Immediately prepend the new rule and switch to 'all' tab so it's visible right away
+        setSurgeRules(prev => [newRule, ...prev]);
         setShowCreateModal(false);
         setCreateForm({ ...defaultForm });
+        setActiveTab('all');
+        setTypeFilter('all');
+        setStatusFilter('all');
+        setSearchTerm('');
+        setCurrentPage(1);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to create surge rule');
@@ -439,15 +431,35 @@ const SurgeManagement = () => {
   };
 
   const handleToggleRuleStatus = async (id) => {
+    if (togglingRuleId === id) return; // prevent double-click
+    setTogglingRuleId(id);
+
+    // Optimistic update: immediately flip active in local state
+    let previousRules;
+    setSurgeRules(prev => {
+      previousRules = prev;
+      return prev.map(r => r._id === id ? { ...r, active: !r.active } : r);
+    });
+
     try {
       const response = await SurgeService.toggleSurgeRuleStatus(id);
       if (response.data?.success) {
+        // Merge server data (has populated zoneId)
+        const serverRule = response.data.data;
+        setSurgeRules(prev => prev.map(r => r._id === id ? { ...r, ...serverRule } : r));
         toast.success(response.data.message);
-        fetchSurgeRules();
+      } else {
+        // Revert if not successful
+        setSurgeRules(previousRules);
+        toast.error('Failed to toggle surge status');
       }
     } catch (error) {
+      // Rollback on error
+      setSurgeRules(previousRules);
       console.error(error);
-      toast.error('Failed to toggle surge status');
+      toast.error(error.response?.data?.message || 'Failed to toggle surge status');
+    } finally {
+      setTogglingRuleId(null);
     }
   };
 
@@ -521,7 +533,7 @@ const SurgeManagement = () => {
 
   return (
     <div className="min-h-screen p-4 md:p-6 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
 
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
@@ -697,6 +709,7 @@ const SurgeManagement = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               {(() => {
                                 const statusInfo = getRuleDisplayStatus(rule);
+                                const isActive = rule.active === true || rule.active === 'true';
                                 return (
                                   <div className="flex items-center gap-2">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${statusInfo.badgeClass}`}>
@@ -705,9 +718,13 @@ const SurgeManagement = () => {
                                     <button
                                       onClick={() => handleToggleRuleStatus(rule._id)}
                                       className="text-gray-400 hover:text-gray-600 transition-colors"
-                                      title={rule.active ? 'Pause Rule' : 'Activate Rule'}
+                                      title={isActive ? 'Deactivate Rule' : 'Activate Rule'}
                                     >
-                                      {rule.active ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5 text-red-400" />}
+                                      {isActive ? (
+                                        <ToggleRight className="w-5 h-5 text-green-600" />
+                                      ) : (
+                                        <ToggleLeft className="w-5 h-5 text-red-400" />
+                                      )}
                                     </button>
                                   </div>
                                 );
@@ -895,6 +912,7 @@ const SurgeManagement = () => {
               isCreate={true}
               onCancel={() => setShowCreateModal(false)}
               zones={zones}
+              existingRules={surgeRules}
             />
           </Modal>
         )}
@@ -909,6 +927,8 @@ const SurgeManagement = () => {
               isCreate={false}
               onCancel={() => setShowEditModal(false)}
               zones={zones}
+              existingRules={surgeRules}
+              editingRuleId={selectedRule?._id}
             />
           </Modal>
         )}
@@ -1101,14 +1121,43 @@ const ZoneCascadeSelector = ({
 };
 
 // ----- Surge Form Component -----
-const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones }) => {
+const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones, existingRules = [], editingRuleId = null }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
+  // Detect conflict: same chargeType + scope + zoneId already exists
+  const conflictRule = existingRules.find(r => {
+    if (editingRuleId && r._id === editingRuleId) return false; // exclude self when editing
+    if (r.chargeType !== form.chargeType) return false;
+    if (r.scope !== form.scope) return false;
+    if (form.scope === 'zone') {
+      const rZoneId = (r.zoneId?._id || r.zoneId || '').toString();
+      const fZoneId = (form.zoneIds && form.zoneIds[0]) ? form.zoneIds[0].toString() : '';
+      return rZoneId === fZoneId && fZoneId !== '';
+    }
+    return true; // global scope conflict
+  });
+
+  const hasConflict = !!conflictRule;
+
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form onSubmit={hasConflict ? (e) => e.preventDefault() : onSubmit} className="space-y-5">
+      {/* Conflict Warning Banner */}
+      {hasConflict && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-amber-800">Duplicate Rule Detected</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              A <span className="font-semibold">{getChargeTypeConfig(form.chargeType).label}</span> rule already exists
+              {form.scope === 'global' ? ' for Global scope' : ' for this zone'}. Only one rule per charge type is allowed.
+              Please <span className="font-semibold">edit the existing rule</span> instead.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Charge Type Selector — visual cards */}
       <div>
         <label className="block text-sm font-semibold text-secondary mb-2">Charge Type *</label>
@@ -1342,7 +1391,15 @@ const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones }) => {
         <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
           Cancel
         </button>
-        <button type="submit" className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-semibold flex items-center shadow-md">
+        <button
+          type="submit"
+          disabled={hasConflict}
+          className={`px-5 py-2 rounded-lg transition-colors text-sm font-semibold flex items-center shadow-md ${
+            hasConflict
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+              : 'bg-primary text-white hover:bg-teal-700'
+          }`}
+        >
           <Save className="w-4 h-4 mr-2" />
           {isCreate ? 'Create Surge Rule' : 'Save Changes'}
         </button>

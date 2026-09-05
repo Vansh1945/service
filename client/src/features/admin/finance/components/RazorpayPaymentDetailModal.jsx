@@ -314,7 +314,12 @@ const RazorpayPaymentDetailModal = ({ isOpen, onClose, entityData, paymentId }) 
                   <InfoRow label="Refund ID" value={refund.refundId || 'N/A'} mono />
                   <InfoRow label="Gateway Refund ID" value={refund.gatewayRefundId || 'N/A'} mono />
                   <InfoRow label="Refund Amount" badge={<span className="font-bold text-danger"><PriceDisplay amount={refund.refundAmount || 0} /></span>} />
-                  <InfoRow label="Refund Status" badge={<StatusChip label={(refund.refundStatus || 'completed').toUpperCase()} type="danger" />} />
+                  <InfoRow label="Refund Status" badge={
+                    <StatusChip 
+                      label={refund.refundStatus === 'processing' ? 'PROCESSING (5-7 DAYS)' : (refund.refundStatus || 'COMPLETED').toUpperCase()} 
+                      type={refund.refundStatus === 'completed' ? 'success' : refund.refundStatus === 'processing' ? 'warning' : 'danger'} 
+                    />
+                  } />
                   <InfoRow label="Refund Speed" value={(refund.refundSpeed || 'optimum').toUpperCase()} />
                   <InfoRow label="Processed Time" value={fmtDate(refund.processedTime)} />
                 </div>

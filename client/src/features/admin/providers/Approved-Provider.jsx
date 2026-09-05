@@ -34,7 +34,7 @@ import { toast } from '../../../components/ui/Toast';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
 import * as ProviderService from '../../../services/ProviderService';
-import { formatDate, formatAddress as formatAddressUtil } from '../../../utils/format';
+import { formatDate, formatDateTime, formatAddress as formatAddressUtil } from '../../../utils/format';
 import StatCard from '../../../components/ui/StatCard';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 
@@ -997,7 +997,7 @@ const ProviderModal = ({
                 </p>
                 {ps.restrictedUntil && (
                   <p className="text-xs text-danger mt-0.5">
-                    Until: {new Date(ps.restrictedUntil).toLocaleString()}
+                    Until: {formatDateTime(ps.restrictedUntil)}
                   </p>
                 )}
               </div>
@@ -1206,7 +1206,7 @@ const ProviderModal = ({
                     {bd.verificationHistory.map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between text-xs bg-neutral-50 p-2.5 rounded-lg border border-neutral-200/60">
                         <span className="font-semibold uppercase tracking-wider text-neutral-700">{item.status}</span>
-                        <span className="text-neutral-400">{new Date(item.timestamp).toLocaleString()}</span>
+                        <span className="text-neutral-400">{formatDateTime(item.timestamp)}</span>
                         <span className="text-neutral-500 italic">{item.reason || 'No remarks'}</span>
                       </div>
                     ))}
@@ -1260,7 +1260,7 @@ const ProviderModal = ({
             </div>
             {provider.legalAcceptance?.acceptedAt && (
               <div className="mt-4 pt-3 border-t border-neutral-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-neutral-500 font-medium">
-                <div>Accepted At: {new Date(provider.legalAcceptance.acceptedAt).toLocaleString()}</div>
+                <div>Accepted At: {formatDateTime(provider.legalAcceptance.acceptedAt)}</div>
                 <div>Version: {provider.legalAcceptance.version}</div>
                 <div>IP: {provider.legalAcceptance.ipAddress || 'N/A'}</div>
                 {provider.digitalSignature?.signatureUrl && (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiX, FiCheckCircle, FiDollarSign, FiLayers, FiCreditCard } from 'react-icons/fi';
 import PriceDisplay from '../../../../components/PriceDisplay';
+import { formatDateTime } from '../../../../utils/format';
 
 const SettlementViewDetailModal = ({ isOpen, onClose, entityData }) => {
   if (!isOpen || !entityData) return null;
@@ -75,7 +76,7 @@ const SettlementViewDetailModal = ({ isOpen, onClose, entityData }) => {
               <div>
                 <span className="text-xs text-slate-400 font-medium block">Settlement Date</span>
                 <span className="font-bold text-slate-800">
-                  {data.createdAt ? new Date(data.createdAt).toLocaleString('en-IN') : 'N/A'}
+                  {data.createdAt ? formatDateTime(data.createdAt) : 'N/A'}
                 </span>
               </div>
               <div>

@@ -210,9 +210,11 @@ export const DOMAIN_STATUS_MAP = {
   [STATUS_DOMAINS.REFUND]: {
     requested: { label: 'Refund Requested', color: 'bg-amber-50 text-amber-700 border-amber-200', group: 'pending', isTerminal: false },
     pending: { label: 'Pending Refund', color: 'bg-amber-50 text-amber-700 border-amber-200', group: 'pending', isTerminal: false },
-    approved: { label: 'Refund Approved', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', group: 'approved', isTerminal: false },
-    processing: { label: 'Processing Payout', color: 'bg-amber-50 text-amber-700 border-amber-200', group: 'processing', isTerminal: false },
+    approved: { label: 'Refund Approved', color: 'bg-blue-50 text-blue-700 border-blue-200', group: 'approved', isTerminal: false },
+    processing: { label: 'Refund Processing (5-7 Days)', color: 'bg-amber-50 text-amber-700 border-amber-200', group: 'processing', isTerminal: false },
+    processingrefund: { label: 'Refund Processing (5-7 Days)', color: 'bg-amber-50 text-amber-700 border-amber-200', group: 'processing', isTerminal: false },
     completed: { label: 'Refund Completed', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', group: 'completed', isTerminal: true },
+    refundcompleted: { label: 'Refund Completed', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', group: 'completed', isTerminal: true },
     failed: { label: 'Refund Failed', color: 'bg-red-50 text-red-700 border-red-200', group: 'failed', isTerminal: true },
     rejected: { label: 'Refund Rejected', color: 'bg-red-50 text-red-700 border-red-200', group: 'rejected', isTerminal: true },
     cancelled: { label: 'Refund Cancelled', color: 'bg-gray-100 text-gray-700 border-gray-200', group: 'cancelled', isTerminal: true }

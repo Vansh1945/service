@@ -8,7 +8,7 @@ import {
   Calendar, Clock, MapPin, User, Phone,
   XCircle, AlertCircle, Eye, CreditCard, Star, Package,
   ShoppingCart, Wrench, Activity, Edit3,
-  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
+  X, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart, CheckCircle2
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings, getBooking } from '../../../services/BookingService';
 import { toggleFavoriteProvider } from '../../../services/CustomerService';
@@ -157,8 +157,8 @@ const ProviderCard = ({ provider, status, compact = false, onCall, onChat, booki
             type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(provider, e); }}
             className={`p-2 rounded-xl transition-all border shadow-sm ${isFavorited
-                ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
-                : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-rose-500'
+              ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+              : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-rose-500'
               }`}
             title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           >
@@ -290,7 +290,7 @@ const PaymentDetails = ({ booking }) => {
           {[
             ['Txn ID', booking.transactionId],
             ...(booking.razorpayPaymentId ? [['Payment ID', booking.razorpayPaymentId]] : []),
-            ...(booking.paymentDate ? [['Date', new Date(booking.paymentDate).toLocaleString()]] : []),
+            ...(booking.paymentDate ? [['Date', formatDateTime(booking.paymentDate)]] : []),
           ].map(([label, val]) => (
             <div key={label} className="flex justify-between text-xs">
               <span className="text-gray-500">{label}</span>
@@ -393,10 +393,10 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
             <div>
               <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Booking Detail</p>
               <h2 className="text-lg font-bold text-secondary leading-tight">{booking.services?.[0]?.service?.title || 'Booking Details'}</h2>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <span className="text-[10px] font-medium text-gray-400 font-mono">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</span>
-                {getBookingTypeBadge(booking.bookingType)}
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 capitalize border border-slate-200">{booking.status}</span>
+                {!['cancelled', 'completed'].includes((booking.status || '').toLowerCase()) && getBookingTypeBadge(booking.bookingType)}
+                <StatusBadge status={booking.status} module="booking" />
               </div>
             </div>
             <button
@@ -464,8 +464,8 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                           type="button"
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(provider, e); }}
                           className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all border shadow-xs ml-auto ${isModalFavorited
-                              ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
-                              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-rose-500'
+                            ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-rose-500'
                             }`}
                           title={isModalFavorited ? 'Remove from favorites' : 'Add to favorites'}
                         >
@@ -551,56 +551,78 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                 </div>
               )}
 
-              {(normalizeStatus(booking.paymentStatus) === 'refunded' || booking.cancellationProgress?.refundAmount > 0 || normalizeStatus(booking.paymentStatus) === 'refundpending' || booking.refundStatus === 'pending') && (
-                <div className="bg-purple-50/80 rounded-xl p-4 border border-purple-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <Wallet className="w-4 h-4 text-purple-600" /> Enterprise Refund Status & Tracking
-                    </p>
-                    <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${booking.paymentStatus === 'refunded' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'
-                      }`}>
-                      {booking.paymentStatus === 'refunded' ? 'Refund Completed' : 'Refund Pending'}
-                    </span>
-                  </div>
+              {(normalizeStatus(booking.paymentStatus) === 'refunded' || booking.cancellationProgress?.refundAmount > 0 || normalizeStatus(booking.paymentStatus) === 'refundpending' || booking.refundStatus === 'pending') && (() => {
+                const refundDest = booking.refundDestination ||
+                  booking.actualRefundDestination ||
+                  booking.cancellationProgress?.destination ||
+                  (booking.paymentMethod === 'wallet' ? 'wallet' : 'original_payment');
+                const isWallet = refundDest === 'wallet';
+                const isMixed = booking.paymentMethod === 'mixed' || (booking.walletUsed > 0 && booking.onlinePaid > 0);
+                const isGateway = !isWallet && !isMixed;
 
-                  <div className="grid grid-cols-2 gap-3 text-xs bg-white/70 p-3 rounded-lg border border-purple-100">
-                    <div>
-                      <span className="text-gray-500 text-[10px] uppercase font-semibold block">Total Refund Amount</span>
-                      <span className="font-extrabold text-purple-700 text-sm">₹{booking.cancellationProgress?.refundAmount || booking.refundAmount || booking.totalAmount}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 text-[10px] uppercase font-semibold block">Refund Destination</span>
-                      <span className="font-bold text-gray-800 flex items-center gap-1">
-                        {booking.paymentMethod === 'mixed' || (booking.walletUsed > 0 && booking.onlinePaid > 0)
-                          ? '⚡ Customer Wallet (Instant)'
-                          : (booking.paymentMethod === 'wallet' || booking.refundDestination === 'wallet' ? '⚡ Customer Wallet (Instant)' : '💳 Payment Gateway (2-5 Days)')}
+                const isSettled = Boolean(booking.cancellationProgress?.bankSettled || booking.refundStatus === 'completed_settled');
+                const isProcessing = isGateway && !isSettled;
+
+                const refundBadgeLabel = isProcessing
+                  ? '⏳ Refund Processing (5-7 Days)'
+                  : '✓ Refund Completed';
+                const refundBadgeClass = isProcessing
+                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                  : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+                const totalRefundAmount = booking.cancellationProgress?.refundAmount || booking.refundAmount || booking.totalAmount;
+
+                return (
+                  <div className="bg-purple-50/70 rounded-xl p-3 sm:p-4 border border-purple-200">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                        <Wallet className="w-3.5 h-3.5 text-purple-600" /> Refund Details
+                      </p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${refundBadgeClass}`}>
+                        {refundBadgeLabel}
                       </span>
                     </div>
 
-                    {/* Mixed Payment Breakdown Display */}
-                    {booking.walletUsed > 0 && booking.onlinePaid > 0 && (
-                      <div className="col-span-2 bg-purple-100/50 p-2 rounded-md space-y-1 text-[11px]">
-                        <span className="font-bold text-purple-900 block text-[10px] uppercase">Payment & Refund Breakdown</span>
-                        <div className="flex justify-between text-gray-700">
-                          <span>Wallet Portion (Instant Credit):</span>
-                          <span className="font-bold text-purple-800">₹{booking.walletUsed}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-700">
-                          <span>Gateway Portion (Razorpay / Bank):</span>
-                          <span className="font-bold text-blue-800">₹{booking.onlinePaid}</span>
-                        </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-white/90 p-2.5 rounded-lg border border-purple-100">
+                      <div>
+                        <span className="text-gray-400 text-[10px] block">Total Amount</span>
+                        <span className="font-bold text-purple-700 text-sm">₹{totalRefundAmount}</span>
                       </div>
-                    )}
+                      <div>
+                        <span className="text-gray-400 text-[10px] block">Destination</span>
+                        <span className="font-semibold text-gray-800 text-[11px] truncate block">
+                          {isMixed ? '⚡ Wallet (Full Credit)' : isWallet ? '⚡ Customer Wallet' : '💳 Original Payment'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 text-[10px] block">Expected Arrival</span>
+                        <span className="font-semibold text-gray-800 text-[11px]">
+                          {isGateway ? '5-7 Business Days' : 'Instant'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 text-[10px] block">Status</span>
+                        <span className={`font-semibold text-[11px] ${isProcessing ? 'text-amber-700' : 'text-emerald-700'}`}>
+                          {isProcessing ? 'Processing' : 'Completed'}
+                        </span>
+                      </div>
 
-                    {booking.cancellationProgress?.refundId && (
-                      <div className="col-span-2 border-t border-purple-100 pt-2 flex justify-between items-center text-[11px]">
-                        <span className="text-gray-500 font-medium">Refund Ledger ID</span>
-                        <span className="font-mono font-bold text-purple-900">{booking.cancellationProgress.refundId}</span>
-                      </div>
-                    )}
+                      {booking.walletUsed > 0 && booking.onlinePaid > 0 && (
+                        <div className="col-span-2 bg-purple-50 p-2 rounded text-[11px] text-gray-700 flex justify-between">
+                          <span>Wallet: <b>₹{booking.walletUsed}</b></span>
+                          <span>Bank: <b>₹{booking.onlinePaid}</b></span>
+                        </div>
+                      )}
+
+                      {booking.refundReference && (
+                        <div className="col-span-2 text-[10px] text-gray-500 font-mono break-all pt-1 border-t border-purple-50">
+                          Ref: <span className="font-medium text-gray-800">{booking.refundReference}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
@@ -610,18 +632,46 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                   <div className="space-y-0">
                     {(() => {
                       const isCancelled = (booking.status || '').toLowerCase() === 'cancelled';
-                      const stepsList = isCancelled ? [
-                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'] },
-                        { label: 'Booking Cancelled', statuses: ['cancelled'], isRed: true }
-                      ] : [
-                        { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
-                        { label: 'Provider Assigned', statuses: ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
-                        { label: 'Accepted', statuses: ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
-                        { label: 'On The Way', statuses: ['ontheway', 'arrived', 'workstarted', 'completed'] },
-                        { label: 'Arrived', statuses: ['arrived', 'workstarted', 'completed'] },
-                        { label: 'Work Started', statuses: ['workstarted', 'completed'] },
-                        { label: 'Completed', statuses: ['completed'] }
-                      ];
+                      const hasRefund = Boolean(booking.refundAmount > 0 || booking.cancellationProgress?.refundAmount > 0 || (booking.totalAmount > 0 && ['online', 'wallet'].includes(booking.paymentMethod)));
+                      const isWalletRefund = (booking.refundDestination === 'wallet' || booking.actualRefundDestination === 'wallet' || booking.paymentMethod === 'wallet');
+                      const isRefundSettled = isWalletRefund || Boolean(booking.cancellationProgress?.bankSettled || booking.refundStatus === 'completed' || booking.refundStatus === 'completed_settled');
+
+                      let stepsList;
+                      if (isCancelled) {
+                        stepsList = [
+                          { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed', 'cancelled'] },
+                          { label: 'Booking Cancelled', statuses: ['cancelled'], isRed: true }
+                        ];
+                        if (hasRefund) {
+                          if (isRefundSettled) {
+                            stepsList.push({
+                              label: isWalletRefund ? 'Refund Credited (Wallet Instant)' : 'Refund Settled to Bank Account',
+                              statuses: ['refundcompleted', 'completed'],
+                              isCompleted: true,
+                              timestamp: booking.refundProcessedAt || booking.cancelledAt || booking.updatedAt
+                            });
+                          } else {
+                            stepsList.push({
+                              label: 'Refund Processing (5-7 Business Days)',
+                              statuses: [],
+                              isCompleted: false,
+                              isProcessing: true,
+                              timestamp: booking.refundProcessedAt || booking.cancelledAt || booking.updatedAt,
+                              subtext: 'Initiated to Razorpay • Awaiting Bank Clearance'
+                            });
+                          }
+                        }
+                      } else {
+                        stepsList = [
+                          { label: 'Booking Created', statuses: ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
+                          { label: 'Provider Assigned', statuses: ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
+                          { label: 'Accepted', statuses: ['accepted', 'ontheway', 'arrived', 'workstarted', 'completed'] },
+                          { label: 'On The Way', statuses: ['ontheway', 'arrived', 'workstarted', 'completed'] },
+                          { label: 'Arrived', statuses: ['arrived', 'workstarted', 'completed'] },
+                          { label: 'Work Started', statuses: ['workstarted', 'completed'] },
+                          { label: 'Completed', statuses: ['completed'] }
+                        ];
+                      }
 
                       return stepsList.map((step, idx) => {
                         const history = booking.statusHistory || [];
@@ -629,13 +679,29 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                           const s = (h.status || '').toLowerCase().replace(/[^a-z]/g, '');
                           return step.statuses.includes(s);
                         });
-                        const isCompleted = !!match || step.statuses.includes(String(booking.status || 'pending').trim().toLowerCase().replace(/[^a-z]/g, ''));
-                        const timestamp = match ? match.timestamp : null;
+                        const isCompleted = step.isCompleted !== undefined
+                          ? step.isCompleted
+                          : (!!match || step.statuses.includes(String(booking.status || 'pending').trim().toLowerCase().replace(/[^a-z]/g, '')));
+                        const timestamp = step.timestamp || (match ? match.timestamp : null);
 
-                        const lineClass = isCompleted ? (step.isRed ? 'bg-danger' : 'bg-emerald-500') : 'bg-gray-250';
-                        const iconClass = isCompleted
-                          ? (step.isRed ? 'bg-danger text-white shadow-sm ring-4 ring-danger/10' : 'bg-emerald-500 text-white shadow-sm ring-4 ring-emerald-50')
-                          : 'bg-white border-2 border-gray-300 text-gray-400';
+                        let lineClass = 'bg-gray-250';
+                        if (isCompleted) {
+                          lineClass = step.isRed ? 'bg-danger' : 'bg-emerald-500';
+                        } else if (step.isProcessing) {
+                          lineClass = 'bg-amber-300 border-dashed';
+                        }
+
+                        let iconClass = 'bg-white border-2 border-gray-300 text-gray-400';
+                        let iconContent = idx + 1;
+                        if (isCompleted) {
+                          iconClass = step.isRed
+                            ? 'bg-danger text-white shadow-sm ring-4 ring-danger/10'
+                            : 'bg-emerald-500 text-white shadow-sm ring-4 ring-emerald-50';
+                          iconContent = '✓';
+                        } else if (step.isProcessing) {
+                          iconClass = 'bg-amber-500 text-white shadow-sm ring-4 ring-amber-100 animate-pulse';
+                          iconContent = '⏳';
+                        }
 
                         return (
                           <div key={idx} className="relative pl-8 pb-5 last:pb-0">
@@ -643,15 +709,23 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                               <div className={`absolute left-[9px] top-5 bottom-0 w-0.5 ${lineClass}`} />
                             )}
                             <div className={`absolute left-0 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold z-10 transition-all ${iconClass}`}>
-                              {isCompleted ? '✓' : idx + 1}
+                              {iconContent}
                             </div>
                             <div className="min-w-0">
-                              <h4 className={`text-xs font-bold leading-none ${isCompleted ? (step.isRed ? 'text-danger font-black' : 'text-secondary font-black') : 'text-gray-400 font-semibold'}`}>
+                              <h4 className={`text-xs font-bold leading-none ${isCompleted
+                                  ? (step.isRed ? 'text-danger font-black' : 'text-secondary font-black')
+                                  : (step.isProcessing ? 'text-amber-800 font-black' : 'text-gray-400 font-semibold')
+                                }`}>
                                 {step.label}
                               </h4>
                               {timestamp && (
-                                <span className="text-[9px] text-gray-400 font-mono block mt-1">
-                                  {new Date(timestamp).toLocaleString()}
+                                <span className="text-[9px] text-gray-500 font-mono block mt-1">
+                                  {formatDateTime(timestamp)}
+                                </span>
+                              )}
+                              {step.subtext && (
+                                <span className="text-[9px] text-amber-700 block mt-0.5 font-medium">
+                                  {step.subtext}
                                 </span>
                               )}
                             </div>
@@ -699,7 +773,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                     </div>
                     {booking.serviceStartedAt && (
                       <p className="text-[9px] text-gray-400 mt-2 flex items-center gap-1 font-medium">
-                        <Clock className="w-2.5 h-2.5" /> {new Date(booking.serviceStartedAt).toLocaleString()}
+                        <Clock className="w-2.5 h-2.5" /> {formatDateTime(booking.serviceStartedAt)}
                       </p>
                     )}
                   </div>
@@ -731,7 +805,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                     </div>
                     {booking.serviceCompletedAt && (
                       <p className="text-[9px] text-emerald-600 font-bold mt-2 flex items-center gap-1">
-                        <CheckSquare className="w-2.5 h-2.5" /> {new Date(booking.serviceCompletedAt).toLocaleString()}
+                        <CheckSquare className="w-2.5 h-2.5" /> {formatDateTime(booking.serviceCompletedAt)}
                       </p>
                     )}
                   </div>
@@ -747,7 +821,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat, onCall, onTogg
                             <span className={`text-[10px] font-bold uppercase ${proof.uploadedBy === 'customer' ? 'text-blue-600' : 'text-primary'}`}>
                               {proof.uploadedBy}
                             </span>
-                            <span className="text-[10px] text-gray-400">{new Date(proof.createdAt).toLocaleString()}</span>
+                            <span className="text-[10px] text-gray-400">{formatDateTime(proof.createdAt)}</span>
                           </div>
                           <p className="text-xs text-gray-650 mb-2">{proof.message}</p>
                           <div className="flex flex-wrap gap-2">
@@ -867,15 +941,15 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              {getBookingTypeBadge(booking.bookingType)}
+              {!['cancelled', 'completed'].includes((booking.status || '').toLowerCase()) && getBookingTypeBadge(booking.bookingType)}
               <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Calendar className="w-3.5 h-3.5" /> {formatDate(booking.date)}
+                <Calendar className="w-3.5 h-3.5 text-gray-400" /> {formatDate(booking.date)}
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Clock className="w-3.5 h-3.5" /> {booking.time ? formatTime(booking.time) : (booking.createdAt ? formatTime(booking.createdAt) : (booking.date ? formatTime(booking.date) : 'Flexible'))}
+                <Clock className="w-3.5 h-3.5 text-gray-400" /> {booking.time ? formatTime(booking.time) : (booking.createdAt ? formatTime(booking.createdAt) : (booking.date ? formatTime(booking.date) : 'Flexible'))}
               </div>
               <StatusBadge status={booking.status} module="booking" />
-              {booking.paymentStatus === 'refunded' && (
+              {booking.paymentStatus === 'refunded' && booking.status !== 'cancelled' && (
                 <StatusBadge status="refunded" module="refund" icon={Wallet} />
               )}
 
@@ -969,6 +1043,16 @@ const BookingCard = ({ booking, onView, onReschedule, onCancel, onCall, onChat, 
 
 // ─── Main Page ───────────────
 
+const CACHE_KEY = 'customer_bookings_cache';
+const getCachedBookings = () => {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 const CustomerBookingsPage = () => {
   const { token, API, showToast, user, refreshUser, updateUserData } = useAuth();
   const { socket } = useSocket();
@@ -976,6 +1060,7 @@ const CustomerBookingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
   const [actionLoading, setActionLoading] = useState({});
+  const deepLinkLoadedRef = useRef(false);
 
   const handleToggleFavorite = async (provider, e) => {
     if (e) {
@@ -1022,8 +1107,10 @@ const CustomerBookingsPage = () => {
     }
   };
 
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedData = useRef(getCachedBookings()).current;
+  const initialIsDefault = !searchParams.get('search');
+  const [bookings, setBookings] = useState(() => (initialIsDefault && cachedData?.data) ? cachedData.data : []);
+  const [loading, setLoading] = useState(() => !(initialIsDefault && cachedData?.data?.length));
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
@@ -1038,7 +1125,7 @@ const CustomerBookingsPage = () => {
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [bookingToReschedule, setBookingToReschedule] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState({});
+  const [pagination, setPagination] = useState(() => (initialIsDefault && cachedData?.pagination) ? cachedData.pagination : {});
   const [chatBookingId, setChatBookingId] = useState(null);
   const [chatRoomType, setChatRoomType] = useState('provider_customer');
   const [cancelModalState, setCancelModalState] = useState({ isOpen: false, booking: null, loading: false });
@@ -1076,27 +1163,40 @@ const CustomerBookingsPage = () => {
   };
 
   const fetchAbortControllerRef = useRef(null);
+  const lastFetchTimeRef = useRef(0);
 
   const fetchBookings = useCallback(async (isSilent = false) => {
     if (fetchAbortControllerRef.current) {
       fetchAbortControllerRef.current.abort();
     }
-    fetchAbortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    fetchAbortControllerRef.current = controller;
 
     try {
       if (!isSilent) setLoading(true);
       const params = new URLSearchParams({ status: statusFilter, timeFilter, searchTerm: debouncedSearch, page: currentPage, limit: 20 });
-      const res = await getCustomerBookings(params, { signal: fetchAbortControllerRef.current.signal });
+      const res = await getCustomerBookings(params, { signal: controller.signal });
       const responseData = res.data;
-      setBookings(responseData.data || []);
-      setPagination(responseData.pagination || {});
+      const data = responseData.data || [];
+      const pag = responseData.pagination || {};
+      setBookings(data);
+      setPagination(pag);
+      lastFetchTimeRef.current = Date.now();
+
+      if (statusFilter === 'all' && timeFilter === 'all' && !debouncedSearch && currentPage === 1) {
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, pagination: pag }));
+        } catch {}
+      }
     } catch (err) {
       if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
         showToast(`Error fetching bookings: ${err.message} `, 'error');
         setBookings([]);
       }
     } finally {
-      if (!isSilent) setLoading(false);
+      if (fetchAbortControllerRef.current === controller && !isSilent) {
+        setLoading(false);
+      }
     }
   }, [showToast, statusFilter, timeFilter, debouncedSearch, currentPage]);
 
@@ -1179,16 +1279,16 @@ const CustomerBookingsPage = () => {
     socket.on('sla_status_changed', handleSlaStatusChanged);
 
     const handleReconnect = () => {
-      fetchBookings(true);
+      if (Date.now() - lastFetchTimeRef.current > 15000) {
+        fetchBookings(true);
+      }
     };
-    socket.on('connect', handleReconnect);
     socket.on('reconnect', handleReconnect);
 
     return () => {
       socket.off('booking-updated', handleBookingUpdated);
       socket.off('booking-deleted', handleBookingDeleted);
       socket.off('sla_status_changed', handleSlaStatusChanged);
-      socket.off('connect', handleReconnect);
       socket.off('reconnect', handleReconnect);
     };
   }, [socket, fetchBookings]);
@@ -1216,10 +1316,12 @@ const CustomerBookingsPage = () => {
 
   // fetchBookings declaration moved above to avoid temporal dead zone reference errors
 
-  // Silent Refresh on window focus and online status
+  // Silent Refresh on window focus (throttled to 30s) and online status
   useEffect(() => {
     const handleFocus = () => {
-      fetchBookings(true);
+      if (Date.now() - lastFetchTimeRef.current > 30000) {
+        fetchBookings(true);
+      }
     };
     const handleOnline = () => {
       fetchBookings(true);
@@ -1359,7 +1461,7 @@ const CustomerBookingsPage = () => {
             title={hasFilters ? "No matching bookings found" : "No bookings yet"}
             message={hasFilters ? "Try changing your search keywords or active status filters." : "Your completed and upcoming service bookings will appear here."}
             actionLabel={hasFilters ? "Clear Filters" : "Browse Services"}
-            onAction={hasFilters ? clearFilters : () => navigate('/services')}
+            onAction={hasFilters ? clearFilters : () => navigate('/customer/services')}
           />
         ) : (
           <div className="space-y-6">

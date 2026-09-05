@@ -80,8 +80,10 @@ export const NotificationProvider = ({ children }) => {
 
     const playNormalNotificationSound = (soundUrl) => {
         if (soundUrl) {
-            const audio = new Audio(soundUrl);
-            audio.play().catch(e => console.warn('Normal notification sound blocked:', e));
+            try {
+                const audio = new Audio(soundUrl);
+                audio.play().catch(() => {});
+            } catch (e) {}
         }
     };
 

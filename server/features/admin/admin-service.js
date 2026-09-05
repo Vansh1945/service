@@ -118,11 +118,14 @@ class AdminService {
             booking.refundDestination = refundableAmount > 0 ? chosenDestination : 'none';
             booking.refundAmount = refundableAmount;
             booking.nonRefundableAmount = nonRefundableAmount;
-            booking.platformFeeRetained = platformFeeRetained;
-            booking.refundStatus = refundableAmount > 0 ? 'completed' : 'none';
+            booking.refundStatus = refundableAmount > 0 ? (chosenDestination === 'original_payment' ? 'processing' : 'completed') : 'none';
             booking.refundProcessedAt = refundableAmount > 0 ? new Date() : null;
             booking.refundReference = refundableAmount > 0 ? `REF-${Date.now()}` : null;
             booking.paymentStatus = refundableAmount > 0 ? 'refunded' : booking.paymentStatus;
+            if (!booking.cancellationProgress) booking.cancellationProgress = {};
+            booking.cancellationProgress.status = chosenDestination === 'original_payment' ? 'processingrefund' : 'refundcompleted';
+            booking.cancellationProgress.refundAmount = refundableAmount;
+            booking.cancellationProgress.destination = chosenDestination;
 
             booking.statusHistory.push({
                 status: 'cancelled',
@@ -1578,6 +1581,7 @@ class AdminService {
                 {
                     $addFields: {
                         averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] },
+                        serviceIds: '$services',
                         services: {
                             $map: {
                                 input: '$serviceCategories',
@@ -3098,7 +3102,13 @@ class AdminService {
             const User = require('../user/user-model');
 
             const filter = {};
-            if (status && status !== 'all') filter.refundStatus = status;
+            if (status && status !== 'all') {
+                if (status === 'pending') {
+                    filter.refundStatus = { $in: ['pending', 'processing'] };
+                } else {
+                    filter.refundStatus = status;
+                }
+            }
             if (source && source !== 'all') filter.refundSource = source;
             if (destination && destination !== 'all') filter.refundDestination = destination;
             if (refundType && refundType !== 'all') filter.refundType = refundType;
@@ -3151,10 +3161,10 @@ class AdminService {
                         $group: {
                             _id: null,
                             totalRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$refundAmount', 0] } },
-                            pendingAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'pending'] }, '$refundAmount', 0] } },
-                            gatewayRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$gatewayRefundAmount', 0] } },
+                            pendingAmount: { $sum: { $cond: [{ $in: ['$refundStatus', ['pending', 'processing']] }, '$refundAmount', 0] } },
+                            gatewayRefundAmount: { $sum: { $cond: [{ $in: ['$refundStatus', ['completed', 'processing']] }, '$gatewayRefundAmount', 0] } },
                             walletRefundAmount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, '$walletRefundAmount', 0] } },
-                            pendingCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'pending'] }, 1, 0] } },
+                            pendingCount: { $sum: { $cond: [{ $in: ['$refundStatus', ['pending', 'processing']] }, 1, 0] } },
                             approvedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'approved'] }, 1, 0] } },
                             completedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'completed'] }, 1, 0] } },
                             failedCount: { $sum: { $cond: [{ $eq: ['$refundStatus', 'failed'] }, 1, 0] } },

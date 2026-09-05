@@ -1828,6 +1828,7 @@ class BookingService {
       const [totalBookings, bookings] = await Promise.all([
         Booking.countDocuments(query),
         Booking.find(query)
+          .select('+startPin +completionPin')
           .populate({
             path: 'services.service',
             select: 'title description basePrice category images duration',
@@ -1920,12 +1921,21 @@ class BookingService {
           const pStatus = BookingService.getPayoutStatus(earning, bookingObj);
           bookingObj.payoutStatus = pStatus;
 
-          // Ensure and persist PINs, then attach based on visibility rules
-          const { startPin, completionPin } = await BookingService.ensureAndPersistPins(bookingObj._id, bookingObj);
-          if (['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived'].includes(bookingObj.status)) {
-            bookingObj.startPin = startPin;
-          } else if (bookingObj.status === 'workstarted') {
-            bookingObj.completionPin = completionPin;
+          // Attach PINs based on visibility rules without N+1 queries
+          const isActiveForPin = ['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived', 'workstarted'].includes(bookingObj.status);
+          if (isActiveForPin) {
+            let startPin = bookingObj.startPin;
+            let completionPin = bookingObj.completionPin;
+            if (!startPin || !completionPin) {
+              const pins = await BookingService.ensureAndPersistPins(bookingObj._id, bookingObj);
+              startPin = pins.startPin;
+              completionPin = pins.completionPin;
+            }
+            if (['pending', 'searchingprovider', 'offered', 'accepted', 'ontheway', 'arrived'].includes(bookingObj.status)) {
+              bookingObj.startPin = startPin;
+            } else if (bookingObj.status === 'workstarted') {
+              bookingObj.completionPin = completionPin;
+            }
           }
 
           bookingObj.timeline = getBookingTimeline(bookingObj, pStatus);
@@ -2770,10 +2780,23 @@ class BookingService {
               isAutoTrigger: true,
             });
 
+            const finalMethod = refundResult.refund?.actualRefundDestination || refundResult.refund?.refundDestination || refundDestination || 'wallet';
+            const isGateway = finalMethod === 'original_payment';
+            booking.refundDestination = finalMethod;
+            booking.refundAmount = refundAmount;
+            booking.refundStatus = isGateway ? 'processing' : 'completed';
+            booking.refundProcessedAt = new Date();
+            booking.paymentStatus = 'refunded';
+            if (!booking.cancellationProgress) booking.cancellationProgress = {};
+            booking.cancellationProgress.status = isGateway ? 'processingrefund' : 'refundcompleted';
+            booking.cancellationProgress.destination = finalMethod;
+            booking.cancellationProgress.refundAmount = refundAmount;
+            booking.refundReference = refundResult.refund?.gatewayRefundId || refundResult.refund?.walletTransactionId || refundResult.refund?.refundId || null;
+
             refundDetails = {
               amount: refundAmount,
-              method: refundResult.refund?.refundDestination || 'wallet',
-              status: refundResult.refund?.refundStatus || 'completed'
+              method: finalMethod,
+              status: booking.refundStatus
             };
           }
         }
@@ -3032,6 +3055,7 @@ class BookingService {
     });
 
     booking.rescheduleCount = (booking.rescheduleCount || 0) + 1;
+    booking.overdueAlertSent = false;
 
     await booking.save();
 
@@ -5119,6 +5143,22 @@ class BookingService {
             from: 'services',
             localField: 'services.service',
             foreignField: '_id',
+            pipeline: [
+              {
+                $lookup: {
+                  from: 'categories',
+                  localField: 'category',
+                  foreignField: '_id',
+                  as: 'category'
+                }
+              },
+              {
+                $unwind: {
+                  path: '$category',
+                  preserveNullAndEmptyArrays: true
+                }
+              }
+            ],
             as: 'serviceDetails'
           }
         },
@@ -6031,15 +6071,109 @@ class BookingService {
   static async monitorActiveBookingsSLA() {
     try {
       const now = new Date();
-      // Fetch all bookings that are not in Completed/Cancelled/Rejected/Expired state
+      // Fetch all bookings that are active or awaiting provider
       const activeBookings = await Booking.find({
-        status: { $in: ['offered', 'accepted', 'ontheway', 'arrived', 'workstarted'] }
+        status: { $in: ['pending', 'searchingprovider', 'offered', 'assigned', 'accepted', 'ontheway', 'arrived', 'workstarted'] }
       }).populate('provider customer');
 
       for (const booking of activeBookings) {
         try {
           const type = (booking.bookingType || '').toLowerCase();
           const currentSla = booking.slaStatus; // dynamically evaluates via virtual
+          const statusLower = (booking.status || '').toLowerCase();
+          const isStarted = ['workstarted', 'started'].includes(statusLower) || Boolean(booking.workStartedAt);
+          const isAccepted = ['accepted', 'assigned', 'scheduled', 'confirmed', 'ontheway', 'arrived', 'workstarted', 'started'].includes(statusLower) || Boolean(booking.acceptedAt);
+          const isUnaccepted = ['pending', 'searchingprovider', 'offered'].includes(statusLower) && !booking.acceptedAt;
+
+          let isOverdue = false;
+          let overdueType = null; // 'unaccepted' | 'unstarted'
+          let overdueMsg = '';
+
+          // 1. SCHEDULED BOOKINGS
+          if (type === 'scheduled') {
+            if (!booking.date) continue;
+            const scheduledTime = new Date(booking.date);
+            if (booking.time) {
+              const match = booking.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+              if (match) {
+                let hours = parseInt(match[1], 10);
+                const minutes = parseInt(match[2], 10);
+                const ampm = match[3]?.toUpperCase();
+                if (ampm === 'PM' && hours < 12) hours += 12;
+                if (ampm === 'AM' && hours === 12) hours = 0;
+                scheduledTime.setHours(hours, minutes, 0, 0);
+              }
+            }
+            const diffMins = (scheduledTime.getTime() - now.getTime()) / (60 * 1000);
+
+            // Case A: Scheduled time has arrived or passed and booking is NOT accepted
+            if (diffMins <= 0 && isUnaccepted) {
+              isOverdue = true;
+              overdueType = 'unaccepted';
+              overdueMsg = `Booking ${booking.bookingId || booking._id} scheduled for ${booking.time || 'earlier'} has passed without provider acceptance!`;
+            }
+            // Case B: Scheduled time has arrived or passed and booking is accepted but NOT started
+            else if (diffMins <= 0 && isAccepted && !isStarted) {
+              isOverdue = true;
+              overdueType = 'unstarted';
+              overdueMsg = `Booking ${booking.bookingId || booking._id} scheduled for ${booking.time || 'earlier'} has passed but provider (${booking.provider?.name || 'Assigned'}) has not started!`;
+            }
+
+            // Reminders for scheduled bookings
+            if (diffMins <= 60 && diffMins > 55 && booking.provider && !booking.journeyStartedAt) {
+              await sendNotification(booking.provider._id, 'provider', '⏰ Booking Reminder', `You have a scheduled booking ${booking.bookingId || booking._id} in 60 minutes.`, 'booking', booking._id);
+            }
+            if (diffMins <= 20 && diffMins > 15 && booking.provider && !booking.journeyStartedAt) {
+              await sendNotification(booking.provider._id, 'provider', '🚗 Time to Travel', `Please start your journey for booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
+            }
+            if (diffMins <= 10 && diffMins > 5 && booking.provider && !booking.journeyStartedAt) {
+              await sendNotification(booking.provider._id, 'provider', '⚠️ Travel Warning', `You have not started navigation for booking ${booking.bookingId || booking._id}. You are running late!`, 'booking', booking._id);
+            }
+            // 30 minutes late: Status CRITICAL -> Auto reassignment
+            if (diffMins <= -30 && booking.provider && !booking.arrivedAt && !['reassigned', 'cancelled', 'completed'].includes(statusLower)) {
+              await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (30 mins late)');
+            }
+          }
+          // 2. INSTANT / EMERGENCY BOOKINGS
+          else if (type === 'instant' || type === 'emergency') {
+            const acceptTimeoutMins = type === 'emergency' ? 5 : 15;
+            const startTimeoutMins = type === 'emergency' ? 15 : 45;
+            const createdAtMs = new Date(booking.createdAt || now).getTime();
+            const minsSinceCreated = (now.getTime() - createdAtMs) / (60 * 1000);
+
+            if (minsSinceCreated >= acceptTimeoutMins && isUnaccepted) {
+              isOverdue = true;
+              overdueType = 'unaccepted';
+              overdueMsg = `${type === 'emergency' ? 'Emergency' : 'Instant'} booking ${booking.bookingId || booking._id} was not accepted within ${acceptTimeoutMins} minutes!`;
+            } else if (isAccepted && !isStarted) {
+              const acceptedAtMs = new Date(booking.acceptedAt || booking.createdAt || now).getTime();
+              const minsSinceAccepted = (now.getTime() - acceptedAtMs) / (60 * 1000);
+              if (minsSinceAccepted >= startTimeoutMins) {
+                isOverdue = true;
+                overdueType = 'unstarted';
+                overdueMsg = `${type === 'emergency' ? 'Emergency' : 'Instant'} booking ${booking.bookingId || booking._id} was accepted by ${booking.provider?.name || 'Provider'} but not started within ${startTimeoutMins} minutes!`;
+              }
+            }
+          }
+
+          // Trigger admin alert only ONCE per booking when it becomes overdue
+          let shouldAlertAdmin = false;
+          if (isOverdue && overdueType && !booking.overdueAlertSent) {
+            const updated = await Booking.findOneAndUpdate(
+              { _id: booking._id, overdueAlertSent: { $ne: true } },
+              { $set: { overdueAlertSent: true, lastOverdueAlertAt: now } }
+            );
+            if (updated) {
+              shouldAlertAdmin = true;
+              await notifyAdmins(
+                overdueType === 'unaccepted' ? '🚨 Booking Overdue: Not Accepted' : '🚨 Booking Overdue: Not Started',
+                overdueMsg,
+                'booking',
+                booking._id,
+                `/admin/bookings?search=${encodeURIComponent(booking.bookingId || booking._id)}&openDetail=true`
+              );
+            }
+          }
 
           // Broadcast SLA status via socket to ensure client synchronization
           try {
@@ -6048,7 +6182,11 @@ class BookingService {
             if (io) {
               const payload = {
                 bookingId: booking._id.toString(),
-                slaStatus: currentSla,
+                bookingCustomId: booking.bookingId || booking._id.toString(),
+                displayBookingId: booking.bookingId || booking._id.toString(),
+                slaStatus: isOverdue ? 'CRITICAL' : currentSla,
+                isOverdue,
+                overdueType,
                 bookingType: booking.bookingType,
                 status: booking.status,
                 journeyStartedAt: booking.journeyStartedAt,
@@ -6066,81 +6204,12 @@ class BookingService {
                 io.to(provId.toString()).emit('sla_status_changed', payload);
               }
               io.to('admin_live_room').emit('sla_status_changed', payload);
+              if (isOverdue && shouldAlertAdmin) {
+                io.to('admin_live_room').emit('booking_overdue_alert', payload);
+              }
             }
           } catch (socketErr) {
             console.error('[SLA Engine] Socket emission error:', socketErr.message);
-          }
-
-          // Trigger notifications/events based on SLA status
-          if (type === 'scheduled') {
-            if (!booking.date) continue;
-            const scheduledTime = new Date(booking.date);
-            if (booking.time) {
-              const [hours, minutes] = booking.time.split(':').map(Number);
-              scheduledTime.setHours(hours, minutes, 0, 0);
-            }
-            const diffMins = (scheduledTime.getTime() - now.getTime()) / (60 * 1000);
-
-            // 60 minutes before: Send reminder to provider
-            if (diffMins <= 60 && diffMins > 59 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.provider._id, 'provider', '⏰ Booking Reminder', `You have a scheduled booking ${booking.bookingId || booking._id} in 60 minutes.`, 'booking', booking._id);
-            }
-            // 20 minutes before: Ask provider to start travel
-            if (diffMins <= 20 && diffMins > 19 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.provider._id, 'provider', '🚗 Time to Travel', `Please start your journey for booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
-            }
-            // 10 minutes before: If not started, warning & status AT_RISK
-            if (diffMins <= 10 && diffMins > 9 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.provider._id, 'provider', '⚠️ Travel Warning', `You have not started navigation for booking ${booking.bookingId || booking._id}. You are running late!`, 'booking', booking._id);
-              await sendNotification(booking.customer._id, 'customer', '⏳ Service Scheduled Update', `Your service professional's status has been updated. We are actively monitoring progress.`, 'booking', booking._id);
-            }
-            // At booking time: If not arrived
-            if (diffMins <= 0 && diffMins > -1 && booking.provider && !booking.arrivedAt) {
-              await sendNotification(booking.provider._id, 'provider', '🚨 Late Arrival Warning', `Booking time has arrived but you haven't marked arrival.`, 'booking', booking._id);
-              await sendNotification(booking.customer._id, 'customer', '⏳ Service Partner Status', `Your service professional is currently en route.`, 'booking', booking._id);
-              await notifyAdmins('🚨 Provider Late Arrival', `Provider ${booking.provider.name} is late for booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
-            }
-            // 30 minutes late: Status CRITICAL -> Auto reassignment
-            if (diffMins <= -30 && booking.provider && !booking.arrivedAt && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
-              await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (30 mins late)');
-            }
-          } else if (type === 'instant') {
-            if (!booking.acceptedAt) continue;
-            const diffMins = (now.getTime() - new Date(booking.acceptedAt).getTime()) / (60 * 1000);
-
-            // 15 mins: No movement warning
-            if (diffMins >= 15 && diffMins < 16 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.provider._id, 'provider', '⚡ Instant Alert', 'Please start traveling for your instant booking request.', 'booking', booking._id);
-            }
-            // 30 mins: Notify customer & admin
-            if (diffMins >= 30 && diffMins < 31 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.customer._id, 'customer', '⏳ Partner Update', 'Your service professional status is being updated by our support team.', 'booking', booking._id);
-              await notifyAdmins('⏳ Instant Delay Alert', `Provider ${booking.provider.name} has no movement for 30 minutes on booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
-            }
-            // 45 mins: Search backup provider
-            if (diffMins >= 45 && diffMins < 46 && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
-              await sendNotification(booking.provider._id, 'provider', '⚠️ Critical delay', 'You have not moved for 45 minutes. Booking is being reassigned.', 'booking', booking._id);
-            }
-            // 60 mins: Transfer booking
-            if (diffMins >= 60 && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
-              await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (Instant 60 mins)');
-            }
-          } else if (type === 'emergency') {
-            if (!booking.acceptedAt) continue;
-            const diffMins = (now.getTime() - new Date(booking.acceptedAt).getTime()) / (60 * 1000);
-
-            // 5 mins: No movement warning
-            if (diffMins >= 5 && diffMins < 6 && booking.provider && !booking.journeyStartedAt) {
-              await sendNotification(booking.provider._id, 'provider', '🚨 Emergency Priority travel', 'Please start traveling immediately for this emergency booking.', 'booking', booking._id);
-            }
-            // 10 mins: Admin notification
-            if (diffMins >= 10 && diffMins < 11) {
-              await notifyAdmins('🚨 Emergency Delay Alert', `No movement for 10 minutes on emergency booking ${booking.bookingId || booking._id}.`, 'booking', booking._id);
-            }
-            // 20 mins: Transfer booking if better provider available
-            if (diffMins >= 20 && !['reassigned', 'cancelled', 'completed'].includes((booking.status || '').toLowerCase())) {
-              await BookingService.triggerSlaReassignment(booking, 'Arrival SLA exceeded (Emergency 20 mins)');
-            }
           }
         } catch (bookingErr) {
           console.error(`[SLA Engine] Error monitoring booking ${booking._id}:`, bookingErr);

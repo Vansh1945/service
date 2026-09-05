@@ -15,7 +15,7 @@ import {
 import BookingCardSkeleton from '../../../components/ui-skeletons/BookingCardSkeleton';
 import * as BookingService from '../../../services/BookingService';
 import Pagination from '../../../components/ui/Pagination';
-import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../../utils/format';
+import { formatDate, formatTime, formatDateTime, formatCurrency, formatDuration, compressImage } from '../../../utils/format';
 import { getStatusColor as getStatusColorUtil, normalizeStatus, isBookingPending } from '../../../utils/status';
 
 import PriceDisplay from '../../../components/PriceDisplay';
@@ -83,7 +83,7 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type =
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full border border-gray-100">
         <div className="p-6">
           <div className="flex items-center mb-4">
@@ -189,7 +189,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress, min
   const isStart = action === 'start';
 
   return (
-    <div className="fixed inset-0 bg-black/25 z-[60] flex items-center justify-center p-4 overflow-y-auto scroll-hidden">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 overflow-y-auto scroll-hidden">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Sticky Header */}
         <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-3 bg-white">
@@ -489,7 +489,7 @@ const PaymentVerificationModal = ({ isOpen, onClose, booking, onVerificationComp
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/25 z-[60] flex items-center justify-center p-4 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
           {/* Header matching Start/Complete ProofModal */}
           <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-white">
@@ -1147,18 +1147,43 @@ const ProviderBooking = () => {
         b.bookingId?.toLowerCase().includes(q) ||
         b._id?.toLowerCase().includes(q));
     }
-    const todayStr = new Date().toISOString().split('T')[0];
+    const toLocalDateStr = (d) => {
+      if (!d) return '';
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return '';
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const todayStr = toLocalDateStr(new Date());
     if (filter === 'today') {
       filtered = filtered.filter(b => {
-        const bookingDateStr = new Date(b.date).toISOString().split('T')[0];
-        if (bookingDateStr === todayStr) return true;
         const s = (b.status || '').toLowerCase().replace(/[^a-z]/g, '');
-        const isActive = ['accepted', 'scheduled', 'confirmed', 'inprogress', 'started', 'ontheway', 'arrived'].includes(s);
-        return isActive && bookingDateStr < todayStr;
+        // 1. Any actively ongoing / started job is happening TODAY
+        if (['workstarted', 'inprogress', 'started', 'ontheway', 'arrived'].includes(s)) {
+          return true;
+        }
+        const bookingDateStr = toLocalDateStr(b.date || b.createdAt);
+        if (bookingDateStr === todayStr) return true;
+
+        // 2. Active accepted job scheduled earlier but still ongoing
+        const isActive = ['accepted', 'scheduled', 'confirmed'].includes(s);
+        if (isActive && bookingDateStr < todayStr) return true;
+
+        // 3. Pending job scheduled or created for today
+        const isPending = ['pending', 'searchingprovider', 'offered', 'assigned', 'reassigned'].includes(s);
+        const createdDateStr = toLocalDateStr(b.createdAt);
+        if (isPending && (bookingDateStr === todayStr || createdDateStr === todayStr)) {
+          return true;
+        }
+
+        return false;
       });
     }
-    else if (filter === 'upcoming') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] >= todayStr);
-    else if (filter === 'past') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] < todayStr);
+    else if (filter === 'upcoming') filtered = filtered.filter(b => toLocalDateStr(b.date || b.createdAt) >= todayStr);
+    else if (filter === 'past') filtered = filtered.filter(b => toLocalDateStr(b.date || b.createdAt) < todayStr);
     else if (filter === 'emergency') filtered = filtered.filter(b => b.bookingType === 'emergency' || b.isEmergency);
     else if (filter === 'instant') filtered = filtered.filter(b => b.bookingType === 'instant' || b.isInstant);
     else if (filter === 'scheduled') filtered = filtered.filter(b => b.bookingType === 'scheduled' || (!b.isEmergency && !b.isInstant));
@@ -1631,40 +1656,39 @@ const ProviderBooking = () => {
 
       {/* ── Booking Details Modal ── */}
       {showModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full border border-gray-100 max-h-[90vh] overflow-y-auto flex flex-col">
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-4xl w-full border border-gray-100 max-h-[92vh] sm:max-h-[88vh] overflow-hidden flex flex-col">
 
             {/* Modal Header */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-t-2xl">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="hidden sm:block p-1 bg-primary/10 rounded-lg">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-3.5 py-2.5 sm:px-6 sm:py-3.5 rounded-t-xl sm:rounded-t-2xl">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="hidden sm:block p-1 bg-primary/10 rounded-lg shrink-0">
                     <ClipboardList className="w-4 h-4 text-primary" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-base sm:text-lg font-bold text-secondary font-black leading-tight">Booking Details</h2>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h2 className="text-sm sm:text-base font-bold text-secondary font-black leading-tight">Booking Details</h2>
                       <StatusBadge status={selectedBooking.status} module="booking" size="sm" />
-
                     </div>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5 truncate">
                       ID: {selectedBooking.bookingId || selectedBooking._id} · <Calendar className="w-3 h-3 inline-block mx-0.5 text-primary align-text-top" /> {formatDate(selectedBooking.date)} · {formatTime(selectedBooking.time)}
                     </p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-[9px] text-gray-400 block uppercase font-bold tracking-wider mb-0.5">You'll Receive</span>
-                  <span className="text-lg sm:text-xl font-black text-primary"><PriceDisplay amount={calculateNetAmount(selectedBooking)} type="text-only" /></span>
+                  <span className="text-base sm:text-lg font-black text-primary"><PriceDisplay amount={calculateNetAmount(selectedBooking)} type="text-only" /></span>
                 </div>
               </div>
 
               {/* Tabs Selector Row - instant loaded */}
-              <div className="flex border-b border-gray-200 mt-2 overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div className="flex border-b border-gray-200 mt-2 overflow-x-auto scrollbar-none gap-1 pb-0.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {selectedBookingTabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setModalActiveTab(tab.id)}
-                    className={`px-3 py-1.5 font-black text-[11px] border-b-2 transition-all whitespace-nowrap uppercase tracking-wider ${selectedActiveTabId === tab.id
+                    className={`px-2.5 py-1.5 font-bold text-[10px] sm:text-xs border-b-2 transition-all whitespace-nowrap uppercase tracking-wider shrink-0 ${selectedActiveTabId === tab.id
                       ? 'border-primary text-primary'
                       : 'border-transparent text-gray-400 hover:text-gray-600'
                       }`}
@@ -1676,26 +1700,26 @@ const ProviderBooking = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="p-3 sm:p-5 overflow-y-auto flex-1">
 
               {/* ── BOOKING TAB ── */}
               {selectedActiveTabId === 'booking' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 animate-fade-in">
 
                   {/* Left: Service List */}
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 border border-gray-100 space-y-3 sm:space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
                       <div className="p-1.5 bg-primary/10 rounded-lg"><Package className="w-4 h-4 text-primary" /></div>
-                      <h3 className="font-black text-secondary text-sm uppercase tracking-wide">Service Information</h3>
+                      <h3 className="font-black text-secondary text-xs sm:text-sm uppercase tracking-wide">Service Information</h3>
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       {selectedBooking.services?.map((service, index) => (
-                        <div key={index} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                        <div key={index} className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm">
                           <div className="flex items-start justify-between">
                             <div className="flex-grow min-w-0">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
                                 {getServiceIcon(service.service?.category)}
-                                <h4 className="font-bold text-secondary text-sm">{service.service?.title || 'Service'}</h4>
+                                <h4 className="font-bold text-secondary text-xs sm:text-sm">{service.service?.title || 'Service'}</h4>
                                 {service.service?.serviceType && service.service?.serviceType !== 'standard' && (
                                   <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase ${service.service?.serviceType === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'}`}>
                                     {service.service?.serviceType}
@@ -1711,7 +1735,7 @@ const ProviderBooking = () => {
                               </div>
                             </div>
                             <div className="text-right shrink-0 ml-3">
-                              <p className="font-black text-primary text-sm">{formatCurrency(service.price * (service.quantity || 1))}</p>
+                              <p className="font-black text-primary text-xs sm:text-sm">{formatCurrency(service.price * (service.quantity || 1))}</p>
                               {service.discountAmount > 0 && <p className="text-xs text-red-500">-{formatCurrency(service.discountAmount)}</p>}
                             </div>
                           </div>
@@ -1720,16 +1744,16 @@ const ProviderBooking = () => {
                     </div>
 
                     {/* Service Address */}
-                    <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex gap-2">
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 shadow-sm flex gap-2">
                       <MapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-xs font-bold text-secondary mb-1 uppercase tracking-wider">Service Address</p>
-                        <p className="text-xs text-gray-600 font-medium">{formatAddress(selectedBooking.address)}</p>
+                        <p className="text-[11px] font-bold text-secondary mb-0.5 uppercase tracking-wider">Service Address</p>
+                        <p className="text-xs text-gray-600 font-medium leading-snug">{formatAddress(selectedBooking.address)}</p>
                       </div>
                     </div>
 
                     {selectedBooking.notes && (
-                      <div className="mt-4 bg-primary/5 border border-primary/20 rounded-xl p-3 flex gap-2">
+                      <div className="mt-3 bg-primary/5 border border-primary/20 rounded-xl p-3 flex gap-2">
                         <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                         <div>
                           <p className="text-xs font-bold text-secondary mb-1">Special Instructions</p>
@@ -1740,12 +1764,12 @@ const ProviderBooking = () => {
                   </div>
 
                   {/* Right: Assignment Details */}
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 border border-gray-100 space-y-3 sm:space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
                       <div className="p-1.5 bg-primary/10 rounded-lg"><Shield className="w-4 h-4 text-primary" /></div>
-                      <h3 className="font-black text-secondary text-sm uppercase tracking-wide">Assignment Details</h3>
+                      <h3 className="font-black text-secondary text-xs sm:text-sm uppercase tracking-wide">Assignment Details</h3>
                     </div>
-                    <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-3 text-xs font-semibold text-gray-650">
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 space-y-2.5 text-xs font-semibold text-gray-650">
                       <div className="flex justify-between items-center">
                         <span>Booking Type</span>
                         {getBookingTypeBadge(selectedBooking.bookingType)}
@@ -1787,7 +1811,7 @@ const ProviderBooking = () => {
                       {selectedBooking.metadata?.assignedAt && (
                         <div className="flex justify-between items-center">
                           <span>Assigned At</span>
-                          <span className="font-mono text-secondary">{new Date(selectedBooking.metadata.assignedAt).toLocaleString()}</span>
+                          <span className="font-mono text-secondary">{formatDateTime(selectedBooking.metadata.assignedAt)}</span>
                         </div>
                       )}
                       <div className="flex justify-between items-center">
@@ -1813,20 +1837,20 @@ const ProviderBooking = () => {
 
               {/* ── CUSTOMER TAB (Locked before Acceptance) ── */}
               {selectedActiveTabId === 'customer' && !isSelectedPending && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 animate-fade-in">
 
                   {/* Customer Profile Info */}
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
-                    <div className="flex items-center justify-between">
+                  <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 border border-gray-100 space-y-3 sm:space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-primary/10 rounded-lg"><User className="w-4 h-4 text-primary" /></div>
-                        <h3 className="font-black text-secondary text-sm uppercase tracking-wide">Customer Profile</h3>
+                        <h3 className="font-black text-secondary text-xs sm:text-sm uppercase tracking-wide">Customer Profile</h3>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0">
                         {selectedBooking.customer?.phone && (
                           <a
                             href={`tel:${selectedBooking.customer.phone}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-bold shadow-sm"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-primary text-white rounded-xl text-xs font-bold shadow-sm hover:opacity-90"
                           >
                             <Phone className="w-3.5 h-3.5" /> Call
                           </a>
@@ -1838,7 +1862,7 @@ const ProviderBooking = () => {
                               setChatBookingId(selectedBooking._id);
                               setChatRoomType('provider_customer');
                             }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm hover:opacity-90"
                           >
                             <MessageSquare className="w-3.5 h-3.5" /> Chat
                           </button>
@@ -1846,15 +1870,15 @@ const ProviderBooking = () => {
                       </div>
                     </div>
 
-                    <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-3 text-xs font-semibold text-gray-650">
-                      <div className="flex justify-between">
-                        <span>Name</span>
-                        <span className="text-secondary font-bold">{selectedBooking.customer?.name || 'Not specified'}</span>
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 space-y-2.5 text-xs font-semibold text-gray-650">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="shrink-0 text-gray-500">Name</span>
+                        <span className="text-secondary font-bold text-right truncate">{selectedBooking.customer?.name || 'Not specified'}</span>
                       </div>
 
-                      <div className="flex justify-between">
-                        <span>Email Address</span>
-                        <span className="text-secondary font-bold break-all">{selectedBooking.customer?.email || 'N/A'}</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                        <span className="shrink-0 text-gray-500">Email Address</span>
+                        <span className="text-secondary font-bold break-all sm:text-right">{selectedBooking.customer?.email || 'N/A'}</span>
                       </div>
                       <div className="border-t border-gray-100 pt-2 flex items-center gap-1.5 text-[10px] text-gray-400">
                         <Shield className="w-3.5 h-3.5" />
@@ -1864,11 +1888,11 @@ const ProviderBooking = () => {
                   </div>
 
                   {/* Address & Navigation */}
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
-                    <div className="flex items-center justify-between">
+                  <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 border border-gray-100 space-y-3 sm:space-y-4">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-primary/10 rounded-lg"><MapPin className="w-4 h-4 text-primary" /></div>
-                        <h3 className="font-black text-secondary text-sm uppercase tracking-wide">Exact Address</h3>
+                        <h3 className="font-black text-secondary text-xs sm:text-sm uppercase tracking-wide">Exact Address</h3>
                       </div>
                       {(['accepted', 'assigned'].includes(selectedBooking.status) || isSelectedInProgress) && (
                         <button
@@ -1876,16 +1900,16 @@ const ProviderBooking = () => {
                             setShowModal(false);
                             navigate(`/provider/track/${selectedBooking._id}`);
                           }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700"
                         >
                           <Navigation className="w-3.5 h-3.5" /> Navigate
                         </button>
                       )}
                     </div>
 
-                    <div className="bg-white rounded-xl p-4 border border-gray-100 text-sm text-secondary font-bold">
-                      <Home className="w-4 h-4 text-gray-400 inline mr-2 shrink-0" />
-                      {formatAddress(selectedBooking.address)}
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-100 text-xs sm:text-sm text-secondary font-bold flex items-start gap-2">
+                      <Home className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                      <span className="leading-snug">{formatAddress(selectedBooking.address)}</span>
                     </div>
                   </div>
                 </div>
@@ -1909,15 +1933,15 @@ const ProviderBooking = () => {
                 const servicePrice = selectedBooking.subtotal || 0;
 
                 return (
-                  <div className="max-w-2xl mx-auto bg-gray-50 rounded-2xl p-6 border border-gray-100 animate-fade-in space-y-6">
+                  <div className="max-w-2xl mx-auto bg-gray-50 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 border border-gray-100 animate-fade-in space-y-4 sm:space-y-6">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="p-1.5 bg-primary/10 rounded-lg"><CreditCard className="w-4 h-4 text-primary" /></div>
                       <h3 className="font-black text-secondary text-sm uppercase tracking-wide">Receivables Breakdown</h3>
                     </div>
 
-                    <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 p-6 rounded-2xl text-center">
+                    <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 p-4 sm:p-6 rounded-xl sm:rounded-2xl text-center">
                       <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block mb-1">YOU'LL RECEIVE</span>
-                      <span className="text-4xl font-black text-emerald-700">₹{netReceivable.toFixed(2)}</span>
+                      <span className="text-3xl sm:text-4xl font-black text-emerald-700">₹{netReceivable.toFixed(2)}</span>
 
                       <button
                         onClick={() => setPaymentBreakdownExpanded(!paymentBreakdownExpanded)}
@@ -2037,7 +2061,7 @@ const ProviderBooking = () => {
                                   {step.label}
                                 </h4>
                                 {timestamp && (
-                                  <span className="text-[9px] text-gray-400 font-mono block mt-0.5">{new Date(timestamp).toLocaleString()}</span>
+                                  <span className="text-[9px] text-gray-400 font-mono block mt-0.5">{formatDateTime(timestamp)}</span>
                                 )}
                               </div>
                             </div>
@@ -2247,12 +2271,15 @@ const ProviderBooking = () => {
             </div>
 
             {/* Sticky Footer */}
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3 justify-end rounded-b-2xl">
+            <div className="p-3 sm:p-4 bg-gray-50 border-t border-gray-100 flex gap-2 sm:gap-3 justify-end rounded-b-xl sm:rounded-b-2xl">
               {selectedBooking.status === 'pending' && (
                 <button
                   disabled={actionLoading.id !== null || isLimitReached}
-                  onClick={() => handleBookingAction(selectedBooking, 'accept')}
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5"
+                  onClick={() => {
+                    setShowModal(false);
+                    handleBookingAction(selectedBooking, 'accept');
+                  }}
+                  className="flex-1 sm:flex-none justify-center px-4 sm:px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5"
                 >
                   {actionLoading.id === selectedBooking._id && actionLoading.type === 'accept' ? (
                     <Loader className="w-3.5 h-3.5 animate-spin" />
@@ -2265,8 +2292,11 @@ const ProviderBooking = () => {
               {(selectedBooking.status === 'accepted' || selectedBooking.status === 'assigned') && (
                 <button
                   disabled={actionLoading.id !== null}
-                  onClick={() => handleBookingAction(selectedBooking, 'start')}
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                  onClick={() => {
+                    setShowModal(false);
+                    handleBookingAction(selectedBooking, 'start');
+                  }}
+                  className="flex-1 sm:flex-none justify-center px-4 sm:px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {actionLoading.id === selectedBooking._id && actionLoading.type === 'start' ? (
                     <Loader className="w-3.5 h-3.5 animate-spin" />
@@ -2279,8 +2309,11 @@ const ProviderBooking = () => {
               {isSelectedInProgress && (
                 <button
                   disabled={actionLoading.id !== null}
-                  onClick={() => handleBookingAction(selectedBooking, 'complete')}
-                  className="px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5"
+                  onClick={() => {
+                    setShowModal(false);
+                    handleBookingAction(selectedBooking, 'complete');
+                  }}
+                  className="flex-1 sm:flex-none justify-center px-4 sm:px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors shadow-md flex items-center gap-1.5"
                 >
                   {actionLoading.id === selectedBooking._id && actionLoading.type === 'complete' ? (
                     <Loader className="w-3.5 h-3.5 animate-spin" />

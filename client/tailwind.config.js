@@ -87,6 +87,22 @@ export default {
         '3xl': 'var(--radius-3xl)', /* Accent pages, login boxes */
         full: 'var(--radius-full)', /* Circular profile frames, active notification pills */
       },
+      fontSize: {
+        '2xs': ['0.625rem', { lineHeight: '0.875rem' }], /* 10px */
+        xs: ['0.6875rem', { lineHeight: '0.95rem' }],     /* 11px - scaled down from 12px */
+        sm: ['0.75rem', { lineHeight: '1.125rem' }],      /* 12px - scaled down from 14px */
+        base: ['0.875rem', { lineHeight: '1.25rem' }],    /* 14px - scaled down from 16px */
+        lg: ['1rem', { lineHeight: '1.5rem' }],           /* 16px - scaled down from 18px */
+        xl: ['1.125rem', { lineHeight: '1.625rem' }],     /* 18px - scaled down from 20px */
+        '2xl': ['1.25rem', { lineHeight: '1.75rem' }],    /* 20px - scaled down from 24px */
+        '3xl': ['1.5rem', { lineHeight: '2rem' }],        /* 24px - scaled down from 30px */
+        '4xl': ['1.875rem', { lineHeight: '2.25rem' }],   /* 30px - scaled down from 36px */
+        '5xl': ['2.25rem', { lineHeight: '2.5rem' }],     /* 36px - scaled down from 48px */
+        '6xl': ['3rem', { lineHeight: '1.1' }],           /* 48px - scaled down from 60px */
+        '7xl': ['3.75rem', { lineHeight: '1.1' }],        /* 60px - scaled down from 72px */
+        '8xl': ['4.5rem', { lineHeight: '1.1' }],         /* 72px - scaled down from 96px */
+        '9xl': ['6rem', { lineHeight: '1.1' }],           /* 96px - scaled down from 128px */
+      },
       fontFamily: {
         poppins: ['Poppins', 'sans-serif'],
         inter: ['Inter', 'sans-serif'],

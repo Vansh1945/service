@@ -424,10 +424,10 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
         </SectionCard>
 
         {/* Refund Breakdown */}
-        {(d.refund || d.refundedAmount > 0 || ['completed', 'partial'].includes(d.refundStatus)) && (() => {
+        {(d.refund || d.refundedAmount > 0 || ['completed', 'partial', 'processing'].includes(d.refundStatus)) && (() => {
           const rf = d.refund || {
             refundId: d.gatewayRefundId || `RFND-${String(d._id).slice(-6)}`,
-            refundStatus: d.refundStatus || 'completed',
+            refundStatus: d.refundStatus || (d.gatewayRefundId ? 'processing' : 'completed'),
             requestedAmount: d.refundedAmount || 0,
             refundAmount: d.refundedAmount || 0,
             gatewayRefundAmount: d.gatewayRefundId ? (d.refundedAmount || 0) : 0,
@@ -441,7 +441,10 @@ const TransactionLedgerDetailModal = ({ isOpen, onClose, initialData }) => {
             <SectionCard title="Refund Breakdown" icon={RefreshCw} iconColor="text-rose-500">
               <InfoRow label="Refund ID" value={rf.refundId} mono />
               <InfoRow label="Status" badge={
-                <StatusChip label={rf.refundStatus} type={rf.refundStatus === 'completed' ? 'success' : rf.refundStatus === 'failed' ? 'danger' : 'warning'} />
+                <StatusChip 
+                  label={rf.refundStatus === 'processing' ? 'PROCESSING (5-7 DAYS)' : (rf.refundStatus || 'COMPLETED').toUpperCase()} 
+                  type={rf.refundStatus === 'completed' ? 'success' : rf.refundStatus === 'processing' ? 'warning' : rf.refundStatus === 'failed' ? 'danger' : 'warning'} 
+                />
               } />
               <AmtRow label="Requested Amount" amount={rf.requestedAmount || rf.refundAmount || 0} />
               <AmtRow label="Refund Amount" amount={rf.refundAmount || 0} bold colorClass="text-rose-600" />

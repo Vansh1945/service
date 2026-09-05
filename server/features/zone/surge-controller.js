@@ -67,10 +67,22 @@ exports.createSurgeRule = async (req, res) => {
       active
     } = req.body;
 
+    const resolvedZoneId = (scope === 'zone' && zoneId && zoneId !== '') ? zoneId : null;
+
+    // Uniqueness check: one rule per chargeType per scope/zone
+    const existing = await Surge.findOne({ chargeType, scope, zoneId: resolvedZoneId });
+    if (existing) {
+      const scopeLabel = scope === 'global' ? 'Global scope' : `this zone`;
+      return res.status(409).json({
+        success: false,
+        message: `A '${chargeType}' rule already exists for ${scopeLabel}. Only one rule per charge type is allowed. Please edit the existing rule instead.`
+      });
+    }
+
     const newRule = new Surge({
       chargeType,
       scope,
-      zoneId: (scope === 'zone' && zoneId !== '') ? zoneId : null,
+      zoneId: resolvedZoneId,
       mode,
       value,
       startTime: startTime || null,
@@ -93,6 +105,12 @@ exports.createSurgeRule = async (req, res) => {
       message: 'Surge rule created successfully'
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'A rule for this charge type already exists for this scope/zone. Please edit the existing rule.'
+      });
+    }
     res.status(400).json({
       success: false,
       message: error.message
@@ -147,9 +165,28 @@ exports.updateSurgeRule = async (req, res) => {
       });
     }
 
-    rule.chargeType = chargeType || rule.chargeType;
-    rule.scope = scope || rule.scope;
-    rule.zoneId = (scope === 'zone' && zoneId !== '') ? zoneId : null;
+    const newChargeType = chargeType || rule.chargeType;
+    const newScope = scope || rule.scope;
+    const newZoneId = (newScope === 'zone' && zoneId && zoneId !== '') ? zoneId : null;
+
+    // Conflict check: ensure no other rule has same chargeType+scope+zoneId
+    const conflict = await Surge.findOne({
+      chargeType: newChargeType,
+      scope: newScope,
+      zoneId: newZoneId,
+      _id: { $ne: rule._id }
+    });
+    if (conflict) {
+      const scopeLabel = newScope === 'global' ? 'Global scope' : 'this zone';
+      return res.status(409).json({
+        success: false,
+        message: `A '${newChargeType}' rule already exists for ${scopeLabel}. Please edit that rule instead.`
+      });
+    }
+
+    rule.chargeType = newChargeType;
+    rule.scope = newScope;
+    rule.zoneId = newZoneId;
     rule.mode = mode || rule.mode;
     rule.value = value !== undefined ? value : rule.value;
     rule.startTime = startTime !== undefined ? (startTime || null) : rule.startTime;
@@ -171,6 +208,12 @@ exports.updateSurgeRule = async (req, res) => {
       message: 'Surge rule updated successfully'
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'A rule for this charge type already exists for this scope/zone.'
+      });
+    }
     res.status(400).json({
       success: false,
       message: error.message
@@ -191,6 +234,11 @@ exports.toggleSurgeRuleStatus = async (req, res) => {
 
     rule.active = !rule.active;
     await rule.save();
+
+    // Populate zoneId so the client retains full zone details without re-fetching
+    if (rule.zoneId) {
+      await rule.populate('zoneId', 'name city zoneLevel');
+    }
 
     res.status(200).json({
       success: true,

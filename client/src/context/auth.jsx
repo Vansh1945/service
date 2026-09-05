@@ -207,7 +207,7 @@ export const AuthProvider = ({ children }) => {
     }, [token]);
 
     // Toast notification with automatic human-readable error sanitization
-    const showToast = (rawMessage, type = 'success') => {
+    const showToast = useCallback((rawMessage, type = 'success') => {
         if (!rawMessage || rawMessage === 'silent_cancel' || rawMessage === 'canceled' || rawMessage === 'Duplicate request blocked') {
             return;
         }
@@ -232,7 +232,7 @@ export const AuthProvider = ({ children }) => {
             draggable: true,
             progress: undefined,
         });
-    };
+    }, []);
 
     const loginUser = async (newToken, newRole, userData, newRefreshToken = null, rememberMe = true) => {
         try {

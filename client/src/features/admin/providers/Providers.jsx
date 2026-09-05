@@ -28,8 +28,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../context/auth';
 import * as AdminService from '../../../services/AdminService';
+import { formatDateTime, formatDate } from '../../../utils/format';
 import LoadingSpinner from '../../../components/ui/Loader';
-import { formatDate } from '../../../utils/format';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import StatCard from '../../../components/ui/StatCard';
@@ -1261,7 +1261,7 @@ const ProviderDetailsModal = ({
                     <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
                       <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Document Uploaded At</span>
                       <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
-                        {selectedProvider.bankDetails.uploadedAt ? new Date(selectedProvider.bankDetails.uploadedAt).toLocaleString() : 'N/A'}
+                        {selectedProvider.bankDetails.uploadedAt ? formatDateTime(selectedProvider.bankDetails.uploadedAt) : 'N/A'}
                       </span>
                     </div>
 
@@ -1276,7 +1276,16 @@ const ProviderDetailsModal = ({
                       <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
                         <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Verified At</span>
                         <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
-                          {new Date(selectedProvider.bankDetails.bankVerifiedAt).toLocaleString()}
+                          {formatDateTime(selectedProvider.bankDetails.bankVerifiedAt)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {selectedProvider.bankDetails.bankRejectedAt && (
+                      <div className="flex justify-between items-center py-2 border-b border-neutral-100/70 text-xs sm:text-sm">
+                        <span className="text-neutral-500 font-medium flex-shrink-0 mr-4">Rejected At</span>
+                        <span className="font-semibold text-neutral-800 text-right text-xs max-w-[70%] break-words">
+                          {formatDateTime(selectedProvider.bankDetails.bankRejectedAt)}
                         </span>
                       </div>
                     )}
@@ -1458,7 +1467,7 @@ const ProviderDetailsModal = ({
 
             {selectedProvider.legalAcceptance?.acceptedAt && (
               <div className="mt-4 pt-3 border-t border-neutral-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-neutral-500 font-medium">
-                <div>Accepted At: {new Date(selectedProvider.legalAcceptance.acceptedAt).toLocaleString()}</div>
+                <div>Accepted At: {formatDateTime(selectedProvider.legalAcceptance.acceptedAt)}</div>
                 <div>Signature Version: {selectedProvider.legalAcceptance.version}</div>
                 <div>IP Address: {selectedProvider.legalAcceptance.ipAddress || 'N/A'}</div>
                 {selectedProvider.digitalSignature?.signatureUrl && (

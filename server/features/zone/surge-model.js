@@ -77,6 +77,9 @@ const surgeSchema = new Schema({
   timestamps: true
 });
 
+// Enforce: only ONE rule per chargeType per scope/zone combination
+surgeSchema.index({ chargeType: 1, scope: 1, zoneId: 1 }, { unique: true });
+
 // Helper: Extract dateStr (YYYY-MM-DD), timeStr (HH:MM), and dayOfWeek (0-6) in given timezone
 surgeSchema.statics.getDateTimeComponentsInTimezone = function (dateObj, timeZone = 'Asia/Kolkata') {
   const d = dateObj || new Date();

@@ -18,6 +18,7 @@ import { normalizeStatus } from '../../../utils/status';
 import StatCard from '../../../components/ui/StatCard';
 import Button from '../../../components/ui/Button';
 import { useConfirm } from '../../../context/ConfirmContext';
+import { formatDateTime } from '../../../utils/format';
 
 const ReferralManagement = () => {
   const confirm = useConfirm();
@@ -674,7 +675,7 @@ const ReferralManagement = () => {
                             </td>
                             <td className="py-3 px-3 text-green-600 font-bold">₹{l.amount}</td>
                             <td className="py-3 px-3 font-medium text-gray-600">{fundingSource}</td>
-                            <td className="py-3 px-3 text-gray-400">{new Date(l.createdAt).toLocaleString()}</td>
+                            <td className="py-3 px-3 text-gray-400">{formatDateTime(l.createdAt)}</td>
                             <td className="py-3 px-3">
                               <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full capitalize ${l.status === 'released' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {l.status}

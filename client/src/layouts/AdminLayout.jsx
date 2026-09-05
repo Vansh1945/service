@@ -259,7 +259,7 @@ const AdminLayout = () => {
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-shrink-0">
-        <div className="flex flex-col w-72 h-full bg-white border-r border-gray-200 shadow-xs">
+        <div className="flex flex-col w-68 h-full bg-white border-r border-gray-200 shadow-xs">
           {/* Desktop header */}
           <div className="flex items-center h-16 px-6 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center min-w-0">
@@ -329,7 +329,7 @@ const AdminLayout = () => {
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top navigation bar */}
-        <header className="bg-white border-b border-gray-200 shadow-xs z-30 flex-shrink-0 h-16 flex items-center px-4 lg:px-6">
+        <header className="bg-white border-b border-gray-200 shadow-xs z-30 flex-shrink-0 h-16 flex items-center px-3 sm:px-4 lg:px-5">
           <div className="flex items-center justify-between w-full gap-4">
             {/* Left side - Mobile menu button & Search bar */}
             <div className="flex items-center flex-1 min-w-0 gap-3">
@@ -461,7 +461,7 @@ const AdminLayout = () => {
           <div className="block lg:hidden sticky top-0 px-4 py-3 bg-white border-b border-gray-200 shadow-xs z-20">
             <AdminSearchBar isGlobal={true} menuGroups={menuGroups} placeholder="Search admin pages..." />
           </div>
-          <div className="p-4 lg:p-6 xl:p-8 space-y-4">
+          <div className="px-3 sm:px-4 lg:px-5 py-3 space-y-3">
             {/* Route-Aware Centralized Global Filter Bar */}
             <AdminFilterBar />
             <Outlet />

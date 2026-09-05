@@ -282,7 +282,7 @@ const ProviderLayout = () => {
         <div className="min-h-screen bg-background lg:pb-0">
             {/* Desktop / Tablet Header */}
             <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-neutral-100 shadow-sm transition-all duration-300">
-                <div className="w-full px-4 sm:px-6 lg:px-8">
+                <div className="w-full px-3 sm:px-4 lg:px-5">
                     <div className="flex items-center justify-between h-16 md:h-20">
                         {/* Left Section */}
                         <div className="flex items-center space-x-4 min-w-0 pr-2">

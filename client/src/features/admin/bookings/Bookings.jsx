@@ -7,11 +7,11 @@ import SectionHeader from '../../../components/ui/SectionHeader';
 import { useAdminFilter } from '../../../context/AdminFilterContext';
 import useDebounce from '../../../hooks/useDebounce';
 import { getStatusColor, normalizeStatus } from '../../../utils/status';
+import StatusBadge from '../../../components/ui/StatusBadge';
 
 import axiosInstance from '../../../api/axiosInstance';
 import AdminSearchBar from '../../../components/AdminSearchBar';
-import StatusBadge from '../../../components/ui/StatusBadge';
-import { getSystemSetting } from '../../../services/SystemService';
+import { getSystemSetting, getSystemSettingAdmin } from '../../../services/SystemService';
 
 
 
@@ -75,7 +75,7 @@ import DeleteConfirmModal from '../../../components/modals/DeleteConfirmModal';
 import RescheduleModal from '../../../components/modals/RescheduleModal';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
 import StatCard from '../../../components/ui/StatCard';
-import { formatDate, formatTime, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../../utils/format';
+import { formatDate, formatTime, formatDateTime, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../../utils/format';
 import PriceDisplay from '../../../components/PriceDisplay';
 import {
     Calendar,
@@ -102,7 +102,9 @@ import {
     Lock,
     Unlock,
     CheckSquare,
-    Filter
+    Filter,
+    Search,
+    Check
 } from 'lucide-react';
 
 const statusOptions = [
@@ -162,16 +164,40 @@ const getBookingTypeBadge = (bookingType) => {
     );
 };
 
+const getBookingOverdueStatus = (booking) => {
+    if (!booking) return null;
+    const st = (booking.status || '').toLowerCase();
+    if (['completed', 'cancelled', 'rejected'].includes(st)) return null;
+    const isStarted = Boolean(booking.workStartedAt || ['workstarted', 'started', 'inprogress'].includes(st));
+    const isAccepted = Boolean(booking.provider && ['accepted', 'assigned', 'ontheway', 'arrived', 'workstarted', 'started'].includes(st));
+    const now = Date.now(), type = (booking.bookingType || '').toLowerCase();
+    const isFast = type === 'instant' || type === 'emergency' || booking.isEmergency || booking.isInstant;
+    const target = isFast
+        ? (booking.createdAt ? new Date(booking.createdAt).getTime() + (type === 'emergency' ? 15 : 30) * 60000 : 0)
+        : (booking.date ? new Date(`${booking.date.split('T')[0]} ${booking.time || '00:00'}`).getTime() : 0);
+
+    if (target && now > target) {
+        if (!isAccepted) return { type: 'unaccepted', label: 'Time Passed: Not Accepted', text: 'Time passed: Not Accepted' };
+        if (!isStarted) return { type: 'unstarted', label: 'Time Passed: Not Started', text: 'Time passed: Not Started' };
+    }
+    return booking.slaStatus === 'CRITICAL' ? { type: 'breached', label: 'SLA Breached', text: 'SLA Breached' } : null;
+};
+
 const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel, rowActionStates = {} }) => {
     const isRowLoading = !!rowActionStates[booking._id];
     const isEmergency = booking.bookingType?.toLowerCase() === 'emergency' || booking.isEmergency;
     const isInstant = booking.bookingType?.toLowerCase() === 'instant' || booking.isInstant;
+    const overdue = getBookingOverdueStatus(booking);
 
     let rowBorderColor = '';
     if (isEmergency) {
         rowBorderColor = 'border-2 border-red-500 bg-red-50/20';
     } else if (isInstant) {
         rowBorderColor = 'border-l-4 border-orange-500';
+    } else if (overdue?.type === 'unaccepted') {
+        rowBorderColor = 'border-l-4 border-red-500 bg-red-50/15';
+    } else if (overdue?.type === 'unstarted') {
+        rowBorderColor = 'border-l-4 border-amber-500 bg-amber-50/15';
     }
     return (
         <tr className={`hover:bg-gray-50 ${rowBorderColor} ${isRowLoading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -247,7 +273,17 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
             </td>
             <td className="px-4 py-4 whitespace-nowrap">
                 <StatusBadge status={booking.status} module="booking" size="sm" />
-
+                {overdue && (
+                    <div className="mt-1">
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded border animate-pulse ${
+                            overdue.type === 'unaccepted'
+                                ? 'bg-red-50 text-red-700 border-red-300'
+                                : 'bg-amber-50 text-amber-800 border-amber-300'
+                        }`}>
+                            ⚠️ {overdue.label}
+                        </span>
+                    </div>
+                )}
             </td>
             <td className="px-4 py-4 whitespace-nowrap">
                 <div className="flex items-center space-x-2">
@@ -471,10 +507,20 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
 
     useEffect(() => {
         if (isOpen) {
-            getSystemSetting()
+            getSystemSettingAdmin()
+                .catch(() => getSystemSetting())
                 .then(res => {
-                    const isForceWallet = Boolean(res.data?.data?.walletSettings?.refundToWalletOnly);
+                    const ws = res.data?.data?.walletSettings;
+                    const rs = res.data?.data?.refundSettings;
+                    const isForceWallet = Boolean(
+                        ws?.refundToWalletOnly ||
+                        rs?.allowedDestinations === 'wallet_only' ||
+                        rs?.allowOriginalPaymentRefund === false
+                    );
                     setForceWalletOnly(isForceWallet);
+                    if (rs?.defaultDestination === 'original_payment') {
+                        setRefundDestination('original_payment');
+                    }
                 })
                 .catch(err => console.warn('[CancelBookingModal] Error fetching system data:', err));
         }
@@ -607,6 +653,11 @@ const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, a
                                         <CreditCard className="w-4 h-4 text-indigo-600" />
                                         Original Gateway (Razorpay)
                                     </button>
+
+                                    <p className="col-span-2 text-[11px] text-gray-500 mt-1 flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <span>{refundDestination === 'original_payment' ? 'Bank SLA: 5-7 working days (Status: Processing)' : 'Wallet credit: Instant (Status: Completed)'}</span>
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -759,10 +810,11 @@ const AdminBookingsView = () => {
     } = useAdminFilter();
 
     const fetchAbortControllerRef = useRef(null);
+    const alertedBookingsRef = useRef(new Set());
 
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
     const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
-    const [providerSearch, setProviderSearch] = useState('');
+    const [selectedAssignProviderId, setSelectedAssignProviderId] = useState('');
 
     // Cancellation enhancements states
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -954,8 +1006,23 @@ const AdminBookingsView = () => {
             });
         };
 
+        const handleOverdueAlert = (data) => {
+            if (!data) return;
+            const alertKey = `${data.bookingId || data.bookingCustomId}_${data.overdueType || 'alert'}`;
+            if (alertedBookingsRef.current.has(alertKey)) return;
+            alertedBookingsRef.current.add(alertKey);
+
+            const bCustomId = data.displayBookingId || data.bookingCustomId || bookings.find(b => b._id === data.bookingId)?.bookingId || data.bookingId;
+            showToast(data.message || `Booking ${bCustomId}: ${data.overdueType === 'unaccepted' ? 'Time passed, not accepted' : 'Time passed, not started'}`, 'warning');
+            if (data.bookingId) {
+                setBookings(prev => prev.map(b => b._id === data.bookingId ? { ...b, slaStatus: 'CRITICAL' } : b));
+            }
+        };
+
         socket.on('booking-updated', handleBookingUpdated);
         socket.on('booking-deleted', handleBookingDeleted);
+        socket.on('booking_overdue_alert', handleOverdueAlert);
+        socket.on('sla_status_changed', handleBookingUpdated);
 
         const handleReconnect = () => {
             fetchBookings(true);
@@ -966,6 +1033,8 @@ const AdminBookingsView = () => {
         return () => {
             socket.off('booking-updated', handleBookingUpdated);
             socket.off('booking-deleted', handleBookingDeleted);
+            socket.off('booking_overdue_alert', handleOverdueAlert);
+            socket.off('sla_status_changed', handleBookingUpdated);
             socket.off('connect', handleReconnect);
             socket.off('reconnect', handleReconnect);
         };
@@ -1035,10 +1104,10 @@ const AdminBookingsView = () => {
         }
     }, [loc.search]);
 
-    // Fetch all providers for assignment — useCallback keeps reference stable
+    // Fetch all approved providers for assignment — useCallback keeps reference stable
     const fetchProviders = useCallback(async () => {
         try {
-            const response = await AdminService.getAllProviders();
+            const response = await AdminService.getAllProviders({ limit: 1000, status: 'approved' });
             const data = response.data;
             setProviders(data.providers || data.data || []);
         } catch (error) {
@@ -1275,17 +1344,24 @@ const AdminBookingsView = () => {
 
 
 
-    // Filter providers by service location match (stable callback)
+    // Filter providers by booking: zone, category, approved & available
     const getFilteredProviders = useCallback((booking) => {
-        if (!booking || !booking.address) return providers.filter(p => p.approved);
+        if (!booking) return [];
+        const bZone = (booking.zoneId?._id || booking.zoneId || '').toString();
+        const bCity = (booking.address?.city || '').toLowerCase();
+        const bCats = (booking.services || []).map(s => (s.service?.category?.name || s.service?.category?._id || s.service?.category || '').toString().toLowerCase());
 
-        return providers.filter(provider => {
-            if (!provider.approved) return false;
-            const providerCity = provider.serviceLocation?.city || provider.city || '';
-            const bookingCity = booking.address?.city || '';
-
-            return providerCity.toLowerCase().includes(bookingCity.toLowerCase()) ||
-                bookingCity.toLowerCase().includes(providerCity.toLowerCase());
+        return providers.filter(p => {
+            if ((!p.approved && p.status !== 'approved') || p.isActive === false || p.isSuspended || p.isOnline === false) return false;
+            if (p.availabilityStatus === 'leave' || p.availabilityStatus === 'break') return false;
+            const pZone = (p.currentZone?._id || p.currentZone || '').toString();
+            const pCity = (p.address?.city || p.serviceLocation?.city || p.city || '').toLowerCase();
+            if (bZone && pZone ? bZone !== pZone : bCity && pCity && !pCity.includes(bCity) && !bCity.includes(pCity)) return false;
+            if (bCats.length > 0) {
+                const pServs = [...(p.services || []), ...(p.serviceIds || [])].map(s => s.toString().toLowerCase());
+                if (!bCats.some(bc => pServs.some(s => s.includes(bc) || bc.includes(s)))) return false;
+            }
+            return true;
         });
     }, [providers]);
 
@@ -1295,6 +1371,8 @@ const AdminBookingsView = () => {
         let list = [];
         if (selectedQueue === 'all') {
             list = [...bookings];
+        } else if (selectedQueue === 'overdue') {
+            list = bookings.filter(b => getBookingOverdueStatus(b) !== null);
         } else if (selectedQueue === 'emergency') {
             list = bookings.filter(b => (b.bookingType === 'emergency' || b.isEmergency) && ['pending', 'Waiting Admin Assignment'].includes(b.status));
         } else if (selectedQueue === 'instant') {
@@ -1335,6 +1413,7 @@ const AdminBookingsView = () => {
 
     const handleOnAssign = useCallback((b) => {
         setSelectedBooking(b);
+        setSelectedAssignProviderId('');
         setShowAssignProviderModal(true);
     }, []);
 
@@ -1512,6 +1591,7 @@ const AdminBookingsView = () => {
                 <div className="flex border-b border-gray-250 bg-gray-50/50 overflow-x-auto shrink-0 scrollbar-thin">
                     {[
                         { id: 'all', label: 'All Bookings', count: bookings.length },
+                        { id: 'overdue', label: '⚠️ Overdue Action', count: bookings.filter(b => getBookingOverdueStatus(b) !== null).length },
                         // EMERGENCY BOOKING ENGINE UPGRADE
                         { id: 'emergency', label: '🚨 Emergency Queue', count: bookings.filter(b => (b.bookingType === 'emergency' || b.isEmergency) && ['pending', 'Waiting Admin Assignment'].includes(b.status)).length },
                         { id: 'instant', label: '⚡ Instant Queue', count: bookings.filter(b => (b.bookingType === 'instant' || b.isInstant) && ['pending', 'Waiting Admin Assignment'].includes(b.status)).length },
@@ -1630,6 +1710,45 @@ const AdminBookingsView = () => {
 
                             {/* Modal Body — scrollable */}
                             <div className="overflow-y-auto flex-1 p-4">
+                                {(() => {
+                                    const modalOverdue = getBookingOverdueStatus(bk);
+                                    if (!modalOverdue) return null;
+                                    return (
+                                        <div className={`mb-3 p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                                            modalOverdue.type === 'unaccepted'
+                                                ? 'bg-red-50 text-red-800 border-red-200'
+                                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                                        }`}>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">⚠️</span>
+                                                <div>
+                                                    <p className="font-bold text-sm">Action Needed: {modalOverdue.text}</p>
+                                                    <p className="text-[11px] opacity-90">
+                                                        {modalOverdue.type === 'unaccepted'
+                                                            ? 'Scheduled service time has passed but no provider has accepted yet. Assign a provider or reschedule.'
+                                                            : 'Scheduled service time has passed but provider has not started the job yet. Contact provider or check progress.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {modalOverdue.type === 'unaccepted' && !bk.provider && (
+                                                    <button
+                                                        onClick={() => { handleCloseModal(); handleOnAssign(bk); }}
+                                                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-medium shadow-sm transition-colors text-xs"
+                                                    >
+                                                        Assign Provider
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => { handleCloseModal(); handleOnReschedule(bk); }}
+                                                    className="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded font-medium transition-colors text-xs"
+                                                >
+                                                    Reschedule
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 {/* Top row: 3 equal columns on desktop */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
 
@@ -1784,21 +1903,50 @@ const AdminBookingsView = () => {
 
                                         {/* Status Timeline */}
                                         <Card title="Status Timeline" icon={<Activity className="w-3 h-3 text-primary" />}>
-                                            {[
-                                                { label: 'Booking Accepted', icon: CheckCircle, activeColor: 'text-green-600', activeBg: 'bg-green-50', ts: selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted')?.timestamp, fallback: 'Pending' },
-                                                { label: 'Service Started', icon: Activity, activeColor: 'text-blue-600', activeBg: 'bg-blue-50', ts: bk.serviceStartedAt, fallback: 'Not started' },
-                                                { label: 'Service Completed', icon: Award, activeColor: 'text-indigo-600', activeBg: 'bg-indigo-50', ts: bk.serviceCompletedAt, fallback: 'Not completed' },
-                                            ].map(({ label, icon: Icon, activeColor, activeBg, ts, fallback }) => (
-                                                <div key={label} className="flex items-center gap-2.5 py-1">
-                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${ts ? activeBg : 'bg-gray-50'}`}>
-                                                        <Icon className={`w-3.5 h-3.5 ${ts ? activeColor : 'text-gray-300'}`} />
+                                            {(() => {
+                                                const isCancelled = bk.status === 'cancelled';
+                                                const hasRefund = Boolean(bk.refundAmount > 0 || bk.cancellationProgress?.refundAmount > 0);
+                                                const isWalletRefund = (bk.refundDestination === 'wallet' || bk.actualRefundDestination === 'wallet' || bk.paymentMethod === 'wallet');
+                                                const isRefundSettled = isWalletRefund || Boolean(bk.cancellationProgress?.bankSettled || bk.refundStatus === 'completed' || bk.refundStatus === 'completed_settled');
+
+                                                const timelineItems = isCancelled ? [
+                                                    { label: 'Booking Created', icon: CheckCircle, activeColor: 'text-green-600', activeBg: 'bg-green-50', ts: bk.createdAt, fallback: 'Pending' },
+                                                    { label: 'Booking Cancelled', icon: XCircle, activeColor: 'text-red-600', activeBg: 'bg-red-50', ts: bk.cancelledAt || bk.updatedAt, fallback: 'Cancelled' },
+                                                    ...(hasRefund ? [
+                                                        isRefundSettled ? {
+                                                            label: isWalletRefund ? 'Refund Credited (Wallet Instant)' : 'Refund Settled to Bank',
+                                                            icon: CheckCircle,
+                                                            activeColor: 'text-green-600',
+                                                            activeBg: 'bg-green-50',
+                                                            ts: bk.refundProcessedAt || bk.cancelledAt,
+                                                            fallback: 'Completed'
+                                                        } : {
+                                                            label: 'Refund Processing (5-7 Days Bank SLA)',
+                                                            icon: Clock,
+                                                            activeColor: 'text-amber-600',
+                                                            activeBg: 'bg-amber-50',
+                                                            ts: bk.refundProcessedAt || bk.cancelledAt,
+                                                            fallback: 'Awaiting Bank Clearance'
+                                                        }
+                                                    ] : [])
+                                                ] : [
+                                                    { label: 'Booking Accepted', icon: CheckCircle, activeColor: 'text-green-600', activeBg: 'bg-green-50', ts: selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted')?.timestamp, fallback: 'Pending' },
+                                                    { label: 'Service Started', icon: Activity, activeColor: 'text-blue-600', activeBg: 'bg-blue-50', ts: bk.serviceStartedAt, fallback: 'Not started' },
+                                                    { label: 'Service Completed', icon: Award, activeColor: 'text-indigo-600', activeBg: 'bg-indigo-50', ts: bk.serviceCompletedAt, fallback: 'Not completed' },
+                                                ];
+
+                                                return timelineItems.map(({ label, icon: Icon, activeColor, activeBg, ts, fallback }) => (
+                                                    <div key={label} className="flex items-center gap-2.5 py-1">
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${ts ? activeBg : 'bg-gray-50'}`}>
+                                                            <Icon className={`w-3.5 h-3.5 ${ts ? activeColor : 'text-gray-300'}`} />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-semibold text-secondary">{label}</p>
+                                                            <p className="text-[10px] text-gray-400">{ts ? formatDateTime(ts) : fallback}</p>
+                                                        </div>
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-xs font-semibold text-secondary">{label}</p>
-                                                        <p className="text-[10px] text-gray-400">{ts ? new Date(ts).toLocaleString() : fallback}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                ));
+                                            })()}
                                         </Card>
 
                                         {/* PIN Verification Audit */}
@@ -1814,7 +1962,7 @@ const AdminBookingsView = () => {
                                                             <PinBadge verified={verified} />
                                                         </div>
                                                         <p className="text-lg font-black text-secondary tracking-widest font-mono">{pin}</p>
-                                                        {ts && <p className="text-[9px] text-gray-400 mt-1">{new Date(ts).toLocaleString()}</p>}
+                                                        {ts && <p className="text-[9px] text-gray-400 mt-1">{formatDateTime(ts)}</p>}
                                                     </div>
                                                 ))}
                                             </div>
@@ -1879,7 +2027,7 @@ const AdminBookingsView = () => {
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {ts && <p className={`text-[9px] mt-1 flex items-center gap-0.5 font-medium ${color === 'primary' ? 'text-gray-400' : 'text-emerald-600'}`}><Clock className="w-2 h-2" />{new Date(ts).toLocaleString()}</p>}
+                                                        {ts && <p className={`text-[9px] mt-1 flex items-center gap-0.5 font-medium ${color === 'primary' ? 'text-gray-400' : 'text-emerald-600'}`}><Clock className="w-2 h-2" />{formatDateTime(ts)}</p>}
                                                     </div>
                                                 ))}
                                             </div>
@@ -2038,16 +2186,44 @@ const AdminBookingsView = () => {
                                                     <div className="flex justify-between"><span className="text-gray-400">Cancelled By:</span><span className="font-semibold capitalize">{bk.cancelledBy || 'Admin'}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-400">Reason:</span><span className="font-semibold text-right max-w-[65%] truncate" title={bk.cancellationReason}>{bk.cancellationReason || '—'}</span></div>
                                                     {bk.complaintId && <div className="flex justify-between"><span className="text-gray-400">Complaint:</span><span className="font-semibold">{bk.complaintId.complaintId || bk.complaintId}</span></div>}
-                                                    {(bk.cancellationProgress?.refundAmount > 0 || bk.refundAmount > 0) && (
-                                                        <>
-                                                            <div className="flex justify-between"><span className="text-gray-400">Refund:</span><PriceDisplay amount={bk.refundAmount} type="teal" /></div>
-                                                            <div className="flex justify-between"><span className="text-gray-400">Refund Destination:</span><span className="font-bold text-teal-755 uppercase">Wallet</span></div>
-                                                            <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.cancellationProgress?.status || bk.refundStatus || 'Completed'}</span></div>
-                                                            <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || '—'}</span></div>
-                                                            {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{new Date(bk.refundProcessedAt).toLocaleDateString()}</span></div>}
-                                                            {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><PriceDisplay amount={bk.platformFee || bk.platformFeeRetained} type="red-bold" /></div>}
-                                                        </>
-                                                    )}
+                                                    {(bk.cancellationProgress?.refundAmount > 0 || bk.refundAmount > 0) && (() => {
+                                                        const refundDest = bk.refundDestination || bk.actualRefundDestination || selectedBooking.refundData?.actualRefundDestination || (bk.paymentMethod === 'wallet' ? 'wallet' : 'original_payment');
+                                                        const isGateway = refundDest === 'original_payment' || refundDest === 'razorpay';
+                                                        const isSettled = Boolean(bk.cancellationProgress?.bankSettled || bk.refundStatus === 'completed_settled');
+                                                        const displayStatus = isGateway
+                                                            ? (isSettled ? 'Completed (Bank Settled)' : 'Processing (5-7 Days Bank SLA)')
+                                                            : 'Completed (Instant Credit)';
+                                                        const statusColorClass = isGateway && !isSettled
+                                                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                                            : 'bg-teal-100 text-teal-800 border border-teal-300';
+
+                                                        return (
+                                                            <>
+                                                                <div className="flex justify-between"><span className="text-gray-400">Refund:</span><PriceDisplay amount={bk.refundAmount || bk.cancellationProgress?.refundAmount} type="teal" /></div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-400">Refund Destination:</span>
+                                                                    <span className="font-bold text-teal-755 uppercase">
+                                                                        {isGateway ? 'Original Gateway (Razorpay)' : refundDest === 'hybrid' ? 'Hybrid (Wallet + Gateway)' : 'Customer Wallet'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-400">Refund Status:</span>
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${statusColorClass}`}>
+                                                                        {displayStatus}
+                                                                    </span>
+                                                                </div>
+                                                                {isGateway && (
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-400">Bank SLA:</span>
+                                                                        <span className="text-[10px] text-amber-700 font-semibold">5-7 Working Days</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || bk.cancellationProgress?.refundId || '—'}</span></div>
+                                                                {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{formatDate(bk.refundProcessedAt)}</span></div>}
+                                                                {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><PriceDisplay amount={bk.platformFee || bk.platformFeeRetained} type="red-bold" /></div>}
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                             )}
 
@@ -2061,13 +2237,13 @@ const AdminBookingsView = () => {
                                                         {bk.rescheduleHistory.map((item, idx) => (
                                                             <div key={idx} className="bg-white p-2 rounded border border-blue-100 text-[11px] space-y-0.5">
                                                                 <div className="flex justify-between font-semibold text-gray-700">
-                                                                    <span>#{idx + 1} {new Date(item.oldDate).toLocaleDateString()} {item.oldTime} &rarr; {new Date(item.newDate).toLocaleDateString()} {item.newTime}</span>
+                                                                    <span>#{idx + 1} {formatDate(item.oldDate)} {item.oldTime} &rarr; {formatDate(item.newDate)} {item.newTime}</span>
                                                                     <span className="capitalize px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px]">{item.changedByRole || item.changedBy || 'Customer'}</span>
                                                                 </div>
                                                                 {item.reason && (
                                                                     <p className="text-gray-500 italic text-[10px]">Reason: {item.reason}</p>
                                                                 )}
-                                                                <p className="text-[9px] text-gray-400 text-right">{new Date(item.createdAt).toLocaleString()}</p>
+                                                                <p className="text-[9px] text-gray-400 text-right">{formatDateTime(item.createdAt)}</p>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -2166,7 +2342,7 @@ const AdminBookingsView = () => {
                 <CancelBookingModal
                     isOpen={showCancelModal}
                     onClose={() => setShowCancelModal(false)}
-                    booking={selectedBooking.booking}
+                    booking={selectedBooking.booking || selectedBooking}
                     complaints={bookingComplaints}
                     onConfirm={handleCancelBookingByAdmin}
                     actionLoading={actionLoading}
@@ -2193,66 +2369,87 @@ const AdminBookingsView = () => {
             {/* Assign Provider Modal */}
             {showAssignProviderModal && selectedBooking && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full">
-                        <div className="p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-semibold text-secondary">Assign Provider</h3>
+                    <div className="bg-white rounded-xl max-w-md w-full shadow-xl overflow-hidden">
+                        <div className="p-5">
+                            <div className="flex justify-between items-center mb-3">
+                                <div>
+                                    <h3 className="text-base font-semibold text-secondary">Assign Provider</h3>
+                                    <p className="text-xs text-gray-500">Available approved providers for this booking</p>
+                                </div>
                                 <button
-                                    onClick={() => setShowAssignProviderModal(false)}
-                                    className="text-gray-400 hover:text-gray-600"
+                                    onClick={() => {
+                                        setShowAssignProviderModal(false);
+                                        setSelectedAssignProviderId('');
+                                    }}
+                                    className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                                 >
-                                    <X className="w-6 h-6" />
+                                    <X className="w-5 h-5" />
                                 </button>
+                            </div>
+
+                            {/* Booking Info Header */}
+                            <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 text-xs flex items-center justify-between">
+                                <div className="min-w-0 pr-2 truncate">
+                                    <span className="font-mono font-bold text-primary mr-1.5">{selectedBooking.bookingId}</span>
+                                    <span className="text-gray-700 font-medium">
+                                        {selectedBooking.services?.[0]?.service?.title || 'Service'}
+                                    </span>
+                                </div>
+                                <span className="text-gray-500 shrink-0">
+                                    📍 {selectedBooking.zoneId?.name ? `Zone: ${selectedBooking.zoneId.name}` : (selectedBooking.address?.city || 'N/A')}
+                                </span>
                             </div>
 
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Select Provider
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                        Select Provider (Zone: {selectedBooking.zoneId?.name || selectedBooking.address?.city || 'All'})
                                     </label>
-                                    <AdminSearchBar
-                                        list="providerOptions"
-                                        value={providerSearch}
-                                        onChange={(e) => setProviderSearch(e.target.value)}
-                                        placeholder="Search providers..."
-                                        onClear={() => setProviderSearch('')}
-                                    />
-                                    <datalist id="providerOptions">
-                                        {getFilteredProviders(selectedBooking)
-                                            .filter(p =>
-                                                (p.providerId && p.providerId.toString().toLowerCase().includes(providerSearch.toLowerCase())) ||
-                                                (p.businessName && p.businessName.toLowerCase().includes(providerSearch.toLowerCase())) ||
-                                                (p.name && p.name.toLowerCase().includes(providerSearch.toLowerCase()))
-                                            )
-                                            .map(provider => (
-                                                <option key={provider._id} value={provider._id}>
-                                                    {provider.providerId ? `[${provider.providerId}] ` : ''}{provider.businessName || provider.name} (Bookings: {provider.completedBookings || 0}, Badge: {provider.performanceBadge || provider.performanceScore?.badge || 'Bronze'}) - {provider.serviceLocation?.city || provider.city || 'N/A'}
+                                    <select
+                                        value={selectedAssignProviderId}
+                                        onChange={(e) => setSelectedAssignProviderId(e.target.value)}
+                                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
+                                    >
+                                        <option value="">-- Choose Provider --</option>
+                                        {getFilteredProviders(selectedBooking).map(p => {
+                                            const rating = p.averageRating > 0 ? Number(p.averageRating).toFixed(1) : (p.rating > 0 ? Number(p.rating).toFixed(1) : '5.0');
+                                            return (
+                                                <option key={p._id} value={p._id}>
+                                                    [{p.providerId || 'PROV'}] {p.name || p.businessName} (Available) · ⭐ {rating} · {p.completedBookings || 0} Bookings · 📍 {p.address?.city || p.city || 'Jalandhar'}
                                                 </option>
-                                            ))}
-                                    </datalist>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Showing providers matching the service location
-                                    </p>
+                                            );
+                                        })}
+                                    </select>
+                                    {getFilteredProviders(selectedBooking).length === 0 && (
+                                        <p className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                            No approved & available provider in this booking's zone.
+                                        </p>
+                                    )}
                                 </div>
 
-                                <div className="flex space-x-3 pt-4">
+                                <div className="flex space-x-3 pt-2">
                                     <button
-                                        onClick={() => setShowAssignProviderModal(false)}
-                                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        type="button"
+                                        onClick={() => {
+                                            setShowAssignProviderModal(false);
+                                            setSelectedAssignProviderId('');
+                                        }}
+                                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs font-medium"
                                     >
                                         Cancel
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => {
-                                            const providerId = providerSearch;
-                                            if (providerId) {
-                                                handleAssignProvider(selectedBooking._id, providerId);
+                                            if (selectedAssignProviderId) {
+                                                handleAssignProvider(selectedBooking._id, selectedAssignProviderId);
                                             } else {
                                                 showToast('Please select a provider', 'error');
                                             }
                                         }}
-                                        disabled={actionLoading}
-                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                                        disabled={actionLoading || !selectedAssignProviderId}
+                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 text-xs font-medium"
                                     >
                                         {actionLoading ? 'Assigning...' : 'Assign Provider'}
                                     </button>

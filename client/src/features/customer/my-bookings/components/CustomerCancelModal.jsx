@@ -24,7 +24,13 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
     if (isOpen) {
       getSystemSetting()
         .then(res => {
-          const isForceWallet = Boolean(res.data?.data?.walletSettings?.refundToWalletOnly);
+          const ws = res.data?.data?.walletSettings;
+          const rs = res.data?.data?.refundSettings;
+          const isForceWallet = Boolean(
+            ws?.refundToWalletOnly ||
+            rs?.allowedDestinations === 'wallet_only' ||
+            rs?.allowOriginalPaymentRefund === false
+          );
           setForceWalletOnly(isForceWallet);
         })
         .catch(err => console.warn('[CustomerCancelModal] Error fetching system data:', err));
@@ -184,7 +190,7 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        UPI / Card / NetBanking bank account (2-5 business days).
+                        UPI / Card / NetBanking (Refund reflects in bank in 5-7 business days).
                       </p>
                     </div>
                   </label>
@@ -211,16 +217,21 @@ const CustomerCancelModal = ({ isOpen, onClose, onConfirm, booking, loading }) =
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-gray-900">Customer Wallet (Instant)</span>
+                        <span className="text-sm font-bold text-gray-900">Customer Wallet (Instant Credit)</span>
                         {refundDestination === 'wallet' && (
                           <CheckCircle2 className="w-4 h-4 text-primary" />
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Credit directly to your app wallet balance for instant re-use.
+                        Credit directly to your app wallet balance immediately. 0 waiting time.
                       </p>
                     </div>
                   </label>
+
+                  <p className="text-[11px] text-gray-500 flex items-center gap-1.5 px-1">
+                    <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span>{refundDestination === 'original_payment' ? 'Bank timeline: 5-7 business days' : 'Wallet credit: Instant'}</span>
+                  </p>
                 </div>
               )}
             </div>

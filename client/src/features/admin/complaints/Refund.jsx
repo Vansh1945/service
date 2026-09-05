@@ -18,9 +18,9 @@ import StatusBadge from '../../../components/ui/StatusBadge';
 // ── Dropdown Configs ────────────────────────
 const refundStatusOptions = [
   { value: 'all', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending Approval' },
+  { value: 'pending', label: 'Pending / In-Progress' },
+  { value: 'processing', label: 'Processing (5-7 Days)' },
   { value: 'approved', label: 'Approved' },
-  { value: 'processing', label: 'Processing' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed Payout' },
   { value: 'rejected', label: 'Rejected Claim' },
@@ -762,6 +762,13 @@ const RefundPage = () => {
     fetchLedgerData();
   }, [fetchLedgerData]);
 
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam && statusParam !== filterStatus) {
+      setFilterStatus(statusParam);
+    }
+  }, [searchParams]);
+
   const hasAutoOpenedRef = useRef(false);
   useEffect(() => {
     if (searchParams.get('openDetail') === 'true' && refunds.length > 0 && !hasAutoOpenedRef.current) {
@@ -1075,7 +1082,7 @@ const RefundPage = () => {
                         {b.cancellationProgress?.reason || b.adminRemark || 'Customer Dispute'}
                       </td>
                       <td className="px-4 py-3 font-extrabold text-secondary text-sm">₹{b.totalAmount}</td>
-                      <td className="px-4 py-3"><RefundStatusBadge status={b.paymentStatus} /></td>
+                      <td className="px-4 py-3"><RefundStatusBadge status={b.refundStatus || b.cancellationProgress?.status || b.paymentStatus} /></td>
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => { setSelectedItem(b); setIsLedgerItem(false); }}

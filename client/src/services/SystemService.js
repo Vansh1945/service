@@ -1,7 +1,9 @@
 import axiosInstance from "../api/axiosInstance";
 
 export const getSystemSetting = () => {
-    return axiosInstance.get("/system-setting/system-data");
+    return axiosInstance.get("/system-setting/system-data", {
+        params: { _t: Date.now() }
+    });
 };
 
 export const getCategories = () => {
@@ -22,7 +24,9 @@ export const getBannersAdmin = () => {
 };
 
 export const getSystemSettingAdmin = () => {
-    return axiosInstance.get("/system-setting/admin/system-setting");
+    return axiosInstance.get("/system-setting/admin/system-setting", {
+        params: { _t: Date.now() }
+    });
 };
 
 export const updateSystemSetting = (data) => {

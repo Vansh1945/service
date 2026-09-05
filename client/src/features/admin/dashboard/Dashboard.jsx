@@ -95,7 +95,7 @@ const AdminDashboard = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gray-50 py-1">
 
       {/* Header */}
       <div className="mb-6 flex justify-between items-center">
