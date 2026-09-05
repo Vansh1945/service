@@ -129,8 +129,7 @@ const notificationSchema = new mongoose.Schema({
     },
     idempotencyKey: {
         type: String,
-        default: null,
-        sparse: true
+        default: null
     },
     expiresAt: {
         type: Date,

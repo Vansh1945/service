@@ -95,8 +95,8 @@ const Navbar = () => {
     >
       <div className="w-full px-3 sm:px-4 lg:px-5">
         <div className="flex justify-between h-16 md:h-18 lg:h-20 items-center">
-          {/* Left side - Logo & Desktop Nav */}
-          <div className="flex items-center flex-1 min-w-0">
+          {/* Left side - Logo */}
+          <div className="flex items-center flex-shrink-0">
             <Link
               to="/"
               className="transition-all duration-300 focus:outline-none rounded-lg p-1 min-w-0"
@@ -116,24 +116,24 @@ const Navbar = () => {
                 </span>
               </div>
             </Link>
+          </div>
 
-            {/* Desktop Navigation  */}
-            <div className="hidden lg:block ml-12 xl:ml-20 flex-shrink-0">
-              <div className="flex space-x-1">
-                {navLinks.map((link) => (
-                  <NavItem
-                    key={link.text}
-                    {...link}
-                    isActive={location.pathname === link.path}
-                    onClick={resetDeepLink}
-                  />
-                ))}
-              </div>
+          {/* Center - Desktop Navigation Links */}
+          <div className="hidden lg:flex items-center justify-center flex-1 mx-4">
+            <div className="flex space-x-1">
+              {navLinks.map((link) => (
+                <NavItem
+                  key={link.text}
+                  {...link}
+                  isActive={location.pathname === link.path}
+                  onClick={resetDeepLink}
+                />
+              ))}
             </div>
           </div>
 
           {/* Right side - Auth Buttons (Desktop) */}
-          <div className="hidden lg:flex items-center space-x-3">
+          <div className="hidden lg:flex items-center space-x-3 flex-shrink-0">
             {isAuthenticated ? (
               <ActionButton
                 icon={<FiHome className="mr-2 text-sm" />}

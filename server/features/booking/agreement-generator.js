@@ -492,7 +492,7 @@ const maskBankAccount = (num) => {
 
 const getContext = async (provider, customVars = {}) => {
   const config = await SystemConfig.findOne() || { companyName: 'Raj Electrical Services' };
-  
+
   const cAddr = provider.currentAddress || {};
   const currentAddressStr = [cAddr.houseNumber, cAddr.street, cAddr.landmark, cAddr.villageCity, cAddr.district, cAddr.state]
     .filter(Boolean).join(', ') + (cAddr.pincode ? ` - ${cAddr.pincode}` : '');
@@ -580,7 +580,7 @@ const drawDynamicTemplate = async (doc, y, config, provider, templateKey, custom
 
   const MARGIN_LEFT = 50;
   const CONTENT_WIDTH = 595.28 - 100;
-  
+
   if (parsedTitle) {
     doc.save();
     doc.fontSize(13).font('Helvetica-Bold').fillColor('#0C7C84');
@@ -734,7 +734,7 @@ const generateAgreement = async (provider) => {
 
     y = drawSectionTitle(doc, 'Provider Digital Signature', y);
     y = drawInfoLine(doc, 'Signed Name', provider.digitalSignature?.signedName || provider.name, y);
-    
+
     const signatureImgY = y;
     if (provider.digitalSignature?.signatureUrl) {
       try {
@@ -845,7 +845,7 @@ const generatePdfFromTemplate = async (templateKey, provider, customVars = {}) =
   return generateLetterheadDocument(provider, templateKey.toUpperCase().slice(0, 3), async (doc, y, config, signatureBuffer, stampBuffer) => {
     const dynamicY = await drawDynamicTemplate(doc, y, config, provider, templateKey, customVars);
     if (dynamicY !== null) return dynamicY;
-    
+
     // Minimal fallback
     doc.save();
     doc.fontSize(12).text(`Dynamic Document: ${templateKey}`, 50, y);
