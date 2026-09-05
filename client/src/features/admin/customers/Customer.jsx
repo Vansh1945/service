@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
 import usePagination from '../../../hooks/usePagination';
 import SectionHeader from '../../../components/ui/SectionHeader';
+import Button from '../../../components/ui/Button';
 import Avatar from '../../../components/ui/Avatar';
 import Table from '../../../components/ui/Table';
 import { AdminLocalFilterBar } from '../../../components/AdminFilterBar';
@@ -33,7 +34,8 @@ import {
     Trash2,
     Lock,
     Unlock,
-    MoreVertical
+    MoreVertical,
+    Download
 } from 'lucide-react';
 import StatCard from '../../../components/ui/StatCard';
 
@@ -369,6 +371,35 @@ const AdminCustomersDashboard = () => {
         }, fetchCustomers);
     };
 
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExportExcel = async () => {
+        try {
+            setIsExporting(true);
+            const res = await AdminService.exportCustomersExcel({
+                search: searchTerm,
+                status: statusFilter
+            });
+            const blob = new Blob([res.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `customers_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            showToast('Customers exported successfully!', 'success');
+        } catch (err) {
+            console.error('Error exporting customers to Excel:', err);
+            showToast(err.response?.data?.message || 'Failed to export customers to Excel', 'error');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     // Format address
 
 
@@ -436,6 +467,17 @@ const AdminCustomersDashboard = () => {
                     title="Customers Management"
                     subtitle="Manage and monitor all customer accounts"
                     className="mb-6 md:mb-8"
+                    action={
+                        <Button
+                            variant="outline"
+                            onClick={handleExportExcel}
+                            loading={isExporting}
+                            icon={Download}
+                            className="bg-white hover:bg-emerald-50 text-emerald-700 border-emerald-300 hover:border-emerald-500 shadow-sm"
+                        >
+                            Export to Excel
+                        </Button>
+                    }
                 />
 
                 {/* Stats Cards */}

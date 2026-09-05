@@ -2,6 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import Modal from '../../../components/ui/Modal';
+import Button from '../../../components/ui/Button';
+import Alert from '../../../components/ui/Alert';
+import Loader from '../../../components/ui/Loader';
+import EmptyState from '../../../components/ui/EmptyState';
+import Badge from '../../../components/ui/Badge';
 import {
   Plus,
   Edit,
@@ -541,13 +547,13 @@ const SurgeManagement = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-secondary">Surge & Surcharge Management</h1>
             <p className="text-gray-600 mt-1">Configure dynamic booking surge charges by type and zone</p>
           </div>
-          <button
+          <Button
             onClick={() => { setCreateForm({ ...defaultForm }); setShowCreateModal(true); }}
-            className="flex items-center bg-primary hover:bg-teal-800 text-white px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm font-semibold"
+            leftIcon={<Plus className="w-4 h-4" />}
+            size="md"
           >
-            <Plus className="w-5 h-5 mr-2" />
             Add Surge Rule
-          </button>
+          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -622,21 +628,32 @@ const SurgeManagement = () => {
         {/* Rules Table */}
         {loading ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-            <div className=" rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600 font-medium">Loading rules...</p>
+            <Loader text="Loading surge rules..." />
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             {currentRules.length === 0 ? (
-              <div className="text-center py-16">
-                <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg font-medium">No surge rules found</p>
-                <p className="text-gray-400 mt-2 text-sm">
-                  {searchTerm || typeFilter !== 'all' || statusFilter !== 'all' || activeTab !== 'all'
+              <EmptyState
+                title="No surge rules found"
+                message={
+                  searchTerm || typeFilter !== 'all' || statusFilter !== 'all' || activeTab !== 'all'
                     ? 'Try adjusting your filters'
-                    : 'Create a surge rule to get started'}
-                </p>
-              </div>
+                    : 'Create a surge rule to get started'
+                }
+                actionLabel={activeTab !== 'all' || searchTerm ? 'Clear Filters' : 'Add Surge Rule'}
+                onAction={() => {
+                  if (activeTab !== 'all' || searchTerm) {
+                    setActiveTab('all');
+                    setSearchTerm('');
+                    setTypeFilter('all');
+                    setStatusFilter('all');
+                  } else {
+                    setCreateForm({ ...defaultForm });
+                    setShowCreateModal(true);
+                  }
+                }}
+                className="py-12 border-0 shadow-none"
+              />
             ) : (
               <>
                 <div className="overflow-x-auto">
@@ -773,14 +790,14 @@ const SurgeManagement = () => {
                   Define the percentage share of each active surcharge type that is paid out directly to the Service Provider. The remaining percentage will be retained by the Company.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={saveSplitSettings}
-                disabled={savingSplits}
-                className="flex items-center bg-primary hover:bg-teal-800 text-white px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-xs font-semibold shrink-0"
+                isLoading={savingSplits}
+                leftIcon={<Save className="w-4 h-4" />}
+                size="sm"
               >
-                <Save className="w-4.5 h-4.5 mr-1.5" />
-                {savingSplits ? 'Saving...' : 'Save Splits'}
-              </button>
+                Save Splits
+              </Button>
             </div>
 
             {/* All split fields in one unified row */}
@@ -937,34 +954,7 @@ const SurgeManagement = () => {
   );
 };
 
-// Reusable Modal
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
-  if (!isOpen) return null;
-  const sizeClasses = { medium: 'sm:max-w-lg', large: 'sm:max-w-2xl', xlarge: 'sm:max-w-4xl' };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-          <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
-        </div>
-        <div className={`bg-white rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 ${sizeClasses[size]} sm:w-full`}>
-          <div className="bg-white px-6 py-5 sm:p-7">
-            <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-              <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
-                <h3 className="text-lg leading-6 font-bold text-secondary">{title}</h3>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors duration-200">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              {children}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ----- Zone Cascade Dropdown Component -----
 const ZoneCascadeSelector = ({
@@ -1146,17 +1136,11 @@ const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones, existin
     <form onSubmit={hasConflict ? (e) => e.preventDefault() : onSubmit} className="space-y-5">
       {/* Conflict Warning Banner */}
       {hasConflict && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-bold text-amber-800">Duplicate Rule Detected</p>
-            <p className="text-xs text-amber-700 mt-0.5">
-              A <span className="font-semibold">{getChargeTypeConfig(form.chargeType).label}</span> rule already exists
-              {form.scope === 'global' ? ' for Global scope' : ' for this zone'}. Only one rule per charge type is allowed.
-              Please <span className="font-semibold">edit the existing rule</span> instead.
-            </p>
-          </div>
-        </div>
+        <Alert
+          type="warning"
+          title="Duplicate Rule Detected"
+          message={`A ${getChargeTypeConfig(form.chargeType).label} rule already exists ${form.scope === 'global' ? 'for Global scope' : 'for this zone'}. Only one rule per charge type is allowed. Please edit the existing rule instead.`}
+        />
       )}
       {/* Charge Type Selector — visual cards */}
       <div>
@@ -1388,21 +1372,17 @@ const SurgeForm = ({ form, setForm, onSubmit, isCreate, onCancel, zones, existin
 
       {/* Actions */}
       <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
-        <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
+        <Button variant="outline" size="sm" onClick={onCancel}>
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           disabled={hasConflict}
-          className={`px-5 py-2 rounded-lg transition-colors text-sm font-semibold flex items-center shadow-md ${
-            hasConflict
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-              : 'bg-primary text-white hover:bg-teal-700'
-          }`}
+          size="sm"
+          leftIcon={<Save className="w-4 h-4" />}
         >
-          <Save className="w-4 h-4 mr-2" />
           {isCreate ? 'Create Surge Rule' : 'Save Changes'}
-        </button>
+        </Button>
       </div>
     </form>
   );

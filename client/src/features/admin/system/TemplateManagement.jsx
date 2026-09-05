@@ -4,6 +4,9 @@ import {
   FiChevronRight, FiCheck, FiCopy, FiInfo, FiTrash2, FiExternalLink, FiX
 } from 'react-icons/fi';
 import { toast } from '../../../components/ui/Toast';
+import Button from '../../../components/ui/Button';
+import Loader from '../../../components/ui/Loader';
+import Badge from '../../../components/ui/Badge';
 
 import * as SystemService from '../../../services/SystemService';
 import { useConfirm } from '../../../context/ConfirmContext';
@@ -274,7 +277,7 @@ const TemplateManagement = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary" />
+        <Loader text="Loading Dynamic Template Workspace..." />
       </div>
     );
   }
@@ -431,23 +434,24 @@ const TemplateManagement = () => {
           </div>
 
           <div className="flex justify-between items-center pt-3 border-t border-gray-150">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => generatePreview()}
-              disabled={isPreviewLoading}
-              className="flex items-center px-4 py-2 rounded-xl border hover:bg-gray-50 font-bold text-sm"
+              isLoading={isPreviewLoading}
+              leftIcon={<FiEye className="w-4 h-4" />}
             >
-              <FiEye className="mr-2" />
               Refresh Preview
-            </button>
+            </Button>
 
-            <button
+            <Button
+              size="sm"
               onClick={handleSaveDraft}
-              disabled={isSaving}
-              className="flex items-center px-5 py-2 rounded-xl bg-primary text-white font-bold text-sm shadow-md hover:bg-teal-700"
+              isLoading={isSaving}
+              leftIcon={<FiSave className="w-4 h-4" />}
             >
-              <FiSave className="mr-2" />
-              {isSaving ? 'Saving Draft...' : 'Save Draft Version'}
-            </button>
+              Save Draft Version
+            </Button>
           </div>
         </div>
 

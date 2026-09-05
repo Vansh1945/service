@@ -13,6 +13,9 @@ import { toast } from '../../../components/ui/Toast';
 
 
 import Modal from '../../../components/ui/Modal';
+import Button from '../../../components/ui/Button';
+import Loader from '../../../components/ui/Loader';
+import EmptyState from '../../../components/ui/EmptyState';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import ConfirmDialog from '../../../components/ui/ConfirmDialog';
 import StatCard from '../../../components/ui/StatCard';
@@ -183,13 +186,14 @@ const BroadcastHistory = () => {
                     </h1>
                     <p className="text-gray-600 mt-1 text-sm font-inter">View complete delivery metrics, CTR engagement rates, and manage past broadcasts.</p>
                 </div>
-                <button
-                    type="button"
+                <Button
+                    variant="outline"
                     onClick={exportToCSV}
-                    className="bg-white border border-gray-300 text-gray-800 font-semibold py-2.5 px-4 rounded-xl flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm text-sm"
+                    leftIcon={<FiDownload className="w-4 h-4" />}
+                    size="sm"
                 >
-                    <FiDownload size={14} /> Export Report
-                </button>
+                    Export Report
+                </Button>
             </div>
 
             {/* Analytics Cards */}
@@ -296,17 +300,17 @@ const BroadcastHistory = () => {
                 ]}
             />
 
-            {/* Grid/Table history list */}
             {loadingHistory ? (
-                <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-white border rounded-2xl">
-                    <FiLoader className="animate-spin text-primary mb-2" size={24} />
-                    <span className="text-sm">Loading history...</span>
+                <div className="py-8 bg-white border border-neutral-100 rounded-2xl">
+                    <Loader text="Loading history..." />
                 </div>
             ) : history.length === 0 ? (
-                <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-white border border-dashed rounded-2xl">
-                    <FiMessageSquare className="mb-2 opacity-35" size={24} />
-                    <span className="text-sm">No notification records match criteria.</span>
-                </div>
+                <EmptyState
+                    title="No Broadcast Records"
+                    message="No notification records match your filter criteria."
+                    icon={FiMessageSquare}
+                    className="py-12"
+                />
             ) : (
                 <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">

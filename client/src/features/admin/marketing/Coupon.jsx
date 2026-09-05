@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Pagination from '../../../components/ui/Pagination';
+import Modal from '../../../components/ui/Modal';
+import Button from '../../../components/ui/Button';
+import Loader from '../../../components/ui/Loader';
+import EmptyState from '../../../components/ui/EmptyState';
+import Badge from '../../../components/ui/Badge';
 import usePagination from '../../../hooks/usePagination';
 import { Plus, Edit, Trash2, Eye, Filter, CheckCircle, XCircle, Clock, Percent, DollarSign, Users, Globe, Gift, Calendar, Save, X } from 'lucide-react';
 import { toast } from '../../../components/ui/Toast';
@@ -833,13 +838,13 @@ const AdminCoupons = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-secondary">Coupons Management</h1>
             <p className="text-gray-600 mt-1">Manage discount coupons and promotions</p>
           </div>
-          <button
+          <Button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+            leftIcon={<Plus className="w-4 h-4" />}
+            size="md"
           >
-            <Plus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
             Add Coupon
-          </button>
+          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -913,8 +918,7 @@ const AdminCoupons = () => {
         {/* Loading State */}
         {loading && (
           <div className="bg-white rounded-xl shadow-md p-8 mb-6 text-center">
-            <div className=" rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading coupons...</p>
+            <Loader text="Loading coupons..." />
           </div>
         )}
 
@@ -922,15 +926,26 @@ const AdminCoupons = () => {
         {!loading && (
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {currentCoupons.length === 0 ? (
-              <div className="text-center py-12 md:py-16">
-                <Gift className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
-                <p className="text-gray-600 text-md md:text-lg">No coupons found</p>
-                <p className="text-gray-400 text-sm mt-1 md:mt-2">
-                  {searchTerm || typeFilter !== 'all' || statusFilter !== 'all'
+              <EmptyState
+                title="No coupons found"
+                message={
+                  searchTerm || typeFilter !== 'all' || statusFilter !== 'all'
                     ? 'Try adjusting your search or filters'
-                    : 'Create your first coupon to get started'}
-                </p>
-              </div>
+                    : 'Create your first coupon to get started'
+                }
+                icon={Gift}
+                actionLabel={searchTerm || typeFilter !== 'all' || statusFilter !== 'all' ? 'Clear Filters' : 'Add Coupon'}
+                onAction={() => {
+                  if (searchTerm || typeFilter !== 'all' || statusFilter !== 'all') {
+                    setSearchTerm('');
+                    setTypeFilter('all');
+                    setStatusFilter('all');
+                  } else {
+                    setShowCreateModal(true);
+                  }
+                }}
+                className="py-12 border-0 shadow-none"
+              />
             ) : (
               <>
                 <div className="overflow-x-auto">
@@ -984,24 +999,21 @@ const AdminCoupons = () => {
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                             {coupon.isGlobal ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              <Badge variant="info" size="sm">
                                 <Globe className="w-3 h-3 mr-1" />
                                 Global
-                              </span>
+                              </Badge>
                             ) : coupon.isFirstBooking ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                              <Badge variant="secondary" size="sm">
                                 <Users className="w-3 h-3 mr-1" />
                                 First Booking
-                              </span>
+                              </Badge>
                             ) : coupon.assignedTo ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                <Users className="w-3 h-3 mr-1" />
-                                Assigned
-                              </span>
+                              <Badge variant="warning" size="sm">Assigned</Badge>
+                            ) : coupon.isReferralCoupon ? (
+                              <Badge variant="primary" size="sm">Referral</Badge>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                Standard
-                              </span>
+                              <Badge variant="neutral" size="sm">Standard</Badge>
                             )}
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
@@ -1013,22 +1025,17 @@ const AdminCoupons = () => {
                             </div>
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${coupon.isActive && !isExpired(coupon.expiryDate)
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                              }`}>
-                              {coupon.isActive && !isExpired(coupon.expiryDate) ? (
-                                <>
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Active
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  {isExpired(coupon.expiryDate) ? 'Expired' : 'Inactive'}
-                                </>
-                              )}
-                            </span>
+                            {coupon.isActive && !isExpired(coupon.expiryDate) ? (
+                              <Badge variant="success" size="sm">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="danger" size="sm">
+                                <XCircle className="w-3 h-3 mr-1" />
+                                {isExpired(coupon.expiryDate) ? 'Expired' : 'Inactive'}
+                              </Badge>
+                            )}
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center space-x-2">
@@ -1108,23 +1115,23 @@ const AdminCoupons = () => {
               {renderCouponForm('create')}
 
               <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     setShowCreateModal(false);
                     resetCreateForm();
                   }}
-                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center shadow-md hover:shadow-lg"
+                  size="sm"
+                  leftIcon={<Save className="w-4 h-4" />}
                 >
-                  <Save className="w-4 h-4 mr-2" />
                   Create Coupon
-                </button>
+                </Button>
               </div>
             </form>
           </Modal>
@@ -1142,20 +1149,20 @@ const AdminCoupons = () => {
               {renderCouponForm('edit')}
 
               <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowEditModal(false)}
-                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center shadow-md hover:shadow-lg"
+                  size="sm"
+                  leftIcon={<Save className="w-4 h-4" />}
                 >
-                  <Save className="w-4 h-4 mr-2" />
                   Update Coupon
-                </button>
+                </Button>
               </div>
             </form>
           </Modal>
@@ -1356,22 +1363,23 @@ const AdminCoupons = () => {
 
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowViewModal(false)}
-                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Close
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="sm"
                   onClick={() => {
                     setShowViewModal(false);
                     handleEditClick(selectedCoupon);
                   }}
-                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center shadow-md hover:shadow-lg"
+                  leftIcon={<Edit className="w-4 h-4" />}
                 >
-                  <Edit className="w-4 h-4 mr-2" />
                   Edit Coupon
-                </button>
+                </Button>
               </div>
             </div>
           </Modal>
@@ -1389,19 +1397,21 @@ const AdminCoupons = () => {
             <div>
               <p className="text-gray-600 mb-4">Are you sure you want to permanently delete this coupon? This action cannot be undone.</p>
               <div className="flex justify-end space-x-3">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowHardDeleteModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={confirmHardDeleteCoupon}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center"
+                  leftIcon={<Trash2 className="w-4 h-4" />}
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           </Modal>
@@ -1412,46 +1422,7 @@ const AdminCoupons = () => {
   );
 };
 
-// Reusable Modal Component
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
-  if (!isOpen) return null;
 
-  const sizeClasses = {
-    medium: 'sm:max-w-lg',
-    large: 'sm:max-w-2xl',
-    xlarge: 'sm:max-w-4xl'
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-          <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
-        </div>
-
-
-        <div className={`bg-white rounded-lg text-left overflow-visible shadow-xl transform transition-all sm:my-8 ${sizeClasses[size]} sm:w-full`}>
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start">
-              <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg leading-6 font-medium text-secondary">{title}</h3>
-                  <button
-                    onClick={onClose}
-                    className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {children}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 
 

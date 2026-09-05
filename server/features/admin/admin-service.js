@@ -4343,6 +4343,443 @@ class AdminService {
         }
     }
 
+    /**
+     * Generate and stream/download a complete multi-page Provider Dossier PDF:
+     * - Page 1: Complete provider details, addresses, services, bank info & document index
+     * - Pages 2+: Each uploaded KYC / ID proof document rendered on its own dedicated full page
+     */
+    static async getProviderDossierPdf(req, res) {
+        try {
+            const queryId = req.params.id;
+            let matchQuery = { providerId: queryId };
+            if (mongoose.isValidObjectId(queryId) && queryId.length === 24) {
+                matchQuery = { $or: [{ _id: new mongoose.Types.ObjectId(queryId) }, { providerId: queryId }] };
+            }
+
+            const provider = await Provider.findOne(matchQuery)
+                .populate('services', 'name title')
+                .lean();
+
+            if (!provider) {
+                return res.status(404).json({ success: false, message: 'Provider not found' });
+            }
+
+            const pdfBuffer = await generateProviderDossierPdf(provider);
+
+            const filename = `provider_dossier_${provider.providerId || provider._id}.pdf`;
+            res.set({
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': `inline; filename="${filename}"`,
+                'Content-Length': pdfBuffer.length
+            });
+            return res.send(pdfBuffer);
+        } catch (error) {
+            console.error('Admin get provider dossier PDF error:', error);
+            res.status(500).json({ success: false, message: 'Server error while generating provider dossier PDF', error: error.message });
+        }
+    }
+
+}
+
+/**
+ * Generate a multi-page Provider Dossier PDF:
+ * - Page 1: All provider details in one page
+ * - Pages 2+: Each uploaded document on a single dedicated full page
+ */
+async function generateProviderDossierPdf(provider) {
+    const PDFDocument = require('pdfkit');
+    const sharp = require('sharp');
+    const axios = require('axios');
+    const cloudinary = require('../../shared/config/cloudinary');
+
+    // Helper to fetch image from Cloudinary/URL and convert to PNG buffer for PDFKit
+    async function fetchImageToPng(url, publicId, isKYC = true) {
+        if (!url && !publicId) return null;
+        try {
+            let fetchUrl = url;
+            const pid = publicId || (url ? url.replace(/.*\/v\d+\//, '').replace(/\.[^/.]+$/, '') : null);
+            if (pid && (isKYC || (url && url.includes('/authenticated/')))) {
+                fetchUrl = cloudinary.url(pid, {
+                    secure: true,
+                    sign_url: true,
+                    resource_type: 'image',
+                    type: 'authenticated',
+                    expires_at: Math.floor(Date.now() / 1000) + 1800
+                });
+            } else if (pid && !url.startsWith('http')) {
+                fetchUrl = cloudinary.url(pid, { secure: true });
+            }
+
+            const response = await axios.get(fetchUrl, {
+                responseType: 'arraybuffer',
+                timeout: 12000
+            });
+            return await sharp(Buffer.from(response.data)).png().toBuffer();
+        } catch (err) {
+            console.warn(`[PDF Dossier] Could not fetch/convert image (${publicId || url}):`, err.message);
+            return null;
+        }
+    }
+
+    // Collect all available KYC / identity documents
+    const docItems = [];
+    if (provider.aadhaarFront || provider.aadhaarFrontPublicId) {
+        docItems.push({
+            title: 'Aadhaar Card (Front)',
+            url: provider.aadhaarFront,
+            publicId: provider.aadhaarFrontPublicId,
+            type: 'aadhaarFront'
+        });
+    }
+    if (provider.aadhaarBack || provider.aadhaarBackPublicId) {
+        docItems.push({
+            title: 'Aadhaar Card (Back)',
+            url: provider.aadhaarBack,
+            publicId: provider.aadhaarBackPublicId,
+            type: 'aadhaarBack'
+        });
+    }
+    if (provider.panCard || provider.panCardPublicId) {
+        docItems.push({
+            title: 'PAN Card (Permanent Account Number)',
+            url: provider.panCard,
+            publicId: provider.panCardPublicId,
+            type: 'panCard'
+        });
+    }
+    if (provider.liveSelfie || provider.liveSelfiePublicId) {
+        docItems.push({
+            title: 'Live Selfie (KYC Verification Photo)',
+            url: provider.liveSelfie,
+            publicId: provider.liveSelfiePublicId,
+            type: 'liveSelfie'
+        });
+    }
+    if (provider.bankDetails?.passbookImage || provider.bankDetails?.passbookImagePublicId) {
+        docItems.push({
+            title: 'Bank Passbook / Cancelled Cheque',
+            url: provider.bankDetails.passbookImage,
+            publicId: provider.bankDetails.passbookImagePublicId,
+            type: 'passbook'
+        });
+    }
+
+    // Fetch images in parallel
+    const [profilePicBuffer, ...docBuffers] = await Promise.all([
+        fetchImageToPng(provider.profilePicUrl, provider.profilePicPublicId, false),
+        ...docItems.map(d => fetchImageToPng(d.url, d.publicId, true))
+    ]);
+
+    docItems.forEach((d, idx) => {
+        d.buffer = docBuffers[idx];
+    });
+
+    const totalPages = 1 + docItems.length;
+
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({
+                size: 'A4',
+                margin: 35,
+                bufferPages: true,
+                autoFirstPage: true
+            });
+
+            const chunks = [];
+            doc.on('data', chunk => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', err => reject(err));
+
+            const PAGE_WIDTH = 595.28;
+            const TEAL = '#0F766E';
+            const GRAY_BG = '#F8FAFC';
+            const BORDER_COLOR = '#CBD5E1';
+            const TEXT_DARK = '#0F172A';
+            const TEXT_MUTED = '#475569';
+
+            function formatDateStr(d) {
+                if (!d) return 'N/A';
+                try {
+                    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                } catch {
+                    return 'N/A';
+                }
+            }
+
+            function formatAddressObj(addr) {
+                if (!addr) return 'Not Provided';
+                if (typeof addr === 'string') return addr;
+                const parts = [
+                    addr.houseNumber,
+                    addr.street,
+                    addr.landmark ? `Near ${addr.landmark}` : null,
+                    addr.villageCity || addr.city,
+                    addr.district,
+                    addr.state,
+                    addr.pincode || addr.postalCode
+                ].filter(Boolean);
+                return parts.length > 0 ? parts.join(', ') : 'Not Provided';
+            }
+
+            // ══════════════════════════════════════════════════════════════════
+            // PAGE 1: ALL PROVIDER DETAILS & SUMMARY
+            // ══════════════════════════════════════════════════════════════════
+
+            // 1. Top Header Banner
+            doc.rect(0, 0, PAGE_WIDTH, 50).fill(TEAL);
+            doc.fillColor('#FFFFFF').fontSize(14).font('Helvetica-Bold').text('PROVIDER DOSSIER & VERIFICATION REPORT', 35, 14);
+            doc.fillColor('#CCFBF1').fontSize(8).font('Helvetica').text('CONFIDENTIAL OFFICIAL RECORD - SERVICE PLATFORM ADMINISTRATION', 35, 32);
+
+            const genDateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text(`DATE: ${genDateStr}`, 410, 15, { width: 150, align: 'right' });
+            doc.fillColor('#CCFBF1').fontSize(8).font('Helvetica').text(`REF: #${provider.providerId || provider._id?.toString().slice(-8)}`, 410, 30, { width: 150, align: 'right' });
+
+            // 2. Identity Card Box
+            doc.roundedRect(35, 60, 525, 66, 4).fillAndStroke(GRAY_BG, BORDER_COLOR);
+
+            if (profilePicBuffer) {
+                try {
+                    doc.image(profilePicBuffer, 45, 68, { fit: [50, 50], align: 'center', valign: 'center' });
+                } catch {
+                    doc.circle(70, 93, 25).fill(TEAL);
+                    const initial = (provider.name || 'P').charAt(0).toUpperCase();
+                    doc.fillColor('#FFFFFF').fontSize(18).font('Helvetica-Bold').text(initial, 62, 85);
+                }
+            } else {
+                doc.circle(70, 93, 25).fill(TEAL);
+                const initial = (provider.name || 'P').charAt(0).toUpperCase();
+                doc.fillColor('#FFFFFF').fontSize(18).font('Helvetica-Bold').text(initial, 62, 85);
+            }
+
+            // Provider Identity Details
+            doc.fillColor(TEXT_DARK).fontSize(14).font('Helvetica-Bold').text(provider.name || 'N/A', 105, 68);
+            doc.fillColor(TEAL).fontSize(10).font('Helvetica-Bold').text(`Provider ID: #${provider.providerId || provider._id?.toString().slice(-8)}`, 105, 85);
+
+            const approvedBadge = provider.approved ? 'APPROVED' : 'PENDING APPROVAL';
+            const kycBadge = `KYC: ${(provider.kycStatus || 'pending').toUpperCase()}`;
+            const activeBadge = provider.isOnline ? 'ONLINE' : 'OFFLINE';
+            const expBadge = `${provider.experience || 0} Yrs Experience`;
+
+            doc.fillColor(TEXT_MUTED).fontSize(8.5).font('Helvetica').text(
+                `Status: ${approvedBadge}   |   ${kycBadge}   |   ${activeBadge}   |   ${expBadge}`,
+                105, 102
+            );
+
+            // 3. Section 1: Personal & Account Details
+            let currentY = 136;
+            doc.rect(35, currentY, 525, 17).fill(TEAL);
+            doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text('1. PERSONAL & ACCOUNT INFORMATION', 42, currentY + 4);
+
+            currentY += 17;
+            doc.rect(35, currentY, 525, 58).fillAndStroke('#FFFFFF', BORDER_COLOR);
+
+            // Row 1
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('FULL NAME', 45, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(provider.name || 'N/A', 45, currentY + 16, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('MOBILE NUMBER', 215, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(provider.phone || 'N/A', 215, currentY + 16, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('EMAIL ADDRESS', 385, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(provider.email || 'N/A', 385, currentY + 16, { width: 165 });
+
+            // Row 2
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('DATE OF BIRTH', 45, currentY + 32);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(formatDateStr(provider.dateOfBirth), 45, currentY + 42, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('REGISTRATION DATE', 215, currentY + 32);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(formatDateStr(provider.registrationDate || provider.createdAt), 215, currentY + 42, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('ACCOUNT ROLE / TYPE', 385, currentY + 32);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text('Verified Service Provider', 385, currentY + 42, { width: 165 });
+
+            // 4. Section 2: Professional & Service Operations
+            currentY += 66;
+            doc.rect(35, currentY, 525, 17).fill(TEAL);
+            doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text('2. PROFESSIONAL & SERVICE OPERATIONS', 42, currentY + 4);
+
+            currentY += 17;
+            doc.rect(35, currentY, 525, 58).fillAndStroke('#FFFFFF', BORDER_COLOR);
+
+            const servicesList = (Array.isArray(provider.services) && provider.services.length > 0)
+                ? provider.services.map(s => (typeof s === 'object' && s ? (s.name || s.title) : String(s))).filter(Boolean).join(', ')
+                : 'General Services';
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('SERVICES / CATEGORIES OFFERED', 45, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(servicesList, 45, currentY + 16, { width: 320, height: 18, ellipsis: true });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('PRIMARY SERVICE AREA', 385, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(provider.serviceArea || provider.address?.city || 'N/A', 385, currentY + 16, { width: 165 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('OPERATIONAL CITY & STATE', 45, currentY + 32);
+            const cityState = [provider.address?.city, provider.address?.state].filter(Boolean).join(', ') || 'N/A';
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(cityState, 45, currentY + 42, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('AVERAGE RATING', 215, currentY + 32);
+            const ratingVal = provider.averageRating || provider.performanceScore?.averageRating || 5;
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(`${Number(ratingVal).toFixed(1)} ★  (${provider.ratingCount || 0} Reviews)`, 215, currentY + 42, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('RELIABILITY SCORE', 385, currentY + 32);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(`${provider.providerReliabilityScore || 100} / 100`, 385, currentY + 42, { width: 165 });
+
+            // 5. Section 3: Addresses
+            currentY += 66;
+            doc.rect(35, currentY, 525, 17).fill(TEAL);
+            doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text('3. RESIDENTIAL & PERMANENT ADDRESSES', 42, currentY + 4);
+
+            currentY += 17;
+            // Current Address (Left)
+            doc.rect(35, currentY, 258, 56).fillAndStroke('#FFFFFF', BORDER_COLOR);
+            doc.fillColor(TEAL).fontSize(8).font('Helvetica-Bold').text('CURRENT RESIDENTIAL ADDRESS', 42, currentY + 6);
+            const currAddrStr = formatAddressObj(provider.currentAddress || provider.address);
+            doc.fillColor(TEXT_DARK).fontSize(7.8).font('Helvetica').text(currAddrStr, 42, currentY + 18, { width: 244, height: 32 });
+
+            // Permanent Address (Right)
+            doc.rect(302, currentY, 258, 56).fillAndStroke('#FFFFFF', BORDER_COLOR);
+            doc.fillColor(TEAL).fontSize(8).font('Helvetica-Bold').text('PERMANENT ADDRESS', 310, currentY + 6);
+            const permAddrStr = provider.addressSame
+                ? 'Same as Current Residential Address'
+                : formatAddressObj(provider.permanentAddress || provider.address);
+            doc.fillColor(TEXT_DARK).fontSize(7.8).font('Helvetica').text(permAddrStr, 310, currentY + 18, { width: 244, height: 32 });
+
+            // 6. Section 4: Banking & Payout Information
+            currentY += 64;
+            doc.rect(35, currentY, 525, 17).fill(TEAL);
+            doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text('4. BANKING & PAYOUT INFORMATION', 42, currentY + 4);
+
+            currentY += 17;
+            doc.rect(35, currentY, 525, 58).fillAndStroke('#FFFFFF', BORDER_COLOR);
+
+            const bank = provider.bankDetails || {};
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('ACCOUNT HOLDER NAME', 45, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(bank.accountName || provider.name || 'N/A', 45, currentY + 16, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('BANK NAME', 215, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(bank.bankName || 'N/A', 215, currentY + 16, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('ACCOUNT NUMBER', 385, currentY + 6);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(bank.accountNo || 'N/A', 385, currentY + 16, { width: 165 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('IFSC CODE', 45, currentY + 32);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(bank.ifsc || 'N/A', 45, currentY + 42, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('UPI ID', 215, currentY + 32);
+            doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(bank.upiId || 'N/A', 215, currentY + 42, { width: 160 });
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('BANK VERIFICATION STATUS', 385, currentY + 32);
+            const bankStatus = (bank.bankVerificationStatus || (bank.verified ? 'verified' : 'pending')).toUpperCase();
+            doc.fillColor(bankStatus === 'VERIFIED' ? '#059669' : '#D97706').fontSize(8.5).font('Helvetica-Bold').text(bankStatus, 385, currentY + 42, { width: 165 });
+
+            // 7. Section 5: Attached KYC Documents Index Table
+            currentY += 66;
+            doc.rect(35, currentY, 525, 17).fill(TEAL);
+            doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text('5. ATTACHED KYC & IDENTITY DOCUMENTS (SINGLE PAGE PER DOCUMENT)', 42, currentY + 4);
+
+            currentY += 17;
+            const tableHeight = Math.max(88, 20 + docItems.length * 17);
+            doc.rect(35, currentY, 525, tableHeight).fillAndStroke('#FFFFFF', BORDER_COLOR);
+
+            // Table Header Row
+            doc.rect(35, currentY, 525, 16).fill('#F1F5F9');
+            doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold');
+            doc.text('DOCUMENT TYPE', 45, currentY + 4);
+            doc.text('STATUS', 330, currentY + 4);
+            doc.text('LOCATION IN PDF', 450, currentY + 4);
+
+            let rowY = currentY + 18;
+            if (docItems.length > 0) {
+                docItems.forEach((item, i) => {
+                    const targetPage = i + 2;
+                    doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(`${i + 1}.  ${item.title}`, 45, rowY);
+                    doc.fillColor('#059669').fontSize(8).font('Helvetica-Bold').text('ATTACHED & VERIFIED', 330, rowY);
+                    doc.fillColor(TEAL).fontSize(8).font('Helvetica-Bold').text(`PAGE ${targetPage} OF ${totalPages}`, 450, rowY);
+                    rowY += 16;
+                });
+            } else {
+                doc.fillColor(TEXT_MUTED).fontSize(8).font('Helvetica-Oblique').text('No KYC identity proof documents uploaded yet for this provider.', 45, rowY);
+                rowY += 18;
+            }
+
+            doc.fillColor(TEXT_MUTED).fontSize(7.2).font('Helvetica-Oblique').text(
+                'Note: As required for administrative verification, all uploaded identity proof documents are attached on individual full pages following this summary sheet.',
+                45, currentY + tableHeight - 14, { width: 505 }
+            );
+
+            // Page 1 Footer
+            doc.rect(35, 785, 525, 0.5).fill(BORDER_COLOR);
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text('Confidential Provider Record - For Official Administration Only', 35, 792);
+            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Bold').text(`Page 1 of ${totalPages}`, 480, 792, { width: 80, align: 'right' });
+
+            // ══════════════════════════════════════════════════════════════════
+            // PAGES 2+: SINGLE DOCUMENT PER PAGE
+            // ══════════════════════════════════════════════════════════════════
+            docItems.forEach((item, index) => {
+                doc.addPage({ size: 'A4', margin: 30 });
+                const pageNum = index + 2;
+
+                // Document Header Banner
+                doc.rect(0, 0, PAGE_WIDTH, 42).fill(TEAL);
+                doc.fillColor('#FFFFFF').fontSize(11).font('Helvetica-Bold').text(
+                    `DOCUMENT ${index + 1} OF ${docItems.length}: ${item.title.toUpperCase()}`,
+                    35, 10
+                );
+                doc.fillColor('#CCFBF1').fontSize(8).font('Helvetica').text(
+                    `Provider: ${provider.name || 'N/A'}  |  ID: #${provider.providerId || provider._id?.toString().slice(-8)}  |  Status: ${(provider.kycStatus || 'pending').toUpperCase()}`,
+                    35, 26
+                );
+
+                doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text(
+                    `PAGE ${pageNum} OF ${totalPages}`,
+                    420, 16,
+                    { width: 140, align: 'right' }
+                );
+
+                // Document Image Container Frame
+                const frameX = 30;
+                const frameY = 52;
+                const frameW = 535;
+                const frameH = 725;
+
+                doc.roundedRect(frameX, frameY, frameW, frameH, 4).fillAndStroke('#FAFAFA', BORDER_COLOR);
+
+                if (item.buffer) {
+                    try {
+                        doc.image(item.buffer, frameX + 10, frameY + 10, {
+                            fit: [frameW - 20, frameH - 20],
+                            align: 'center',
+                            valign: 'center'
+                        });
+                    } catch (embedErr) {
+                        doc.fillColor(TEXT_MUTED).fontSize(11).font('Helvetica').text(
+                            'Document file attached but could not be rendered visually.',
+                            frameX + 20, frameY + 100, { align: 'center', width: frameW - 40 }
+                        );
+                    }
+                } else {
+                    doc.fillColor(TEXT_MUTED).fontSize(11).font('Helvetica').text(
+                        'Document uploaded by provider (image preview currently unavailable).',
+                        frameX + 20, frameY + 100, { align: 'center', width: frameW - 40 }
+                    );
+                }
+
+                // Document Page Footer
+                doc.rect(30, 787, 535, 0.5).fill(BORDER_COLOR);
+                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(
+                    `Document: ${item.title}  |  Provider ID: #${provider.providerId || provider._id}`,
+                    30, 793
+                );
+                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Bold').text(
+                    `Page ${pageNum} of ${totalPages}`,
+                    485, 793,
+                    { width: 80, align: 'right' }
+                );
+            });
+
+            doc.end();
+        } catch (err) {
+            reject(err);
+        }
+    });
 }
 
 module.exports = AdminService;

@@ -177,6 +177,10 @@ export const getProviderApprovalLetter = (id) => {
     return axiosInstance.get(`/admin/providers/${id}/approval-letter`, { responseType: 'blob' });
 };
 
+export const getProviderDossierPdf = (id) => {
+    return axiosInstance.get(`/admin/providers/${id}/dossier-pdf`, { responseType: 'blob' });
+};
+
 // Universal Advanced Search & Filter
 export const universalAdminSearch = (payload, options = {}) => {
     return axiosInstance.post('/admin/search', payload, options);
@@ -185,4 +189,20 @@ export const universalAdminSearch = (payload, options = {}) => {
 // Global Cross-Module Search
 export const globalAdminSearch = (payload, options = {}) => {
     return axiosInstance.post('/admin/search/global', payload, options);
-};
+};
+
+// Excel Exports
+export const exportProvidersExcel = (params) => {
+    return axiosInstance.get('/admin/providers/export', {
+        params,
+        responseType: 'blob'
+    });
+};
+
+export const exportCustomersExcel = (params) => {
+    return axiosInstance.get('/admin/customers/export', {
+        params,
+        responseType: 'blob'
+    });
+};
+

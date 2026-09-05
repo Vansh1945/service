@@ -472,6 +472,39 @@ const rejectRefundById = async (req, res, next) => {
   }
 };
 
+const getProviderDossierPdf = async (req, res, next) => {
+  try {
+    await AdminService.getProviderDossierPdf(req, res, next);
+  } catch (error) {
+    global.logger.error(`[AdminController.getProviderDossierPdf] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    next(error);
+  }
+};
+
+const { exportProvidersToExcel, exportCustomersToExcel } = require('./excel-export-service');
+
+const exportProvidersExcel = async (req, res, next) => {
+  try {
+    await exportProvidersToExcel(req, res);
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[AdminController.exportProvidersExcel] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
+
+const exportCustomersExcel = async (req, res, next) => {
+  try {
+    await exportCustomersToExcel(req, res);
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`[AdminController.exportCustomersExcel] Route: ${req.originalUrl || req.url} - Error: ${error.message}`, error);
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   searchUniversal,
   searchGlobal,
@@ -518,5 +551,8 @@ module.exports = {
   getActiveSessions,
   forceLogoutUser,
   getProviderAgreementPdf,
-  getProviderApprovalLetter
+  getProviderApprovalLetter,
+  getProviderDossierPdf,
+  exportProvidersExcel,
+  exportCustomersExcel
 };

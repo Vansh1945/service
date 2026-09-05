@@ -6,6 +6,10 @@ import {
   FiLayout, FiMaximize2, FiSmartphone, FiMonitor
 } from 'react-icons/fi';
 import { toast } from '../../../components/ui/Toast';
+import Button from '../../../components/ui/Button';
+import Loader from '../../../components/ui/Loader';
+import Modal from '../../../components/ui/Modal';
+import Badge from '../../../components/ui/Badge';
 
 import * as SystemService from '../../../services/SystemService';
 import { useConfirm } from '../../../context/ConfirmContext';
@@ -353,8 +357,7 @@ const EmailTemplate = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px]">
-        <div className=" rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        <p className="mt-4 text-gray-500 font-inter">Loading Email Template Management Workspace...</p>
+        <Loader text="Loading Email Template Management Workspace..." />
       </div>
     );
   }
@@ -524,33 +527,36 @@ const EmailTemplate = () => {
           {/* Action CTA Panel */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-150">
             {/* Restore Default Button */}
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleRestore}
-              disabled={isRestoring || loading}
-              className="flex items-center px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm font-semibold transition-all duration-200"
+              isLoading={isRestoring}
+              leftIcon={<FiRotateCcw className="w-4 h-4 text-red-600" />}
+              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
             >
-              <FiRotateCcw className={`w-4 h-4 mr-2 ${isRestoring ? '' : ''}`} />
               Restore Default
-            </button>
+            </Button>
 
             {/* Test Send & Save Buttons */}
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowTestModal(true)}
-                className="flex items-center px-4 py-2.5 rounded-xl border border-gray-200 text-secondary hover:bg-gray-50 text-sm font-semibold transition-all duration-200"
+                leftIcon={<FiSend className="w-4 h-4" />}
               >
-                <FiSend className="w-4 h-4 mr-2" />
                 Test Dispatch
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white font-semibold text-sm shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 disabled:opacity-50"
+                isLoading={isSaving}
+                size="sm"
+                leftIcon={<FiSave className="w-4 h-4" />}
               >
-                <FiSave className={`w-4 h-4 mr-2 ${isSaving ? '' : ''}`} />
                 Save Changes
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -669,28 +675,16 @@ const EmailTemplate = () => {
 
       {/* Test Dispatch Modal */}
       {showTestModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border border-gray-200 w-full max-w-md shadow-2xl p-6 relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setShowTestModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-secondary transition-colors"
-            >
-              <FiX className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="p-3 bg-primary/10 text-primary rounded-xl">
-                <FiSend className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-secondary font-inter">
-                  SMTP Dispatch Tester
-                </h3>
-                <p className="text-gray-400 text-xs">
-                  Verify final template layout inside real mail clients.
-                </p>
-              </div>
-            </div>
+        <Modal
+          isOpen={showTestModal}
+          onClose={() => setShowTestModal(false)}
+          title="SMTP Dispatch Tester"
+          size="small"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-400 text-xs">
+              Verify final template layout inside real mail clients.
+            </p>
 
             <form onSubmit={handleTestSend} className="space-y-4">
               <div className="space-y-1.5">
@@ -703,7 +697,7 @@ const EmailTemplate = () => {
                   value={testEmail}
                   onChange={(e) => setTestEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-secondary font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-secondary font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
                 />
                 <p className="text-[10px] text-gray-400 leading-relaxed font-inter">
                   We will compile a temporary render using realistic system mock-data values (e.g. otp, amount, client details) and send the email immediately using the active SMTP server settings.
@@ -711,25 +705,25 @@ const EmailTemplate = () => {
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowTestModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-gray-200 text-secondary hover:bg-gray-50 text-sm font-semibold transition-all duration-200"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={isTesting}
-                  className="flex items-center px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white font-semibold text-sm shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 disabled:opacity-50"
+                  isLoading={isTesting}
+                  size="sm"
+                  leftIcon={<FiSend className="w-4 h-4" />}
                 >
-                  <FiSend className={`w-4 h-4 mr-2 ${isTesting ? '' : ''}`} />
-                  {isTesting ? 'Sending test...' : 'Send Live Test'}
-                </button>
+                  Send Live Test
+                </Button>
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

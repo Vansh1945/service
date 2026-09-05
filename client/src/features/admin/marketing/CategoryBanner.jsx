@@ -6,6 +6,10 @@ import * as SystemService from '../../../services/SystemService';
 import useCategory from '../../../hooks/useCategory';
 import { formatDate } from '../../../utils/format';
 import { useConfirm } from '../../../context/ConfirmContext';
+import Button from '../../../components/ui/Button';
+import Loader from '../../../components/ui/Loader';
+import EmptyState from '../../../components/ui/EmptyState';
+import Badge from '../../../components/ui/Badge';
 
 const CategoryBanner = () => {
   const confirm = useConfirm();
@@ -286,10 +290,7 @@ const CategoryBanner = () => {
   if (loading || categoriesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className=" rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-secondary font-inter">Loading dashboard...</p>
-        </div>
+        <Loader text="Loading dashboard..." />
       </div>
     );
   }
@@ -500,27 +501,21 @@ const CategoryBanner = () => {
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button
+                <Button
                   onClick={editingBanner ? updateBanner : addBanner}
-                  disabled={submitting}
-                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                  isLoading={submitting}
+                  leftIcon={editingBanner ? <FaSave /> : <FaPlus />}
                 >
-                  {submitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      {editingBanner ? 'Updating...' : 'Adding...'}
-                    </>
-                  ) : (
-                    editingBanner ? <><FaSave /> Update Banner</> : <><FaPlus /> Add Banner</>
-                  )}
-                </button>
+                  {editingBanner ? 'Update Banner' : 'Add Banner'}
+                </Button>
                 {editingBanner && (
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={resetBannerForm}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all"
+                    leftIcon={<FaTimes />}
                   >
-                    <FaTimes /> Cancel
-                  </button>
+                    Cancel
+                  </Button>
                 )}
               </div>
             </div>
@@ -529,11 +524,12 @@ const CategoryBanner = () => {
             <div>
               <h3 className="text-xl font-semibold text-secondary mb-4 font-inter">Existing Banners</h3>
               {banners.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
-                  <FaBullhorn className="text-4xl mx-auto mb-3 text-gray-400" />
-                  <p className="text-lg mb-2 font-inter">No banners created yet</p>
-                  <p className="text-sm font-inter">Add your first banner to get started</p>
-                </div>
+                <EmptyState
+                  title="No banners created yet"
+                  message="Add your first banner to get started"
+                  icon={FaBullhorn}
+                  className="py-12 bg-gray-50 border-0 shadow-none"
+                />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {banners.map((banner) => (
@@ -680,27 +676,21 @@ const CategoryBanner = () => {
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button
+                <Button
                   onClick={editingCategory ? updateCategory : createCategory}
-                  disabled={submitting}
-                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                  isLoading={submitting}
+                  leftIcon={editingCategory ? <FaSave /> : <FaPlus />}
                 >
-                  {submitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      {editingCategory ? 'Updating...' : 'Creating...'}
-                    </>
-                  ) : (
-                    editingCategory ? <><FaSave /> Update Category</> : <><FaPlus /> Create Category</>
-                  )}
-                </button>
+                  {editingCategory ? 'Update Category' : 'Create Category'}
+                </Button>
                 {editingCategory && (
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={resetCategoryForm}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-medium font-inter flex items-center gap-2 transition-all"
+                    leftIcon={<FaTimes />}
                   >
-                    <FaTimes /> Cancel
-                  </button>
+                    Cancel
+                  </Button>
                 )}
               </div>
             </div>
@@ -709,11 +699,12 @@ const CategoryBanner = () => {
             <div>
               <h3 className="text-xl font-semibold text-secondary mb-4 font-inter">Category List</h3>
               {categories.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
-                  <FaTag className="text-4xl mx-auto mb-3 text-gray-400" />
-                  <p className="text-lg mb-2 font-inter">No categories created yet</p>
-                  <p className="text-sm font-inter">Add your first category to get started</p>
-                </div>
+                <EmptyState
+                  title="No categories created yet"
+                  message="Add your first category to get started"
+                  icon={FaTag}
+                  className="py-12 bg-gray-50 border-0 shadow-none"
+                />
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-gray-200">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -764,12 +755,9 @@ const CategoryBanner = () => {
                             <div className="text-gray-600 max-w-xs truncate font-inter">{category.description || 'No description'}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium font-inter ${category.isActive
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                              }`}>
+                            <Badge variant={category.isActive ? 'success' : 'danger'}>
                               {category.isActive ? 'Active' : 'Inactive'}
-                            </span>
+                            </Badge>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">

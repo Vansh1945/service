@@ -15,6 +15,63 @@ const { getBookingTimeline, enrichBookingData } = require('./booking-helper');
 const ProviderAssignmentService = require('./provider-assignment-service');
 const { validateBookingTransition } = require('./booking-validation');
 
+/**
+ * Apply Dark Teal (#0F766E) header theme, clean font, borders, and auto column widths to worksheet
+ */
+function styleWorksheetHeader(worksheet) {
+  if (!worksheet) return;
+
+  const headerRow = worksheet.getRow(1);
+  if (headerRow) {
+    headerRow.height = 30;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0F766E' }
+      };
+      cell.font = {
+        name: 'Calibri',
+        size: 11,
+        bold: true,
+        color: { argb: 'FFFFFFFF' }
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'medium', color: { argb: 'FF0D9488' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+      };
+    });
+  }
+
+  if (worksheet.columns) {
+    worksheet.columns.forEach((column) => {
+      let maxLength = 12;
+      column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
+        const val = cell.value ? String(cell.value) : '';
+        if (val.length > maxLength) {
+          maxLength = Math.min(val.length + 3, 50);
+        }
+        if (rowNumber > 1) {
+          cell.font = { name: 'Calibri', size: 10 };
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: typeof cell.value === 'number' ? 'right' : 'left'
+          };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+          };
+        }
+      });
+      column.width = Math.max(column.width || 14, Math.max(maxLength, 14));
+    });
+  }
+}
 
 const runInTransactionOrSequential = async (operationsFunc) => {
   let session = null;
@@ -4947,6 +5004,8 @@ class BookingService {
       );
       res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
 
+      styleWorksheetHeader(worksheet);
+
       await workbook.xlsx.write(res);
       res.end();
     } catch (error) {
@@ -6057,6 +6116,8 @@ class BookingService {
         'Content-Disposition',
         `attachment; filename=Booking_Report_${startDate.toISOString().split('T')[0]}_to_${endDate.toISOString().split('T')[0]}.xlsx`
       );
+
+      styleWorksheetHeader(worksheet);
 
       // Write workbook to response
       await workbook.xlsx.write(res);

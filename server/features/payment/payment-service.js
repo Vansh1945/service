@@ -1837,9 +1837,7 @@ class PaymentService {
           });
         });
 
-        worksheet.getRow(1).eachCell((cell) => {
-          cell.font = { bold: true };
-        });
+        PaymentService.formatWorksheetColumns(worksheet);
 
         res.setHeader("Content-Disposition", `attachment; filename=earnings_report_${startDate}_to_${endDate}.xlsx`);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1912,12 +1910,6 @@ class PaymentService {
           { header: "Booking ID", key: "bookingId", width: 25 },
           { header: "Admin Remark / Rejection", key: "remark", width: 40 },
         ];
-
-        // Add header row
-        const headerRow = worksheet.getRow(1);
-        headerRow.eachCell((cell) => {
-          cell.font = { bold: true };
-        });
 
         // Add data rows
         records.forEach((record) => {
@@ -3079,9 +3071,6 @@ class PaymentService {
 
       PaymentService.formatWorksheetColumns(worksheet);
 
-      // Header bold
-      worksheet.getRow(1).font = { bold: true };
-
       // Send Excel file
       res.setHeader(
         'Content-Type',
@@ -3152,9 +3141,10 @@ class PaymentService {
             reason: record.rejectionReason || record.adminRemark || 'N/A',
             status: record.status,
             requestedAt: record.createdAt.toISOString().slice(0, 10),
-            actionDate: record.completedAt ? record.completedAt.toISOString().slice(0, 10) : 'N/A'
           });
         });
+
+        PaymentService.formatWorksheetColumns(worksheet);
 
         res.setHeader('Content-Disposition', `attachment; filename=failed_rejected_withdrawals_${startDate}_to_${endDate}.xlsx`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -3293,9 +3283,10 @@ class PaymentService {
           providerSurgeShare: earning.booking.providerSurgeShare || 0,
           companySurgeShare: earning.booking.companySurgeShare || 0,
           refundAmount: earning.booking.refundAmount || earning.booking.cancellationProgress?.refundAmount || 0,
-          platformFeeRetained: earning.booking.platformFeeRetained || 0
         });
       });
+
+      PaymentService.formatWorksheetColumns(worksheet);
 
       res.setHeader('Content-Disposition', `attachment; filename=provider_ledger_${providerId}_${fromDate}_to_${toDate}.xlsx`);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -3459,6 +3450,8 @@ class PaymentService {
           netRevenue: item.totalCommission // Platform revenue is essentially the commission
         });
       });
+
+      PaymentService.formatWorksheetColumns(worksheet);
 
       res.setHeader('Content-Disposition', `attachment; filename=earnings_summary_${fromDate}_to_${toDate}.xlsx`);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -3680,6 +3673,8 @@ class PaymentService {
       reportData.forEach(item => {
         worksheet.addRow(item);
       });
+
+      PaymentService.formatWorksheetColumns(worksheet);
 
       res.setHeader('Content-Disposition', `attachment; filename=outstanding_balance_report.xlsx`);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -3909,8 +3904,6 @@ class PaymentService {
 
       PaymentService.formatWorksheetColumns(worksheet);
 
-      worksheet.getRow(1).font = { bold: true };
-
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=Complaint_Report_${fromDate}_to_${toDate}.xlsx`);
 
@@ -4022,8 +4015,6 @@ class PaymentService {
       });
 
       PaymentService.formatWorksheetColumns(worksheet);
-
-      worksheet.getRow(1).font = { bold: true };
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=Refund_Report_${fromDate}_to_${toDate}.xlsx`);
@@ -5001,6 +4992,32 @@ class PaymentService {
   static formatWorksheetColumns(worksheet, colDefs = []) {
     if (!worksheet) return;
 
+    // Style Header Row (Row 1) with Dark Teal theme (#0F766E), bold white text, height 30, and clean borders
+    const headerRow = worksheet.getRow(1);
+    if (headerRow) {
+      headerRow.height = 30;
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF0F766E' }
+        };
+        cell.font = {
+          name: 'Calibri',
+          size: 11,
+          bold: true,
+          color: { argb: 'FFFFFFFF' }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'medium', color: { argb: 'FF0D9488' } },
+          right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+        };
+      });
+    }
+
     const colDefMap = {};
     if (Array.isArray(colDefs)) {
       colDefs.forEach(c => {
@@ -5008,42 +5025,67 @@ class PaymentService {
       });
     }
 
-    worksheet.columns.forEach((col, idx) => {
-      const key = col.key;
-      const explicitDef = (Array.isArray(colDefs) && colDefs[idx]) || colDefMap[key] || {};
-      const isCurrency = explicitDef.type === 'currency' || PaymentService.isMonetaryColumnKey(key);
-      const isPercentage = explicitDef.type === 'percentage' || PaymentService.isPercentageColumnKey(key);
-      const isStatusOrLabel = key.toLowerCase().includes('status') ||
-        key.toLowerCase().includes('method') ||
-        key.toLowerCase().includes('type') ||
-        key.toLowerCase().includes('category') ||
-        key.toLowerCase().includes('direction') ||
-        key.toLowerCase().includes('role');
+    if (worksheet.columns) {
+      worksheet.columns.forEach((col, idx) => {
+        const key = col.key;
+        const explicitDef = (Array.isArray(colDefs) && colDefs[idx]) || (key ? colDefMap[key] : {}) || {};
+        const isCurrency = explicitDef.type === 'currency' || (key && PaymentService.isMonetaryColumnKey(key));
+        const isPercentage = explicitDef.type === 'percentage' || (key && PaymentService.isPercentageColumnKey(key));
+        const isStatusOrLabel = key && (
+          key.toLowerCase().includes('status') ||
+          key.toLowerCase().includes('method') ||
+          key.toLowerCase().includes('type') ||
+          key.toLowerCase().includes('category') ||
+          key.toLowerCase().includes('direction') ||
+          key.toLowerCase().includes('role')
+        );
 
-      if (isCurrency) {
-        col.numFmt = '#,##0.00';
-      } else if (isPercentage) {
-        col.numFmt = '0.00"%"';
-      }
-
-      col.eachCell({ includeEmpty: false }, (cell, rowNumber) => {
-        if (rowNumber === 1) return; // Skip header row
-        const val = cell.value;
-        if (val !== null && val !== undefined && val !== '') {
-          if ((isCurrency || isPercentage) && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
-            const num = Number(val);
-            cell.value = num; // Retain numeric type so Excel can still sum/filter/sort
-            if (isCurrency) {
-              cell.numFmt = '#,##0.00';
-            } else if (isPercentage) {
-              cell.numFmt = '0.00"%"';
-            }
-          } else if (isStatusOrLabel && typeof val === 'string') {
-            cell.value = PaymentService.formatLabel(val);
-          }
+        if (isCurrency) {
+          col.numFmt = '#,##0.00';
+        } else if (isPercentage) {
+          col.numFmt = '0.00"%"';
         }
+
+        let maxLength = 12;
+        col.eachCell({ includeEmpty: false }, (cell, rowNumber) => {
+          const val = cell.value;
+          const strVal = val !== null && val !== undefined ? String(val) : '';
+          if (strVal.length > maxLength) {
+            maxLength = Math.min(strVal.length + 3, 50);
+          }
+
+          if (rowNumber === 1) return; // Skip data formatting on header row
+
+          cell.font = { name: 'Calibri', size: 10 };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+          };
+
+          if (val !== null && val !== undefined && val !== '') {
+            if ((isCurrency || isPercentage) && (typeof val === 'number' || (!isNaN(Number(val)) && typeof val !== 'boolean'))) {
+              const num = Number(val);
+              cell.value = num; // Retain numeric type so Excel can still sum/filter/sort
+              if (isCurrency) {
+                cell.numFmt = '#,##0.00';
+              } else if (isPercentage) {
+                cell.numFmt = '0.00"%"';
+              }
+              cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            } else if (isStatusOrLabel && typeof val === 'string') {
+              cell.value = PaymentService.formatLabel(val);
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            } else {
+              cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            }
+          }
+        });
+
+        col.width = Math.max(col.width || 14, Math.max(maxLength, 14));
       });
-    });
+    }
   }
 
   /**

@@ -36,6 +36,7 @@ router.get('/admins', adminController.getAllAdmins);
 router.delete('/admins/:id', adminActionLimiter, validateParams(idParamSchema), adminController.deleteAdmin);
 
 // Customer management
+router.get('/customers/export', adminController.exportCustomersExcel);
 router.get('/customers', adminController.getAllCustomers);
 router.get('/customers/:id', validateParams(idParamSchema), adminController.getCustomerById);
 router.put('/customers/:id', adminActionLimiter, validateParams(idParamSchema), adminController.updateCustomer);
@@ -43,10 +44,12 @@ router.patch('/customers/:id/toggle-block', adminActionLimiter, validateParams(i
 router.delete('/customers/:id', adminActionLimiter, validateParams(idParamSchema), adminController.deleteCustomer);
 
 // Provider management
+router.get('/providers/export', adminController.exportProvidersExcel);
 router.get('/providers/pending', adminController.getPendingProviders);
 router.put('/providers/:id/status', adminActionLimiter, validateParams(idParamSchema), validateBody(approveProviderSchema), adminController.approveProvider);
 router.get('/providers/:id/agreement-pdf', validateParams(idParamSchema), adminController.getProviderAgreementPdf);
 router.get('/providers/:id/approval-letter', validateParams(idParamSchema), adminController.getProviderApprovalLetter);
+router.get('/providers/:id/dossier-pdf', validateParams(idParamSchema), adminController.getProviderDossierPdf);
 router.get('/providers', adminController.getAllProviders);
 router.get('/providers/:id', validateParams(idParamSchema), adminController.getProviderDetails);
 
