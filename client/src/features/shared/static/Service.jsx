@@ -182,7 +182,7 @@ const ServicesPage = () => {
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                         {services.map((service, index) => (
                             <motion.div
                                 key={service._id}
@@ -192,7 +192,7 @@ const ServicesPage = () => {
                                 viewport={{ once: true }}
                                 className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 flex flex-col h-full"
                             >
-                                <div className="relative h-48 overflow-hidden">
+                                <div className="relative h-48 sm:h-52 overflow-hidden">
                                     <img
                                         src={service.image}
                                         alt={service.title || "Electrical Service"}
@@ -208,17 +208,17 @@ const ServicesPage = () => {
                                     </div>
                                 </div>
 
-                                <div className="p-6 flex flex-col flex-grow">
-                                    <div className="flex justify-between items-start mb-3">
+                                <div className="p-5 sm:p-6 flex flex-col flex-grow">
+                                    <div className="flex justify-between items-start mb-3 gap-2">
                                         <h3 className="text-xl font-bold text-gray-900">{service.title}</h3>
-                                        <span className="text-accent font-bold">{service.price}</span>
+                                        <span className="text-accent font-bold text-lg whitespace-nowrap">{service.price}</span>
                                     </div>
                                     <p className="text-gray-500 text-sm mb-4 leading-relaxed">{service.description}</p>
 
                                     <div className="space-y-2 mb-6">
                                         {service.features.map((feature, idx) => (
                                             <div key={idx} className="flex items-center gap-2">
-                                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
                                                 <span className="text-sm text-gray-600">{feature}</span>
                                             </div>
                                         ))}

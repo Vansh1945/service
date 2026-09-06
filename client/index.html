@@ -39,11 +39,44 @@
 
   <!-- ── Theme & PWA ── -->
   <meta name="theme-color" content="#ffffff" />
+  <meta name="application-name" content="Raj Electrical Service" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Raj Service" />
+  <meta name="apple-mobile-web-app-title" content="Raj Electrical Service" />
   <meta name="google-site-verification" content="bZvqxFYyl5POzy3vr6DdyuS7CDEKu8057JPKc1lHNP0" />
+
+  <!-- ── Google Site Name & Organization Structured Data (Schema.org) ── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://rajelectricalservices.vercel.app/#website",
+        "name": "Raj Electrical Service",
+        "alternateName": ["Raj Electrical Services", "Raj Service", "RajElectricalServices"],
+        "url": "https://rajelectricalservices.vercel.app/"
+      },
+      {
+        "@type": "LocalBusiness",
+        "@id": "https://rajelectricalservices.vercel.app/#organization",
+        "name": "Raj Electrical Service",
+        "alternateName": "Raj Electrical Services",
+        "url": "https://rajelectricalservices.vercel.app/",
+        "logo": "https://rajelectricalservices.vercel.app/icon-512.png",
+        "image": "https://rajelectricalservices.vercel.app/og-image.jpg",
+        "telephone": "+919625333919",
+        "priceRange": "₹₹",
+        "address": {
+          "@type": "PostalAddress",
+          "addressRegion": "Punjab / North India",
+          "addressCountry": "IN"
+        }
+      }
+    ]
+  }
+  </script>
 
   <!-- ── Favicon & Icons ── -->
   <link rel="icon" type="image/png" href="/icon-192.png" />

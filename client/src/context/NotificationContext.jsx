@@ -38,7 +38,7 @@ export const NotificationProvider = ({ children }) => {
         if (validKeys.length === 0) return false;
 
         const inMemory = validKeys.some(k => recentNotifKeysRef.current.has(k));
-        
+
         let inSession = false;
         try {
             inSession = validKeys.some(k => sessionStorage.getItem(SS_PREFIX + k) === '1');
@@ -82,8 +82,8 @@ export const NotificationProvider = ({ children }) => {
         if (soundUrl) {
             try {
                 const audio = new Audio(soundUrl);
-                audio.play().catch(() => {});
-            } catch (e) {}
+                audio.play().catch(() => { });
+            } catch (e) { }
         }
     };
 

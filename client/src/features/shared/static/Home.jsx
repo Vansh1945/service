@@ -172,43 +172,45 @@ const Home = () => {
             </div>
 
             {/* Right Column - Image & Floating Cards */}
-            <div className="relative flex justify-center lg:justify-end">
-              <div className="relative w-full max-w-[440px] aspect-[4/3] rounded-3xl overflow-hidden shadow-xl border border-gray-100">
-                <img
-                  src={electricanimg}
-                  alt="Professional Electrician at Work"
-                  width={440}
-                  height={330}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* Floating Badge 1 - Happy Customers */}
-              <div className="absolute -left-4 top-1/2 -translate-y-1/2 bg-white rounded-2xl p-3 shadow-xl border border-gray-100/50 flex flex-col gap-1.5 z-10 animate-fade-in min-w-[120px]">
-                <div className="flex items-center gap-1">
-                  <span className="text-sm font-black text-secondary font-poppins">10,000+</span>
+            <div className="flex justify-center lg:justify-end">
+              <div className="relative w-full max-w-[460px]">
+                <div className="w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-xl border border-gray-100">
+                  <img
+                    src={electricanimg}
+                    alt="Professional Electrician at Work"
+                    width={460}
+                    height={345}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Happy Customers</span>
 
-                {/* Avatars */}
-                <div className="flex -space-x-1.5 overflow-hidden">
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
-                  <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                {/* Floating Badge 1 - Happy Customers */}
+                <div className="absolute -left-5 sm:-left-6 top-1/2 -translate-y-1/2 bg-white rounded-2xl p-3 shadow-xl border border-gray-100/50 flex flex-col gap-1.5 z-10 animate-fade-in min-w-[120px]">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-black text-secondary font-poppins">10,000+</span>
+                  </div>
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Happy Customers</span>
+
+                  {/* Avatars */}
+                  <div className="flex -space-x-1.5 overflow-hidden">
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                  </div>
                 </div>
-              </div>
 
-              {/* Floating Badge 2 - Customer Rating */}
-              <div className="absolute -right-4 bottom-8 bg-white rounded-2xl p-3 shadow-xl border border-gray-100/50 flex flex-col gap-1 z-10 animate-fade-in min-w-[110px]">
-                <span className="text-sm font-black text-secondary font-poppins">4.8/5</span>
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Customer Rating</span>
-                <div className="flex text-amber-500 gap-0.5">
-                  {"★".repeat(5).split("").map((star, i) => (
-                    <span key={i} className="text-xs">{star}</span>
-                  ))}
+                {/* Floating Badge 2 - Customer Rating */}
+                <div className="absolute -right-3 sm:-right-4 bottom-6 bg-white rounded-2xl p-3 shadow-xl border border-gray-100/50 flex flex-col gap-1 z-10 animate-fade-in min-w-[110px]">
+                  <span className="text-sm font-black text-secondary font-poppins">4.8/5</span>
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Customer Rating</span>
+                  <div className="flex text-amber-500 gap-0.5">
+                    {"★".repeat(5).split("").map((star, i) => (
+                      <span key={i} className="text-xs">{star}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

@@ -129,11 +129,11 @@ const getNotifications = async (req, res, next) => {
                     } catch (e) { }
                 }
                 message = message.replace(/\{\{\s*providerName\s*\}\}/g, providerName)
-                                 .replace(/\{\{\s*customerName\s*\}\}/g, 'Customer')
-                                 .replace(/\{\{\s*serviceName\s*\}\}/g, 'service');
+                    .replace(/\{\{\s*customerName\s*\}\}/g, 'Customer')
+                    .replace(/\{\{\s*serviceName\s*\}\}/g, 'service');
                 title = title.replace(/\{\{\s*providerName\s*\}\}/g, providerName)
-                             .replace(/\{\{\s*customerName\s*\}\}/g, 'Customer')
-                             .replace(/\{\{\s*serviceName\s*\}\}/g, 'service');
+                    .replace(/\{\{\s*customerName\s*\}\}/g, 'Customer')
+                    .replace(/\{\{\s*serviceName\s*\}\}/g, 'service');
             }
             return { ...notif, title, message };
         }));
@@ -144,14 +144,14 @@ const getNotifications = async (req, res, next) => {
             message: "Notifications retrieved successfully",
             data: formattedNotifications,
             unreadCount,
-            pagination: { 
-                total, 
-                page: parseInt(page), 
-                limit: parseInt(limit), 
-                totalPages, 
-                pages: totalPages, 
-                hasNextPage: parseInt(page) < totalPages, 
-                hasPreviousPage: parseInt(page) > 1 
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages,
+                pages: totalPages,
+                hasNextPage: parseInt(page) < totalPages,
+                hasPreviousPage: parseInt(page) > 1
             }
         });
     } catch (error) {
@@ -1046,7 +1046,7 @@ const getActiveEventsList = () => {
                     }
                 }
             }
-        } catch (_) {}
+        } catch (_) { }
     };
 
     try {

@@ -34,7 +34,7 @@ const NotificationBell = () => {
     // Initial fetch
     useEffect(() => {
         fetchNotifications();
-        
+
         // Listen to new notification from socket
         const socket = getSocket();
         if (socket) {
@@ -43,7 +43,7 @@ const NotificationBell = () => {
                 setUnreadCount(c => c + 1);
             });
         }
-        
+
         return () => {
             const socket = getSocket();
             if (socket) {
@@ -177,7 +177,7 @@ const NotificationBell = () => {
                                         try {
                                             await NotificationService.markClicked(n._id);
                                         } catch { /* silent fail for analytics */ }
-                                        
+
                                         if (n.url && n.url !== '/' && !n.url.startsWith('/messages')) {
                                             navigate(n.url);
                                             setIsOpen(false);

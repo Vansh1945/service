@@ -197,8 +197,8 @@ class RefundEngineService {
     let calculatedRefundAmount = overrideAmount !== undefined && overrideAmount !== null
       ? Number(overrideAmount)
       : (booking.cancellationProgress && typeof booking.cancellationProgress.refundAmount === 'number'
-          ? Math.min(booking.cancellationProgress.refundAmount, remainingRefundable)
-          : remainingRefundable);
+        ? Math.min(booking.cancellationProgress.refundAmount, remainingRefundable)
+        : remainingRefundable);
 
     if (calculatedRefundAmount <= 0) {
       console.log(`Refund amount is 0 for booking ${booking._id}. Skipping monetary transfer.`);
@@ -293,18 +293,18 @@ class RefundEngineService {
 
     // 6. Extract Original Payment Identifiers
     const originalPaymentMethod = booking.paymentMethod || 'online';
-    let razorpayPaymentId = booking.razorpayPaymentId || 
-                            booking.paymentVerification?.razorpayPaymentId || 
-                            booking.paymentVerification?.paymentId || 
-                            booking.paymentDetails?.razorpay_payment_id || 
-                            booking.paymentDetails?.razorpayPaymentId || 
-                            null;
-    let razorpayOrderId = booking.razorpayOrderId || 
-                          booking.paymentVerification?.razorpayOrderId || 
-                          booking.paymentVerification?.orderId || 
-                          booking.paymentDetails?.razorpay_order_id || 
-                          booking.paymentDetails?.razorpayOrderId || 
-                          null;
+    let razorpayPaymentId = booking.razorpayPaymentId ||
+      booking.paymentVerification?.razorpayPaymentId ||
+      booking.paymentVerification?.paymentId ||
+      booking.paymentDetails?.razorpay_payment_id ||
+      booking.paymentDetails?.razorpayPaymentId ||
+      null;
+    let razorpayOrderId = booking.razorpayOrderId ||
+      booking.paymentVerification?.razorpayOrderId ||
+      booking.paymentVerification?.orderId ||
+      booking.paymentDetails?.razorpay_order_id ||
+      booking.paymentDetails?.razorpayOrderId ||
+      null;
 
     if ((!razorpayPaymentId || !razorpayOrderId) && booking._id) {
       try {
@@ -431,7 +431,7 @@ class RefundEngineService {
     // ── RECOVERY ARCHITECTURE FOR PROCESSING STATE ──
     if (refundDoc.refundStatus === 'processing') {
       console.log(`[RefundEngine] Processing state recovery check for Refund ${refundDoc.refundId}`);
-      
+
       // Verify Razorpay gateway state if gateway refund ID or payment ID exists
       if (refundDoc.gatewayRefundId || refundDoc.gatewayPaymentId) {
         const existingRzpRefund = await razorpay.fetchRazorpayRefund(refundDoc.gatewayRefundId, refundDoc.gatewayPaymentId, {
@@ -611,14 +611,14 @@ class RefundEngineService {
       // B. Process Gateway Refund Portion (Only if isOriginalRazorpayPayment AND NOT a wallet destination)
       else if (isOriginalRazorpayPayment) {
         const gatewayAmt = refundDoc.gatewayRefundAmount || totalRefund;
-        let razorpayPaymentId = refundDoc.gatewayPaymentId || 
-                                refundDoc.originalPaymentId || 
-                                booking.razorpayPaymentId || 
-                                booking.paymentVerification?.razorpayPaymentId || 
-                                booking.paymentVerification?.paymentId || 
-                                booking.paymentDetails?.razorpay_payment_id || 
-                                booking.paymentDetails?.razorpayPaymentId || 
-                                null;
+        let razorpayPaymentId = refundDoc.gatewayPaymentId ||
+          refundDoc.originalPaymentId ||
+          booking.razorpayPaymentId ||
+          booking.paymentVerification?.razorpayPaymentId ||
+          booking.paymentVerification?.paymentId ||
+          booking.paymentDetails?.razorpay_payment_id ||
+          booking.paymentDetails?.razorpayPaymentId ||
+          null;
 
         if (!razorpayPaymentId && booking._id) {
           try {
@@ -640,7 +640,7 @@ class RefundEngineService {
 
         if (gatewayAmt > 0 && isRealRazorpay) {
           console.log(`Initiating Razorpay refund for payment ${razorpayPaymentId}, amount: ₹${gatewayAmt}`);
-          
+
           // Ensure persisted idempotency key exists prior to gateway API call (Never generate a new key on retry)
           if (!refundDoc.idempotencyKey) {
             refundDoc.idempotencyKey = `IDEMP-REFUND-${refundDoc.refundId || refundDoc._id}`;
@@ -693,7 +693,7 @@ class RefundEngineService {
 
             // Rule 5: Fallback handling vs Network Timeout
             const isTimeoutOrNetworkError = rzpErr.code === 'ECONNABORTED' || rzpErr.message?.includes('timeout') || rzpErr.message?.includes('network');
-            
+
             if (isTimeoutOrNetworkError) {
               // Keep refundStatus = 'processing' (retryable state), do NOT set processed or failed on timeout
               refundDoc.refundStatus = 'processing';
