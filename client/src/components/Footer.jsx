@@ -113,42 +113,46 @@ const Footer = () => {
           {/* Quick Links Section */}
           <div>
             <h3 className="text-white font-semibold text-base mb-5 tracking-wide">Quick Links</h3>
-            <ul className="space-y-3">
-              {quickLinks.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    to={link.path}
-                    className="text-sm text-gray-400 hover:text-primary transition-all duration-300 flex items-center group"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 text-primary mr-1" />
-                    <span className="group-hover:translate-x-1 transition-transform duration-300">{link.name}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <nav aria-label="Footer Quick Links">
+              <ul className="space-y-3">
+                {quickLinks.map((link) => (
+                  <li key={link.name}>
+                    <Link
+                      to={link.path}
+                      className="text-sm text-gray-400 hover:text-primary transition-all duration-300 flex items-center group"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 text-primary mr-1" />
+                      <span className="group-hover:translate-x-1 transition-transform duration-300">{link.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           </div>
 
           {/* Contact Info Section */}
           <div>
             <h3 className="text-white font-semibold text-base mb-5 tracking-wide">Contact Info</h3>
-            <ul className="space-y-4">
-              <li className="flex items-start gap-3 text-sm group">
-                <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform duration-300" />
-                <span className="text-gray-400 leading-relaxed">{systemData?.address || "Punjab & Himachal Pradesh, North India"}</span>
-              </li>
-              <li className="flex items-center gap-3 text-sm group">
-                <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform duration-300" />
-                <a href={`tel:${systemData?.phone}`} className="text-gray-400 hover:text-primary transition-colors duration-300">
-                  {systemData?.phone || "+91 9625333919"}
-                </a>
-              </li>
-              <li className="flex items-center gap-3 text-sm group">
-                <Mail className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform duration-300" />
-                <a href={`mailto:${systemData?.email}`} className="text-gray-400 hover:text-primary transition-colors duration-300 break-all">
-                  {systemData?.email || "info@rajelectricalservices.com"}
-                </a>
-              </li>
-            </ul>
+            <address className="not-italic">
+              <ul className="space-y-4">
+                <li className="flex items-start gap-3 text-sm group">
+                  <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform duration-300" />
+                  <span className="text-gray-400 leading-relaxed">{systemData?.address || "Punjab & Himachal Pradesh, North India"}</span>
+                </li>
+                <li className="flex items-center gap-3 text-sm group">
+                  <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform duration-300" />
+                  <a href={`tel:${systemData?.phone || "+919625333919"}`} className="text-gray-400 hover:text-primary transition-colors duration-300">
+                    {systemData?.phone || "+91 9625333919"}
+                  </a>
+                </li>
+                <li className="flex items-center gap-3 text-sm group">
+                  <Mail className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform duration-300" />
+                  <a href={`mailto:${systemData?.email || "info@rajelectricalservices.com"}`} className="text-gray-400 hover:text-primary transition-colors duration-300 break-all">
+                    {systemData?.email || "info@rajelectricalservices.com"}
+                  </a>
+                </li>
+              </ul>
+            </address>
           </div>
 
           {/* Newsletter & App Section */}
@@ -204,7 +208,7 @@ const Footer = () => {
             </p>
 
             {/* Legal Links */}
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+            <nav aria-label="Legal" className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               <Link to="/terms-and-conditions" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
                 Terms & Conditions
               </Link>
@@ -214,7 +218,7 @@ const Footer = () => {
               <Link to="/refund-policy" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
                 Refund Policy
               </Link>
-            </div>
+            </nav>
 
             {/* Developer Credit */}
             <p className="text-center md:text-right flex items-center gap-1">

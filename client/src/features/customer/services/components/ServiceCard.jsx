@@ -18,7 +18,7 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
 
   // Grid View Card
   return (
-    <div className="group bg-white rounded-2xl border border-gray-150 hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between h-full">
+    <article className="group bg-white rounded-2xl border border-gray-150 hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between h-full">
       <div>
         {/* Image Container */}
         <div className="relative h-32 overflow-hidden bg-gray-50">
@@ -117,7 +117,7 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

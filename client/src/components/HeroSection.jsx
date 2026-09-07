@@ -131,9 +131,9 @@ const HeroSection = ({ noMargin = false }) => {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent"></div>
                       <div className="absolute bottom-0 left-0 w-full p-4 z-10">
                         {banner.title && (
-                          <h3 className="text-sm sm:text-base md:text-lg font-bold text-white font-poppins line-clamp-1">
+                          <h2 className="text-sm sm:text-base md:text-lg font-bold text-white font-poppins line-clamp-1">
                             {banner.title}
-                          </h3>
+                          </h2>
                         )}
                         {banner.subtitle && (
                           <p className="text-xxs sm:text-xs md:text-sm text-gray-300 font-poppins line-clamp-2 mt-1">

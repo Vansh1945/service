@@ -120,16 +120,17 @@ const Navbar = () => {
 
           {/* Center - Desktop Navigation Links */}
           <div className="hidden lg:flex items-center justify-center flex-1 mx-4">
-            <div className="flex space-x-1">
+            <ul className="flex space-x-1">
               {navLinks.map((link) => (
-                <NavItem
-                  key={link.text}
-                  {...link}
-                  isActive={location.pathname === link.path}
-                  onClick={resetDeepLink}
-                />
+                <li key={link.text}>
+                  <NavItem
+                    {...link}
+                    isActive={location.pathname === link.path}
+                    onClick={resetDeepLink}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
 
           {/* Right side - Auth Buttons (Desktop) */}
@@ -194,16 +195,17 @@ const Navbar = () => {
       >
         <div className="px-6 py-8 space-y-6">
           {/* Mobile Navigation Links */}
-          <div className="space-y-2">
+          <ul className="space-y-2">
             {navLinks.map((link) => (
-              <MobileNavItem
-                key={link.text}
-                {...link}
-                isActive={location.pathname === link.path}
-                onClick={() => setIsOpen(false)}
-              />
+              <li key={link.text}>
+                <MobileNavItem
+                  {...link}
+                  isActive={location.pathname === link.path}
+                  onClick={() => setIsOpen(false)}
+                />
+              </li>
             ))}
-          </div>
+          </ul>
 
           {/* Mobile Action Buttons */}
           <div className="pt-6 border-t border-gray-200/20 space-y-3">

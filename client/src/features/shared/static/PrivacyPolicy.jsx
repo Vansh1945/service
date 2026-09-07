@@ -119,7 +119,7 @@ const PrivacyPolicy = () => {
       </Helmet>
 
       {/* Header Section */}
-      <section className="bg-gray-50 border-b border-gray-100 pt-24 pb-16 md:pt-32 md:pb-20">
+      <header className="bg-gray-50 border-b border-gray-100 pt-24 pb-16 md:pt-32 md:pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -146,7 +146,7 @@ const PrivacyPolicy = () => {
             Your privacy is important to us. This policy explains how we collect, use, and protect your information to provide you with the best experience.
           </motion.p>
         </div>
-      </section>
+      </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-4 md:pt-16 md:pb-6">
@@ -155,6 +155,7 @@ const PrivacyPolicy = () => {
             <motion.section
               key={section.id}
               id={section.id}
+              aria-labelledby={`title-${section.id}`}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -166,7 +167,7 @@ const PrivacyPolicy = () => {
                   {section.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-base md:text-lg font-bold text-secondary mb-3">
+                  <h2 id={`title-${section.id}`} className="text-base md:text-lg font-bold text-secondary mb-3">
                     {index + 1}. {section.title}
                   </h2>
                   <ul className="space-y-2.5">
@@ -184,12 +185,12 @@ const PrivacyPolicy = () => {
         </div>
 
         {/* Contact CTA */}
-        <section className="mt-8 md:mt-10">
+        <section aria-labelledby="privacy-contact-heading" className="mt-8 md:mt-10">
           <div className="max-w-3xl mx-auto bg-primary/5 rounded-2xl p-6 md:p-10 text-center border border-primary/10 relative overflow-hidden">
             <div className="absolute -top-16 -left-16 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-16 -right-16 w-32 h-32 bg-accent/10 rounded-full blur-3xl" />
             <div className="relative z-10">
-              <h3 className="text-lg md:text-xl font-bold text-secondary mb-2">Have questions?</h3>
+              <h2 id="privacy-contact-heading" className="text-lg md:text-xl font-bold text-secondary mb-2">Have questions?</h2>
               <p className="text-gray-500 text-xs md:text-sm mb-6 max-w-md mx-auto leading-relaxed">
                 If you have any questions or concerns regarding our privacy practices, please contact us.
               </p>
@@ -215,7 +216,7 @@ const PrivacyPolicy = () => {
           <div className="inline-flex items-center gap-2 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
             <Info className="w-3.5 h-3.5 text-gray-400" />
             <p className="text-gray-500 font-medium text-xs md:text-sm">
-              Last Updated: <span className="text-secondary font-bold">{currentDate}</span>
+              Last Updated: <time dateTime={new Date().toISOString().slice(0, 7)} className="text-secondary font-bold">{currentDate}</time>
             </p>
           </div>
         </motion.div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../../context/auth';
 import {
   MdStar, MdCheck,
@@ -275,8 +276,86 @@ const ServiceDetailPage = () => {
     );
   }
 
+  const companyName = systemSettings.companyName || 'Raj Electrical Services';
+
+  // Structured Data Schema for Service and BreadcrumbList
+  const serviceSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": service.title,
+    "description": service.shortDescription || service.description || `Professional ${service.title} services by ${companyName}.`,
+    "provider": {
+      "@type": "LocalBusiness",
+      "name": companyName,
+      "telephone": systemSettings.supportPhone || "+91 98765 43210"
+    },
+    "areaServed": "India",
+    "offers": {
+      "@type": "Offer",
+      "price": service.discountPrice || service.basePrice || 0,
+      "priceCurrency": "INR",
+      "availability": service.isActive !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
+    },
+    ...(service.ratingCount > 0 ? {
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": service.averageRating || 5,
+        "reviewCount": service.ratingCount
+      }
+    } : {})
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://rajelectricalservices.vercel.app/customer/services"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": categoryName,
+        "item": `https://rajelectricalservices.vercel.app/customer/services-list?category=${getCategoryId}`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": service.title,
+        "item": `https://rajelectricalservices.vercel.app/customer/services/${id}`
+      }
+    ]
+  };
+
   return (
-    <div className="min-h-screen bg-white font-inter">
+    <main className="min-h-screen bg-white font-inter">
+      <Helmet>
+        <title>{`${service.title} | ${companyName}`}</title>
+        <meta name="description" content={service.shortDescription || service.description?.slice(0, 160) || `Book expert ${service.title} service from ${companyName}. Verified electricians, transparent pricing, and instant booking.`} />
+        <meta name="keywords" content={`${service.title}, ${categoryName}, electrical service, electrician booking, ${companyName}`} />
+        <link rel="canonical" href={`https://rajelectricalservices.vercel.app/customer/services/${id}`} />
+        <meta property="og:title" content={`${service.title} | ${companyName}`} />
+        <meta property="og:description" content={service.shortDescription || service.description?.slice(0, 160) || `Book expert ${service.title} service from ${companyName}.`} />
+        <meta property="og:url" content={`https://rajelectricalservices.vercel.app/customer/services/${id}`} />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content={allImages[0] || "https://rajelectricalservices.vercel.app/og-image.jpg"} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${service.title} | ${companyName}`} />
+        <meta name="twitter:description" content={service.shortDescription || service.description?.slice(0, 160) || `Book expert ${service.title} service from ${companyName}.`} />
+        <meta name="twitter:image" content={allImages[0] || "https://rajelectricalservices.vercel.app/og-image.jpg"} />
+        <script type="application/ld+json">
+          {JSON.stringify(serviceSchema)}
+        </script>
+        <script type="application/ld+json">
+          {JSON.stringify(breadcrumbSchema)}
+        </script>
+      </Helmet>
+
       {/* Breadcrumb Section */}
       <div className="max-w-[95%] mx-auto px-4 py-4 sm:px-6 lg:px-8">
         <nav className="flex text-xs md:text-sm text-gray-500 font-medium" aria-label="Breadcrumb">
@@ -287,14 +366,14 @@ const ServiceDetailPage = () => {
                 Home
               </Link>
             </li>
-            <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" aria-hidden="true" />
             <li className="truncate max-w-[100px] sm:max-w-[150px]">
               <button type="button" onClick={() => navigate(`/customer/services-list?category=${getCategoryId}`)} className="hover:text-primary transition-colors truncate whitespace-nowrap block w-full text-left">
                 {categoryName}
               </button>
             </li>
-            <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            <li className="text-secondary font-semibold truncate max-w-[120px] sm:max-w-[200px] whitespace-nowrap">
+            <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" aria-hidden="true" />
+            <li aria-current="page" className="text-secondary font-semibold truncate max-w-[120px] sm:max-w-[200px] whitespace-nowrap">
               {service.title}
             </li>
           </ol>
@@ -303,7 +382,7 @@ const ServiceDetailPage = () => {
 
       {/* Main Content Grid */}
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        <article aria-labelledby="service-title" className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="md:grid md:grid-cols-2 gap-10 p-6 lg:p-10">
 
             {/* Left Column: Image Section with Thumbnails */}
@@ -351,10 +430,10 @@ const ServiceDetailPage = () => {
 
                 {allImages.length > 1 && (
                   <div className="hidden md:flex absolute inset-x-3 top-1/2 -translate-y-1/2 justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                    <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
+                    <button onClick={(e) => { e.stopPropagation(); prevImage(); }} aria-label="Previous image" className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
                       <MdArrowBack size={18} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
+                    <button onClick={(e) => { e.stopPropagation(); nextImage(); }} aria-label="Next image" className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
                       <MdArrowForward size={18} />
                     </button>
                   </div>
@@ -365,12 +444,12 @@ const ServiceDetailPage = () => {
             {/* Right Column: Service Details */}
             <div className="flex flex-col h-full mt-6 md:mt-0 justify-between">
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <span className="text-[10px] font-extrabold bg-teal-50 text-primary px-2.5 py-1 rounded-lg border border-teal-100/50 uppercase tracking-widest">
+                <header className="space-y-2">
+                  <span className="text-[10px] font-extrabold bg-teal-50 text-primary px-2.5 py-1 rounded-lg border border-teal-100/50 uppercase tracking-widest inline-block">
                     {categoryName}
                   </span>
 
-                  <h1 className="text-2xl lg:text-3xl font-extrabold text-secondary tracking-tight leading-tight pt-1">
+                  <h1 id="service-title" className="text-2xl lg:text-3xl font-extrabold text-secondary tracking-tight leading-tight pt-1">
                     {service.title}
                   </h1>
 
@@ -386,7 +465,7 @@ const ServiceDetailPage = () => {
                       Verified Service
                     </span>
                   </div>
-                </div>
+                </header>
 
                 {/* Unified Price & CTA Row */}
                 <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-100 flex flex-wrap items-center justify-between gap-4">
@@ -424,6 +503,7 @@ const ServiceDetailPage = () => {
                     </button>
                     <button
                       onClick={handleShare}
+                      aria-label="Share service"
                       className="p-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all active:scale-95 flex-shrink-0"
                     >
                       <MdShare size={18} />
@@ -463,17 +543,17 @@ const ServiceDetailPage = () => {
                   </div>
                 </div>
 
-
               </div>
             </div>
 
           </div>
-        </div>
+        </article>
       </div>
+
       {/* Tabs / Bottom Section (FAQ & Reviews) */}
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
         <div className="border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hide">
-          <nav className="flex space-x-8 min-w-max">
+          <nav className="flex space-x-8 min-w-max" aria-label="Service Details Tabs">
             {['Overview', 'Specifications', 'Reviews'].map((tab) => (
               <button
                 key={tab}
@@ -491,15 +571,15 @@ const ServiceDetailPage = () => {
 
         <div className="animate-fade-in min-h-[250px]">
           {activeTab === 'Overview' && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
+            <section aria-labelledby="service-details-heading" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
               <div className="grid md:grid-cols-2 gap-8">
                 <div className="space-y-4">
-                  <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Details</h3>
+                  <h2 id="service-details-heading" className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Details</h2>
                   <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{service.description}</p>
                 </div>
                 {serviceGuarantees.length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Guarantees</h3>
+                  <section aria-labelledby="service-guarantees-heading" className="space-y-4">
+                    <h2 id="service-guarantees-heading" className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Guarantees</h2>
                     <div className="grid grid-cols-2 gap-3">
                       {serviceGuarantees.map((text, index) => {
                         const icons = [
@@ -516,7 +596,7 @@ const ServiceDetailPage = () => {
                         );
                       })}
                     </div>
-                  </div>
+                  </section>
                 )}
               </div>
 
@@ -559,18 +639,18 @@ const ServiceDetailPage = () => {
                 </div>
               )}
 
-            </div>
+            </section>
           )}
 
           {activeTab === 'Specifications' && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
+            <section aria-labelledby="tech-specs-heading" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
               <div className="grid md:grid-cols-2 gap-8">
                 {/* Left Column: Tech Specs */}
                 <div className="space-y-4">
-                  <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3 flex items-center gap-2">
+                  <h2 id="tech-specs-heading" className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3 flex items-center gap-2">
                     <WrenchIcon className="w-5 h-5 text-primary" />
                     Technical Details
-                  </h3>
+                  </h2>
                   <div className="divide-y divide-gray-100 text-sm">
                     <div className="grid grid-cols-2 py-3">
                       <span className="text-gray-500 font-medium">Estimated Duration</span>
@@ -591,11 +671,11 @@ const ServiceDetailPage = () => {
 
                 {/* Right Column: FAQ */}
                 {service.faqs && service.faqs.length > 0 ? (
-                  <div className="space-y-4">
-                    <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3 flex items-center gap-2">
+                  <section aria-labelledby="faq-heading" className="space-y-4">
+                    <h2 id="faq-heading" className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3 flex items-center gap-2">
                       <MdHelpOutline className="w-5 h-5 text-primary" />
                       Frequently Asked Questions
-                    </h3>
+                    </h2>
                     <div className="space-y-3">
                       {service.faqs.map((faq, index) => (
                         <div
@@ -620,7 +700,7 @@ const ServiceDetailPage = () => {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </section>
                 ) : (
                   <div className="hidden md:block" />
                 )}
@@ -664,11 +744,12 @@ const ServiceDetailPage = () => {
                   )}
                 </div>
               )}
-            </div>
+            </section>
           )}
 
           {activeTab === 'Reviews' && (
-            <div className="space-y-6">
+            <section aria-labelledby="customer-reviews-heading" className="space-y-6">
+              <h2 id="customer-reviews-heading" className="sr-only">Customer Reviews</h2>
               <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col md:flex-row gap-8">
                 {/* Left Side: Global Score */}
                 <div className="text-center md:text-left min-w-[120px]">
@@ -718,16 +799,16 @@ const ServiceDetailPage = () => {
                             style={showAllReviews ? { scrollbarWidth: 'thin', scrollbarColor: 'rgba(13, 148, 136, 0.2) transparent' } : {}}
                           >
                             {visibleReviews.map((review, index) => (
-                              <div key={index} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group text-xs md:text-sm">
+                              <article key={index} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group text-xs md:text-sm">
                                 <div className="flex items-center gap-3 mb-3">
                                   <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-xs">
                                     {review.customer?.name?.[0]?.toUpperCase() || 'U'}
                                   </div>
                                   <div className="flex-1">
                                     <div className="font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
-                                    <div className="text-[9px] uppercase font-black text-gray-400 tracking-wider">
+                                    <time dateTime={review.createdAt} className="text-[9px] uppercase font-black text-gray-400 tracking-wider block">
                                       {formatDate(review.createdAt)}
-                                    </div>
+                                    </time>
                                   </div>
                                   <div className="flex gap-0.5">
                                     {[1, 2, 3, 4, 5].map(s => (
@@ -738,7 +819,7 @@ const ServiceDetailPage = () => {
                                 <p className="text-gray-600 leading-relaxed italic border-l-2 border-gray-100 pl-3">
                                   {review.comment}
                                 </p>
-                              </div>
+                              </article>
                             ))}
                           </div>
                           
@@ -766,13 +847,13 @@ const ServiceDetailPage = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           )}
         </div>
       </div>
 
       {/* Related Services Section */}
-      <div className="bg-gray-50/50 border-t border-gray-100 mt-2">
+      <aside aria-label="Related Services" className="bg-gray-50/50 border-t border-gray-100 mt-2">
         <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <RelatedServicesComponent
             services={relatedServices}
@@ -781,8 +862,8 @@ const ServiceDetailPage = () => {
             activeSurcharges={activeSurcharges}
           />
         </div>
-      </div>
-    </div>
+      </aside>
+    </main>
   );
 };
 

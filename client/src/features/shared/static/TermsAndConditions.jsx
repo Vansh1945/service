@@ -30,7 +30,7 @@ const TermsAndConditions = () => {
   const sections = [
     {
       id: 'introduction',
-      title: '1. Platform Scope & Agreement',
+      title: 'Platform Scope & Agreement',
       icon: <FileText className="w-5 h-5 text-primary" />,
       content: [
         `Welcome to ${companyName}. We connect customers with verified independent electrical and home service providers.`,
@@ -39,7 +39,7 @@ const TermsAndConditions = () => {
     },
     {
       id: 'responsibilities',
-      title: '2. User & Customer Responsibilities',
+      title: 'User & Customer Responsibilities',
       icon: <UserCheck className="w-5 h-5 text-primary" />,
       content: [
         'Users must provide accurate contact details, service location, and clear description of required work.',
@@ -49,7 +49,7 @@ const TermsAndConditions = () => {
     },
     {
       id: 'provider-onboarding',
-      title: '3. Provider Verification & KYC Terms',
+      title: 'Provider Verification & KYC Terms',
       icon: <ShieldCheck className="w-5 h-5 text-primary" />,
       content: [
         'Providers must complete 4-step registration: OTP verification, Live Selfie, identity docs (Aadhaar/PAN), and bank details.',
@@ -59,7 +59,7 @@ const TermsAndConditions = () => {
     },
     {
       id: 'booking-payments',
-      title: '4. Bookings, Pricing & Payouts',
+      title: 'Bookings, Pricing & Payouts',
       icon: <CreditCard className="w-5 h-5 text-primary" />,
       content: [
         'Service prices are displayed before booking. Additional spare parts or work will be quoted before execution.',
@@ -69,7 +69,7 @@ const TermsAndConditions = () => {
     },
     {
       id: 'cancellation',
-      title: '5. Cancellation & Rescheduling',
+      title: 'Cancellation & Rescheduling',
       icon: <CalendarX className="w-5 h-5 text-primary" />,
       content: [
         'Free cancellation is available before provider dispatch.',
@@ -78,7 +78,7 @@ const TermsAndConditions = () => {
     },
     {
       id: 'liability',
-      title: '6. Zero Tolerance & Liability Limitation',
+      title: 'Zero Tolerance & Liability Limitation',
       icon: <AlertTriangle className="w-5 h-5 text-primary" />,
       content: [
         'Zero tolerance for theft, violence, property damage, or harassment. Accounts will be banned and reported to police.',
@@ -87,7 +87,7 @@ const TermsAndConditions = () => {
     },
     {
       id: 'suspension',
-      title: '7. Account Termination & Law Disputes',
+      title: 'Account Termination & Law Disputes',
       icon: <UserMinus className="w-5 h-5 text-primary" />,
       content: [
         'We reserve the right to suspend or terminate accounts violating safety guidelines, forging KYC, or bypassing payments.',
@@ -99,7 +99,7 @@ const TermsAndConditions = () => {
   const currentDate = new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 
   return (
-    <div className="min-h-screen bg-white font-inter">
+    <main className="min-h-screen bg-white font-inter">
       <Helmet>
         <title>Terms & Conditions | {companyName}</title>
         <meta name="description" content={`Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with ${companyName}.`} />
@@ -120,7 +120,7 @@ const TermsAndConditions = () => {
       </Helmet>
 
       {/* Header Section */}
-      <section className="bg-gray-50 border-b border-gray-100 pt-24 pb-16 md:pt-32 md:pb-20">
+      <header className="bg-gray-50 border-b border-gray-100 pt-24 pb-16 md:pt-32 md:pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -147,15 +147,16 @@ const TermsAndConditions = () => {
             Please read these terms carefully before using our platform. By accessing or using our services, you agree to be bound by these terms.
           </motion.p>
         </div>
-      </section>
+      </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-4 md:pt-16 md:pb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-4 md:pt-16 md:pb-6">
         <div className="grid gap-6 md:gap-8">
           {sections.map((section, index) => (
             <motion.section
               key={section.id}
               id={section.id}
+              aria-labelledby={`title-${section.id}`}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -167,7 +168,7 @@ const TermsAndConditions = () => {
                   {section.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-base md:text-lg font-bold text-secondary mb-3">
+                  <h2 id={`title-${section.id}`} className="text-base md:text-lg font-bold text-secondary mb-3">
                     {index + 1}. {section.title}
                   </h2>
                   <div className="space-y-4">
@@ -187,12 +188,12 @@ const TermsAndConditions = () => {
         </div>
 
         {/* Contact CTA */}
-        <section className="mt-8 md:mt-10">
+        <section aria-labelledby="terms-help-heading" className="mt-8 md:mt-10">
           <div className="max-w-3xl mx-auto bg-primary/5 rounded-2xl p-6 md:p-10 text-center border border-primary/10 relative overflow-hidden">
             <div className="absolute -top-16 -left-16 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-16 -right-16 w-32 h-32 bg-accent/10 rounded-full blur-3xl" />
             <div className="relative z-10">
-              <h3 className="text-lg md:text-xl font-bold text-secondary mb-2">Have questions?</h3>
+              <h3 id="terms-help-heading" className="text-lg md:text-xl font-bold text-secondary mb-2">Have questions?</h3>
               <p className="text-gray-500 text-xs md:text-sm mb-6 max-w-md mx-auto leading-relaxed">
                 If you have any questions about our Terms & Conditions, please don't hesitate to reach out to our support team.
               </p>
@@ -218,17 +219,17 @@ const TermsAndConditions = () => {
           <div className="inline-flex items-center gap-2 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
             <Info className="w-3.5 h-3.5 text-gray-400" />
             <p className="text-gray-500 font-medium text-xs md:text-sm">
-              Last Updated: <span className="text-secondary font-bold">{currentDate}</span>
+              Last Updated: <time dateTime={new Date().toISOString().slice(0, 10)} className="text-secondary font-bold">{currentDate}</time>
             </p>
           </div>
         </motion.div>
-      </main>
+      </div>
 
       {/* Bottom Brand Tag */}
       <div className="pb-4 text-center text-gray-400 text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold">
         {companyName} • Fairness • Transparency • Trust
       </div>
-    </div>
+    </main>
   );
 };
 

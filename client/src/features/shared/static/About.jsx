@@ -46,8 +46,8 @@ const AboutPage = () => {
         </script>
       </Helmet>
 
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
+      {/* Hero Header Section */}
+      <header className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <motion.div
@@ -99,10 +99,10 @@ const AboutPage = () => {
             </motion.div>
           </div>
         </div>
-      </section>
+      </header>
 
       {/* Stats Section */}
-      <section className="py-8 border-y border-gray-100">
+      <section aria-label="Company Key Figures" className="py-8 border-y border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => {
@@ -119,8 +119,8 @@ const AboutPage = () => {
                   <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mb-3">
                     <Icon className="w-6 h-6 text-primary" />
                   </div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label}</div>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-sm text-gray-500">{stat.label}</p>
                 </motion.div>
               );
             })}
@@ -129,7 +129,7 @@ const AboutPage = () => {
       </section>
 
       {/* Company Story */}
-      <section className="pt-8 md:pt-12 pb-8 md:pb-12">
+      <section aria-labelledby="story-heading" className="pt-8 md:pt-12 pb-8 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <motion.div
@@ -141,6 +141,9 @@ const AboutPage = () => {
                 <Zap className="w-3 h-3 text-primary" />
                 <span className="text-primary text-xs font-semibold">Our Story</span>
               </div>
+              <h2 id="story-heading" className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+                Making Electrical Services Safe & Accessible
+              </h2>
               <p className="text-gray-600 mb-4 leading-relaxed">
                 It started with a simple goal — helping people find reliable, honest, and skilled electricians without the hassle. Too often, customers faced poor service quality, unclear pricing, or difficulty finding trusted professionals.
               </p>
@@ -183,14 +186,14 @@ const AboutPage = () => {
       </section>
 
       {/* Mission & Vision */}
-      <section className="py-10 md:py-16 bg-gradient-to-br from-primary/5 to-teal-50">
+      <section aria-labelledby="mission-heading" className="py-10 md:py-16 bg-gradient-to-br from-primary/5 to-teal-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 bg-primary/10 px-3 py-1 rounded-full mb-4">
               <Star className="w-3 h-3 text-primary" />
               <span className="text-primary text-xs font-semibold">What Drives Us</span>
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">Mission & Vision</h2>
+            <h2 id="mission-heading" className="text-3xl font-bold text-gray-900 mb-3">Mission & Vision</h2>
             <p className="text-gray-500 max-w-xl mx-auto">Simple goals, big impact.</p>
           </div>
 
@@ -232,13 +235,13 @@ const AboutPage = () => {
 
 
       {/* Professional Electrical Solutions Section */}
-      <section className="py-16 bg-white border-t border-gray-100">
+      <section aria-labelledby="solutions-heading" className="py-16 bg-white border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
               Enterprise Care
             </span>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
+            <h2 id="solutions-heading" className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
               Professional Electrical Solutions
             </h2>
             <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
@@ -278,14 +281,14 @@ const AboutPage = () => {
       </section>
 
       {/* Safety & Quality Standards Section */}
-      <section className="py-16 bg-gray-50 border-t border-gray-100">
+      <section aria-labelledby="standards-heading" className="py-16 bg-gray-50 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
                 Zero Compromise
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-4 mb-4 font-poppins">
+              <h2 id="standards-heading" className="text-2xl md:text-3xl font-extrabold text-secondary mt-4 mb-4 font-poppins">
                 Our Rigid Safety & Quality Standards
               </h2>
               <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
@@ -303,7 +306,7 @@ const AboutPage = () => {
                       <Shield className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-secondary font-poppins">{item.title}</h4>
+                      <h3 className="text-sm font-bold text-secondary font-poppins">{item.title}</h3>
                       <p className="text-[11px] text-gray-500 font-medium">{item.desc}</p>
                     </div>
                   </div>
@@ -315,7 +318,7 @@ const AboutPage = () => {
               <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
                 <img
                   src="https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&q=80&w=800"
-                  alt="Safety audit and inspection"
+                  alt="Certified technician performing electrical safety audit and inspection"
                   loading="lazy"
                   decoding="async"
                   width={800}
@@ -329,10 +332,10 @@ const AboutPage = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="pt-8 md:pt-10 pb-12">
+      <section aria-labelledby="about-cta-heading" className="pt-8 md:pt-10 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-r from-primary to-teal-600 rounded-2xl p-8 md:p-12 text-center">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            <h2 id="about-cta-heading" className="text-2xl md:text-3xl font-bold text-white mb-4">
               Need Professional Electrical Service?
             </h2>
             <p className="text-white/90 mb-6 max-w-2xl mx-auto">

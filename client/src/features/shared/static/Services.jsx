@@ -98,11 +98,11 @@ const Services = ({ limit }) => {
   const displayedServices = limit ? services.slice(0, limit) : services;
 
   return (
-    <section className="w-full bg-transparent py-2 px-3 sm:px-4 lg:px-5 relative group/section">
+    <section aria-labelledby="popular-services-heading" className="w-full bg-transparent py-2 px-3 sm:px-4 lg:px-5 relative group/section">
       <div className="w-full relative">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl md:text-2xl font-extrabold text-secondary font-poppins">
+          <h2 id="popular-services-heading" className="text-xl md:text-2xl font-extrabold text-secondary font-poppins">
             Popular Services
           </h2>
           <Link

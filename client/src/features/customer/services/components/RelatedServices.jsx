@@ -11,10 +11,10 @@ const RelatedServices = ({ services, categoryName, categoryId }) => {
   if (!services || services.length === 0) return null;
 
   return (
-    <div className="mt-12 animate-fade-in">
+    <aside aria-labelledby="related-services-heading" className="mt-12 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-secondary tracking-tight">Related {categoryName} Services</h2>
+          <h2 id="related-services-heading" className="text-xl font-bold text-secondary tracking-tight">Related {categoryName} Services</h2>
           <p className="text-gray-400 text-xs mt-0.5 font-medium">People also viewed these services</p>
         </div>
         <button
@@ -56,7 +56,7 @@ const RelatedServices = ({ services, categoryName, categoryId }) => {
           )}
         </div>
       </div>
-    </div>
+    </aside>
   );
 };
 

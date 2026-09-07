@@ -96,8 +96,8 @@ const CareersPage = () => {
         <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/careers" />
       </Helmet>
 
-      {/* Hero Section - Matching AboutPage style */}
-      <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
+      {/* Hero Header Section */}
+      <header className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <motion.div
@@ -149,10 +149,10 @@ const CareersPage = () => {
             </motion.div>
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* Stats Section - Matching AboutPage style */}
-      <section className="py-8 border-y border-gray-100">
+      {/* Stats Section */}
+      <section aria-label="Partner Statistics" className="py-8 border-y border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => {
@@ -169,8 +169,8 @@ const CareersPage = () => {
                   <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mb-3">
                     <Icon className="w-6 h-6 text-primary" />
                   </div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label}</div>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-sm text-gray-500">{stat.label}</p>
                 </motion.div>
               );
             })}
@@ -179,10 +179,10 @@ const CareersPage = () => {
       </section>
 
       {/* Main Benefits Grid Section */}
-      <section className="pt-8 md:pt-12 pb-8 md:pb-12">
+      <section aria-labelledby="benefits-heading" className="pt-8 md:pt-12 pb-8 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+            <h2 id="benefits-heading" className="text-3xl font-bold text-gray-900 mb-4">
               Why Choose Our Platform?
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto">
@@ -194,7 +194,7 @@ const CareersPage = () => {
             {benefits.map((benefit, index) => {
               const Icon = benefit.icon;
               return (
-                <motion.div
+                <motion.article
                   key={index}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
@@ -207,7 +207,7 @@ const CareersPage = () => {
                   </div>
                   <h3 className="font-semibold text-gray-900 mb-2">{benefit.title}</h3>
                   <p className="text-sm text-gray-500">{benefit.description}</p>
-                </motion.div>
+                </motion.article>
               );
             })}
           </div>
@@ -215,10 +215,10 @@ const CareersPage = () => {
       </section>
 
       {/* How to Get Started Section */}
-      <section className="py-10 md:py-16 bg-white overflow-hidden">
+      <section aria-labelledby="steps-heading" className="py-10 md:py-16 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">How to Get Started</h2>
+            <h2 id="steps-heading" className="text-3xl font-bold text-gray-900 mb-4">How to Get Started</h2>
             <p className="text-gray-600">Three simple steps to start your journey</p>
           </div>
 
@@ -226,11 +226,11 @@ const CareersPage = () => {
             {/* Connection Line (Desktop) */}
             <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-primary/10 -z-10" />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <ol className="grid grid-cols-1 md:grid-cols-3 gap-12 list-none p-0 m-0">
               {steps.map((step, index) => {
                 const Icon = step.icon;
                 return (
-                  <motion.div
+                  <motion.li
                     key={index}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -246,16 +246,16 @@ const CareersPage = () => {
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
                     <p className="text-gray-500 leading-relaxed max-w-xs mx-auto">{step.description}</p>
-                  </motion.div>
+                  </motion.li>
                 );
               })}
-            </div>
+            </ol>
           </div>
         </div>
       </section>
 
       {/* Requirements Section */}
-      <section className="py-8 md:py-12 bg-gray-900 text-white">
+      <section aria-labelledby="requirements-heading" className="py-8 md:py-12 bg-gray-900 text-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <motion.div
@@ -263,7 +263,7 @@ const CareersPage = () => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
             >
-              <h2 className="text-xl md:text-2xl font-bold mb-3">Joining Requirements</h2>
+              <h2 id="requirements-heading" className="text-xl md:text-2xl font-bold mb-3">Joining Requirements</h2>
               <p className="text-gray-400 mb-6 text-xs md:text-sm">We only hire honest and skilled professionals. To join us, you need:</p>
 
               <div className="space-y-5">
@@ -324,14 +324,14 @@ const CareersPage = () => {
       {/* ── Supplementary SEO Sections ── */}
 
       {/* Trust & Reliability Section */}
-      <section className="py-16 bg-gray-50 border-t border-gray-100">
+      <section aria-labelledby="trust-heading" className="py-16 bg-gray-50 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
                 Partner Support
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-4 mb-4 font-poppins">
+              <h2 id="trust-heading" className="text-2xl md:text-3xl font-extrabold text-secondary mt-4 mb-4 font-poppins">
                 Built on Trust & Reliability
               </h2>
               <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
@@ -349,7 +349,7 @@ const CareersPage = () => {
                       <Handshake className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-secondary font-poppins">{item.title}</h4>
+                      <h3 className="text-sm font-bold text-secondary font-poppins">{item.title}</h3>
                       <p className="text-[11px] text-gray-500 font-medium">{item.desc}</p>
                     </div>
                   </div>
@@ -375,10 +375,10 @@ const CareersPage = () => {
       </section>
 
       {/* CTA Section - Matching AboutPage style */}
-      <section className="pt-8 md:pt-10 pb-12">
+      <section aria-labelledby="careers-cta-heading" className="pt-8 md:pt-10 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-r from-primary to-teal-600 rounded-2xl p-8 md:p-12 text-center">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            <h2 id="careers-cta-heading" className="text-2xl md:text-3xl font-bold text-white mb-4">
               Ready to Start Earning?
             </h2>
             <p className="text-white/90 mb-6 max-w-2xl mx-auto">

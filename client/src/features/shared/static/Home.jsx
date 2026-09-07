@@ -74,16 +74,18 @@ const Home = () => {
         <meta name="twitter:url" content="https://rajelectricalservices.vercel.app/" />
       </Helmet>
 
-      {/* Semantic H1 for SEO Audit */}
-      <h1 className="sr-only">
-        {systemSettings.companyName || "Raj Electrical Services"} - Certified Electricians & Professional Electrical Support in North India
-      </h1>
-
-      {/* Hero Section */}
-      <HeroSection />
+      {/* Semantic H1 for SEO and Screen Readers */}
+      <header>
+        <h1 className="sr-only">
+          {systemSettings.companyName || "Raj Electrical Services"} - Certified Electricians & Professional Electrical Support in North India
+        </h1>
+        {/* Hero Section */}
+        <HeroSection />
+      </header>
 
       {/* Trust Badges / Features Section */}
-      <div className="w-full px-3 sm:px-4 lg:px-5 mt-2 mb-2">
+      <section aria-labelledby="features-heading" className="w-full px-3 sm:px-4 lg:px-5 mt-2 mb-2">
+        <h2 id="features-heading" className="sr-only">Our Core Guarantees</h2>
         <div className="flex overflow-x-auto gap-4 pb-2 lg:pb-0 lg:grid lg:grid-cols-5 scrollbar-hide snap-x snap-mandatory">
           {features.map((item, idx) => {
             const IconComponent = item.icon;
@@ -107,19 +109,19 @@ const Home = () => {
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* Limited Services Section */}
       <Services />
 
 
       {/* Why Choose Us Section */}
-      <section className="py-8 bg-white border-t border-gray-100">
+      <section aria-labelledby="why-choose-heading" className="py-8 bg-white border-t border-gray-100">
         <div className="w-full px-3 sm:px-4 lg:px-5">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left Column - Content */}
             <div className="space-y-6">
-              <h2 className="text-2xl md:text-3xl font-extrabold text-secondary font-poppins leading-tight">
+              <h2 id="why-choose-heading" className="text-2xl md:text-3xl font-extrabold text-secondary font-poppins leading-tight">
                 Why Choose {systemSettings.companyName || "Raj Electrical Service"}?
               </h2>
               <p className="text-gray-500 text-sm font-medium leading-relaxed">
@@ -150,9 +152,9 @@ const Home = () => {
                       <span className="text-teal-600 font-bold text-xs">✓</span>
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-secondary font-poppins">
+                      <h3 className="text-sm font-bold text-secondary font-poppins">
                         {item.title}
-                      </h4>
+                      </h3>
                       <p className="text-xs text-gray-500 font-medium mt-0.5">
                         {item.desc}
                       </p>
@@ -177,7 +179,7 @@ const Home = () => {
                 <div className="w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-xl border border-gray-100">
                   <img
                     src={electricanimg}
-                    alt="Professional Electrician at Work"
+                    alt="Professional certified electrician performing electrical repair and wiring"
                     width={460}
                     height={345}
                     loading="lazy"
@@ -195,10 +197,10 @@ const Home = () => {
 
                   {/* Avatars */}
                   <div className="flex -space-x-1.5 overflow-hidden">
-                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
-                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
-                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
-                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="Customer profile photo" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format&q=80" alt="Customer profile" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&auto=format&q=80" alt="Customer profile" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&auto=format&q=80" alt="Customer profile" />
+                    <img className="inline-block h-5 w-5 rounded-full ring-2 ring-white" width={20} height={20} loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&auto=format&q=80" alt="Customer profile" />
                   </div>
                 </div>
 
@@ -219,7 +221,7 @@ const Home = () => {
       </section>
 
       {/* Stats Ribbon Strip */}
-      <section className="bg-teal-900 text-white py-6">
+      <section aria-label="Company Statistics" className="bg-teal-900 text-white py-6">
         <div className="w-full px-3 sm:px-4 lg:px-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center divide-x-0 md:divide-x divide-teal-800">
             {[
@@ -251,9 +253,9 @@ const Home = () => {
                     <IconComponent className="w-5.5 h-5.5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-base md:text-lg font-black font-poppins leading-none">
+                    <p className="text-base md:text-lg font-black font-poppins leading-none">
                       {stat.value}
-                    </h3>
+                    </p>
                     <p className="text-[10px] md:text-xs text-white/80 font-medium mt-1">
                       {stat.label}
                     </p>
@@ -266,7 +268,7 @@ const Home = () => {
       </section>
 
       {/* Need Help Banner */}
-      <section className="py-6 bg-teal-50/50">
+      <section aria-labelledby="help-heading" className="py-6 bg-teal-50/50">
         <div className="w-full px-3 sm:px-4 lg:px-5">
           <div className="bg-teal-50/70 border border-teal-100/50 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -274,9 +276,9 @@ const Home = () => {
                 <span className="text-teal-600 font-bold text-sm">?</span>
               </div>
               <div>
-                <h3 className="text-sm md:text-base font-extrabold text-secondary font-poppins">
+                <h2 id="help-heading" className="text-sm md:text-base font-extrabold text-secondary font-poppins">
                   Need Help with Electrical Work?
-                </h3>
+                </h2>
                 <p className="text-[11px] md:text-xs text-gray-500 font-medium mt-0.5">
                   Book trusted electricians for your home or office – fast, reliable & affordable.
                 </p>

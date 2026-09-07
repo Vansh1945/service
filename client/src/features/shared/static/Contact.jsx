@@ -105,8 +105,8 @@ const Contact = () => {
 
       </Helmet>
 
-      {/* Hero Section - Matching other pages */}
-      <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
+      {/* Hero Header Section */}
+      <header className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <motion.div
@@ -159,9 +159,7 @@ const Contact = () => {
             </motion.div>
           </div>
         </div>
-      </section>
-
-
+      </header>
 
       {/* Contact Form and Info Section */}
       <section className="pt-8 md:pt-12 pb-8 md:pb-12">
@@ -175,7 +173,7 @@ const Contact = () => {
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8"
             >
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Send us a Message</h2>
+                <h2 id="message-heading" className="text-2xl font-bold text-gray-900 mb-2">Send us a Message</h2>
                 <p className="text-gray-500">We'll get back to you within 2 hours</p>
               </div>
 
@@ -289,16 +287,18 @@ const Contact = () => {
               className="space-y-6"
             >
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
-                <h2 className="text-center text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
+                <h2 id="contact-info-heading" className="text-center text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
 
-                <div className="space-y-5">
+                <address className="not-italic space-y-5">
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
                       <Phone className="w-5 h-5 text-primary" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-1">Phone Numbers</h3>
-                      <p className="text-primary font-medium">{contactInfo.primaryPhone}</p>
+                      <a href={`tel:${contactInfo.primaryPhone}`} className="text-primary font-medium hover:underline block">
+                        {contactInfo.primaryPhone}
+                      </a>
                       <p className="text-sm text-gray-500 mt-1">24/7 Emergency Available</p>
                     </div>
                   </div>
@@ -309,7 +309,9 @@ const Contact = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-1">Email Address</h3>
-                      <p className="text-gray-600">{contactInfo.email}</p>
+                      <a href={`mailto:${contactInfo.email}`} className="text-gray-600 hover:text-primary transition-colors block">
+                        {contactInfo.email}
+                      </a>
                       <p className="text-sm text-gray-500 mt-1">Response within 2 hours</p>
                     </div>
                   </div>
@@ -321,7 +323,7 @@ const Contact = () => {
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-1">Address</h3>
                       <p className="text-gray-600">{contactInfo.address}</p>
-                      <p className="text-sm text-gray-500 mt-1">India</p>
+                      <p className="text-sm text-gray-500 mt-1">North India</p>
                     </div>
                   </div>
 
@@ -330,8 +332,8 @@ const Contact = () => {
                       <Clock className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">Support timing</h3>
-                      <div className="space-y-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Support Timing</h3>
+                      <div className="space-y-1 text-sm">
                         <div className="flex justify-between gap-8">
                           <span className="text-gray-600">Monday - Saturday</span>
                           <span className="font-medium text-gray-900">{contactInfo.businessHours.weekdays}</span>
@@ -343,7 +345,7 @@ const Contact = () => {
                       </div>
                     </div>
                   </div>
-                </div>
+                </address>
               </div>
 
               {/* Emergency Card */}
@@ -358,7 +360,9 @@ const Contact = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-white/80 text-sm">Emergency Hotline</p>
-                    <p className="text-xl font-bold">{contactInfo.emergencyPhone}</p>
+                    <a href={`tel:${contactInfo.emergencyPhone}`} className="text-xl font-bold hover:underline">
+                      {contactInfo.emergencyPhone}
+                    </a>
                   </div>
                   <div className="bg-white/20 p-3 rounded-lg">
                     <Phone className="w-5 h-5" />
@@ -373,13 +377,13 @@ const Contact = () => {
       {/* ── Supplementary SEO Sections ── */}
 
       {/* North India Service Hubs Section */}
-      <section className="py-16 bg-gray-50 border-t border-gray-100">
+      <section aria-labelledby="hubs-heading" className="py-16 bg-gray-50 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
               Regional Availability
             </span>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
+            <h2 id="hubs-heading" className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
               North India Service Hubs
             </h2>
             <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
@@ -412,10 +416,10 @@ const Contact = () => {
       </section>
 
       {/* CTA Section - Matching other pages */}
-      <section className="pt-8 md:pt-10 pb-12">
+      <section aria-labelledby="expert-help-heading" className="pt-8 md:pt-10 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-r from-primary to-teal-600 rounded-2xl p-8 md:p-12 text-center">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            <h2 id="expert-help-heading" className="text-2xl md:text-3xl font-bold text-white mb-4">
               Need Expert Help Now?
             </h2>
             <p className="text-white/90 mb-6 max-w-2xl mx-auto">

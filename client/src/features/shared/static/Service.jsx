@@ -115,8 +115,8 @@ const ServicesPage = () => {
 
             </Helmet>
 
-            {/* Hero Section - Matching AboutPage style */}
-            <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
+            {/* Hero Header Section */}
+            <header className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center">
                         <motion.div
@@ -168,13 +168,13 @@ const ServicesPage = () => {
                         </motion.div>
                     </div>
                 </div>
-            </section>
+            </header>
 
             {/* Services Grid Section */}
-            <section className="pt-8 md:pt-12 pb-8 md:pb-12">
+            <section aria-labelledby="catalog-heading" className="pt-8 md:pt-12 pb-8 md:pb-12">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-12">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                        <h2 id="catalog-heading" className="text-2xl font-bold text-gray-900 mb-4">
                             What We Offer
                         </h2>
                         <p className="text-gray-600 max-w-2xl mx-auto">
@@ -184,7 +184,7 @@ const ServicesPage = () => {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                         {services.map((service, index) => (
-                            <motion.div
+                            <motion.article
                                 key={service._id}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
@@ -231,17 +231,17 @@ const ServicesPage = () => {
                                         Book Now <ArrowRight className="w-4 h-4" />
                                     </button>
                                 </div>
-                            </motion.div>
+                            </motion.article>
                         ))}
                     </div>
                 </div>
             </section>
 
             {/* Why Choose Us Section - Matching AboutPage features section */}
-            <section className="py-10 md:py-16 bg-gray-50">
+            <section aria-labelledby="why-choose-services-heading" className="py-10 md:py-16 bg-gray-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-12">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                        <h2 id="why-choose-services-heading" className="text-2xl font-bold text-gray-900 mb-4">
                             Why Choose Us
                         </h2>
                         <p className="text-gray-600 max-w-2xl mx-auto">
@@ -281,13 +281,13 @@ const ServicesPage = () => {
             {/* ── Supplementary SEO Sections ── */}
 
             {/* Residential & Commercial Support Section */}
-            <section className="py-16 bg-white border-t border-gray-100">
+            <section aria-labelledby="support-heading" className="py-16 bg-white border-t border-gray-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-12">
                         <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
                             Complete Utility
                         </span>
-                        <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
+                        <h2 id="support-heading" className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
                             Residential & Commercial Support
                         </h2>
                         <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
@@ -342,14 +342,14 @@ const ServicesPage = () => {
             </section>
 
             {/* Emergency Electrical Support Section */}
-            <section className="py-16 bg-gray-900 text-white border-t border-gray-800">
+            <section aria-labelledby="emergency-heading" className="py-16 bg-gray-900 text-white border-t border-gray-800">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="grid md:grid-cols-2 gap-12 items-center">
                         <div>
                             <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-accent bg-accent/10 px-4 py-1.5 rounded-full">
                                 Instant Dispatch
                             </span>
-                            <h2 className="text-2xl md:text-3xl font-extrabold text-white mt-4 mb-4 font-poppins">
+                            <h2 id="emergency-heading" className="text-2xl md:text-3xl font-extrabold text-white mt-4 mb-4 font-poppins">
                                 Emergency Electrical Support in North India
                             </h2>
                             <p className="text-gray-400 text-xs font-semibold leading-relaxed mb-6">
@@ -367,7 +367,7 @@ const ServicesPage = () => {
                                             <Zap className="w-4 h-4" />
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-bold text-white font-poppins">{item.title}</h4>
+                                            <h3 className="text-sm font-bold text-white font-poppins">{item.title}</h3>
                                             <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
                                         </div>
                                     </div>
@@ -393,23 +393,23 @@ const ServicesPage = () => {
             </section>
 
             {/* CTA Section - Matching AboutPage style */}
-            <section className="pt-8 md:pt-10 pb-12">
+            <section aria-labelledby="services-cta-heading" className="pt-8 md:pt-10 pb-12">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="bg-gradient-to-r from-primary to-teal-600 rounded-2xl p-8 md:p-12 text-center">
-                        <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+                        <h2 id="services-cta-heading" className="text-2xl md:text-3xl font-bold text-white mb-4">
                             Need Professional Electrical Service?
                         </h2>
                         <p className="text-white/90 mb-6 max-w-2xl mx-auto">
                             Get a free quote today. Quick response, transparent pricing, and quality guaranteed.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Link
-                                to={`tel:${phoneNumber}`}
+                            <a
+                                href={`tel:${phoneNumber}`}
                                 className="inline-flex items-center justify-center gap-2 bg-white text-primary px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
                             >
                                 <Phone className="w-4 h-4" />
                                 Call Now
-                            </Link>
+                            </a>
                             <Link
                                 to={consultationLink}
                                 className="inline-flex items-center justify-center gap-2 bg-white/20 text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
