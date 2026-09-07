@@ -215,10 +215,23 @@ const notificationTemplateSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
+        default: null
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null
     }
 }, { timestamps: true });
 
 notificationTemplateSchema.index({ isActive: 1 });
+notificationTemplateSchema.index({ isDeleted: 1 });
 
 mongoose.model('NotificationTemplate', notificationTemplateSchema);
 

@@ -53,6 +53,34 @@ const referralSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  newCustomerRewardReleased: {
+    type: Boolean,
+    default: false
+  },
+  rewardCoupon: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Coupon'
+  },
+  rewardTransaction: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
+  },
+  newCustomerRewardCoupon: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Coupon'
+  },
+  rejectionReason: {
+    type: String
+  },
+  reviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
+  reviewedAt: {
+    type: Date,
+    default: null
+  },
   providerRewardMilestonesReleased: [{
     type: Number
   }],

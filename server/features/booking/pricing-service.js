@@ -69,11 +69,15 @@ class PricingService {
       try {
         const coupon = await Coupon.validateCoupon(userId, couponCode, subtotal, detectedZoneId);
         let discount = 0;
-        if (coupon.discountType === 'percent') {
+        if (coupon.discountType === 'percent' || coupon.discountType === 'percentage') {
           discount = (subtotal * coupon.discountValue) / 100;
+          if (coupon.maxDiscountAmount && coupon.maxDiscountAmount > 0) {
+            discount = Math.min(discount, coupon.maxDiscountAmount);
+          }
         } else {
           discount = coupon.discountValue;
         }
+        discount = Math.min(discount, subtotal);
         totalDiscount = parseFloat(discount.toFixed(2));
         couponDetails = {
           code: coupon.code,

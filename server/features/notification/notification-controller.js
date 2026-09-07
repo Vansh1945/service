@@ -1083,7 +1083,7 @@ const getActiveEvents = async (req, res, next) => {
 const getTemplates = async (req, res, next) => {
     try {
         const NotificationTemplate = mongoose.model('NotificationTemplate');
-        const templates = await NotificationTemplate.find({ isActive: { $ne: false } }).sort({ eventId: 1 });
+        const templates = await NotificationTemplate.find({ isDeleted: { $ne: true } }).sort({ eventId: 1 });
         return res.status(200).json({ success: true, data: templates });
     } catch (error) {
         global.logger.error(`[NotificationController.getTemplates] Route: ${req.originalUrl || req.url} - getTemplates error: ${error.message}`, error);
@@ -1094,9 +1094,38 @@ const getTemplates = async (req, res, next) => {
 const createTemplate = async (req, res, next) => {
     try {
         const NotificationTemplate = mongoose.model('NotificationTemplate');
-        const template = await NotificationTemplate.create(req.body);
-        return res.status(201).json({ success: true, data: template });
+        const eventId = (req.body.eventId || '').trim();
+        if (!eventId) {
+            return res.status(400).json({ success: false, message: 'Event ID is required' });
+        }
+
+        const existing = await NotificationTemplate.findOne({ eventId });
+        if (existing) {
+            // If template exists (active or inactive or soft-deleted), update it seamlessly
+            Object.assign(existing, req.body, {
+                eventId,
+                isDeleted: false,
+                deletedAt: null,
+                deletedBy: null,
+                isActive: req.body.isActive !== undefined ? req.body.isActive : true
+            });
+            await existing.save();
+            return res.status(200).json({ success: true, message: 'Template saved successfully', data: existing });
+        }
+
+        const template = await NotificationTemplate.create({
+            ...req.body,
+            eventId,
+            isDeleted: false
+        });
+        return res.status(201).json({ success: true, message: 'Template created successfully', data: template });
     } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: `A notification template for event '${req.body.eventId}' already exists.`
+            });
+        }
         global.logger.error(`[NotificationController.createTemplate] Route: ${req.originalUrl || req.url} - createTemplate error: ${error.message}`, error);
         next(error);
     }
@@ -1112,6 +1141,12 @@ const updateTemplate = async (req, res, next) => {
         }
         return res.status(200).json({ success: true, data: template });
     } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: `Another notification template for event '${req.body.eventId}' already exists.`
+            });
+        }
         global.logger.error(`[NotificationController.updateTemplate] Route: ${req.originalUrl || req.url} - updateTemplate error: ${error.message}`, error);
         next(error);
     }
@@ -1121,20 +1156,11 @@ const deleteTemplate = async (req, res, next) => {
     try {
         const { id } = req.params;
         const NotificationTemplate = mongoose.model('NotificationTemplate');
-        const template = await NotificationTemplate.findByIdAndUpdate(
-            id,
-            {
-                isDeleted: true,
-                deletedAt: new Date(),
-                deletedBy: req.user?._id || null,
-                isActive: false
-            },
-            { new: true }
-        );
+        const template = await NotificationTemplate.findByIdAndDelete(id);
         if (!template) {
             return res.status(404).json({ success: false, message: 'Template not found' });
         }
-        return res.status(200).json({ success: true, message: 'Template soft-deleted successfully' });
+        return res.status(200).json({ success: true, message: 'Template deleted successfully' });
     } catch (error) {
         global.logger.error(`[NotificationController.deleteTemplate] Route: ${req.originalUrl || req.url} - deleteTemplate error: ${error.message}`, error);
         next(error);

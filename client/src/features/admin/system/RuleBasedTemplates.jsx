@@ -4,7 +4,7 @@ import * as NotificationService from '../../../services/NotificationService';
 import * as SystemService from '../../../services/SystemService';
 import {
     FiBell, FiTarget, FiLoader, FiMessageSquare, FiSmile,
-    FiEdit2, FiTrash2, FiXCircle, FiPlay, FiSettings
+    FiEdit2, FiTrash2, FiXCircle, FiPlay, FiSquare, FiSettings
 } from 'react-icons/fi';
 import { AnimatePresence } from 'framer-motion';
 import { toast } from '../../../components/ui/Toast';
@@ -58,6 +58,18 @@ const RuleBasedTemplates = () => {
 
     const [uploadingRingtone, setUploadingRingtone] = useState(false);
     const [showIconEmojiPicker, setShowIconEmojiPicker] = useState(false);
+    const audioRef = useRef(null);
+    const [isPlayingSound, setIsPlayingSound] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.src = '';
+                audioRef.current = null;
+            }
+        };
+    }, []);
 
     const [templateForm, setTemplateForm] = useState({
         eventId: '',
@@ -302,14 +314,41 @@ const RuleBasedTemplates = () => {
         }
     };
 
-    const playSample = () => {
+    const togglePlaySound = () => {
         const url = systemSettings && systemSettings.providerBookingRingtone;
-        if (!url) return;
-        const audio = new Audio(url);
-        audio.play().catch(err => {
-            console.error('Play sample failed:', err);
-            toast.error('Browser blocked audio playback. Please interact with the page first.');
-        });
+        if (!url) {
+            toast.error('No alert sound is configured.');
+            return;
+        }
+
+        if (isPlayingSound && audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            setIsPlayingSound(false);
+            return;
+        }
+
+        if (!audioRef.current || audioRef.current.src !== url) {
+            audioRef.current = new Audio(url);
+            audioRef.current.onended = () => {
+                setIsPlayingSound(false);
+            };
+            audioRef.current.onerror = () => {
+                setIsPlayingSound(false);
+                toast.error('Failed to play audio file.');
+            };
+        }
+
+        audioRef.current.currentTime = 0;
+        audioRef.current.play()
+            .then(() => {
+                setIsPlayingSound(true);
+            })
+            .catch(err => {
+                console.error('Play sample failed:', err);
+                setIsPlayingSound(false);
+                toast.error('Browser blocked audio playback. Please interact with the page first.');
+            });
     };
 
     const renderMockMessage = (msg) => {
@@ -366,10 +405,22 @@ const RuleBasedTemplates = () => {
                             <audio src={systemSettings.providerBookingRingtone} controls className="h-9 max-w-[200px]" />
                             <button
                                 type="button"
-                                onClick={playSample}
-                                className="text-xs bg-primary hover:bg-teal-700 text-white font-bold px-3 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1"
+                                onClick={togglePlaySound}
+                                className={`text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5 ${
+                                    isPlayingSound
+                                        ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                                        : 'bg-primary hover:bg-teal-700 text-white'
+                                }`}
                             >
-                                <FiPlay size={12} /> Test Sound
+                                {isPlayingSound ? (
+                                    <>
+                                        <FiSquare size={12} className="fill-current" /> Stop Sound
+                                    </>
+                                ) : (
+                                    <>
+                                        <FiPlay size={12} /> Test Sound
+                                    </>
+                                )}
                             </button>
                         </>
                     ) : (
@@ -482,14 +533,47 @@ const RuleBasedTemplates = () => {
                         <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Event Trigger ID *</label>
                         <select
                             value={templateForm.eventId}
-                            onChange={(e) => setTemplateForm(prev => ({ ...prev, eventId: e.target.value }))}
+                            onChange={(e) => {
+                                const selectedEventId = e.target.value;
+                                const existing = templates.find(t => t.eventId === selectedEventId);
+                                if (existing && (!templateModal.isEdit || templateModal.item?._id !== existing._id)) {
+                                    const targetAud = existing.targetAudience || {};
+                                    setTemplateForm({
+                                        eventId: existing.eventId,
+                                        title: existing.title || '',
+                                        message: existing.message || '',
+                                        icon: existing.icon || '',
+                                        ctaText: existing.ctaText || '',
+                                        ctaUrl: existing.ctaUrl || '',
+                                        priority: existing.priority || 'medium',
+                                        targetAudience: {
+                                            role: targetAud.role || 'all',
+                                            providerStatus: targetAud.providerStatus || '',
+                                            serviceCategory: targetAud.serviceCategory || '',
+                                            bookingStatus: targetAud.bookingStatus || '',
+                                            ratingGte: targetAud.ratingGte || '',
+                                            subscriptionPlan: targetAud.subscriptionPlan || ''
+                                        },
+                                        isActive: existing.isActive !== false
+                                    });
+                                    setTemplateModal({ open: true, item: existing, isEdit: true });
+                                    toast.info(`Loaded existing template for '${selectedEventId}'. Any changes will update it.`);
+                                } else {
+                                    setTemplateForm(prev => ({ ...prev, eventId: selectedEventId }));
+                                }
+                            }}
                             className="w-full px-3 py-2 border rounded-xl text-sm font-semibold bg-white"
                             required
                         >
                             <option value="">-- Select Event ID --</option>
-                            {ALL_EVENTS.map(evtId => (
-                                <option key={evtId} value={evtId}>{STANDARD_EVENT_LABELS[evtId]}</option>
-                            ))}
+                            {ALL_EVENTS.map(evtId => {
+                                const isConfigured = templates.some(t => t.eventId === evtId && (!templateModal.item || templateModal.item._id !== t._id));
+                                return (
+                                    <option key={evtId} value={evtId}>
+                                        {STANDARD_EVENT_LABELS[evtId]} {isConfigured ? '✓ (Configured)' : ''}
+                                    </option>
+                                );
+                            })}
                         </select>
                     </div>
 

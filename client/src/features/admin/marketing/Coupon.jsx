@@ -287,6 +287,8 @@ const AdminCoupons = () => {
         filtered = filtered.filter(coupon => coupon.isFirstBooking);
       } else if (typeFilter === 'assigned') {
         filtered = filtered.filter(coupon => coupon.assignedTo);
+      } else if (typeFilter === 'referral') {
+        filtered = filtered.filter(coupon => coupon.isReferralCoupon || coupon.assignedTo);
       }
     }
 
@@ -901,6 +903,7 @@ const AdminCoupons = () => {
                 <option value="global">Global</option>
                 <option value="first-booking">First Booking</option>
                 <option value="assigned">Assigned</option>
+                <option value="referral">Referral & Welcome</option>
               </select>
               <select
                 value={statusFilter}

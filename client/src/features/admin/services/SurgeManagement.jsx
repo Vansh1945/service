@@ -482,12 +482,17 @@ const SurgeManagement = () => {
     try {
       const response = await SurgeService.deleteSurgeRule(id);
       if (response.data?.success) {
-        toast.success(response.data.message);
+        toast.success(response.data.message || 'Surge rule deleted successfully');
         fetchSurgeRules();
       }
     } catch (error) {
       console.error(error);
-      toast.error('Failed to delete surge rule');
+      if (error.response?.status === 404) {
+        toast.info('This surge rule was already removed');
+        fetchSurgeRules();
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to delete surge rule');
+      }
     }
   };
 

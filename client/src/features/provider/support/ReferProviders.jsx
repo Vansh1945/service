@@ -144,12 +144,54 @@ const ReferProviders = () => {
           </div>
         </div>
 
+        {/* Limit Reached Warning Banner */}
+        {details?.isDailyLimitReached && (
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-4 py-3 rounded-2xl flex items-center gap-3 text-xs font-semibold">
+            <FiAlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Daily referral limit reached. You can refer again tomorrow.</span>
+          </div>
+        )}
+        {details?.isMonthlyLimitReached && !details?.isDailyLimitReached && (
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-4 py-3 rounded-2xl flex items-center gap-3 text-xs font-semibold">
+            <FiAlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Monthly referral limit reached.</span>
+          </div>
+        )}
+
+        {/* Invite Limits & Activity Counters */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <InfoCard
+            label="Today's Invites"
+            value={`${details?.dailyUsed ?? 0} / ${details?.dailyLimit ?? 5}`}
+            subtext="Daily invite usage"
+            variant="primary"
+          />
+          <InfoCard
+            label="Remaining Today"
+            value={`${details?.dailyRemaining ?? 5}`}
+            subtext="Can invite today"
+            variant="success"
+          />
+          <InfoCard
+            label="This Month"
+            value={`${details?.monthlyUsed ?? 0} / ${details?.monthlyLimit ?? 20}`}
+            subtext="Monthly invite usage"
+            variant="neutral"
+          />
+          <InfoCard
+            label="Remaining This Month"
+            value={`${details?.monthlyRemaining ?? 20}`}
+            subtext="Can invite this month"
+            variant="primary"
+          />
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { title: 'Released Rewards', value: `₹${details?.totalEarnings ?? 0}`, sub: 'Credited to Wallet', variant: 'success' },
+            { title: 'Rewards Earned', value: `₹${details?.totalEarnings ?? 0}`, sub: 'Credited to Wallet', variant: 'success' },
+            { title: 'Successful Providers', value: `${(details?.referrals || []).filter(r => ['released', 'completed'].includes(r.status) || (r.completedBookingsCount && r.completedBookingsCount > 0)).length}`, sub: 'Completed jobs', variant: 'primary' },
             { title: 'Pending/Held Rewards', value: `₹${details?.pendingEarnings ?? 0}`, sub: 'Awaiting Settlement', variant: 'warning' },
-            { title: 'Partners Referred', value: `${details?.referralsCount ?? 0}`, sub: 'Signed up providers', variant: 'primary' },
             { title: 'Maximum Reward', value: `₹${totalRewardAmount}`, sub: 'Per referral limit', variant: 'neutral' }
           ].map((stat, i) => (
             <InfoCard

@@ -136,13 +136,74 @@ const ReferEarn = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {/* Limit Reached Warning Banner */}
+        {details?.isDailyLimitReached && (
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-4 py-3 rounded-2xl flex items-center gap-3 text-xs font-semibold">
+            <FiAlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Daily referral limit reached. You can refer again tomorrow.</span>
+          </div>
+        )}
+        {details?.isMonthlyLimitReached && !details?.isDailyLimitReached && (
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-4 py-3 rounded-2xl flex items-center gap-3 text-xs font-semibold">
+            <FiAlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Monthly referral limit reached.</span>
+          </div>
+        )}
+
+        {/* Invite Limits & Activity Counters */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-poppins">Today's Referrals</span>
+              <div className="p-2 rounded-xl bg-primary/10 text-primary"><FiUsers className="w-4.5 h-4.5" /></div>
+            </div>
+            <div>
+              <p className="text-xl font-black text-neutral-800 leading-tight font-poppins">{details?.dailyUsed ?? 0} / {details?.dailyLimit ?? 5}</p>
+              <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">Daily invite usage</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-poppins">Remaining Today</span>
+              <div className="p-2 rounded-xl bg-success/10 text-success"><FiClock className="w-4.5 h-4.5" /></div>
+            </div>
+            <div>
+              <p className="text-xl font-black text-success leading-tight font-poppins">{details?.dailyRemaining ?? 5}</p>
+              <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">Can refer today</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-poppins">This Month</span>
+              <div className="p-2 rounded-xl bg-info/10 text-info"><FiUsers className="w-4.5 h-4.5" /></div>
+            </div>
+            <div>
+              <p className="text-xl font-black text-neutral-800 leading-tight font-poppins">{details?.monthlyUsed ?? 0} / {details?.monthlyLimit ?? 20}</p>
+              <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">Monthly invite usage</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-poppins">Remaining This Month</span>
+              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><FiClock className="w-4.5 h-4.5" /></div>
+            </div>
+            <div>
+              <p className="text-xl font-black text-indigo-600 leading-tight font-poppins">{details?.monthlyRemaining ?? 20}</p>
+              <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">Can refer this month</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial & Rewards Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Wallet Balance', value: `₹${profile?.wallet?.availableBalance ?? 0}`, sub: 'Available to spend', icon: <FiCreditCard className="w-4.5 h-4.5" />, colorBg: 'bg-primary/10', colorText: 'text-primary' },
-            systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Released Rewards', value: `₹${details.releasedRewards ?? 0}`, sub: 'Credited successfully', icon: <FiGift className="w-4.5 h-4.5" />, colorBg: 'bg-success/10', colorText: 'text-success' },
-            systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Pending Rewards', value: `₹${displayPending}`, sub: 'Awaiting first booking', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' },
-            { title: 'Friends Invited', value: `${details.referralsCount ?? 0}`, sub: 'Signed up users', icon: <FiUsers className="w-4.5 h-4.5" />, colorBg: 'bg-info/10', colorText: 'text-info' }
+            { title: 'Total Rewards', value: `₹${details.releasedRewards ?? 0}`, sub: 'Credited successfully', icon: <FiGift className="w-4.5 h-4.5" />, colorBg: 'bg-success/10', colorText: 'text-success' },
+            { title: 'Successful Referrals', value: `${(details.referrals || []).filter(r => ['released', 'completed'].includes(r.status)).length}`, sub: 'Completed bookings', icon: <FiUsers className="w-4.5 h-4.5" />, colorBg: 'bg-info/10', colorText: 'text-info' },
+            systemSettings?.featureFlags?.walletEnabled !== false && { title: 'Pending Rewards', value: `₹${displayPending}`, sub: 'Awaiting first booking', icon: <FiClock className="w-4.5 h-4.5" />, colorBg: 'bg-warning/10', colorText: 'text-warning' }
           ].filter(Boolean).map((stat, i) => (
             <div key={i} className="bg-white rounded-2xl p-4 border border-neutral-100 shadow-sm flex flex-col justify-between text-left hover:scale-[0.98] transition-transform duration-200 h-28">
               <div className="flex items-center justify-between">

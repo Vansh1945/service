@@ -200,20 +200,25 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
   if (!coupon.isActive) throw new Error("This coupon code isn't valid.");
   if (coupon.expiryDate && new Date() > coupon.expiryDate) throw new Error("This coupon has expired.");
   if (coupon.minBookingValue && serviceAmount < coupon.minBookingValue) {
-    throw new Error(`This coupon requires a higher booking amount of \`₹${coupon.minBookingValue}.\``);
+    throw new Error(`Minimum booking amount of ₹${coupon.minBookingValue} is required to apply this coupon.`);
   }
   if (coupon.usageLimit && coupon.usedBy.length >= coupon.usageLimit) {
-    throw new Error("This coupon has reached its usage limit.");
+    throw new Error("This coupon has reached its maximum usage limit.");
+  }
+
+  // Check if coupon is assigned to a specific user
+  if (coupon.assignedTo && coupon.assignedTo.toString() !== userId.toString()) {
+    throw new Error("This coupon is linked to a different account and cannot be used here.");
   }
 
   // Check if user has already used this coupon
   const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === userId.toString());
-  if (alreadyUsed) throw new Error("This coupon isn't available for this booking.");
+  if (alreadyUsed) throw new Error("You have already redeemed this coupon.");
 
   // STEP 3, 4 & 5: Hierarchical Zone Applicability Validation
   if (!coupon.isGlobal && coupon.scope !== 'global') {
     if (!bookingZoneId || !coupon.applicableZones || coupon.applicableZones.length === 0) {
-      throw new Error("This coupon isn't available for this service.");
+      throw new Error("This coupon is not valid for the selected service area.");
     }
 
     let currentZoneId = bookingZoneId;
@@ -232,7 +237,7 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
     }
 
     if (!matched) {
-      throw new Error("This coupon isn't available for this service.");
+      throw new Error("This coupon is not valid in your service area.");
     }
 
     // Temporarily attach the matched zone ID for controllers/booking use
@@ -298,16 +303,21 @@ couponSchema.methods.applyCoupon = function (totalAmount) {
     throw new Error('Minimum amount not met');
   }
 
-  if (this.discountType === 'flat') {
-    return {
-      discount: this.discountValue,
-      finalAmount: Math.max(0, totalAmount - this.discountValue)
-    };
-  } else {
-    const discount = (totalAmount * this.discountValue) / 100;
+  if (this.discountType === 'flat' || this.discountType === 'fixed') {
+    const discount = Math.min(this.discountValue, totalAmount);
     return {
       discount,
-      finalAmount: totalAmount - discount
+      finalAmount: Math.max(0, totalAmount - discount)
+    };
+  } else {
+    let discount = (totalAmount * this.discountValue) / 100;
+    if (this.maxDiscountAmount && this.maxDiscountAmount > 0) {
+      discount = Math.min(discount, this.maxDiscountAmount);
+    }
+    discount = Math.min(discount, totalAmount);
+    return {
+      discount: parseFloat(discount.toFixed(2)),
+      finalAmount: Math.max(0, parseFloat((totalAmount - discount).toFixed(2)))
     };
   }
 };

@@ -172,6 +172,11 @@ const releaseHeldRewardSchema = z.object({
   referralId: objectIdSchema
 });
 
+const rejectReferralSchema = z.object({
+  referralId: objectIdSchema,
+  reason: z.string().max(300).optional()
+});
+
 // Surge Schemas
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
@@ -382,6 +387,7 @@ module.exports = {
   updateReferralSettingsSchema,
   addMilestoneSchema,
   releaseHeldRewardSchema,
+  rejectReferralSchema,
   // Surge
   createSurgeRuleSchema,
   updateSurgeRuleSchema,

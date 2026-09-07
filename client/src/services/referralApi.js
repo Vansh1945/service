@@ -56,6 +56,10 @@ export const releaseHeldReward = (referralId) => {
     return axiosInstance.post("/referral/admin/release", { referralId });
 };
 
+export const rejectReferral = (referralId, reason) => {
+    return axiosInstance.post("/referral/admin/reject", { referralId, reason });
+};
+
 export const getAdminReferralsList = (type, status) => {
     return axiosInstance.get("/referral/admin/referrals", { params: { type, status } });
 };

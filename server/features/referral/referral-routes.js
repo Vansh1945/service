@@ -12,7 +12,8 @@ const {
   idParamSchema,
   updateReferralSettingsSchema,
   addMilestoneSchema,
-  releaseHeldRewardSchema
+  releaseHeldRewardSchema,
+  rejectReferralSchema
 } = require('../../shared/validation/common-validation');
 const { adminActionLimiter } = require('../../shared/middlewares/rate-limit');
 
@@ -38,5 +39,6 @@ router.get('/admin/referrals', adminAuthMiddleware, referralController.getAdminR
 router.get('/admin/fraud', adminAuthMiddleware, referralController.getFraudReferrals);
 router.get('/admin/logs', adminAuthMiddleware, referralController.getRewardLogs);
 router.post('/admin/release', adminAuthMiddleware, adminActionLimiter, validateBody(releaseHeldRewardSchema), referralController.releaseHeldReward);
+router.post('/admin/reject', adminAuthMiddleware, adminActionLimiter, validateBody(rejectReferralSchema), referralController.rejectReferral);
 
 module.exports = router;

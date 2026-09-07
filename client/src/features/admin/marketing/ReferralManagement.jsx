@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiUsers, FiAward, FiAlertTriangle, FiList, FiTrash2, FiPlus, FiCheck, FiTrendingUp, FiDollarSign, FiPercent, FiUserCheck, FiFilter } from 'react-icons/fi';
+import { FiUsers, FiAward, FiAlertTriangle, FiList, FiTrash2, FiPlus, FiCheck, FiX, FiTrendingUp, FiDollarSign, FiPercent, FiUserCheck, FiFilter } from 'react-icons/fi';
 import { toast } from '../../../components/ui/Toast';
 
 import {
@@ -10,6 +10,7 @@ import {
   getFraudReferralsFiltered,
   getRewardLogsFiltered,
   releaseHeldReward,
+  rejectReferral,
   getAdminReferralsList,
   getSettings
 } from '../../../services/referralApi';
@@ -67,14 +68,14 @@ const ReferralManagement = () => {
         ]);
         if (mRes.data.success) setMilestones(mRes.data.data);
         if (rRes.data.success) setReferralsList(rRes.data.data);
-        if (sRes.data.success) setSystemConfig(sRes.data.data?.referralSettings);
+        if (sRes.data.success) setSystemConfig(sRes.data.data?.referralSettings || sRes.data.data);
       } else if (activeTab === 'customer') {
         const [rRes, sRes] = await Promise.all([
           getAdminReferralsList('customer', 'all'),
           getSettings()
         ]);
         if (rRes.data.success) setReferralsList(rRes.data.data);
-        if (sRes.data.success) setSystemConfig(sRes.data.data?.referralSettings);
+        if (sRes.data.success) setSystemConfig(sRes.data.data?.referralSettings || sRes.data.data);
       } else if (activeTab === 'fraud') {
         const res = await getFraudReferralsFiltered(fraudProgramFilter, fraudRoleFilter);
         if (res.data.success) setFraudList(res.data.data);
@@ -84,7 +85,7 @@ const ReferralManagement = () => {
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to fetch data from server');
+      toast.error('Unable to fetch referral details. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -95,21 +96,21 @@ const ReferralManagement = () => {
     try {
       const res = await addMilestone(newMilestone);
       if (res.data.success) {
-        toast.success('Milestone added successfully');
+        toast.success('Milestone rule added successfully');
         setNewMilestone({ bookingsCount: '', rewardAmount: '', description: '' });
         loadData();
       } else {
-        toast.error(res.data.message || 'Failed to add milestone');
+        toast.error(res.data.message || 'Unable to add milestone');
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to add milestone');
+      toast.error(err.response?.data?.message || 'Unable to add milestone');
     }
   };
 
   const handleDeleteMilestone = async (id) => {
     const isConfirmed = await confirm({
       title: 'Delete Milestone',
-      message: 'Are you sure you want to delete this milestone?',
+      message: 'Are you sure you want to delete this milestone rule?',
       confirmText: 'Delete',
       confirmVariant: 'danger'
     });
@@ -117,11 +118,16 @@ const ReferralManagement = () => {
     try {
       const res = await deleteMilestone(id);
       if (res.data.success) {
-        toast.success('Milestone deleted successfully');
+        toast.success('Milestone rule deleted successfully');
         loadData();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to delete milestone');
+      if (err.response?.status === 404) {
+        toast.info('Milestone rule has already been removed');
+        loadData();
+      } else {
+        toast.error(err.response?.data?.message || 'Unable to delete milestone');
+      }
     }
   };
 
@@ -143,6 +149,27 @@ const ReferralManagement = () => {
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to release reward');
+    }
+  };
+
+  const handleRejectReferral = async (referralId) => {
+    const isConfirmed = await confirm({
+      title: 'Reject Flagged Referral',
+      message: 'Are you sure you want to permanently reject this referral? No rewards will be released.',
+      confirmText: 'Reject Referral',
+      confirmVariant: 'danger'
+    });
+    if (!isConfirmed) return;
+    try {
+      const res = await rejectReferral(referralId, 'Rejected by administrator during fraud review');
+      if (res.data.success) {
+        toast.success('Referral rejected successfully');
+        loadData();
+      } else {
+        toast.error(res.data.message || 'Failed to reject referral');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reject referral');
     }
   };
 
@@ -588,15 +615,26 @@ const ReferralManagement = () => {
                             <p className="text-[9px] truncate max-w-[120px]">{f.deviceInfo?.deviceId || 'N/A'}</p>
                           </td>
                           <td className="py-3 px-2">
-                            <Button
-                              onClick={() => handleManualRelease(f._id)}
-                              variant="success"
-                              size="sm"
-                              className="font-bold text-[11px]"
-                              leftIcon={<FiCheck />}
-                            >
-                              Approve Override
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                onClick={() => handleManualRelease(f._id)}
+                                variant="success"
+                                size="sm"
+                                className="font-bold text-[11px]"
+                                leftIcon={<FiCheck />}
+                              >
+                                Approve Override
+                              </Button>
+                              <Button
+                                onClick={() => handleRejectReferral(f._id)}
+                                variant="danger"
+                                size="sm"
+                                className="font-bold text-[11px]"
+                                leftIcon={<FiX />}
+                              >
+                                Reject
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))
